@@ -1,0 +1,24 @@
+{
+  "db": {
+    "host": "localhost",
+    "port": 27017,
+    "database": "example_db",
+    "password": "",
+    "name": "db",
+    "user": "",
+    "connector": "mongodb",
+    "useNewUrlParser": true,
+    "allowExtendedOperators": true
+  },
+  "db2": {
+    "host": "localhost",
+    "port": 27017,
+    "database": "example_db_2",
+    "password": "",
+    "name": "db2",
+    "user": "",
+    "connector": "mongodb",
+    "useNewUrlParser": true,
+    "allowExtendedOperators": true
+  }
+}

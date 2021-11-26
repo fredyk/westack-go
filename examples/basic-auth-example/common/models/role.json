@@ -1,0 +1,14 @@
+{
+  "name": "role",
+  "plural": "roles",
+  "public": true,
+  "properties": {
+    "name": {
+      "type": "string",
+      "required": true
+    }
+  },
+  "relations": {
+
+  }
+}
