@@ -1,0 +1,22 @@
+{
+  "name": "note",
+  "base": "PersistedModel",
+  "plural": "users",
+  "public": true,
+  "properties": {
+    "email": {
+      "type": "string",
+      "required": true
+    }
+  },
+  "relations": {
+    "roles": {
+      "type": "hasAndBelongsToMany",
+      "model": "Role",
+      "modelThrough": "RoleMapping",
+      "foreignKey": "userId",
+      "keyThrough": "roleId"
+    }
+  },
+  "hidden": ["password"]
+}

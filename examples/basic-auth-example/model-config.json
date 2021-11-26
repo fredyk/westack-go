@@ -1,0 +1,14 @@
+{
+  "user": {
+    "dataSource": "db",
+    "public": true
+  },
+  "role": {
+    "dataSource": "db",
+    "public": true
+  },
+  "note": {
+    "dataSource": "db",
+    "public": true
+  }
+}
