@@ -5,9 +5,7 @@
 ### Run
 
 ```shell
-cd ./src
-go get
-cd ..
+go mod tidy
 go build -o example ./src
 ./example
 ```
