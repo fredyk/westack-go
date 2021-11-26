@@ -1,4 +1,4 @@
-# Basic Auth Example
+# Basic Auth Example for westack-go
 
 ## Getting Started
 
