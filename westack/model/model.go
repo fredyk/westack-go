@@ -143,20 +143,20 @@ func (loadedModel Model) FindMany(filterMap *map[string]interface{}) ([]ModelIns
 	return results, nil
 }
 
-type OperationError struct {
-	Code    int
-	Message string
-}
-
-func (e *OperationError) Error() string {
-	return fmt.Sprintf("%v %v", e.Code, e.Message)
-}
-
-func NewError(code int, message string) *OperationError {
-	res := &OperationError{
-		code, message,
+func (loadedModel Model) FindOne(filterMap *map[string]interface{}) (*ModelInstance, error) {
+	var documents []map[string]interface{}
+	err := loadedModel.Datasource.FindMany(loadedModel.Name, filterMap).All(context.Background(), &documents)
+	if err != nil {
+		return nil, err
 	}
-	return res
+
+	if len(documents) == 0 {
+		return nil, nil
+	} else {
+		modelInstance := loadedModel.Build(documents[0], true)
+		modelInstance.hideProperties()
+		return &modelInstance, nil
+	}
 }
 
 func (loadedModel Model) FindById(id string, filterMap map[string]interface{}) (*ModelInstance, error) {
@@ -171,7 +171,7 @@ func (loadedModel Model) FindById(id string, filterMap map[string]interface{}) (
 			return &result, nil
 		}
 	} else {
-		return nil, NewError(404, "Document "+id+" found")
+		return nil, datasource.NewError(404, "Document "+id+" found")
 	}
 }
 
@@ -201,15 +201,15 @@ func (loadedModel Model) Create(data map[string]interface{}) (*ModelInstance, er
 			return &result, nil
 		}
 	} else {
-		return nil, NewError(400, "Could not create document")
+		return nil, datasource.NewError(400, "Could not create document")
 	}
 
 }
 
 func handleError(c *fiber.Ctx, err error) error {
 	switch err.(type) {
-	case *OperationError:
-		return c.Status(err.(*OperationError).Code).JSON(fiber.Map{"error": fiber.Map{"status": err.(*OperationError).Code, "message": err.(*OperationError).Message}})
+	case *datasource.OperationError:
+		return c.Status(err.(*datasource.OperationError).Code).JSON(fiber.Map{"error": fiber.Map{"status": err.(*datasource.OperationError).Code, "message": err.(*datasource.OperationError).Message}})
 	default:
 		return c.Status(500).JSON(fiber.Map{"error": fiber.Map{"status": 500, "message": "Internal Server Error"}})
 	}
@@ -414,7 +414,9 @@ func (loadedModel Model) GetHandler(event string) func(eventContext *EventContex
 	res := loadedModel.eventHandlers[event]
 	if res == nil {
 		res = func(eventContext *EventContext) error {
-			log.Println("no handler found for ", loadedModel.Name, ".", event)
+			if loadedModel.App.Debug {
+				log.Println("no handler found for ", loadedModel.Name, ".", event)
+			}
 			return nil
 		}
 	}

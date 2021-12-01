@@ -6,7 +6,7 @@
 
 ```shell
 go mod tidy
-go build -o example ./src
+go build -o example ./server
 ./example
 ```
 

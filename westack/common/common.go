@@ -10,6 +10,7 @@ import (
 )
 
 type IApp struct {
+	Debug        bool
 	SwaggerPaths func() *map[string]map[string]interface{}
 }
 
