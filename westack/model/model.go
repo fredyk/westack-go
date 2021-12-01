@@ -154,7 +154,6 @@ func (loadedModel Model) FindOne(filterMap *map[string]interface{}) (*ModelInsta
 		return nil, nil
 	} else {
 		modelInstance := loadedModel.Build(documents[0], true)
-		modelInstance.hideProperties()
 		return &modelInstance, nil
 	}
 }
