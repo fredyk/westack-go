@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
@@ -101,7 +102,7 @@ func findByObjectId(collectionName string, _id primitive.ObjectID, ds *Datasourc
 	}
 }
 
-func (ds *Datasource) Create(collectionName string, data *map[string]interface{}) *mongo.Cursor {
+func (ds *Datasource) Create(collectionName string, data *bson.M) *mongo.Cursor {
 	var connector string = ds.Config["connector"].(string)
 	switch connector {
 	case "mongodb":

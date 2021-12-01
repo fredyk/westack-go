@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"go.mongodb.org/mongo-driver/bson"
 	"log"
 	"regexp"
 	"strings"
@@ -78,9 +79,11 @@ func New(config Config) *Model {
 }
 
 type ModelInstance struct {
-	data  map[string]interface{}
 	Model Model
 	Id    interface{}
+
+	data  bson.M
+	bytes []byte
 }
 
 type RegistryEntry struct {
@@ -94,7 +97,7 @@ func (modelInstance ModelInstance) ToJSON() map[string]interface{} {
 	return result
 }
 
-func (loadedModel Model) Build(data map[string]interface{}, fromDb bool) ModelInstance {
+func (loadedModel Model) Build(data bson.M, fromDb bool) ModelInstance {
 
 	if data["id"] == nil {
 		data["id"] = data["_id"]
@@ -102,9 +105,12 @@ func (loadedModel Model) Build(data map[string]interface{}, fromDb bool) ModelIn
 			delete(data, "_id")
 		}
 	}
+
+	_bytes, _ := bson.Marshal(data)
 	data = common.CopyMap(data)
 	modelInstance := ModelInstance{
 		Id:    data["id"],
+		bytes: _bytes,
 		data:  data,
 		Model: loadedModel,
 	}
@@ -176,10 +182,16 @@ func (loadedModel Model) FindById(id string, filterMap map[string]interface{}) (
 
 func (loadedModel Model) Create(data interface{}) (*ModelInstance, error) {
 
-	var finalData map[string]interface{}
+	var finalData bson.M
 	switch data.(type) {
 	case map[string]interface{}:
-		finalData = data.(map[string]interface{})
+		finalData = bson.M{}
+		for key, value := range data.(map[string]interface{}) {
+			finalData[key] = value
+		}
+		break
+	case bson.M:
+		finalData = data.(bson.M)
 		break
 	case ModelInstance:
 		finalData = data.(ModelInstance).ToJSON()
@@ -193,7 +205,7 @@ func (loadedModel Model) Create(data interface{}) (*ModelInstance, error) {
 		IsNewInstance: true,
 	}
 	loadedModel.GetHandler("__operation__before_save")(&eventContext)
-	var document map[string]interface{}
+	var document bson.M
 	cursor := loadedModel.Datasource.Create(loadedModel.Name, &finalData)
 	if cursor != nil {
 		err := cursor.Decode(&document)
@@ -229,6 +241,14 @@ func (modelInstance ModelInstance) hideProperties() {
 	for _, propertyName := range modelInstance.Model.Config.Hidden {
 		delete(modelInstance.data, propertyName)
 	}
+}
+
+func (modelInstance ModelInstance) Transform(out interface{}) error {
+	err := bson.Unmarshal(modelInstance.bytes, out)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func (loadedModel Model) FindManyRoute(c *fiber.Ctx) error {
@@ -369,7 +389,7 @@ func (loadedModel Model) RemoteMethod(handler func(c *fiber.Ctx) error, options 
 }
 
 type EventContext struct {
-	Data          *map[string]interface{}
+	Data          *bson.M
 	Instance      *ModelInstance
 	Ctx           *fiber.Ctx
 	IsNewInstance bool
