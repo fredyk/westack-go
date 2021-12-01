@@ -16,7 +16,11 @@ import (
 
 func main() {
 
-	app := westack.New()
+	app := westack.New(westack.WeStackOptions{
+		Debug:       false,
+		RestApiRoot: "/api/v1",
+		Port:        8023,
+	})
 
 	app.Boot(func(app * westack.WeStack) {
 
@@ -27,7 +31,7 @@ func main() {
 
 	})
 
-	app.Server.Listen(":8023")
+	log.Fatal(app.Listen(fmt.Sprintf(":%v", app.Port)))
 
 }
 
