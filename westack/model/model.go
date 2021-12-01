@@ -174,16 +174,27 @@ func (loadedModel Model) FindById(id string, filterMap map[string]interface{}) (
 	}
 }
 
-func (loadedModel Model) Create(data map[string]interface{}) (*ModelInstance, error) {
+func (loadedModel Model) Create(data interface{}) (*ModelInstance, error) {
 
+	var finalData map[string]interface{}
+	switch data.(type) {
+	case map[string]interface{}:
+		finalData = data.(map[string]interface{})
+		break
+	case ModelInstance:
+		finalData = data.(ModelInstance).ToJSON()
+		break
+	default:
+		log.Fatal(fmt.Sprintf("Invalid input for Model.Create() <- %s", data))
+	}
 	eventContext := EventContext{
-		Data:          &data,
+		Data:          &finalData,
 		Ctx:           nil,
 		IsNewInstance: true,
 	}
 	loadedModel.GetHandler("__operation__before_save")(&eventContext)
 	var document map[string]interface{}
-	cursor := loadedModel.Datasource.Create(loadedModel.Name, &data)
+	cursor := loadedModel.Datasource.Create(loadedModel.Name, &finalData)
 	if cursor != nil {
 		err := cursor.Decode(&document)
 		if err != nil {
