@@ -1,39 +1,13 @@
-package main
+package boot
 
 import (
-	"fmt"
 	"github.com/fredyk/westack-go/westack"
 	"github.com/fredyk/westack-go/westack/model"
 	"github.com/gofiber/fiber/v2"
 	"log"
 )
 
-func main() {
-
-	app := westack.New()
-
-	app.Boot(setupRoutes)
-
-	// For the ones pending to be done
-	app.Server.Get("/*", func(c *fiber.Ctx) error {
-		log.Println("GET: " + c.Path())
-		return c.Status(404).JSON(fiber.Map{"error": fiber.Map{"status": 404, "message": fmt.Sprintf("Unknown method %v %v", c.Method(), c.Path())}})
-	})
-	app.Server.Post("/*", func(c *fiber.Ctx) error {
-		log.Println("POST: " + c.Path())
-		return c.Status(404).JSON(fiber.Map{"error": fiber.Map{"status": 404, "message": fmt.Sprintf("Unknown method %v %v", c.Method(), c.Path())}})
-	})
-
-	log.Fatal(app.Server.Listen(":8023"))
-
-}
-
-func setupRoutes(app *westack.WeStack) {
-
-	app.FindModel("role").Observe("loaded", func(eventContext *model.EventContext) error {
-		log.Println("loaded role ", eventContext.Data)
-		return nil
-	})
+func SetupUsers(app *westack.WeStack) {
 
 	userModel := app.FindModel("user")
 

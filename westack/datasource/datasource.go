@@ -3,11 +3,28 @@ package datasource
 import (
 	"context"
 	"errors"
+	"fmt"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"log"
 )
+
+type OperationError struct {
+	Code    int
+	Message string
+}
+
+func (e *OperationError) Error() string {
+	return fmt.Sprintf("%v %v", e.Code, e.Message)
+}
+
+func NewError(code int, message string) *OperationError {
+	res := &OperationError{
+		code, message,
+	}
+	return res
+}
 
 type Datasource struct {
 	Config map[string]interface{}
@@ -28,6 +45,10 @@ func (ds *Datasource) Initialize() error {
 }
 
 func (ds *Datasource) FindMany(collectionName string, filter *map[string]interface{}) *mongo.Cursor {
+	if err := validateFilter(filter); err != nil {
+		//log.Println(err)
+		panic(err)
+	}
 	var connector string = ds.Config["connector"].(string)
 	switch connector {
 	case "mongodb":
@@ -43,6 +64,20 @@ func (ds *Datasource) FindMany(collectionName string, filter *map[string]interfa
 		}
 		cursor, _ := collection.Find(context.Background(), targetFilter)
 		return cursor
+	}
+	return nil
+}
+
+func validateFilter(filter *map[string]interface{}) error {
+	if filter == nil {
+		return nil
+	}
+	for key, _ := range *filter {
+		if key == "where" || key == "include" || key == "skip" || key == "limit" || key == "order" {
+
+		} else {
+			return NewError(400, fmt.Sprintf("Invalid key %v in filter", key))
+		}
 	}
 	return nil
 }
