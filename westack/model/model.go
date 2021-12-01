@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"log"
 	"regexp"
 	"strings"
@@ -164,9 +165,9 @@ func (loadedModel Model) FindOne(filterMap *map[string]interface{}) (*ModelInsta
 	}
 }
 
-func (loadedModel Model) FindById(id string, filterMap map[string]interface{}) (*ModelInstance, error) {
+func (loadedModel Model) FindById(id string, filterMap *map[string]interface{}) (*ModelInstance, error) {
 	var document map[string]interface{}
-	cursor := loadedModel.Datasource.FindById(loadedModel.Name, id, &filterMap)
+	cursor := loadedModel.Datasource.FindById(loadedModel.Name, id, filterMap)
 	if cursor != nil {
 		err := cursor.Decode(&document)
 		if err != nil {
@@ -176,7 +177,7 @@ func (loadedModel Model) FindById(id string, filterMap map[string]interface{}) (
 			return &result, nil
 		}
 	} else {
-		return nil, datasource.NewError(404, "Document "+id+" found")
+		return nil, datasource.NewError(404, loadedModel.Name+" "+id+" not found")
 	}
 }
 
@@ -192,6 +193,9 @@ func (loadedModel Model) Create(data interface{}) (*ModelInstance, error) {
 		break
 	case bson.M:
 		finalData = data.(bson.M)
+		break
+	case *bson.M:
+		finalData = *data.(*bson.M)
 		break
 	case ModelInstance:
 		finalData = data.(ModelInstance).ToJSON()
@@ -226,6 +230,57 @@ func (loadedModel Model) Create(data interface{}) (*ModelInstance, error) {
 		return nil, datasource.NewError(400, "Could not create document")
 	}
 
+}
+
+func (modelInstance *ModelInstance) UpdateAttributes(data interface{}) (*ModelInstance, error) {
+
+	var finalData bson.M
+	switch data.(type) {
+	case map[string]interface{}:
+		finalData = bson.M{}
+		for key, value := range data.(map[string]interface{}) {
+			finalData[key] = value
+		}
+		break
+	case bson.M:
+		finalData = data.(bson.M)
+		break
+	case *bson.M:
+		finalData = *data.(*bson.M)
+		break
+	case ModelInstance:
+		finalData = data.(ModelInstance).ToJSON()
+		break
+	default:
+		log.Fatal(fmt.Sprintf("Invalid input for Model.UpdateAttributes() <- %s", data))
+	}
+	eventContext := EventContext{
+		Data:          &finalData,
+		Instance:      modelInstance,
+		Ctx:           nil,
+		IsNewInstance: false,
+	}
+	modelInstance.Model.GetHandler("__operation__before_save")(&eventContext)
+	var document bson.M
+	cursor := modelInstance.Model.Datasource.UpdateById(modelInstance.Model.Name, modelInstance.Id.(primitive.ObjectID), &finalData)
+	if cursor != nil {
+		err := cursor.Decode(&document)
+		if err != nil {
+			return nil, err
+		} else {
+			result := modelInstance.Model.Build(document, true)
+			result.hideProperties()
+			modelInstance.Model.GetHandler("__operation__after_save")(&EventContext{
+				Data:          &result.data,
+				Instance:      &result,
+				Ctx:           nil,
+				IsNewInstance: false,
+			})
+			return &result, nil
+		}
+	} else {
+		return nil, datasource.NewError(400, "Could not create document")
+	}
 }
 
 func handleError(c *fiber.Ctx, err error) error {
@@ -280,7 +335,7 @@ func (loadedModel Model) FindByIdRoute(c *fiber.Ctx) error {
 		if filterSt == "" {
 
 		}
-		result, err := loadedModel.FindById(id, *filterMap)
+		result, err := loadedModel.FindById(id, filterMap)
 		result.hideProperties()
 		if err != nil {
 			return handleError(c, err)
@@ -394,6 +449,7 @@ type EventContext struct {
 	Ctx           *fiber.Ctx
 	IsNewInstance bool
 	Result        interface{}
+	ModelID       *primitive.ObjectID
 }
 
 type WeStackError struct {

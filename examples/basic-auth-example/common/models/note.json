@@ -1,7 +1,6 @@
 {
   "name": "note",
   "base": "PersistedModel",
-  "plural": "users",
   "public": true,
   "properties": {
     "email": {

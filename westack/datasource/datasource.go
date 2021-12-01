@@ -116,6 +116,22 @@ func (ds *Datasource) Create(collectionName string, data *bson.M) *mongo.Cursor 
 	return nil
 }
 
+func (ds *Datasource) UpdateById(collectionName string, id primitive.ObjectID, data *bson.M) *mongo.Cursor {
+	var connector = ds.Config["connector"].(string)
+	switch connector {
+	case "mongodb":
+		var db = ds.Db.(mongo.Client)
+		// TODO: dynamic database
+		database := db.Database(ds.Config["database"].(string))
+		collection := database.Collection(collectionName)
+		if _, err := collection.UpdateOne(context.Background(), bson.M{"_id": id}, bson.M{"$set": data}); err != nil {
+			panic(err)
+		}
+		return findByObjectId(collectionName, id, ds)
+	}
+	return nil
+}
+
 func New(config map[string]interface{}) *Datasource {
 	ds := &Datasource{
 		Config: config,
