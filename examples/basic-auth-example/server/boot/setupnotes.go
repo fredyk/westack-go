@@ -3,7 +3,9 @@ package boot
 import (
 	"github.com/fredyk/westack-go/examples/basic-auth-example/common/models"
 	"github.com/fredyk/westack-go/westack"
+	"go.mongodb.org/mongo-driver/bson"
 	"log"
+	"time"
 )
 
 func SetupNotes(app *westack.WeStack) {
@@ -35,6 +37,13 @@ func SetupNotes(app *westack.WeStack) {
 
 		//id := typedNote.Id
 		log.Println("Created note", typedNote, "for user", typedUser)
+
+		// Update the note
+		updated, err := note.UpdateAttributes(&bson.M{"date": time.Now()})
+		if err != nil {
+			panic(nil)
+		}
+		log.Println("Updated note ", updated.ToJSON())
 
 		// List user notes
 		notes, _ := noteModel.FindMany(&map[string]interface{}{"where": map[string]interface{}{"userId": typedUser.Id}})

@@ -6,6 +6,7 @@ require (
 	github.com/arsmn/fiber-swagger/v2 v2.20.0
 	github.com/go-openapi/spec v0.20.4 // indirect
 	github.com/gofiber/fiber/v2 v2.20.2
+	github.com/golang-jwt/jwt v3.2.2+incompatible
 	github.com/mailru/easyjson v0.7.7 // indirect
 	github.com/swaggo/swag v1.7.4 // indirect
 	go.mongodb.org/mongo-driver v1.7.3

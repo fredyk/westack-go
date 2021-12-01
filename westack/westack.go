@@ -9,6 +9,7 @@ import (
 	"github.com/fredyk/westack-go/westack/model"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/recover"
+	"github.com/golang-jwt/jwt"
 	"go.mongodb.org/mongo-driver/bson"
 	"runtime/debug"
 	"strings"
@@ -22,6 +23,11 @@ import (
 	"io/ioutil"
 	"log"
 )
+
+// For HMAC signing method, the key can be any []byte. It is recommended to generate
+// a key using crypto/rand or something equivalent. You need the same key for signing
+// and validating.
+var hmacSampleSecret []byte
 
 type LoginBody struct {
 	Email    string `json:"email"`
@@ -100,20 +106,35 @@ func (app *WeStack) loadModels() {
 			loadedModel.BaseUrl = app.RestApiRoot + "/" + plural
 			loadedModel.On("create", func(ctx *model.EventContext) error {
 
-				var data map[string]interface{}
-				err := json.Unmarshal(ctx.Ctx.Body(), &data)
-				if err != nil {
-					return err
-				}
+				data := ctx.Data
 				if config.Base == "User" {
-					log.Println("Create User")
-					hashed, err := bcrypt.GenerateFromPassword([]byte(data["password"].(string)), 10)
+
+					if (*data)["email"] == nil || strings.TrimSpace((*data)["email"].(string)) == "" {
+						// TODO: Validate email
+						return ctx.RestError(fiber.ErrBadRequest, fiber.Map{"error": "Invalid email"})
+					}
+					existent, err2 := loadedModel.FindOne(&map[string]interface{}{"where": map[string]interface{}{"email": (*data)["email"]}})
+					if err2 != nil {
+						return err2
+					}
+					if existent != nil {
+						return ctx.RestError(fiber.ErrConflict, fiber.Map{"error": "User exists"})
+					}
+
+					if (*data)["password"] == nil || strings.TrimSpace((*data)["password"].(string)) == "" {
+						return ctx.RestError(fiber.ErrBadRequest, fiber.Map{"error": "Invalid password"})
+					}
+					hashed, err := bcrypt.GenerateFromPassword([]byte((*data)["password"].(string)), 10)
 					if err != nil {
 						return err
 					}
-					data["password"] = string(hashed)
+					(*data)["password"] = string(hashed)
+
+					if app.Debug {
+						log.Println("Create User")
+					}
 				}
-				created, err := loadedModel.Create(data)
+				created, err := loadedModel.Create(*data)
 				if err != nil {
 					return err
 				}
@@ -121,18 +142,46 @@ func (app *WeStack) loadModels() {
 				return nil
 			})
 
+			loadedModel.On("instance_updateAttributes", func(ctx *model.EventContext) error {
+
+				inst, err := loadedModel.FindById(ctx.ModelID.Hex(), nil)
+				if err != nil {
+					return err
+				}
+
+				if config.Base == "User" && (*ctx.Data)["password"] != nil && (*ctx.Data)["password"] != "" {
+					log.Println("Update User")
+					hashed, err := bcrypt.GenerateFromPassword([]byte((*ctx.Data)["password"].(string)), 10)
+					if err != nil {
+						return err
+					}
+					(*ctx.Data)["password"] = string(hashed)
+				}
+				updated, err := inst.UpdateAttributes(ctx.Data)
+				if err != nil {
+					return err
+				}
+				ctx.Result = updated.ToJSON()
+				return nil
+			})
+
 			if config.Base == "User" {
 
 				loadedModel.On("login", func(ctx *model.EventContext) error {
 					var loginBody *LoginBody
-					var loginAsMap *bson.M
+					var data *bson.M
 					err := json.Unmarshal(ctx.Ctx.Body(), &loginBody)
-					err = json.Unmarshal(ctx.Ctx.Body(), &loginAsMap)
+					err = json.Unmarshal(ctx.Ctx.Body(), &data)
 					if err != nil {
 						ctx.Result = fiber.Map{"error": err}
 						return err
 					}
-					ctx.Data = loginAsMap
+					ctx.Data = data
+
+					if (*data)["password"] == nil || strings.TrimSpace((*data)["password"].(string)) == "" {
+						return ctx.RestError(fiber.ErrBadRequest, fiber.Map{"error": "Invalid password"})
+					}
+
 					email := loginBody.Email
 					users, err := loadedModel.FindMany(&map[string]interface{}{
 						"where": map[string]interface{}{
@@ -152,7 +201,19 @@ func (app *WeStack) loadModels() {
 						return ctx.RestError(fiber.ErrBadRequest, fiber.Map{"error": "Invalid credentials"})
 					}
 
-					ctx.Result = fiber.Map{"id": "<token>", "userId": firstUser.Id.(primitive.ObjectID).Hex()}
+					userIdHex := firstUser.Id.(primitive.ObjectID).Hex()
+
+					// Create a new token object, specifying signing method and the claims
+					// you would like it to contain.
+					token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+						"userId":  userIdHex,
+						"created": time.Now().UnixMilli(),
+					})
+
+					// Sign and get the complete encoded token as a string using the secret
+					tokenString, err := token.SignedString(hmacSampleSecret)
+
+					ctx.Result = fiber.Map{"id": tokenString, "userId": userIdHex}
 					return nil
 				})
 
@@ -162,15 +223,12 @@ func (app *WeStack) loadModels() {
 	}
 }
 
-func handleEvent(ctx *fiber.Ctx, loadedModel *model.Model, event string) error {
-	eventContext := model.EventContext{
-		Ctx: ctx,
-	}
-	err := loadedModel.GetHandler(event)(&eventContext)
+func handleEvent(eventContext *model.EventContext, loadedModel *model.Model, event string) error {
+	err := loadedModel.GetHandler(event)(eventContext)
 	if err != nil {
-		return loadedModel.SendError(ctx, err)
+		return loadedModel.SendError(eventContext.Ctx, err)
 	}
-	return ctx.JSON(eventContext.Result)
+	return eventContext.Ctx.JSON(eventContext.Result)
 }
 
 func (app *WeStack) loadDataSources() {
@@ -299,17 +357,55 @@ func (app *WeStack) loadModelsRoutes() {
 			log.Println("Mount POST " + loadedModel.BaseUrl)
 		}
 		loadedModel.RemoteMethod(func(ctx *fiber.Ctx) error {
-			return handleEvent(ctx, loadedModel, "create")
+			var data *bson.M
+			err := json.Unmarshal(ctx.Body(), &data)
+			if err != nil {
+				return err
+			}
+			eventContext := model.EventContext{
+				Ctx:  ctx,
+				Data: data,
+			}
+			return handleEvent(&eventContext, loadedModel, "create")
 		}, model.RemoteMethodOptions{
 			Http: model.RemoteMethodOptionsHttp{
 				Path: "/",
 				Verb: "post",
 			},
 		})
+
+		if app.Debug {
+			log.Println("Mount PATCH " + loadedModel.BaseUrl)
+		}
+		loadedModel.RemoteMethod(func(ctx *fiber.Ctx) error {
+			id, err := primitive.ObjectIDFromHex(ctx.Params("id"))
+			if err != nil {
+				return err
+			}
+			var data *bson.M
+			err = json.Unmarshal(ctx.Body(), &data)
+			if err != nil {
+				return err
+			}
+			eventContext := model.EventContext{
+				Ctx:     ctx,
+				ModelID: &id,
+				Data:    data,
+			}
+			return handleEvent(&eventContext, loadedModel, "instance_updateAttributes")
+		}, model.RemoteMethodOptions{
+			Http: model.RemoteMethodOptionsHttp{
+				Path: "/:id",
+				Verb: "patch",
+			},
+		})
 		if loadedModel.Config.Base == "User" {
 
 			loadedModel.RemoteMethod(func(ctx *fiber.Ctx) error {
-				return handleEvent(ctx, loadedModel, "login")
+				eventContext := model.EventContext{
+					Ctx: ctx,
+				}
+				return handleEvent(&eventContext, loadedModel, "login")
 			}, model.RemoteMethodOptions{
 				Description: "Logins a user",
 				Http: model.RemoteMethodOptionsHttp{
