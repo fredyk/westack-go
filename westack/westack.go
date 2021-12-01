@@ -59,6 +59,10 @@ func (app *WeStack) loadModels() {
 
 	app._swaggerPaths = map[string]map[string]interface{}{}
 	for _, fileInfo := range fileInfos {
+
+		if strings.Split(fileInfo.Name(), ".")[1] != "json" {
+			continue
+		}
 		var config model.Config
 		common.LoadFile("./common/models/"+fileInfo.Name(), &config)
 
