@@ -1,0 +1,6 @@
+{
+  "user": {
+    "dataSource": "db",
+    "public": true
+  }
+}

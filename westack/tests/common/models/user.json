@@ -1,0 +1,14 @@
+{
+  "name": "user",
+  "base": "User",
+  "plural": "users",
+  "public": true,
+  "properties": {
+    "email": {
+      "type": "string",
+      "required": true
+    }
+  },
+  "relations": {},
+  "hidden": ["password"]
+}
