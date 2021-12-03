@@ -427,7 +427,14 @@ func (app *WeStack) loadModelsRoutes() {
 	}
 }
 
+// Listen is an alias for Start()
+//
+// Deprecated: Start() should be used instead
 func (app WeStack) Listen(addr string) interface{} {
+	return app.Start(addr)
+}
+
+func (app WeStack) Start(addr string) interface{} {
 	log.Printf("DEBUG Server took %v ms to start\n", time.Now().UnixMilli()-app.init.UnixMilli())
 	return app.Server.Listen(addr)
 }
@@ -438,7 +445,7 @@ type WeStackOptions struct {
 	Port        int32
 }
 
-func New(options WeStackOptions) WeStack {
+func New(options WeStackOptions) *WeStack {
 	server := fiber.New()
 
 	modelRegistry := make(map[string]*model.Model)
@@ -464,5 +471,5 @@ func New(options WeStackOptions) WeStack {
 		},
 	}))
 
-	return app
+	return &app
 }

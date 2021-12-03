@@ -11,16 +11,18 @@ import (
 	"testing"
 )
 
-var app = westack.New(westack.WeStackOptions{
-	Debug:       true,
-	RestApiRoot: "/api/v1",
-	Port:        8023,
-})
+var app *westack.WeStack
 
 func init() {
+	app = westack.New(westack.WeStackOptions{
+		Debug:       true,
+		RestApiRoot: "/api/v1",
+		Port:        8023,
+	})
 	app.Boot(func(app *westack.WeStack) {
 
 	})
+	go app.Start("localhost:8021")
 }
 
 func Test_WeStackCreateUser(t *testing.T) {
