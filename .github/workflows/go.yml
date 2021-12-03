@@ -31,7 +31,7 @@ jobs:
     - name: Start MongoDB
       run: sudo systemctl start mongod
 
-    - name: Build
+    - name: Test WeStack
       run: go test -v ./westack/tests
 
 #    - name: Test
