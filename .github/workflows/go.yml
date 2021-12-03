@@ -32,7 +32,7 @@ jobs:
       run: sudo systemctl start mongod
 
     - name: Build
-      run: go build -v ./...
+      run: go test -v ./westack/tests
 
 #    - name: Test
 #      run: go test -v ./...
