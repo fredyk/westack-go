@@ -36,3 +36,9 @@ func main() {
 }
 
 ```
+
+### Contribute
+
+Write to [westack.team@gmail.com](mailto://westack.team@gmail.com) if you want to contribute to the project: D
+
+You can also create as many pull requests as you want
