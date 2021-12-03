@@ -31,7 +31,7 @@ func main() {
 
 	})
 
-	log.Fatal(app.Listen(fmt.Sprintf(":%v", app.Port)))
+	log.Fatal(app.Start(fmt.Sprintf(":%v", app.Port)))
 
 }
 
