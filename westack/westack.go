@@ -63,7 +63,9 @@ func (app *WeStack) loadModels() {
 	}
 
 	var globalModelConfig *map[string]*model.Config
-	common.LoadFile("./model-config.json", &globalModelConfig)
+	if err := common.LoadFile("./model-config.json", &globalModelConfig); err != nil {
+		panic("Missing or invalid ./model-config.json: " + err.Error())
+	}
 
 	app._swaggerPaths = map[string]map[string]interface{}{}
 	for _, fileInfo := range fileInfos {
@@ -233,7 +235,9 @@ func handleEvent(eventContext *model.EventContext, loadedModel *model.Model, eve
 
 func (app *WeStack) loadDataSources() {
 	var allDatasources *map[string]*model.DataSourceConfig
-	common.LoadFile("./datasources.json", &allDatasources)
+	if err := common.LoadFile("./datasources.json", &allDatasources); err != nil {
+		panic(err)
+	}
 
 	for dsName, dsConfig := range *allDatasources {
 		if dsConfig.Connector == "mongodb" {
@@ -248,6 +252,9 @@ func (app *WeStack) loadDataSources() {
 				log.Println(err)
 			}
 			(*app.Datasources)[dsName] = ds
+			if app.Debug {
+				log.Println("Connected to database", dsConfig.Database)
+			}
 		} else {
 			log.Println("ERROR: connector", dsConfig.Connector, "not supported")
 		}

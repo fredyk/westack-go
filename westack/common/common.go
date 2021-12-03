@@ -2,7 +2,6 @@ package common
 
 import (
 	"encoding/json"
-	"fmt"
 	"io/ioutil"
 	"log"
 	"regexp"
@@ -14,18 +13,18 @@ type IApp struct {
 	SwaggerPaths func() *map[string]map[string]interface{}
 }
 
-func LoadFile(filePath string, out interface{}) interface{} {
+func LoadFile(filePath string, out interface{}) error {
 	jsonFile, err := ioutil.ReadFile(filePath)
 	if err != nil {
-		fmt.Println(err)
+		return err
 	}
 
 	//var result map[string]interface{}
 	err2 := json.Unmarshal(jsonFile, &out)
 	if err2 != nil {
-		fmt.Println(err2)
+		return err2
 	}
-	return out
+	return nil
 }
 
 func DashedCase(st string) string {
