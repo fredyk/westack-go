@@ -42,7 +42,7 @@ func Test_WeStackCreateUser(t *testing.T) {
 
 }
 
-func Test_WeStackCreateLogin(t *testing.T) {
+func Test_WeStackLogin(t *testing.T) {
 
 	m, b := map[string]interface{}{"email": "email1@example.com", "password": "test"}, new(bytes.Buffer)
 	err := json.NewEncoder(b).Encode(m)
