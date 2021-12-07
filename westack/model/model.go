@@ -314,7 +314,7 @@ func (loadedModel *Model) DeleteById(id interface{}) (int64, error) {
 	if deletedCount > 0 {
 		return deletedCount, nil
 	} else {
-		return 0, datasource.NewError(400, "Could not delete document")
+		return 0, datasource.NewError(fiber.StatusNotFound, "Document not found")
 	}
 }
 
