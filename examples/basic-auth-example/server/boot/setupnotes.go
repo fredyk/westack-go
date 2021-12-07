@@ -1,6 +1,7 @@
 package boot
 
 import (
+	"fmt"
 	"github.com/fredyk/westack-go/examples/basic-auth-example/common/models"
 	"github.com/fredyk/westack-go/westack"
 	"go.mongodb.org/mongo-driver/bson"
@@ -49,6 +50,22 @@ func SetupNotes(app *westack.WeStack) {
 		notes, _ := noteModel.FindMany(&map[string]interface{}{"where": map[string]interface{}{"userId": typedUser.Id}})
 
 		log.Println("User notes:", len(notes))
+
+		// Delete the note
+		deletedCount, err := noteModel.DeleteById(note.Id)
+		if err != nil {
+			panic(nil)
+		}
+		if deletedCount != 1 {
+			panic(fmt.Sprintf("Note was not deleted: count=%v", deletedCount))
+		}
+		log.Println("Deleted notes: ", deletedCount)
+
+		// Again list user notes
+		notes, _ = noteModel.FindMany(&map[string]interface{}{"where": map[string]interface{}{"userId": typedUser.Id}})
+
+		log.Println("User notes:", len(notes))
+
 	}
 
 }
