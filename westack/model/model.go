@@ -80,7 +80,7 @@ func New(config Config) *Model {
 }
 
 type ModelInstance struct {
-	Model Model
+	Model *Model
 	Id    interface{}
 
 	data  bson.M
@@ -98,7 +98,7 @@ func (modelInstance ModelInstance) ToJSON() map[string]interface{} {
 	return result
 }
 
-func (loadedModel Model) Build(data bson.M, fromDb bool) ModelInstance {
+func (loadedModel *Model) Build(data bson.M, fromDb bool) ModelInstance {
 
 	if data["id"] == nil {
 		data["id"] = data["_id"]
@@ -133,7 +133,7 @@ func parseFilter(filter string) *map[string]interface{} {
 	return filterMap
 }
 
-func (loadedModel Model) FindMany(filterMap *map[string]interface{}) ([]ModelInstance, error) {
+func (loadedModel *Model) FindMany(filterMap *map[string]interface{}) ([]ModelInstance, error) {
 
 	var documents []map[string]interface{}
 	err := loadedModel.Datasource.FindMany(loadedModel.Name, filterMap).All(context.Background(), &documents)
@@ -150,7 +150,7 @@ func (loadedModel Model) FindMany(filterMap *map[string]interface{}) ([]ModelIns
 	return results, nil
 }
 
-func (loadedModel Model) FindOne(filterMap *map[string]interface{}) (*ModelInstance, error) {
+func (loadedModel *Model) FindOne(filterMap *map[string]interface{}) (*ModelInstance, error) {
 	var documents []map[string]interface{}
 	err := loadedModel.Datasource.FindMany(loadedModel.Name, filterMap).All(context.Background(), &documents)
 	if err != nil {
@@ -165,7 +165,7 @@ func (loadedModel Model) FindOne(filterMap *map[string]interface{}) (*ModelInsta
 	}
 }
 
-func (loadedModel Model) FindById(id string, filterMap *map[string]interface{}) (*ModelInstance, error) {
+func (loadedModel *Model) FindById(id string, filterMap *map[string]interface{}) (*ModelInstance, error) {
 	var document map[string]interface{}
 	cursor := loadedModel.Datasource.FindById(loadedModel.Name, id, filterMap)
 	if cursor != nil {
@@ -181,7 +181,7 @@ func (loadedModel Model) FindById(id string, filterMap *map[string]interface{}) 
 	}
 }
 
-func (loadedModel Model) Create(data interface{}) (*ModelInstance, error) {
+func (loadedModel *Model) Create(data interface{}) (*ModelInstance, error) {
 
 	var finalData bson.M
 	switch data.(type) {
@@ -283,6 +283,41 @@ func (modelInstance *ModelInstance) UpdateAttributes(data interface{}) (*ModelIn
 	}
 }
 
+func (loadedModel *Model) DeleteById(id interface{}) (int64, error) {
+
+	var finalId primitive.ObjectID
+	switch id.(type) {
+	case string:
+		if aux, err := primitive.ObjectIDFromHex(id.(string)); err != nil {
+			return 0, err
+		} else {
+			finalId = aux
+		}
+		break
+	case primitive.ObjectID:
+		finalId = id.(primitive.ObjectID)
+		break
+	case *primitive.ObjectID:
+		finalId = *id.(*primitive.ObjectID)
+		break
+	default:
+		log.Fatal(fmt.Sprintf("Invalid input for Model.DeleteById() <- %s", id))
+	}
+	//eventContext := EventContext{
+	//	Data:          &finalId,
+	//	Instance:      modelInstance,
+	//	Ctx:           nil,
+	//	IsNewInstance: false,
+	//}
+	//modelInstance.Model.GetHandler("__operation__before_save")(&eventContext)
+	deletedCount := loadedModel.Datasource.DeleteById(loadedModel.Name, finalId)
+	if deletedCount > 0 {
+		return deletedCount, nil
+	} else {
+		return 0, datasource.NewError(400, "Could not delete document")
+	}
+}
+
 func handleError(c *fiber.Ctx, err error) error {
 	switch err.(type) {
 	case *datasource.OperationError:
@@ -306,7 +341,7 @@ func (modelInstance ModelInstance) Transform(out interface{}) error {
 	return nil
 }
 
-func (loadedModel Model) FindManyRoute(c *fiber.Ctx) error {
+func (loadedModel *Model) FindManyRoute(c *fiber.Ctx) error {
 	filterSt := c.Query("filter")
 	filterMap := parseFilter(filterSt)
 
@@ -323,7 +358,7 @@ func (loadedModel Model) FindManyRoute(c *fiber.Ctx) error {
 	return c.JSON(out)
 }
 
-func (loadedModel Model) FindByIdRoute(c *fiber.Ctx) error {
+func (loadedModel *Model) FindByIdRoute(c *fiber.Ctx) error {
 	id := c.Params("id")
 	if regexp.MustCompile("^([0-9a-f]{24})$").MatchString(id) {
 		filterSt := c.Query("filter")
@@ -356,7 +391,7 @@ type RemoteMethodOptions struct {
 	Http        RemoteMethodOptionsHttp
 }
 
-func (loadedModel Model) RemoteMethod(handler func(c *fiber.Ctx) error, options RemoteMethodOptions) fiber.Router {
+func (loadedModel *Model) RemoteMethod(handler func(c *fiber.Ctx) error, options RemoteMethodOptions) fiber.Router {
 	var http = options.Http
 	path := strings.ToLower(http.Path)
 	verb := strings.ToLower(http.Verb)
@@ -450,6 +485,7 @@ type EventContext struct {
 	IsNewInstance bool
 	Result        interface{}
 	ModelID       *primitive.ObjectID
+	StatusCode    int
 }
 
 type WeStackError struct {
@@ -471,7 +507,7 @@ func (ctx *EventContext) RestError(fiberError *fiber.Error, details fiber.Map) e
 	}
 }
 
-func wrapEventHandler(model Model, eventKey string, handler func(eventContext *EventContext) error) func(eventContext *EventContext) error {
+func wrapEventHandler(model *Model, eventKey string, handler func(eventContext *EventContext) error) func(eventContext *EventContext) error {
 	currentHandler := model.eventHandlers[eventKey]
 	if currentHandler != nil {
 		newHandler := handler
@@ -487,16 +523,16 @@ func wrapEventHandler(model Model, eventKey string, handler func(eventContext *E
 	return handler
 }
 
-func (loadedModel Model) On(event string, handler func(eventContext *EventContext) error) {
+func (loadedModel *Model) On(event string, handler func(eventContext *EventContext) error) {
 	loadedModel.eventHandlers[event] = wrapEventHandler(loadedModel, event, handler)
 }
 
-func (loadedModel Model) Observe(operation string, handler func(eventContext *EventContext) error) {
+func (loadedModel *Model) Observe(operation string, handler func(eventContext *EventContext) error) {
 	eventKey := "__operation__" + strings.ReplaceAll(strings.TrimSpace(operation), " ", "_")
 	loadedModel.On(eventKey, handler)
 }
 
-func (loadedModel Model) GetHandler(event string) func(eventContext *EventContext) error {
+func (loadedModel *Model) GetHandler(event string) func(eventContext *EventContext) error {
 	res := loadedModel.eventHandlers[event]
 	if res == nil {
 		res = func(eventContext *EventContext) error {

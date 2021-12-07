@@ -98,7 +98,7 @@ func (app *WeStack) loadModels() {
 				plural = common.DashedCase(config.Name) + "s"
 			}
 			config.Plural = plural
-			// TODO: Dynamic rest base
+
 			modelRouter := app.Server.Group(app.RestApiRoot+"/"+plural, func(ctx *fiber.Ctx) error {
 				//log.Println("Resolve " + loadedModel.Name + " " + ctx.Method() + " " + ctx.Path())
 				return ctx.Next()
@@ -115,7 +115,8 @@ func (app *WeStack) loadModels() {
 						// TODO: Validate email
 						return ctx.RestError(fiber.ErrBadRequest, fiber.Map{"error": "Invalid email"})
 					}
-					existent, err2 := loadedModel.FindOne(&map[string]interface{}{"where": map[string]interface{}{"email": (*data)["email"]}})
+					filter := map[string]interface{}{"where": map[string]interface{}{"email": (*data)["email"]}}
+					existent, err2 := loadedModel.FindOne(&filter)
 					if err2 != nil {
 						return err2
 					}
@@ -140,6 +141,7 @@ func (app *WeStack) loadModels() {
 				if err != nil {
 					return err
 				}
+				ctx.StatusCode = fiber.StatusOK
 				ctx.Result = created.ToJSON()
 				return nil
 			})
@@ -163,9 +165,24 @@ func (app *WeStack) loadModels() {
 				if err != nil {
 					return err
 				}
+				ctx.StatusCode = fiber.StatusOK
 				ctx.Result = updated.ToJSON()
 				return nil
 			})
+
+			deleteByIdHandler := func(ctx *model.EventContext) error {
+				deletedCount, err := loadedModel.DeleteById(ctx.ModelID)
+				if err != nil {
+					return err
+				}
+				if deletedCount != 1 {
+					return ctx.RestError(fiber.ErrBadRequest, fiber.Map{"error": fmt.Sprintf("Deleted %v instances for %v", deletedCount, ctx.ModelID)})
+				}
+				ctx.StatusCode = fiber.StatusNoContent
+				ctx.Result = ""
+				return nil
+			}
+			loadedModel.On("deleteById", deleteByIdHandler)
 
 			if config.Base == "User" {
 
@@ -175,6 +192,7 @@ func (app *WeStack) loadModels() {
 					err := json.Unmarshal(ctx.Ctx.Body(), &loginBody)
 					err = json.Unmarshal(ctx.Ctx.Body(), &data)
 					if err != nil {
+						ctx.StatusCode = fiber.StatusBadRequest
 						ctx.Result = fiber.Map{"error": err}
 						return err
 					}
@@ -215,6 +233,7 @@ func (app *WeStack) loadModels() {
 					// Sign and get the complete encoded token as a string using the secret
 					tokenString, err := token.SignedString(hmacSampleSecret)
 
+					ctx.StatusCode = fiber.StatusOK
 					ctx.Result = fiber.Map{"id": tokenString, "userId": userIdHex}
 					return nil
 				})
@@ -230,7 +249,10 @@ func handleEvent(eventContext *model.EventContext, loadedModel *model.Model, eve
 	if err != nil {
 		return loadedModel.SendError(eventContext.Ctx, err)
 	}
-	return eventContext.Ctx.JSON(eventContext.Result)
+	if eventContext.StatusCode == 0 {
+		eventContext.StatusCode = fiber.StatusNotImplemented
+	}
+	return eventContext.Ctx.Status(eventContext.StatusCode).JSON(eventContext.Result)
 }
 
 func (app *WeStack) loadDataSources() {
@@ -249,7 +271,7 @@ func (app *WeStack) loadDataSources() {
 			})
 			err := ds.Initialize()
 			if err != nil {
-				log.Println(err)
+				panic(err)
 			}
 			(*app.Datasources)[dsName] = ds
 			if app.Debug {
@@ -382,7 +404,7 @@ func (app *WeStack) loadModelsRoutes() {
 		})
 
 		if app.Debug {
-			log.Println("Mount PATCH " + loadedModel.BaseUrl)
+			log.Println("Mount PATCH " + loadedModel.BaseUrl + "/:id")
 		}
 		loadedModel.RemoteMethod(func(ctx *fiber.Ctx) error {
 			id, err := primitive.ObjectIDFromHex(ctx.Params("id"))
@@ -404,6 +426,26 @@ func (app *WeStack) loadModelsRoutes() {
 			Http: model.RemoteMethodOptionsHttp{
 				Path: "/:id",
 				Verb: "patch",
+			},
+		})
+
+		if app.Debug {
+			log.Println("Mount DELETE " + loadedModel.BaseUrl + "/:id")
+		}
+		loadedModel.RemoteMethod(func(ctx *fiber.Ctx) error {
+			id, err := primitive.ObjectIDFromHex(ctx.Params("id"))
+			if err != nil {
+				return err
+			}
+			eventContext := model.EventContext{
+				Ctx:     ctx,
+				ModelID: &id,
+			}
+			return handleEvent(&eventContext, loadedModel, "deleteById")
+		}, model.RemoteMethodOptions{
+			Http: model.RemoteMethodOptionsHttp{
+				Path: "/:id",
+				Verb: "delete",
 			},
 		})
 		if loadedModel.Config.Base == "User" {

@@ -37,7 +37,10 @@ func (ds *Datasource) Initialize() error {
 	switch connector {
 	case "mongodb":
 		mongoCtx := context.Background()
-		db, _ := mongo.Connect(mongoCtx, options.Client().ApplyURI(ds.Config["url"].(string)))
+		db, err := mongo.Connect(mongoCtx, options.Client().ApplyURI(ds.Config["url"].(string)))
+		if err != nil {
+			return err
+		}
 		ds.Db = *db
 	default:
 		return errors.New("Invalid connector " + connector)
@@ -54,7 +57,7 @@ func (ds *Datasource) FindMany(collectionName string, filter *map[string]interfa
 	switch connector {
 	case "mongodb":
 		var db mongo.Client = ds.Db.(mongo.Client)
-		// TODO: dynamic database
+
 		database := db.Database(ds.Config["database"].(string))
 		collection := database.Collection(collectionName)
 		var targetFilter map[string]interface{}
@@ -107,7 +110,7 @@ func (ds *Datasource) Create(collectionName string, data *bson.M) *mongo.Cursor 
 	switch connector {
 	case "mongodb":
 		var db mongo.Client = ds.Db.(mongo.Client)
-		// TODO: dynamic database
+
 		database := db.Database(ds.Config["database"].(string))
 		collection := database.Collection(collectionName)
 		cursor, _ := collection.InsertOne(context.Background(), data)
@@ -121,7 +124,7 @@ func (ds *Datasource) UpdateById(collectionName string, id primitive.ObjectID, d
 	switch connector {
 	case "mongodb":
 		var db = ds.Db.(mongo.Client)
-		// TODO: dynamic database
+
 		database := db.Database(ds.Config["database"].(string))
 		collection := database.Collection(collectionName)
 		if _, err := collection.UpdateOne(context.Background(), bson.M{"_id": id}, bson.M{"$set": data}); err != nil {
@@ -130,6 +133,23 @@ func (ds *Datasource) UpdateById(collectionName string, id primitive.ObjectID, d
 		return findByObjectId(collectionName, id, ds)
 	}
 	return nil
+}
+
+func (ds *Datasource) DeleteById(collectionName string, id primitive.ObjectID) int64 {
+	var connector = ds.Config["connector"].(string)
+	switch connector {
+	case "mongodb":
+		var db = ds.Db.(mongo.Client)
+
+		database := db.Database(ds.Config["database"].(string))
+		collection := database.Collection(collectionName)
+		if result, err := collection.DeleteOne(context.Background(), bson.M{"_id": id}); err != nil {
+			panic(err)
+		} else {
+			return result.DeletedCount
+		}
+	}
+	return 0
 }
 
 func New(config map[string]interface{}) *Datasource {
