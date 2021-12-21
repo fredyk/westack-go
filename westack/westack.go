@@ -266,7 +266,11 @@ func (app *WeStack) loadDataSources() {
 		panic(err)
 	}
 
-	for dsName, dsConfig := range *allDatasources {
+	for key, dsConfig := range *allDatasources {
+		dsName := dsConfig.Name
+		if dsName == "" {
+			dsName = key
+		}
 		if dsConfig.Connector == "mongodb" {
 			ds := datasource.New(map[string]interface{}{
 				"name":      dsConfig.Name,
