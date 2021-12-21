@@ -393,7 +393,7 @@ type RemoteMethodOptions struct {
 
 func (loadedModel *Model) RemoteMethod(handler func(c *fiber.Ctx) error, options RemoteMethodOptions) fiber.Router {
 	if !loadedModel.Config.Public {
-		log.Fatal("Trying to register a remote method in the private model:", loadedModel.Name)
+		panic(fmt.Sprintf("Trying to register a remote method in the private model: %v, you may set \"public\": true in the %v.json file", loadedModel.Name, loadedModel.Name))
 	}
 	var http = options.Http
 	path := strings.ToLower(http.Path)
