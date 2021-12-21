@@ -341,6 +341,12 @@ func (app *WeStack) Boot(customRoutesCallback func(app *WeStack)) {
 func (app *WeStack) loadNotFoundRoutes() {
 	for _, entry := range *app.ModelRegistry {
 		loadedModel := entry
+		if !loadedModel.Config.Public {
+			if app.Debug {
+				log.Println("WARNING: Model", loadedModel.Name, "is not public")
+			}
+			continue
+		}
 		(*loadedModel.Router).Use(func(ctx *fiber.Ctx) error {
 			log.Println("WARNING: Unresolved method in " + loadedModel.Name + ": " + ctx.Method() + " " + ctx.Path())
 			return ctx.Status(404).JSON(fiber.Map{"error": fiber.Map{"status": 404, "message": fmt.Sprintf("Shared class %#v has no method handling %v %v", loadedModel.Name, ctx.Method(), ctx.Path())}})
@@ -361,6 +367,12 @@ func (app *WeStack) AsInterface() *common.IApp {
 func (app *WeStack) loadModelsRoutes() {
 	for _, entry := range *app.ModelRegistry {
 		loadedModel := entry
+		if !loadedModel.Config.Public {
+			if app.Debug {
+				log.Println("WARNING: Model", loadedModel.Name, "is not public")
+			}
+			continue
+		}
 
 		if app.Debug {
 			log.Println("Mount GET " + loadedModel.BaseUrl)
