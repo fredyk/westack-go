@@ -84,6 +84,11 @@ func (app *WeStack) loadModels() {
 
 		//noinspection GoUnusedVariable
 		dataSource := (*app.Datasources)[configFromGlobal.Datasource]
+
+		if dataSource == nil {
+			log.Fatal("ERROR: Missing or invalid datasource file for ", dataSource)
+		}
+
 		loadedModel := model.New(config)
 		loadedModel.App = app.AsInterface()
 		loadedModel.Datasource = dataSource
