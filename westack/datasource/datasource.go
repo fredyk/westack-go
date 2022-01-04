@@ -10,6 +10,7 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"log"
 	"regexp"
+	"time"
 )
 
 type OperationError struct {
@@ -80,7 +81,7 @@ func validateFilter(filter *map[string]interface{}) error {
 	if filter == nil {
 		return nil
 	}
-	for key, _ := range *filter {
+	for key := range *filter {
 		if key == "where" || key == "include" || key == "skip" || key == "limit" || key == "order" {
 
 		} else {
@@ -90,6 +91,7 @@ func validateFilter(filter *map[string]interface{}) error {
 	return nil
 }
 
+//goland:noinspection GoUnusedParameter
 func (ds *Datasource) FindById(collectionName string, id interface{}, filter *map[string]interface{}) *mongo.Cursor {
 	var _id interface{}
 	switch id.(type) {
@@ -196,23 +198,27 @@ func ReplaceObjectIds(data interface{}) {
 	for key, value := range finalData {
 		switch value.(type) {
 		case string:
+			var newValue interface{}
+			var err error
 			if regexp.MustCompile("^([0-9a-f]{24})$").MatchString(value.(string)) {
-				_id, err := primitive.ObjectIDFromHex(value.(string))
-				if err == nil {
-					switch data.(type) {
-					case map[string]interface{}:
-						data.(map[string]interface{})[key] = _id
-						break
-					case bson.M:
-						data.(bson.M)[key] = _id
-						break
-					case *bson.M:
-						(*data.(*bson.M))[key] = _id
-						break
-					default:
-						log.Fatal(fmt.Sprintf("Invalid input for Model.Create() <- %s", data))
-					}
-
+				newValue, err = primitive.ObjectIDFromHex(value.(string))
+			} else if regexp.MustCompile("^(\\d{4}-\\d{2}-\\d{2}-T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?)([+:\\-/0-9a-zA-Z]+)?$").MatchString(value.(string)) {
+				layout := "2006-01-02T15:04:05.000-03:00"
+				newValue, err = time.Parse(layout, value.(string))
+			}
+			if err == nil && newValue != nil {
+				switch data.(type) {
+				case map[string]interface{}:
+					data.(map[string]interface{})[key] = newValue
+					break
+				case bson.M:
+					data.(bson.M)[key] = newValue
+					break
+				case *bson.M:
+					(*data.(*bson.M))[key] = newValue
+					break
+				default:
+					log.Fatal(fmt.Sprintf("Invalid input for Model.Create() <- %s", data))
 				}
 			}
 		case map[string]interface{}:
