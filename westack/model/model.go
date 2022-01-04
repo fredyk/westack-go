@@ -165,7 +165,7 @@ func (loadedModel *Model) FindOne(filterMap *map[string]interface{}) (*ModelInst
 	}
 }
 
-func (loadedModel *Model) FindById(id string, filterMap *map[string]interface{}) (*ModelInstance, error) {
+func (loadedModel *Model) FindById(id interface{}, filterMap *map[string]interface{}) (*ModelInstance, error) {
 	var document map[string]interface{}
 	cursor := loadedModel.Datasource.FindById(loadedModel.Name, id, filterMap)
 	if cursor != nil {
@@ -177,7 +177,7 @@ func (loadedModel *Model) FindById(id string, filterMap *map[string]interface{})
 			return &result, nil
 		}
 	} else {
-		return nil, datasource.NewError(404, loadedModel.Name+" "+id+" not found")
+		return nil, datasource.NewError(404, fmt.Sprintf("%v %v not found", loadedModel.Name, id))
 	}
 }
 
@@ -262,7 +262,7 @@ func (modelInstance *ModelInstance) UpdateAttributes(data interface{}) (*ModelIn
 	}
 	modelInstance.Model.GetHandler("__operation__before_save")(&eventContext)
 	var document bson.M
-	cursor := modelInstance.Model.Datasource.UpdateById(modelInstance.Model.Name, modelInstance.Id.(primitive.ObjectID), &finalData)
+	cursor := modelInstance.Model.Datasource.UpdateById(modelInstance.Model.Name, modelInstance.Id, &finalData)
 	if cursor != nil {
 		err := cursor.Decode(&document)
 		if err != nil {
@@ -285,11 +285,13 @@ func (modelInstance *ModelInstance) UpdateAttributes(data interface{}) (*ModelIn
 
 func (loadedModel *Model) DeleteById(id interface{}) (int64, error) {
 
-	var finalId primitive.ObjectID
+	var finalId interface{}
 	switch id.(type) {
 	case string:
 		if aux, err := primitive.ObjectIDFromHex(id.(string)); err != nil {
-			return 0, err
+			// id can be a non-objectid
+			//return 0, err
+			finalId = aux
 		} else {
 			finalId = aux
 		}
@@ -301,7 +303,9 @@ func (loadedModel *Model) DeleteById(id interface{}) (int64, error) {
 		finalId = *id.(*primitive.ObjectID)
 		break
 	default:
-		log.Fatal(fmt.Sprintf("Invalid input for Model.DeleteById() <- %s", id))
+		if loadedModel.App.Debug {
+			log.Println(fmt.Sprintf("WARNING: Invalid input for Model.DeleteById() <- %s", id))
+		}
 	}
 	//eventContext := EventContext{
 	//	Data:          &finalId,
@@ -487,7 +491,7 @@ type EventContext struct {
 	Ctx           *fiber.Ctx
 	IsNewInstance bool
 	Result        interface{}
-	ModelID       *primitive.ObjectID
+	ModelID       interface{}
 	StatusCode    int
 }
 

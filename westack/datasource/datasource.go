@@ -88,16 +88,23 @@ func validateFilter(filter *map[string]interface{}) error {
 	return nil
 }
 
-func (ds *Datasource) FindById(collectionName string, id string, filter *map[string]interface{}) *mongo.Cursor {
-	_id, err := primitive.ObjectIDFromHex(id)
-	if err != nil {
-		log.Println(err.Error())
-		return nil
+func (ds *Datasource) FindById(collectionName string, id interface{}, filter *map[string]interface{}) *mongo.Cursor {
+	var _id interface{}
+	switch id.(type) {
+	case string:
+		var err error
+		_id, err = primitive.ObjectIDFromHex(id.(string))
+		if err != nil {
+			log.Println("WARNING: _id", _id, " is not a valid ObjectID:", err.Error())
+			//return nil
+		}
+	default:
+		_id = id
 	}
 	return findByObjectId(collectionName, _id, ds)
 }
 
-func findByObjectId(collectionName string, _id primitive.ObjectID, ds *Datasource) *mongo.Cursor {
+func findByObjectId(collectionName string, _id interface{}, ds *Datasource) *mongo.Cursor {
 	filter := &map[string]interface{}{"where": map[string]interface{}{"_id": _id}}
 	cursor := ds.FindMany(collectionName, filter)
 	if cursor.Next(context.Background()) {
@@ -119,12 +126,12 @@ func (ds *Datasource) Create(collectionName string, data *bson.M) *mongo.Cursor 
 		if err != nil {
 			panic(err)
 		}
-		return findByObjectId(collectionName, cursor.InsertedID.(primitive.ObjectID), ds)
+		return findByObjectId(collectionName, cursor.InsertedID, ds)
 	}
 	return nil
 }
 
-func (ds *Datasource) UpdateById(collectionName string, id primitive.ObjectID, data *bson.M) *mongo.Cursor {
+func (ds *Datasource) UpdateById(collectionName string, id interface{}, data *bson.M) *mongo.Cursor {
 	var connector = ds.Config["connector"].(string)
 	switch connector {
 	case "mongodb":
@@ -140,7 +147,7 @@ func (ds *Datasource) UpdateById(collectionName string, id primitive.ObjectID, d
 	return nil
 }
 
-func (ds *Datasource) DeleteById(collectionName string, id primitive.ObjectID) int64 {
+func (ds *Datasource) DeleteById(collectionName string, id interface{}) int64 {
 	var connector = ds.Config["connector"].(string)
 	switch connector {
 	case "mongodb":
