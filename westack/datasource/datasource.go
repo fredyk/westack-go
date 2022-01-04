@@ -65,7 +65,10 @@ func (ds *Datasource) FindMany(collectionName string, filter *map[string]interfa
 		} else {
 			targetFilter = map[string]interface{}{}
 		}
-		cursor, _ := collection.Find(context.Background(), targetFilter)
+		cursor, err := collection.Find(context.Background(), targetFilter)
+		if err != nil {
+			panic(err)
+		}
 		return cursor
 	}
 	return nil
@@ -112,7 +115,10 @@ func (ds *Datasource) Create(collectionName string, data *bson.M) *mongo.Cursor 
 
 		database := db.Database(ds.Config["database"].(string))
 		collection := database.Collection(collectionName)
-		cursor, _ := collection.InsertOne(context.Background(), data)
+		cursor, err := collection.InsertOne(context.Background(), data)
+		if err != nil {
+			panic(err)
+		}
 		return findByObjectId(collectionName, cursor.InsertedID.(primitive.ObjectID), ds)
 	}
 	return nil

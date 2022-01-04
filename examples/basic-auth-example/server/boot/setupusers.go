@@ -38,4 +38,14 @@ func SetupUsers(app *westack.WeStack) {
 		},
 	})
 
+	//userModel.RemoteMethod(func(c *fiber.Ctx) error {
+	//	TODO:
+	//}, model.RemoteMethodOptions{
+	//	Description: "Example error",
+	//	Http: model.RemoteMethodOptionsHttp{
+	//		Path: "/api/users/me",
+	//		Verb: "get",
+	//	},
+	//})
+
 }
