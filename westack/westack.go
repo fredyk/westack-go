@@ -51,7 +51,11 @@ func (app WeStack) SwaggerPaths() *map[string]map[string]interface{} {
 }
 
 func (app *WeStack) FindModel(modelName string) *model.Model {
-	return (*app.ModelRegistry)[modelName]
+	result := (*app.ModelRegistry)[modelName]
+	if result == nil {
+		panic(fmt.Sprintf("Model %v not found", modelName))
+	}
+	return result
 }
 
 func (app *WeStack) loadModels() {
