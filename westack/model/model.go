@@ -203,6 +203,7 @@ func (loadedModel *Model) Create(data interface{}) (*ModelInstance, error) {
 	default:
 		log.Fatal(fmt.Sprintf("Invalid input for Model.Create() <- %s", data))
 	}
+	replaceObjectIds(finalData)
 	eventContext := EventContext{
 		Data:          &finalData,
 		Ctx:           nil,
@@ -232,6 +233,20 @@ func (loadedModel *Model) Create(data interface{}) (*ModelInstance, error) {
 
 }
 
+func replaceObjectIds(data bson.M) {
+	for key, value := range data {
+		switch value.(type) {
+		case string:
+			if regexp.MustCompile("^([0-9a-f]{24})$").MatchString(value.(string)) {
+				_id, err := primitive.ObjectIDFromHex(value.(string))
+				if err == nil {
+					data[key] = _id
+				}
+			}
+		}
+	}
+}
+
 func (modelInstance *ModelInstance) UpdateAttributes(data interface{}) (*ModelInstance, error) {
 
 	var finalData bson.M
@@ -254,6 +269,7 @@ func (modelInstance *ModelInstance) UpdateAttributes(data interface{}) (*ModelIn
 	default:
 		log.Fatal(fmt.Sprintf("Invalid input for Model.UpdateAttributes() <- %s", data))
 	}
+	replaceObjectIds(finalData)
 	eventContext := EventContext{
 		Data:          &finalData,
 		Instance:      modelInstance,
@@ -364,25 +380,21 @@ func (loadedModel *Model) FindManyRoute(c *fiber.Ctx) error {
 
 func (loadedModel *Model) FindByIdRoute(c *fiber.Ctx) error {
 	id := c.Params("id")
-	if regexp.MustCompile("^([0-9a-f]{24})$").MatchString(id) {
-		filterSt := c.Query("filter")
-		filterMap := parseFilter(filterSt)
-		if filterMap == nil {
-			filterMap = &map[string]interface{}{}
-		}
-
-		if filterSt == "" {
-
-		}
-		result, err := loadedModel.FindById(id, filterMap)
-		result.hideProperties()
-		if err != nil {
-			return handleError(c, err)
-		}
-		return c.JSON(result.ToJSON())
-	} else {
-		return c.Next()
+	filterSt := c.Query("filter")
+	filterMap := parseFilter(filterSt)
+	if filterMap == nil {
+		filterMap = &map[string]interface{}{}
 	}
+
+	if filterSt == "" {
+
+	}
+	result, err := loadedModel.FindById(id, filterMap)
+	result.hideProperties()
+	if err != nil {
+		return handleError(c, err)
+	}
+	return c.JSON(result.ToJSON())
 }
 
 type RemoteMethodOptionsHttp struct {
