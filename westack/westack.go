@@ -296,12 +296,13 @@ func (app *WeStack) Boot(customRoutesCallback func(app *WeStack)) {
 	app.loadDataSources()
 
 	app.loadModels()
-	app.loadModelsRoutes()
+	app.loadModelsFixedRoutes()
 
 	if customRoutesCallback != nil {
 		(customRoutesCallback)(app)
 	}
 
+	app.loadModelsDynamicRoutes()
 	app.loadNotFoundRoutes()
 
 	app.Server.Get("/swagger/doc.json", func(ctx *fiber.Ctx) error {
@@ -372,7 +373,7 @@ func (app *WeStack) AsInterface() *common.IApp {
 	}
 }
 
-func (app *WeStack) loadModelsRoutes() {
+func (app *WeStack) loadModelsFixedRoutes() {
 	for _, entry := range *app.ModelRegistry {
 		loadedModel := entry
 		if !loadedModel.Config.Public {
@@ -388,16 +389,6 @@ func (app *WeStack) loadModelsRoutes() {
 		loadedModel.RemoteMethod(loadedModel.FindManyRoute, model.RemoteMethodOptions{
 			Http: model.RemoteMethodOptionsHttp{
 				Path: "/",
-				Verb: "get",
-			},
-		})
-
-		if app.Debug {
-			log.Println("Mount GET " + loadedModel.BaseUrl + "/:id")
-		}
-		loadedModel.RemoteMethod(loadedModel.FindByIdRoute, model.RemoteMethodOptions{
-			Http: model.RemoteMethodOptionsHttp{
-				Path: "/:id",
 				Verb: "get",
 			},
 		})
@@ -420,6 +411,47 @@ func (app *WeStack) loadModelsRoutes() {
 			Http: model.RemoteMethodOptionsHttp{
 				Path: "/",
 				Verb: "post",
+			},
+		})
+
+		if loadedModel.Config.Base == "User" {
+
+			loadedModel.RemoteMethod(func(ctx *fiber.Ctx) error {
+				eventContext := model.EventContext{
+					Ctx: ctx,
+				}
+				return handleEvent(&eventContext, loadedModel, "login")
+			}, model.RemoteMethodOptions{
+				Description: "Logins a user",
+				Http: model.RemoteMethodOptionsHttp{
+					Path: "/login",
+					Verb: "post",
+				},
+			},
+			)
+
+		}
+
+	}
+}
+
+func (app *WeStack) loadModelsDynamicRoutes() {
+	for _, entry := range *app.ModelRegistry {
+		loadedModel := entry
+		if !loadedModel.Config.Public {
+			if app.Debug {
+				log.Println("WARNING: Model", loadedModel.Name, "is not public")
+			}
+			continue
+		}
+
+		if app.Debug {
+			log.Println("Mount GET " + loadedModel.BaseUrl + "/:id")
+		}
+		loadedModel.RemoteMethod(loadedModel.FindByIdRoute, model.RemoteMethodOptions{
+			Http: model.RemoteMethodOptionsHttp{
+				Path: "/:id",
+				Verb: "get",
 			},
 		})
 
@@ -468,24 +500,6 @@ func (app *WeStack) loadModelsRoutes() {
 				Verb: "delete",
 			},
 		})
-		if loadedModel.Config.Base == "User" {
-
-			loadedModel.RemoteMethod(func(ctx *fiber.Ctx) error {
-				eventContext := model.EventContext{
-					Ctx: ctx,
-				}
-				return handleEvent(&eventContext, loadedModel, "login")
-			}, model.RemoteMethodOptions{
-				Description: "Logins a user",
-				Http: model.RemoteMethodOptionsHttp{
-					Path: "/login",
-					Verb: "post",
-				},
-			},
-			)
-
-		}
-
 	}
 }
 
