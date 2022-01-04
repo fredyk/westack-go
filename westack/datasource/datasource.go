@@ -9,6 +9,7 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"log"
+	"regexp"
 )
 
 type OperationError struct {
@@ -65,6 +66,7 @@ func (ds *Datasource) FindMany(collectionName string, filter *map[string]interfa
 		} else {
 			targetFilter = map[string]interface{}{}
 		}
+		ReplaceObjectIds(targetFilter)
 		cursor, err := collection.Find(context.Background(), targetFilter)
 		if err != nil {
 			panic(err)
@@ -170,4 +172,55 @@ func New(config map[string]interface{}) *Datasource {
 		Config: config,
 	}
 	return ds
+}
+
+func ReplaceObjectIds(data interface{}) {
+
+	var finalData bson.M
+	switch data.(type) {
+	case map[string]interface{}:
+		finalData = bson.M{}
+		for key, value := range data.(map[string]interface{}) {
+			finalData[key] = value
+		}
+		break
+	case bson.M:
+		finalData = data.(bson.M)
+		break
+	case *bson.M:
+		finalData = *data.(*bson.M)
+		break
+	default:
+		log.Fatal(fmt.Sprintf("Invalid input for Model.Create() <- %s", data))
+	}
+	for key, value := range finalData {
+		switch value.(type) {
+		case string:
+			if regexp.MustCompile("^([0-9a-f]{24})$").MatchString(value.(string)) {
+				_id, err := primitive.ObjectIDFromHex(value.(string))
+				if err == nil {
+					switch data.(type) {
+					case map[string]interface{}:
+						data.(map[string]interface{})[key] = _id
+						break
+					case bson.M:
+						data.(bson.M)[key] = _id
+						break
+					case *bson.M:
+						(*data.(*bson.M))[key] = _id
+						break
+					default:
+						log.Fatal(fmt.Sprintf("Invalid input for Model.Create() <- %s", data))
+					}
+
+				}
+			}
+		case map[string]interface{}:
+		case bson.M:
+		case *bson.M:
+			ReplaceObjectIds(value)
+			break
+
+		}
+	}
 }

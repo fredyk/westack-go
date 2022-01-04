@@ -47,7 +47,7 @@ func SetupNotes(app *westack.WeStack) {
 		log.Println("Updated note ", updated.ToJSON())
 
 		// List user notes
-		notes, _ := noteModel.FindMany(&map[string]interface{}{"where": map[string]interface{}{"userId": typedUser.Id}})
+		notes, _ := noteModel.FindMany(&map[string]interface{}{"where": map[string]interface{}{"userId": typedUser.Id.Hex()}})
 
 		log.Println("User notes:", len(notes))
 
@@ -62,7 +62,7 @@ func SetupNotes(app *westack.WeStack) {
 		log.Println("Deleted notes: ", deletedCount)
 
 		// Again list user notes
-		notes, _ = noteModel.FindMany(&map[string]interface{}{"where": map[string]interface{}{"userId": typedUser.Id}})
+		notes, _ = noteModel.FindMany(&map[string]interface{}{"where": map[string]interface{}{"userId": typedUser.Id.Hex()}})
 
 		log.Println("User notes:", len(notes))
 
