@@ -50,7 +50,6 @@ func (ds *Datasource) Initialize() error {
 
 func (ds *Datasource) FindMany(collectionName string, filter *map[string]interface{}) *mongo.Cursor {
 	if err := validateFilter(filter); err != nil {
-		//log.Println(err)
 		panic(err)
 	}
 	var connector string = ds.Config["connector"].(string)
