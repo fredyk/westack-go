@@ -16,9 +16,9 @@ import (
 )
 
 type Property struct {
-	Type     string `json:"type"`
-	Required bool   `json:"required"`
-	Default  string `json:"default"`
+	Type     string      `json:"type"`
+	Required bool        `json:"required"`
+	Default  interface{} `json:"default"`
 }
 
 type Relation struct {
