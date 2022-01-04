@@ -203,7 +203,7 @@ func (loadedModel *Model) Create(data interface{}) (*ModelInstance, error) {
 	default:
 		log.Fatal(fmt.Sprintf("Invalid input for Model.Create() <- %s", data))
 	}
-	replaceObjectIds(finalData)
+	datasource.ReplaceObjectIds(finalData)
 	eventContext := EventContext{
 		Data:          &finalData,
 		Ctx:           nil,
@@ -233,20 +233,6 @@ func (loadedModel *Model) Create(data interface{}) (*ModelInstance, error) {
 
 }
 
-func replaceObjectIds(data bson.M) {
-	for key, value := range data {
-		switch value.(type) {
-		case string:
-			if regexp.MustCompile("^([0-9a-f]{24})$").MatchString(value.(string)) {
-				_id, err := primitive.ObjectIDFromHex(value.(string))
-				if err == nil {
-					data[key] = _id
-				}
-			}
-		}
-	}
-}
-
 func (modelInstance *ModelInstance) UpdateAttributes(data interface{}) (*ModelInstance, error) {
 
 	var finalData bson.M
@@ -269,7 +255,7 @@ func (modelInstance *ModelInstance) UpdateAttributes(data interface{}) (*ModelIn
 	default:
 		log.Fatal(fmt.Sprintf("Invalid input for Model.UpdateAttributes() <- %s", data))
 	}
-	replaceObjectIds(finalData)
+	datasource.ReplaceObjectIds(finalData)
 	eventContext := EventContext{
 		Data:          &finalData,
 		Instance:      modelInstance,
