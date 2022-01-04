@@ -16,7 +16,7 @@ import (
 )
 
 type Property struct {
-	Type     string      `json:"type"`
+	Type     interface{} `json:"type"`
 	Required bool        `json:"required"`
 	Default  interface{} `json:"default"`
 }
