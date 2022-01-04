@@ -58,8 +58,7 @@ func (app *WeStack) loadModels() {
 
 	fileInfos, err := ioutil.ReadDir("./common/models")
 	if err != nil {
-		log.Println("Error while loading models: " + err.Error())
-		return
+		panic("Error while loading models: " + err.Error())
 	}
 
 	var globalModelConfig *map[string]*model.Config
@@ -79,14 +78,14 @@ func (app *WeStack) loadModels() {
 		configFromGlobal := (*globalModelConfig)[config.Name]
 
 		if configFromGlobal == nil {
-			log.Fatal("ERROR: Missing model ", config.Name, " in model-config.json")
+			panic("ERROR: Missing model " + config.Name + " in model-config.json")
 		}
 
 		//noinspection GoUnusedVariable
 		dataSource := (*app.Datasources)[configFromGlobal.Datasource]
 
 		if dataSource == nil {
-			log.Fatal("ERROR: Missing or invalid datasource file for ", dataSource)
+			panic(fmt.Sprintf("ERROR: Missing or invalid datasource file for %v", dataSource))
 		}
 
 		loadedModel := model.New(config)
@@ -287,7 +286,7 @@ func (app *WeStack) loadDataSources() {
 				log.Println("Connected to database", dsConfig.Database)
 			}
 		} else {
-			log.Println("ERROR: connector", dsConfig.Connector, "not supported")
+			panic("ERROR: connector " + dsConfig.Connector + " not supported")
 		}
 	}
 }

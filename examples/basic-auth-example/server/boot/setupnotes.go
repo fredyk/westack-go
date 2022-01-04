@@ -28,7 +28,7 @@ func SetupNotes(app *westack.WeStack) {
 
 	// Create a note for the user
 	if note, err := noteModel.Create(map[string]interface{}{"title": "A note", "body": "this is a note", "userId": typedUser.Id}); err != nil {
-		log.Fatalln("Could not create note", err)
+		panic(fmt.Sprintf("Could not create note %v", err))
 	} else {
 		var typedNote models.Note
 		err := note.Transform(&typedNote)

@@ -3,7 +3,6 @@ package common
 import (
 	"encoding/json"
 	"io/ioutil"
-	"log"
 	"regexp"
 	"strings"
 )
@@ -31,8 +30,7 @@ func DashedCase(st string) string {
 	var res = strings.ToLower(st[:1])
 	compile, err := regexp.Compile("([A-Z])")
 	if err != nil {
-		log.Println(err)
-		return ""
+		panic(err)
 	}
 	res += string(compile.ReplaceAllFunc([]byte(st[1:]), func(bytes []byte) []byte {
 		return []byte("-" + strings.ToLower(string(bytes[0])))
