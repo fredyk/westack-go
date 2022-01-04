@@ -152,7 +152,7 @@ func (app *WeStack) loadModels() {
 
 			loadedModel.On("instance_updateAttributes", func(ctx *model.EventContext) error {
 
-				inst, err := loadedModel.FindById(ctx.ModelID.Hex(), nil)
+				inst, err := loadedModel.FindById(ctx.ModelID, nil)
 				if err != nil {
 					return err
 				}
