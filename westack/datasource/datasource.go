@@ -223,6 +223,8 @@ func ReplaceObjectIds(data interface{}) {
 				default:
 					log.Fatal(fmt.Sprintf("Invalid input for Model.Create() <- %s", data))
 				}
+			} else if err != nil {
+				log.Println("WARNING: ", err)
 			}
 		case map[string]interface{}:
 		case bson.M:
