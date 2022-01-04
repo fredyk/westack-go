@@ -202,7 +202,7 @@ func ReplaceObjectIds(data interface{}) {
 			var err error
 			if regexp.MustCompile("^([0-9a-f]{24})$").MatchString(value.(string)) {
 				newValue, err = primitive.ObjectIDFromHex(value.(string))
-			} else if regexp.MustCompile("^(\\d{4}-\\d{2}-\\d{2}-T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?)([+:\\-/0-9a-zA-Z]+)?$").MatchString(value.(string)) {
+			} else if regexp.MustCompile("^(\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?)([+:\\-/0-9a-zA-Z]+)?$").MatchString(value.(string)) {
 				layout := "2006-01-02T15:04:05.000-03:00"
 				newValue, err = time.Parse(layout, value.(string))
 			}
