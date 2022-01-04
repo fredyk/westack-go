@@ -73,7 +73,10 @@ func (app *WeStack) loadModels() {
 			continue
 		}
 		var config model.Config
-		common.LoadFile("./common/models/"+fileInfo.Name(), &config)
+		err := common.LoadFile("./common/models/"+fileInfo.Name(), &config)
+		if err != nil {
+			panic(err)
+		}
 
 		configFromGlobal := (*globalModelConfig)[config.Name]
 

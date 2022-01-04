@@ -97,6 +97,7 @@ func (ds *Datasource) FindById(collectionName string, id interface{}, filter *ma
 		if err != nil {
 			log.Println("WARNING: _id", _id, " is not a valid ObjectID:", err.Error())
 			//return nil
+			_id = id
 		}
 	default:
 		_id = id
