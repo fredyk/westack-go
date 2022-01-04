@@ -176,7 +176,7 @@ func New(config map[string]interface{}) *Datasource {
 	return ds
 }
 
-func ReplaceObjectIds(data interface{}) {
+func ReplaceObjectIds(data interface{}) interface{} {
 
 	var finalData bson.M
 	switch data.(type) {
@@ -196,10 +196,10 @@ func ReplaceObjectIds(data interface{}) {
 		log.Fatal(fmt.Sprintf("Invalid input for Model.Create() <- %s", data))
 	}
 	for key, value := range finalData {
+		var err error
+		var newValue interface{}
 		switch value.(type) {
 		case string:
-			var newValue interface{}
-			var err error
 			if regexp.MustCompile("^([0-9a-f]{24})$").MatchString(value.(string)) {
 				newValue, err = primitive.ObjectIDFromHex(value.(string))
 				//} else if regexp.MustCompile("^(\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?)([+:\\-/0-9a-zA-Z]+)?$").MatchString(value.(string)) {
@@ -209,29 +209,32 @@ func ReplaceObjectIds(data interface{}) {
 				layout := "2006-01-02T15:04:05.000Z"
 				newValue, err = time.Parse(layout, value.(string))
 			}
-			if err == nil && newValue != nil {
-				switch data.(type) {
-				case map[string]interface{}:
-					data.(map[string]interface{})[key] = newValue
-					break
-				case bson.M:
-					data.(bson.M)[key] = newValue
-					break
-				case *bson.M:
-					(*data.(*bson.M))[key] = newValue
-					break
-				default:
-					log.Fatal(fmt.Sprintf("Invalid input for Model.Create() <- %s", data))
-				}
-			} else if err != nil {
-				log.Println("WARNING: ", err)
-			}
 		case map[string]interface{}:
 		case bson.M:
 		case *bson.M:
-			ReplaceObjectIds(value)
+			newValue = ReplaceObjectIds(value)
 			break
-
+		default:
+			continue
+		}
+		if err == nil && newValue != nil {
+			switch data.(type) {
+			case map[string]interface{}:
+				data.(map[string]interface{})[key] = newValue
+				break
+			case bson.M:
+				data.(bson.M)[key] = newValue
+				break
+			case *bson.M:
+				(*data.(*bson.M))[key] = newValue
+				break
+			default:
+				log.Fatal(fmt.Sprintf("Invalid input for Model.Create() <- %s", data))
+			}
+			log.Println(fmt.Sprintf("DEBUG: Converted %v to %v", value, newValue))
+		} else if err != nil {
+			log.Println("WARNING: ", err)
 		}
 	}
+	return data
 }
