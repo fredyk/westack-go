@@ -95,11 +95,9 @@ func (app *WeStack) loadModels() {
 			panic(fmt.Sprintf("ERROR: Missing or invalid datasource file for %v", dataSource))
 		}
 
-		loadedModel := model.New(config)
+		loadedModel := model.New(config, app.ModelRegistry)
 		loadedModel.App = app.AsInterface()
 		loadedModel.Datasource = dataSource
-
-		(*app.ModelRegistry)[config.Name] = loadedModel
 
 		if loadedModel.Config.Public {
 			var plural string

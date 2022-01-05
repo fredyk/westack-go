@@ -22,8 +22,10 @@ type Property struct {
 }
 
 type Relation struct {
-	Type  string `json:"type"`
-	Model string `json:"model"`
+	Type       string `json:"type"`
+	Model      string `json:"model"`
+	PrimaryKey string `json:"primaryKey"`
+	ForeignKey string `json:"foreignKey"`
 }
 
 type ACL struct {
@@ -54,13 +56,15 @@ type DataSourceConfig struct {
 }
 
 type Model struct {
-	Name          string `json:"name"`
-	Config        Config
-	Datasource    *datasource.Datasource
-	Router        *fiber.Router
-	App           *common.IApp
+	Name       string `json:"name"`
+	Config     Config
+	Datasource *datasource.Datasource
+	Router     *fiber.Router
+	App        *common.IApp
+	BaseUrl    string
+
 	eventHandlers map[string]func(eventContext *EventContext) error
-	BaseUrl       string
+	modelRegistry *map[string]*Model
 }
 
 func (loadedModel *Model) SendError(ctx *fiber.Ctx, err error) error {
@@ -71,12 +75,17 @@ func (loadedModel *Model) SendError(ctx *fiber.Ctx, err error) error {
 	return err
 }
 
-func New(config Config) *Model {
-	return &Model{
+func New(config Config, modelRegistry *map[string]*Model) *Model {
+	loadedModel := &Model{
 		Name:          config.Name,
 		Config:        config,
+		modelRegistry: modelRegistry,
 		eventHandlers: map[string]func(eventContext *EventContext) error{},
 	}
+
+	(*modelRegistry)[config.Name] = loadedModel
+
+	return loadedModel
 }
 
 type ModelInstance struct {
@@ -135,8 +144,10 @@ func parseFilter(filter string) *map[string]interface{} {
 
 func (loadedModel *Model) FindMany(filterMap *map[string]interface{}) ([]ModelInstance, error) {
 
+	lookups := loadedModel.ExtractLookupsFromFilter(filterMap)
+
 	var documents []map[string]interface{}
-	err := loadedModel.Datasource.FindMany(loadedModel.Name, filterMap).All(context.Background(), &documents)
+	err := loadedModel.Datasource.FindMany(loadedModel.Name, filterMap, lookups).All(context.Background(), &documents)
 	if err != nil {
 		return nil, err
 	}
@@ -150,9 +161,83 @@ func (loadedModel *Model) FindMany(filterMap *map[string]interface{}) ([]ModelIn
 	return results, nil
 }
 
+func (loadedModel *Model) ExtractLookupsFromFilter(filterMap *map[string]interface{}) *[]map[string]interface{} {
+	var targetInclude *[]interface{}
+	if filterMap != nil && (*filterMap)["include"] != nil {
+		includeValue := (*filterMap)["include"].([]interface{})
+		targetInclude = &includeValue
+	} else {
+		targetInclude = nil
+	}
+
+	var lookups *[]map[string]interface{}
+	if targetInclude != nil {
+		lookupsCopy := make([]map[string]interface{}, 0)
+		lookups = &lookupsCopy
+		for _, includeItem := range *targetInclude {
+			relationName := includeItem.(map[string]interface{})["relation"].(string)
+			relation := loadedModel.Config.Relations[relationName]
+			relatedModelName := relation.Model
+			relatedLoadedModel := (*loadedModel.modelRegistry)[relatedModelName]
+			if relatedLoadedModel.Datasource.Config["name"] == loadedModel.Datasource.Config["name"] {
+				switch relation.Type {
+				case "belongsTo", "hasMany":
+					pipeline := []interface{}{
+						map[string]interface{}{
+							"$match": map[string]interface{}{
+								"$expr": map[string]interface{}{
+									"$and": []map[string]interface{}{
+										map[string]interface{}{
+											"$eq": []string{fmt.Sprintf("$%v", relation.PrimaryKey), fmt.Sprintf("$$%v", relation.ForeignKey)},
+										},
+									},
+								},
+							},
+						},
+					}
+					project := map[string]interface{}{}
+					for _, propertyName := range relatedLoadedModel.Config.Hidden {
+						project[propertyName] = false
+					}
+					pipeline = append(pipeline, map[string]interface{}{
+						"$project": project,
+					})
+					appendCopy := append(*lookups, map[string]interface{}{
+						"$lookup": map[string]interface{}{
+							"from": relatedLoadedModel.Name,
+							"let": map[string]interface{}{
+								relation.ForeignKey: fmt.Sprintf("$%v", relation.ForeignKey),
+							},
+							"pipeline": pipeline,
+							"as":       relationName,
+						},
+					})
+					lookups = &appendCopy
+					break
+				}
+				switch relation.Type {
+				case "belongsTo":
+					appendCopy := append(*lookups, map[string]interface{}{
+						"$unwind": map[string]interface{}{
+							"path":                       fmt.Sprintf("$%v", relationName),
+							"preserveNullAndEmptyArrays": true,
+						},
+					})
+					lookups = &appendCopy
+					break
+				}
+			}
+		}
+	}
+	return lookups
+}
+
 func (loadedModel *Model) FindOne(filterMap *map[string]interface{}) (*ModelInstance, error) {
 	var documents []map[string]interface{}
-	err := loadedModel.Datasource.FindMany(loadedModel.Name, filterMap).All(context.Background(), &documents)
+
+	lookups := loadedModel.ExtractLookupsFromFilter(filterMap)
+
+	err := loadedModel.Datasource.FindMany(loadedModel.Name, filterMap, lookups).All(context.Background(), &documents)
 	if err != nil {
 		return nil, err
 	}
@@ -167,7 +252,10 @@ func (loadedModel *Model) FindOne(filterMap *map[string]interface{}) (*ModelInst
 
 func (loadedModel *Model) FindById(id interface{}, filterMap *map[string]interface{}) (*ModelInstance, error) {
 	var document map[string]interface{}
-	cursor := loadedModel.Datasource.FindById(loadedModel.Name, id, filterMap)
+
+	lookups := loadedModel.ExtractLookupsFromFilter(filterMap)
+
+	cursor := loadedModel.Datasource.FindById(loadedModel.Name, id, filterMap, lookups)
 	if cursor != nil {
 		err := cursor.Decode(&document)
 		if err != nil {
@@ -211,6 +299,9 @@ func (loadedModel *Model) Create(data interface{}) (*ModelInstance, error) {
 	}
 	loadedModel.GetHandler("__operation__before_save")(&eventContext)
 	var document bson.M
+	for key := range loadedModel.Config.Relations {
+		delete(finalData, key)
+	}
 	cursor := loadedModel.Datasource.Create(loadedModel.Name, &finalData)
 	if cursor != nil {
 		err := cursor.Decode(&document)
@@ -264,6 +355,9 @@ func (modelInstance *ModelInstance) UpdateAttributes(data interface{}) (*ModelIn
 	}
 	modelInstance.Model.GetHandler("__operation__before_save")(&eventContext)
 	var document bson.M
+	for key := range modelInstance.Model.Config.Relations {
+		delete(finalData, key)
+	}
 	cursor := modelInstance.Model.Datasource.UpdateById(modelInstance.Model.Name, modelInstance.Id, &finalData)
 	if cursor != nil {
 		err := cursor.Decode(&document)
