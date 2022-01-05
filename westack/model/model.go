@@ -327,7 +327,7 @@ func (loadedModel *Model) Create(data interface{}) (*ModelInstance, error) {
 			return nil, err
 		} else {
 			result := loadedModel.Build(document, true)
-			result.hideProperties()
+			result.HideProperties()
 			loadedModel.GetHandler("__operation__after_save")(&EventContext{
 				Data:          &result.data,
 				Instance:      &result,
@@ -383,7 +383,7 @@ func (modelInstance *ModelInstance) UpdateAttributes(data interface{}) (*ModelIn
 			return nil, err
 		} else {
 			result := modelInstance.Model.Build(document, true)
-			result.hideProperties()
+			result.HideProperties()
 			modelInstance.Model.GetHandler("__operation__after_save")(&EventContext{
 				Data:          &result.data,
 				Instance:      &result,
@@ -445,7 +445,7 @@ func handleError(c *fiber.Ctx, err error) error {
 	}
 }
 
-func (modelInstance ModelInstance) hideProperties() {
+func (modelInstance ModelInstance) HideProperties() {
 	for _, propertyName := range modelInstance.Model.Config.Hidden {
 		delete(modelInstance.data, propertyName)
 	}
@@ -466,7 +466,7 @@ func (loadedModel *Model) FindManyRoute(c *fiber.Ctx) error {
 	result, err := loadedModel.FindMany(filterMap)
 	out := make([]map[string]interface{}, len(result))
 	for idx, item := range result {
-		item.hideProperties()
+		item.HideProperties()
 		out[idx] = item.ToJSON()
 	}
 
@@ -488,7 +488,7 @@ func (loadedModel *Model) FindByIdRoute(c *fiber.Ctx) error {
 
 	}
 	result, err := loadedModel.FindById(id, filterMap)
-	result.hideProperties()
+	result.HideProperties()
 	if err != nil {
 		return handleError(c, err)
 	}
