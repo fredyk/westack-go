@@ -182,14 +182,32 @@ func (loadedModel *Model) ExtractLookupsFromFilter(filterMap *map[string]interfa
 			if relatedLoadedModel.Datasource.Config["name"] == loadedModel.Datasource.Config["name"] {
 				switch relation.Type {
 				case "belongsTo", "hasMany":
+					var matching map[string]interface{}
+					var lookupLet map[string]interface{}
+					switch relation.Type {
+					case "belongsTo":
+						lookupLet = map[string]interface{}{
+							relation.ForeignKey: fmt.Sprintf("$%v", relation.ForeignKey),
+						}
+						matching = map[string]interface{}{
+							"$eq": []string{fmt.Sprintf("$%v", relation.PrimaryKey), fmt.Sprintf("$$%v", relation.ForeignKey)},
+						}
+						break
+					case "hasMany":
+						lookupLet = map[string]interface{}{
+							relation.ForeignKey: fmt.Sprintf("$%v", relation.PrimaryKey),
+						}
+						matching = map[string]interface{}{
+							"$eq": []string{fmt.Sprintf("$%v", relation.ForeignKey), fmt.Sprintf("$$%v", relation.ForeignKey)},
+						}
+						break
+					}
 					pipeline := []interface{}{
 						map[string]interface{}{
 							"$match": map[string]interface{}{
 								"$expr": map[string]interface{}{
 									"$and": []map[string]interface{}{
-										map[string]interface{}{
-											"$eq": []string{fmt.Sprintf("$%v", relation.PrimaryKey), fmt.Sprintf("$$%v", relation.ForeignKey)},
-										},
+										matching,
 									},
 								},
 							},
@@ -199,15 +217,15 @@ func (loadedModel *Model) ExtractLookupsFromFilter(filterMap *map[string]interfa
 					for _, propertyName := range relatedLoadedModel.Config.Hidden {
 						project[propertyName] = false
 					}
-					pipeline = append(pipeline, map[string]interface{}{
-						"$project": project,
-					})
+					if len(project) > 0 {
+						pipeline = append(pipeline, map[string]interface{}{
+							"$project": project,
+						})
+					}
 					appendCopy := append(*lookups, map[string]interface{}{
 						"$lookup": map[string]interface{}{
-							"from": relatedLoadedModel.Name,
-							"let": map[string]interface{}{
-								relation.ForeignKey: fmt.Sprintf("$%v", relation.ForeignKey),
-							},
+							"from":     relatedLoadedModel.Name,
+							"let":      lookupLet,
 							"pipeline": pipeline,
 							"as":       relationName,
 						},
