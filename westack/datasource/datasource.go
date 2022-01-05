@@ -50,7 +50,7 @@ func (ds *Datasource) Initialize() error {
 	return nil
 }
 
-func (ds *Datasource) FindMany(collectionName string, filter *map[string]interface{}) *mongo.Cursor {
+func (ds *Datasource) FindMany(collectionName string, filter *map[string]interface{}, lookups *[]map[string]interface{}) *mongo.Cursor {
 	if err := validateFilter(filter); err != nil {
 		panic(err)
 	}
@@ -61,14 +61,21 @@ func (ds *Datasource) FindMany(collectionName string, filter *map[string]interfa
 
 		database := db.Database(ds.Config["database"].(string))
 		collection := database.Collection(collectionName)
-		var targetFilter map[string]interface{}
+		var targetWhere map[string]interface{}
 		if filter != nil && (*filter)["where"] != nil {
-			targetFilter = (*filter)["where"].(map[string]interface{})
+			targetWhere = (*filter)["where"].(map[string]interface{})
 		} else {
-			targetFilter = map[string]interface{}{}
+			targetWhere = map[string]interface{}{}
 		}
-		ReplaceObjectIds(targetFilter)
-		cursor, err := collection.Find(context.Background(), targetFilter)
+		ReplaceObjectIds(targetWhere)
+		pipeline := []map[string]interface{}{
+			{"$match": targetWhere},
+		}
+
+		if lookups != nil {
+			pipeline = append(pipeline, *lookups...)
+		}
+		cursor, err := collection.Aggregate(context.Background(), pipeline)
 		if err != nil {
 			panic(err)
 		}
@@ -92,7 +99,7 @@ func validateFilter(filter *map[string]interface{}) error {
 }
 
 //goland:noinspection GoUnusedParameter
-func (ds *Datasource) FindById(collectionName string, id interface{}, filter *map[string]interface{}) *mongo.Cursor {
+func (ds *Datasource) FindById(collectionName string, id interface{}, filter *map[string]interface{}, lookups *[]map[string]interface{}) *mongo.Cursor {
 	var _id interface{}
 	switch id.(type) {
 	case string:
@@ -106,12 +113,12 @@ func (ds *Datasource) FindById(collectionName string, id interface{}, filter *ma
 	default:
 		_id = id
 	}
-	return findByObjectId(collectionName, _id, ds)
+	return findByObjectId(collectionName, _id, ds, lookups)
 }
 
-func findByObjectId(collectionName string, _id interface{}, ds *Datasource) *mongo.Cursor {
+func findByObjectId(collectionName string, _id interface{}, ds *Datasource, lookups *[]map[string]interface{}) *mongo.Cursor {
 	filter := &map[string]interface{}{"where": map[string]interface{}{"_id": _id}}
-	cursor := ds.FindMany(collectionName, filter)
+	cursor := ds.FindMany(collectionName, filter, lookups)
 	if cursor.Next(context.Background()) {
 		return cursor
 	} else {
@@ -131,7 +138,7 @@ func (ds *Datasource) Create(collectionName string, data *bson.M) *mongo.Cursor 
 		if err != nil {
 			panic(err)
 		}
-		return findByObjectId(collectionName, cursor.InsertedID, ds)
+		return findByObjectId(collectionName, cursor.InsertedID, ds, nil)
 	}
 	return nil
 }
@@ -147,7 +154,7 @@ func (ds *Datasource) UpdateById(collectionName string, id interface{}, data *bs
 		if _, err := collection.UpdateOne(context.Background(), bson.M{"_id": id}, bson.M{"$set": data}); err != nil {
 			panic(err)
 		}
-		return findByObjectId(collectionName, id, ds)
+		return findByObjectId(collectionName, id, ds, nil)
 	}
 	return nil
 }
