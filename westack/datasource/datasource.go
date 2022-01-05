@@ -180,6 +180,12 @@ func ReplaceObjectIds(data interface{}) interface{} {
 
 	var finalData bson.M
 	switch data.(type) {
+	case string:
+	case int32:
+	case int64:
+	case float32:
+	case float64:
+		return data
 	case map[string]interface{}:
 		finalData = bson.M{}
 		for key, value := range data.(map[string]interface{}) {
@@ -193,7 +199,8 @@ func ReplaceObjectIds(data interface{}) interface{} {
 		finalData = *data.(*bson.M)
 		break
 	default:
-		log.Fatal(fmt.Sprintf("Invalid input for Model.Create() <- %s", data))
+		log.Println(fmt.Sprintf("WARNING: Invalid input for ReplaceObjectIds() <- %s", data))
+		return data
 	}
 	for key, value := range finalData {
 		var err error
@@ -209,13 +216,24 @@ func ReplaceObjectIds(data interface{}) interface{} {
 				layout := "2006-01-02T15:04:05.000Z"
 				newValue, err = time.Parse(layout, value.(string))
 			}
-		case map[string]interface{}:
 		case bson.M:
 		case *bson.M:
 			newValue = ReplaceObjectIds(value)
 			break
 		default:
-			continue
+			asMap, asMapOk := value.(map[string]interface{})
+			if asMapOk {
+				newValue = ReplaceObjectIds(asMap)
+			} else {
+				asList, asListOk := value.([]interface{})
+				if asListOk {
+					for i, asListItem := range asList {
+						asList[i] = ReplaceObjectIds(asListItem)
+					}
+				} else {
+					log.Println(fmt.Sprintf("WARNING: What to do with %v (%s)?", value, value))
+				}
+			}
 		}
 		if err == nil && newValue != nil {
 			switch data.(type) {
