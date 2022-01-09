@@ -179,6 +179,15 @@ func (loadedModel *Model) ExtractLookupsFromFilter(filterMap *map[string]interfa
 			relation := loadedModel.Config.Relations[relationName]
 			relatedModelName := relation.Model
 			relatedLoadedModel := (*loadedModel.modelRegistry)[relatedModelName]
+
+			if relation.PrimaryKey == "" {
+				relation.PrimaryKey = "_id"
+			}
+
+			if relation.ForeignKey == "" {
+				relation.ForeignKey = relatedModelName + "Id"
+			}
+
 			if relatedLoadedModel.Datasource.Config["name"] == loadedModel.Datasource.Config["name"] {
 				switch relation.Type {
 				case "belongsTo", "hasMany":
