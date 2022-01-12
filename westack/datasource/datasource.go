@@ -201,6 +201,12 @@ func ReplaceObjectIds(data interface{}) interface{} {
 			finalData[key] = value
 		}
 		break
+	case *map[string]interface{}:
+		finalData = bson.M{}
+		for key, value := range *data.(*map[string]interface{}) {
+			finalData[key] = value
+		}
+		break
 	case bson.M:
 		finalData = data.(bson.M)
 		break
@@ -233,6 +239,10 @@ func ReplaceObjectIds(data interface{}) interface{} {
 		case *bson.M:
 			newValue = ReplaceObjectIds(value)
 			break
+		case int32:
+		case int64:
+		case float32:
+		case float64:
 		case primitive.ObjectID:
 		case *primitive.ObjectID:
 			break
@@ -255,6 +265,9 @@ func ReplaceObjectIds(data interface{}) interface{} {
 			switch data.(type) {
 			case map[string]interface{}:
 				data.(map[string]interface{})[key] = newValue
+				break
+			case *map[string]interface{}:
+				(*data.(*map[string]interface{}))[key] = newValue
 				break
 			case bson.M:
 				data.(bson.M)[key] = newValue
