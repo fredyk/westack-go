@@ -194,6 +194,7 @@ func ReplaceObjectIds(data interface{}) interface{} {
 	case float64:
 	case primitive.ObjectID:
 	case *primitive.ObjectID:
+	case time.Time:
 		return data
 	case map[string]interface{}:
 		finalData = bson.M{}
@@ -245,6 +246,7 @@ func ReplaceObjectIds(data interface{}) interface{} {
 		case float64:
 		case primitive.ObjectID:
 		case *primitive.ObjectID:
+		case time.Time:
 			break
 		default:
 			asMap, asMapOk := value.(map[string]interface{})
