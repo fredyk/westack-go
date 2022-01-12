@@ -224,6 +224,10 @@ func ReplaceObjectIds(data interface{}) interface{} {
 				//layout := "2006-01-02T15:04:05.000-03:00"
 				layout := "2006-01-02T15:04:05.000Z"
 				newValue, err = time.Parse(layout, value.(string))
+				if err == nil {
+					newValue = newValue.(time.Time).Unix()
+					newValue = primitive.Timestamp{T: uint32(newValue.(int64))}
+				}
 			}
 		case bson.M:
 		case *bson.M:
