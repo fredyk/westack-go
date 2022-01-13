@@ -118,6 +118,23 @@ func (loadedModel *Model) Build(data bson.M, fromDb bool) ModelInstance {
 
 	_bytes, _ := bson.Marshal(data)
 	data = common.CopyMap(data)
+
+	// TODO: Build nested
+	//for relationName, relation := range loadedModel.Config.Relations {
+	//	if data[relationName] != nil {
+	//		switch relation.Type {
+	//		case "belongsTo":
+	//			data[relationName] = (*loadedModel.modelRegistry)[relation.Model].Build(data[relationName].(bson.M), fromDb)
+	//			break
+	//		case "hasMany":
+	//			for k, v := range data[relationName].([]interface{}) {
+	//				data[relationName] = (*loadedModel.modelRegistry)[relation.Model].Build(data[relationName].(bson.M), fromDb)
+	//			}
+	//			break
+	//		}
+	//	}
+	//}
+
 	modelInstance := ModelInstance{
 		Id:    data["id"],
 		bytes: _bytes,
@@ -162,6 +179,15 @@ func (loadedModel *Model) FindMany(filterMap *map[string]interface{}) ([]ModelIn
 }
 
 func (loadedModel *Model) ExtractLookupsFromFilter(filterMap *map[string]interface{}) *[]map[string]interface{} {
+
+	var targetWhere *map[string]interface{}
+	if filterMap != nil && (*filterMap)["where"] != nil {
+		whereCopy := (*filterMap)["where"].(map[string]interface{})
+		targetWhere = &whereCopy
+	} else {
+		targetWhere = nil
+	}
+
 	var targetInclude *[]interface{}
 	if filterMap != nil && (*filterMap)["include"] != nil {
 		includeValue := (*filterMap)["include"].([]interface{})
@@ -169,16 +195,88 @@ func (loadedModel *Model) ExtractLookupsFromFilter(filterMap *map[string]interfa
 	} else {
 		targetInclude = nil
 	}
+	var targetOrder *[]interface{}
+	if filterMap != nil && (*filterMap)["order"] != nil {
+		orderValue := (*filterMap)["order"].([]interface{})
+		targetOrder = &orderValue
+	} else {
+		targetOrder = nil
+	}
+	var targetSkip int64
+	if filterMap != nil && (*filterMap)["skip"] != nil {
+		targetSkip = (*filterMap)["skip"].(int64)
+	} else {
+		targetSkip = 0
+	}
+	var targetLimit int64
+	if filterMap != nil && (*filterMap)["skip"] != nil {
+		targetLimit = (*filterMap)["skip"].(int64)
+	} else {
+		targetLimit = 0
+	}
 
 	var lookups *[]map[string]interface{}
+	if targetWhere != nil {
+		datasource.ReplaceObjectIds(*targetWhere)
+		lookups = &[]map[string]interface{}{
+			{"$match": *targetWhere},
+		}
+	} else {
+		lookups = &[]map[string]interface{}{}
+	}
+
+	if targetOrder != nil && len(*targetOrder) > 0 {
+		orderMap := map[string]interface{}{}
+		for _, orderPair := range *targetOrder {
+			splt := strings.Split(orderPair.(string), " ")
+			key := splt[0]
+			directionSt := splt[1]
+			if strings.ToLower(strings.TrimSpace(directionSt)) == "asc" {
+				orderMap[key] = 1
+			} else if strings.ToLower(strings.TrimSpace(directionSt)) == "desc" {
+				orderMap[key] = -1
+			} else {
+				panic(fmt.Sprintf("Invalid direction %v while trying to sort by %v", directionSt, key))
+			}
+		}
+		*lookups = append(*lookups, map[string]interface{}{
+			"$sort": orderMap,
+		})
+	}
+
+	if targetSkip > 0 {
+		*lookups = append(*lookups, map[string]interface{}{
+			"$skip": targetSkip,
+		})
+	}
+	if targetLimit > 0 {
+		*lookups = append(*lookups, map[string]interface{}{
+			"$limit": targetLimit,
+		})
+	}
+
 	if targetInclude != nil {
-		lookupsCopy := make([]map[string]interface{}, 0)
-		lookups = &lookupsCopy
 		for _, includeItem := range *targetInclude {
+
+			var targetScope interface{}
+			if (includeItem.(map[string]interface{}))["scope"] != nil {
+				scopeValue := (includeItem.(map[string]interface{}))["scope"].(map[string]interface{})
+				targetScope = &scopeValue
+			} else {
+				targetScope = nil
+			}
+
 			relationName := includeItem.(map[string]interface{})["relation"].(string)
 			relation := loadedModel.Config.Relations[relationName]
 			relatedModelName := relation.Model
 			relatedLoadedModel := (*loadedModel.modelRegistry)[relatedModelName]
+
+			if relatedLoadedModel == nil {
+				log.Println()
+				log.Printf("WARNING: related model %v not found for relation %v.%v", relatedModelName, loadedModel.Name, relationName)
+				log.Println()
+				continue
+			}
 
 			if relation.PrimaryKey == "" {
 				relation.PrimaryKey = "_id"
@@ -238,7 +336,23 @@ func (loadedModel *Model) ExtractLookupsFromFilter(filterMap *map[string]interfa
 							"$project": project,
 						})
 					}
-					appendCopy := append(*lookups, map[string]interface{}{
+					if targetScope != nil {
+						//	TODO: Recursive
+						if loadedModel.App.Debug {
+							log.Println("Process recursive scope ", targetScope)
+						}
+						nestedLoopkups := relatedLoadedModel.ExtractLookupsFromFilter(targetScope.(*map[string]interface{}))
+						if nestedLoopkups != nil {
+							if loadedModel.App.Debug {
+								log.Println("nested lookups: ", nestedLoopkups)
+							}
+							for _, v := range *nestedLoopkups {
+								pipeline = append(pipeline, v)
+							}
+						}
+					}
+
+					*lookups = append(*lookups, map[string]interface{}{
 						"$lookup": map[string]interface{}{
 							"from":     relatedLoadedModel.Name,
 							"let":      lookupLet,
@@ -246,22 +360,30 @@ func (loadedModel *Model) ExtractLookupsFromFilter(filterMap *map[string]interfa
 							"as":       relationName,
 						},
 					})
-					lookups = &appendCopy
 					break
 				}
 				switch relation.Type {
 				case "belongsTo":
-					appendCopy := append(*lookups, map[string]interface{}{
+					*lookups = append(*lookups, map[string]interface{}{
 						"$unwind": map[string]interface{}{
 							"path":                       fmt.Sprintf("$%v", relationName),
 							"preserveNullAndEmptyArrays": true,
 						},
 					})
-					lookups = &appendCopy
 					break
 				}
+				if targetScope != nil {
+					if loadedModel.App.Debug {
+						lookupBytes, _ := json.Marshal(*lookups)
+						log.Println("final lookup: ", string(lookupBytes))
+					}
+				}
+
 			}
 		}
+
+	} else {
+
 	}
 	return lookups
 }
@@ -464,6 +586,18 @@ func handleError(c *fiber.Ctx, err error) error {
 func (modelInstance ModelInstance) HideProperties() {
 	for _, propertyName := range modelInstance.Model.Config.Hidden {
 		delete(modelInstance.data, propertyName)
+		// TODO: Hide in nested
+		//for relationName, relation := range modelInstance.Model.Config.Relations {
+		//	switch relation.Type {
+		//	case "belongsTo":
+		//		if modelInstance.data[relationName] != nil {
+		//
+		//		}
+		//		break
+		//	case "hasMany":
+		//		break
+		//	}
+		//}
 	}
 }
 
@@ -504,7 +638,9 @@ func (loadedModel *Model) FindByIdRoute(c *fiber.Ctx) error {
 
 	}
 	result, err := loadedModel.FindById(id, filterMap)
-	result.HideProperties()
+	if result != nil {
+		result.HideProperties()
+	}
 	if err != nil {
 		return handleError(c, err)
 	}
