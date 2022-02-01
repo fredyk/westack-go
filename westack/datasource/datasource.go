@@ -109,7 +109,7 @@ func (ds *Datasource) FindById(collectionName string, id interface{}, filter *ma
 		var err error
 		_id, err = primitive.ObjectIDFromHex(id.(string))
 		if err != nil {
-			log.Println("WARNING: _id", _id, " is not a valid ObjectID:", err.Error())
+			//log.Println("WARNING: _id", _id, " is not a valid ObjectID:", err.Error())
 			//return nil
 			_id = id
 		}
