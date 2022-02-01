@@ -102,7 +102,8 @@ type RegistryEntry struct {
 }
 
 func (modelInstance ModelInstance) ToJSON() map[string]interface{} {
-	modelInstance.HideProperties()
+	// Cannot hide here, it may be necessary
+	//modelInstance.HideProperties()
 	var result map[string]interface{}
 	result = common.CopyMap(modelInstance.data)
 	for relationName, relationConfig := range modelInstance.Model.Config.Relations {
@@ -576,6 +577,7 @@ func (modelInstance *ModelInstance) UpdateAttributes(data interface{}) (*ModelIn
 			return nil, err
 		} else {
 			err := modelInstance.Reload()
+			modelInstance.HideProperties()
 			if err != nil {
 				return nil, err
 			}
