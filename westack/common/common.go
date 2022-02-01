@@ -2,6 +2,7 @@ package common
 
 import (
 	"encoding/json"
+	"go.mongodb.org/mongo-driver/bson"
 	"io/ioutil"
 	"regexp"
 	"strings"
@@ -10,6 +11,7 @@ import (
 type IApp struct {
 	Debug        bool
 	SwaggerPaths func() *map[string]map[string]interface{}
+	FindModel    func(modelName string) interface{}
 }
 
 func LoadFile(filePath string, out interface{}) error {
@@ -47,4 +49,16 @@ func CopyMap(src map[string]interface{}) map[string]interface{} {
 		targetMap[key] = value
 	}
 	return targetMap
+}
+
+func Transform(in interface{}, out interface{}) error {
+	bytes, err := bson.Marshal(in)
+	if err != nil {
+		return err
+	}
+	err2 := bson.Unmarshal(bytes, out)
+	if err2 != nil {
+		return err2
+	}
+	return nil
 }
