@@ -102,6 +102,7 @@ type RegistryEntry struct {
 }
 
 func (modelInstance ModelInstance) ToJSON() map[string]interface{} {
+	modelInstance.HideProperties()
 	var result map[string]interface{}
 	result = common.CopyMap(modelInstance.data)
 	for relationName, relationConfig := range modelInstance.Model.Config.Relations {
@@ -574,15 +575,17 @@ func (modelInstance *ModelInstance) UpdateAttributes(data interface{}) (*ModelIn
 		if err != nil {
 			return nil, err
 		} else {
-			result := modelInstance.Model.Build(document, true)
-			result.HideProperties()
+			err := modelInstance.Reload()
+			if err != nil {
+				return nil, err
+			}
 			modelInstance.Model.GetHandler("__operation__after_save")(&EventContext{
-				Data:          &result.data,
-				Instance:      &result,
+				Data:          &modelInstance.data,
+				Instance:      modelInstance,
 				Ctx:           nil,
 				IsNewInstance: false,
 			})
-			return &result, nil
+			return modelInstance, nil
 		}
 	} else {
 		return nil, datasource.NewError(400, "Could not create document")
@@ -660,6 +663,24 @@ func (modelInstance ModelInstance) Transform(out interface{}) error {
 	if err != nil {
 		return err
 	}
+	return nil
+}
+
+func (modelInstance ModelInstance) UncheckedTransform(out interface{}) interface{} {
+	err := modelInstance.Transform(out)
+	if err != nil {
+		panic(err)
+	}
+	return out
+}
+
+func (modelInstance *ModelInstance) Reload() error {
+	newInstance, err := modelInstance.Model.FindById(modelInstance.Id, nil)
+	if err != nil {
+		return err
+	}
+	modelInstance.data = newInstance.data
+	modelInstance.bytes = newInstance.bytes
 	return nil
 }
 
