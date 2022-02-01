@@ -238,9 +238,9 @@ func (loadedModel *Model) ExtractLookupsFromFilter(filterMap *map[string]interfa
 	} else {
 		targetInclude = nil
 	}
-	var targetOrder *[]string
+	var targetOrder *[]interface{}
 	if filterMap != nil && (*filterMap)["order"] != nil {
-		orderValue := (*filterMap)["order"].([]string)
+		orderValue := (*filterMap)["order"].([]interface{})
 		targetOrder = &orderValue
 	} else {
 		targetOrder = nil
@@ -271,7 +271,7 @@ func (loadedModel *Model) ExtractLookupsFromFilter(filterMap *map[string]interfa
 	if targetOrder != nil && len(*targetOrder) > 0 {
 		orderMap := map[string]interface{}{}
 		for _, orderPair := range *targetOrder {
-			splt := strings.Split(orderPair, " ")
+			splt := strings.Split(orderPair.(string), " ")
 			key := splt[0]
 			directionSt := splt[1]
 			if strings.ToLower(strings.TrimSpace(directionSt)) == "asc" {
