@@ -56,12 +56,12 @@ type DataSourceConfig struct {
 }
 
 type Model struct {
-	Name       string `json:"name"`
-	Config     Config
-	Datasource *datasource.Datasource
-	Router     *fiber.Router
-	App        *common.IApp
-	BaseUrl    string
+	Name       string                 `json:"name"`
+	Config     Config                 `json:"-"`
+	Datasource *datasource.Datasource `json:"-"`
+	Router     *fiber.Router          `json:"-"`
+	App        *common.IApp           `json:"-"`
+	BaseUrl    string                 `json:"-"`
 
 	eventHandlers map[string]func(eventContext *EventContext) error
 	modelRegistry *map[string]*Model
