@@ -132,28 +132,15 @@ func (modelInstance ModelInstance) ToJSON() map[string]interface{} {
 }
 
 func (modelInstance ModelInstance) Get(relationName string) interface{} {
-	//var relationConfig = modelInstance.Model.Config.Relations[relationName]
-	//if relationConfig.Type == "" {
-	//	// relation not found
-	//	return nil
-	//}
-	//rawRelatedData := modelInstance.data[relationName]
-	//relatedModel := modelInstance.Model.App.FindModel(relationConfig.Model).(*Model)
-	//if relatedModel != nil {
-	//	switch relationConfig.Type {
-	//	case "belongsTo", "hasOne":
-	//		relatedInstance := rawRelatedData.(ModelInstance)
-	//		return relatedInstance
-	//	case "hasMany", "hasAndBelongsToMany":
-	//		result := make([]ModelInstance, len(rawRelatedData.(primitive.A)))
-	//		for idx, v := range rawRelatedData.(primitive.A) {
-	//			result[idx] = v.(ModelInstance)
-	//		}
-	//		return result
-	//	}
-	//}
-	//return nil
 	return modelInstance.data[relationName]
+}
+
+func (modelInstance ModelInstance) GetOne(relationName string) ModelInstance {
+	return modelInstance.Get(relationName).(ModelInstance)
+}
+
+func (modelInstance ModelInstance) GetMany(relationName string) []ModelInstance {
+	return modelInstance.Get(relationName).([]ModelInstance)
 }
 
 func (loadedModel *Model) Build(data bson.M, fromDb bool) ModelInstance {
