@@ -103,7 +103,31 @@ type RegistryEntry struct {
 
 func (modelInstance ModelInstance) ToJSON() map[string]interface{} {
 	var result map[string]interface{}
-	result = modelInstance.data
+	result = common.CopyMap(modelInstance.data)
+	for relationName, relationConfig := range modelInstance.Model.Config.Relations {
+		if modelInstance.data[relationName] != nil {
+			if relationConfig.Type == "" {
+				// relation not found
+				continue
+			}
+			rawRelatedData := modelInstance.data[relationName]
+			relatedModel := modelInstance.Model.App.FindModel(relationConfig.Model).(*Model)
+			if relatedModel != nil {
+				switch relationConfig.Type {
+				case "belongsTo", "hasOne":
+					relatedInstance := rawRelatedData.(ModelInstance).ToJSON()
+					result[relationName] = relatedInstance
+				case "hasMany", "hasAndBelongsToMany":
+					aux := make([]map[string]interface{}, len(rawRelatedData.([]ModelInstance)))
+					for idx, v := range rawRelatedData.([]ModelInstance) {
+						aux[idx] = v.ToJSON()
+					}
+					result[relationName] = aux
+				}
+			}
+		}
+	}
+
 	return result
 }
 
@@ -142,7 +166,7 @@ func (loadedModel *Model) Build(data bson.M, fromDb bool) ModelInstance {
 	}
 
 	_bytes, _ := bson.Marshal(data)
-	data = common.CopyMap(data)
+	//data = common.CopyMap(data)
 
 	for relationName, relationConfig := range loadedModel.Config.Relations {
 		if data[relationName] != nil {
