@@ -134,11 +134,19 @@ func (modelInstance ModelInstance) ToJSON() map[string]interface{} {
 }
 
 func (modelInstance ModelInstance) Get(relationName string) interface{} {
-	return modelInstance.data[relationName]
+	result := modelInstance.data[relationName]
+	switch modelInstance.Model.Config.Relations[relationName].Type {
+	case "hasMany", "hasAndBelongsToMany":
+		if result == nil {
+			result = make([]ModelInstance, 0)
+		}
+		break
+	}
+	return result
 }
 
-func (modelInstance ModelInstance) GetOne(relationName string) ModelInstance {
-	return modelInstance.Get(relationName).(ModelInstance)
+func (modelInstance ModelInstance) GetOne(relationName string) *ModelInstance {
+	return modelInstance.Get(relationName).(*ModelInstance)
 }
 
 func (modelInstance ModelInstance) GetMany(relationName string) []ModelInstance {
