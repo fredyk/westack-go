@@ -107,6 +107,31 @@ func (modelInstance ModelInstance) ToJSON() map[string]interface{} {
 	return result
 }
 
+func (modelInstance ModelInstance) Get(relationName string) interface{} {
+	//var relationConfig = modelInstance.Model.Config.Relations[relationName]
+	//if relationConfig.Type == "" {
+	//	// relation not found
+	//	return nil
+	//}
+	//rawRelatedData := modelInstance.data[relationName]
+	//relatedModel := modelInstance.Model.App.FindModel(relationConfig.Model).(*Model)
+	//if relatedModel != nil {
+	//	switch relationConfig.Type {
+	//	case "belongsTo", "hasOne":
+	//		relatedInstance := rawRelatedData.(ModelInstance)
+	//		return relatedInstance
+	//	case "hasMany", "hasAndBelongsToMany":
+	//		result := make([]ModelInstance, len(rawRelatedData.(primitive.A)))
+	//		for idx, v := range rawRelatedData.(primitive.A) {
+	//			result[idx] = v.(ModelInstance)
+	//		}
+	//		return result
+	//	}
+	//}
+	//return nil
+	return modelInstance.data[relationName]
+}
+
 func (loadedModel *Model) Build(data bson.M, fromDb bool) ModelInstance {
 
 	if data["id"] == nil {
@@ -119,21 +144,29 @@ func (loadedModel *Model) Build(data bson.M, fromDb bool) ModelInstance {
 	_bytes, _ := bson.Marshal(data)
 	data = common.CopyMap(data)
 
-	// TODO: Build nested
-	//for relationName, relation := range loadedModel.Config.Relations {
-	//	if data[relationName] != nil {
-	//		switch relation.Type {
-	//		case "belongsTo":
-	//			data[relationName] = (*loadedModel.modelRegistry)[relation.Model].Build(data[relationName].(bson.M), fromDb)
-	//			break
-	//		case "hasMany":
-	//			for k, v := range data[relationName].([]interface{}) {
-	//				data[relationName] = (*loadedModel.modelRegistry)[relation.Model].Build(data[relationName].(bson.M), fromDb)
-	//			}
-	//			break
-	//		}
-	//	}
-	//}
+	for relationName, relationConfig := range loadedModel.Config.Relations {
+		if data[relationName] != nil {
+			if relationConfig.Type == "" {
+				// relation not found
+				continue
+			}
+			rawRelatedData := data[relationName]
+			relatedModel := loadedModel.App.FindModel(relationConfig.Model).(*Model)
+			if relatedModel != nil {
+				switch relationConfig.Type {
+				case "belongsTo", "hasOne":
+					relatedInstance := relatedModel.Build(rawRelatedData.(map[string]interface{}), false)
+					data[relationName] = relatedInstance
+				case "hasMany", "hasAndBelongsToMany":
+					result := make([]ModelInstance, len(rawRelatedData.(primitive.A)))
+					for idx, v := range rawRelatedData.(primitive.A) {
+						result[idx] = relatedModel.Build(v.(map[string]interface{}), false)
+					}
+					data[relationName] = result
+				}
+			}
+		}
+	}
 
 	modelInstance := ModelInstance{
 		Id:    data["id"],
@@ -190,14 +223,24 @@ func (loadedModel *Model) ExtractLookupsFromFilter(filterMap *map[string]interfa
 
 	var targetInclude *[]interface{}
 	if filterMap != nil && (*filterMap)["include"] != nil {
-		includeValue := (*filterMap)["include"].([]interface{})
-		targetInclude = &includeValue
+		includeAsMaps, asMapsOk := (*filterMap)["include"].([]map[string]interface{})
+		if asMapsOk {
+			includeAsInterfaces := make([]interface{}, len(includeAsMaps))
+			for idx, v := range includeAsMaps {
+				includeAsInterfaces[idx] = v
+			}
+			targetInclude = &includeAsInterfaces
+		} else {
+			includeAsInterfaces := (*filterMap)["include"].([]interface{})
+			targetInclude = &includeAsInterfaces
+
+		}
 	} else {
 		targetInclude = nil
 	}
-	var targetOrder *[]interface{}
+	var targetOrder *[]string
 	if filterMap != nil && (*filterMap)["order"] != nil {
-		orderValue := (*filterMap)["order"].([]interface{})
+		orderValue := (*filterMap)["order"].([]string)
 		targetOrder = &orderValue
 	} else {
 		targetOrder = nil
@@ -228,7 +271,7 @@ func (loadedModel *Model) ExtractLookupsFromFilter(filterMap *map[string]interfa
 	if targetOrder != nil && len(*targetOrder) > 0 {
 		orderMap := map[string]interface{}{}
 		for _, orderPair := range *targetOrder {
-			splt := strings.Split(orderPair.(string), " ")
+			splt := strings.Split(orderPair, " ")
 			key := splt[0]
 			directionSt := splt[1]
 			if strings.ToLower(strings.TrimSpace(directionSt)) == "asc" {

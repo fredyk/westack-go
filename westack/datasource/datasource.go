@@ -202,14 +202,7 @@ func ReplaceObjectIds(data interface{}) interface{} {
 
 	var finalData bson.M
 	switch data.(type) {
-	case string:
-	case int32:
-	case int64:
-	case float32:
-	case float64:
-	case primitive.ObjectID:
-	case *primitive.ObjectID:
-	case time.Time:
+	case string, int32, int64, float32, float64, primitive.ObjectID, *primitive.ObjectID, time.Time:
 		return data
 	case map[string]interface{}:
 		finalData = bson.M{}
@@ -251,17 +244,10 @@ func ReplaceObjectIds(data interface{}) interface{} {
 				//	newValue = primitive.Timestamp{T: uint32(newValue.(int64))}
 				//}
 			}
-		case bson.M:
-		case *bson.M:
+		case bson.M, *bson.M:
 			newValue = ReplaceObjectIds(value)
 			break
-		case int32:
-		case int64:
-		case float32:
-		case float64:
-		case primitive.ObjectID:
-		case *primitive.ObjectID:
-		case time.Time:
+		case int32, int64, float32, float64, primitive.ObjectID, *primitive.ObjectID, time.Time:
 			break
 		default:
 			asMap, asMapOk := value.(map[string]interface{})

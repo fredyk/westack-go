@@ -372,6 +372,9 @@ func (app *WeStack) loadNotFoundRoutes() {
 func (app *WeStack) AsInterface() *common.IApp {
 	return &common.IApp{
 		Debug: app.Debug,
+		FindModel: func(modelName string) interface{} {
+			return app.FindModel(modelName)
+		},
 		SwaggerPaths: func() *map[string]map[string]interface{} {
 			return app.SwaggerPaths()
 		},
