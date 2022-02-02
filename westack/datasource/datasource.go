@@ -202,7 +202,7 @@ func ReplaceObjectIds(data interface{}) interface{} {
 
 	var finalData bson.M
 	switch data.(type) {
-	case string, int32, int64, float32, float64, bool, primitive.ObjectID, *primitive.ObjectID, time.Time:
+	case string, int, int32, int64, float32, float64, bool, primitive.ObjectID, *primitive.ObjectID, time.Time:
 		return data
 	case map[string]interface{}:
 		finalData = bson.M{}
@@ -247,7 +247,7 @@ func ReplaceObjectIds(data interface{}) interface{} {
 		case bson.M, *bson.M:
 			newValue = ReplaceObjectIds(value)
 			break
-		case int32, int64, float32, float64, bool, primitive.ObjectID, *primitive.ObjectID, time.Time:
+		case int, int32, int64, float32, float64, bool, primitive.ObjectID, *primitive.ObjectID, time.Time:
 			break
 		default:
 			asMap, asMapOk := value.(map[string]interface{})
@@ -260,7 +260,10 @@ func ReplaceObjectIds(data interface{}) interface{} {
 						asList[i] = ReplaceObjectIds(asListItem)
 					}
 				} else {
-					log.Println(fmt.Sprintf("WARNING: What to do with %v (%s)?", value, value))
+					_, asStringListOk := value.([]string)
+					if !asStringListOk {
+						log.Println(fmt.Sprintf("WARNING: What to do with %v (%s)?", value, value))
+					}
 				}
 			}
 		}
@@ -281,7 +284,7 @@ func ReplaceObjectIds(data interface{}) interface{} {
 			default:
 				log.Fatal(fmt.Sprintf("Invalid input for Model.Create() <- %s", data))
 			}
-			log.Println(fmt.Sprintf("DEBUG: Converted %v to %v", value, newValue))
+			//log.Println(fmt.Sprintf("DEBUG: Converted %v to %v", value, newValue))
 		} else if err != nil {
 			log.Println("WARNING: ", err)
 		}
