@@ -689,8 +689,44 @@ func (modelInstance *ModelInstance) Reload() error {
 	if err != nil {
 		return err
 	}
+	for k, _ := range modelInstance.data {
+		if modelInstance.Model.Config.Relations[k].Model == "" {
+			// Delete this non-relation key
+			delete(modelInstance.data, k)
+		}
+	}
+	for k, v := range newInstance.data {
+		if modelInstance.Model.Config.Relations[k].Model == "" {
+			// Add this non-relation key
+			modelInstance.data[k] = v
+		}
+	}
+	// It's better not to update relations because of performance
+	//for relationName, relation := range modelInstance.Model.Config.Relations {
+	//	switch relation.Type {
+	//	case "belongsTo", "hasOne":
+	//		err := modelInstance.GetOne(relationName).Reload()
+	//		if err != nil {
+	//			return err
+	//		}
+	//		//modelInstance.data[relationName] =  modelInstance.GetOne(relationName).data
+	//		break
+	//	case "hasMany", "hasAndBelongsToMany":
+	//		for _, related := range modelInstance.GetMany(relationName) {
+	//			err := related.Reload()
+	//			if err != nil {
+	//				return err
+	//			}
+	//		}
+	//		break
+	//	}
+	//}
 	modelInstance.data = newInstance.data
-	modelInstance.bytes = newInstance.bytes
+	_bytes, err := bson.Marshal(modelInstance.data)
+	if err != nil {
+		return err
+	}
+	modelInstance.bytes = _bytes
 	return nil
 }
 
