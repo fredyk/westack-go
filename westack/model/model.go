@@ -117,7 +117,7 @@ func (modelInstance ModelInstance) ToJSON() map[string]interface{} {
 			if relatedModel != nil {
 				switch relationConfig.Type {
 				case "belongsTo", "hasOne":
-					relatedInstance := rawRelatedData.(ModelInstance).ToJSON()
+					relatedInstance := rawRelatedData.(*ModelInstance).ToJSON()
 					result[relationName] = relatedInstance
 				case "hasMany", "hasAndBelongsToMany":
 					aux := make([]map[string]interface{}, len(rawRelatedData.([]ModelInstance)))
@@ -508,6 +508,9 @@ func (loadedModel *Model) Create(data interface{}) (*ModelInstance, error) {
 	case ModelInstance:
 		finalData = data.(ModelInstance).ToJSON()
 		break
+	case *ModelInstance:
+		finalData = data.(*ModelInstance).ToJSON()
+		break
 	default:
 		log.Fatal(fmt.Sprintf("Invalid input for Model.Create() <- %s", data))
 	}
@@ -562,6 +565,9 @@ func (modelInstance *ModelInstance) UpdateAttributes(data interface{}) (*ModelIn
 		break
 	case ModelInstance:
 		finalData = data.(ModelInstance).ToJSON()
+		break
+	case *ModelInstance:
+		finalData = data.(*ModelInstance).ToJSON()
 		break
 	default:
 		log.Fatal(fmt.Sprintf("Invalid input for Model.UpdateAttributes() <- %s", data))
