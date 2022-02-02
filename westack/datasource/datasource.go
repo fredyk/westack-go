@@ -200,6 +200,10 @@ func New(config map[string]interface{}) *Datasource {
 
 func ReplaceObjectIds(data interface{}) interface{} {
 
+	if data == nil {
+		return nil
+	}
+
 	var finalData bson.M
 	switch data.(type) {
 	case string, int, int32, int64, float32, float64, bool, primitive.ObjectID, *primitive.ObjectID, time.Time:
@@ -227,6 +231,9 @@ func ReplaceObjectIds(data interface{}) interface{} {
 		return data
 	}
 	for key, value := range finalData {
+		if value == nil {
+			continue
+		}
 		var err error
 		var newValue interface{}
 		switch value.(type) {
