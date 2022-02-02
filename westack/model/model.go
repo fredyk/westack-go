@@ -177,7 +177,7 @@ func (loadedModel *Model) Build(data bson.M, fromDb bool) ModelInstance {
 				switch relationConfig.Type {
 				case "belongsTo", "hasOne":
 					relatedInstance := relatedModel.Build(rawRelatedData.(map[string]interface{}), false)
-					data[relationName] = relatedInstance
+					data[relationName] = &relatedInstance
 				case "hasMany", "hasAndBelongsToMany":
 					result := make([]ModelInstance, len(rawRelatedData.(primitive.A)))
 					for idx, v := range rawRelatedData.(primitive.A) {
