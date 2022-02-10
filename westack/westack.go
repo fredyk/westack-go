@@ -66,7 +66,7 @@ func (app *WeStack) loadModels() {
 	}
 
 	var globalModelConfig *map[string]*model.Config
-	if err := common.LoadFile("./model-config.json", &globalModelConfig); err != nil {
+	if err := wst.LoadFile("./model-config.json", &globalModelConfig); err != nil {
 		panic("Missing or invalid ./model-config.json: " + err.Error())
 	}
 
@@ -77,7 +77,7 @@ func (app *WeStack) loadModels() {
 			continue
 		}
 		var config model.Config
-		err := common.LoadFile("./common/models/"+fileInfo.Name(), &config)
+		err := wst.LoadFile("./common/models/"+fileInfo.Name(), &config)
 		if err != nil {
 			panic(err)
 		}
@@ -104,7 +104,7 @@ func (app *WeStack) loadModels() {
 			if config.Plural != "" {
 				plural = config.Plural
 			} else {
-				plural = common.DashedCase(config.Name) + "s"
+				plural = wst.DashedCase(config.Name) + "s"
 			}
 			config.Plural = plural
 
@@ -266,7 +266,7 @@ func handleEvent(eventContext *model.EventContext, loadedModel *model.Model, eve
 
 func (app *WeStack) loadDataSources() {
 	var allDatasources *map[string]*model.DataSourceConfig
-	if err := common.LoadFile("./datasources.json", &allDatasources); err != nil {
+	if err := wst.LoadFile("./datasources.json", &allDatasources); err != nil {
 		panic(err)
 	}
 
@@ -369,8 +369,8 @@ func (app *WeStack) loadNotFoundRoutes() {
 	}
 }
 
-func (app *WeStack) AsInterface() *common.IApp {
-	return &common.IApp{
+func (app *WeStack) AsInterface() *wst.IApp {
+	return &wst.IApp{
 		Debug: app.Debug,
 		FindModel: func(modelName string) interface{} {
 			return app.FindModel(modelName)

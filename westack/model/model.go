@@ -60,7 +60,7 @@ type Model struct {
 	Config     Config                 `json:"-"`
 	Datasource *datasource.Datasource `json:"-"`
 	Router     *fiber.Router          `json:"-"`
-	App        *common.IApp           `json:"-"`
+	App        *wst.IApp              `json:"-"`
 	BaseUrl    string                 `json:"-"`
 
 	eventHandlers map[string]func(eventContext *EventContext) error
@@ -105,7 +105,7 @@ func (modelInstance ModelInstance) ToJSON() map[string]interface{} {
 	// Cannot hide here, it may be necessary
 	//modelInstance.HideProperties()
 	var result map[string]interface{}
-	result = common.CopyMap(modelInstance.data)
+	result = wst.CopyMap(modelInstance.data)
 	for relationName, relationConfig := range modelInstance.Model.Config.Relations {
 		if modelInstance.data[relationName] != nil {
 			if relationConfig.Type == "" {

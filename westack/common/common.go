@@ -1,4 +1,4 @@
-package common
+package wst
 
 import (
 	"encoding/json"
@@ -7,6 +7,10 @@ import (
 	"regexp"
 	"strings"
 )
+
+type M map[string]interface{}
+
+type A []map[string]interface{}
 
 type IApp struct {
 	Debug        bool
