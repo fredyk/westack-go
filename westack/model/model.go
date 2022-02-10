@@ -487,12 +487,18 @@ func (loadedModel *Model) Create(data interface{}) (*ModelInstance, error) {
 
 	var finalData wst.M
 	switch data.(type) {
-	//case wst.M:
-	//	finalData = wst.M{}
-	//	for key, value := range data.(wst.M) {
-	//		finalData[key] = value
-	//	}
-	//	break
+	case map[string]interface{}:
+		finalData = wst.M{}
+		for key, value := range data.(map[string]interface{}) {
+			finalData[key] = value
+		}
+		break
+	case *map[string]interface{}:
+		finalData = wst.M{}
+		for key, value := range *data.(*map[string]interface{}) {
+			finalData[key] = value
+		}
+		break
 	case wst.M:
 		finalData = data.(wst.M)
 		break
@@ -545,12 +551,18 @@ func (modelInstance *ModelInstance) UpdateAttributes(data interface{}) (*ModelIn
 
 	var finalData wst.M
 	switch data.(type) {
-	//case wst.M:
-	//	finalData = wst.M{}
-	//	for key, value := range data.(wst.M) {
-	//		finalData[key] = value
-	//	}
-	//	break
+	case map[string]interface{}:
+		finalData = wst.M{}
+		for key, value := range data.(map[string]interface{}) {
+			finalData[key] = value
+		}
+		break
+	case *map[string]interface{}:
+		finalData = wst.M{}
+		for key, value := range *data.(*map[string]interface{}) {
+			finalData[key] = value
+		}
+		break
 	case wst.M:
 		finalData = data.(wst.M)
 		break
