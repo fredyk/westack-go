@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/fredyk/westack-go/westack"
+	wst "github.com/fredyk/westack-go/westack/common"
 	"github.com/stretchr/testify/assert"
 	"io"
 	"log"
@@ -65,7 +66,7 @@ func login(t *testing.T, b *bytes.Buffer) (string, string) {
 		return "", ""
 	}
 
-	var loginResponse map[string]interface{}
+	var loginResponse wst.M
 	err = json.Unmarshal(responseBytes, &loginResponse)
 	if err != nil {
 		t.Error(err)
@@ -85,13 +86,13 @@ func Test_WeStackCreateUser(t *testing.T) {
 	n, _ := rand.Int(rand.Reader, big.NewInt(899999999))
 	email := fmt.Sprintf("email%v@example.com", 100000000+n.Int64())
 	password := "test"
-	body := map[string]interface{}{"email": email, "password": password}
+	body := wst.M{"email": email, "password": password}
 	bodyBytes := createBody(t, body)
 	createUser(t, bodyBytes)
 
 }
 
-func createBody(t *testing.T, body map[string]interface{}) *bytes.Buffer {
+func createBody(t *testing.T, body wst.M) *bytes.Buffer {
 	bodyBytes := new(bytes.Buffer)
 	if err := json.NewEncoder(bodyBytes).Encode(body); err != nil {
 		t.Error(err)
@@ -107,7 +108,7 @@ func Test_WeStackLogin(t *testing.T) {
 	password := "test"
 
 	log.Println("Email", email)
-	body := map[string]interface{}{"email": email, "password": password}
+	body := wst.M{"email": email, "password": password}
 	bodyBytes := createBody(t, body)
 	createUser(t, bodyBytes)
 
@@ -121,7 +122,7 @@ func Test_WeStackDelete(t *testing.T) {
 	n, _ := rand.Int(rand.Reader, big.NewInt(899999999))
 	email := fmt.Sprintf("email%v@example.com", 100000000+n.Int64())
 	password := "test"
-	body := map[string]interface{}{"email": email, "password": password}
+	body := wst.M{"email": email, "password": password}
 	bodyBytes := createBody(t, body)
 	createUser(t, bodyBytes)
 

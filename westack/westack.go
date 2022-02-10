@@ -10,7 +10,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/recover"
 	"github.com/golang-jwt/jwt"
-	"go.mongodb.org/mongo-driver/bson"
+	//"go.mongodb.org/mongo-driver/bson"
 	"runtime/debug"
 	"strings"
 	"time"
@@ -42,11 +42,11 @@ type WeStack struct {
 	RestApiRoot   string
 	Port          int32
 
-	_swaggerPaths map[string]map[string]interface{}
+	_swaggerPaths map[string]wst.M
 	init          time.Time
 }
 
-func (app WeStack) SwaggerPaths() *map[string]map[string]interface{} {
+func (app WeStack) SwaggerPaths() *map[string]wst.M {
 	return &app._swaggerPaths
 }
 
@@ -70,7 +70,7 @@ func (app *WeStack) loadModels() {
 		panic("Missing or invalid ./model-config.json: " + err.Error())
 	}
 
-	app._swaggerPaths = map[string]map[string]interface{}{}
+	app._swaggerPaths = map[string]wst.M{}
 	for _, fileInfo := range fileInfos {
 
 		if strings.Split(fileInfo.Name(), ".")[1] != "json" {
@@ -124,7 +124,7 @@ func (app *WeStack) loadModels() {
 						// TODO: Validate email
 						return ctx.RestError(fiber.ErrBadRequest, fiber.Map{"error": "Invalid email"})
 					}
-					filter := map[string]interface{}{"where": map[string]interface{}{"email": (*data)["email"]}}
+					filter := wst.Filter{Where: &wst.Where{"email": (*data)["email"]}}
 					existent, err2 := loadedModel.FindOne(&filter)
 					if err2 != nil {
 						return err2
@@ -197,7 +197,7 @@ func (app *WeStack) loadModels() {
 
 				loadedModel.On("login", func(ctx *model.EventContext) error {
 					var loginBody *LoginBody
-					var data *bson.M
+					var data *wst.M
 					err := json.Unmarshal(ctx.Ctx.Body(), &loginBody)
 					err = json.Unmarshal(ctx.Ctx.Body(), &data)
 					if err != nil {
@@ -212,8 +212,8 @@ func (app *WeStack) loadModels() {
 					}
 
 					email := loginBody.Email
-					users, err := loadedModel.FindMany(&map[string]interface{}{
-						"where": map[string]interface{}{
+					users, err := loadedModel.FindMany(&wst.Filter{
+						Where: &wst.Where{
 							"email": email,
 						},
 					})
@@ -276,7 +276,7 @@ func (app *WeStack) loadDataSources() {
 			dsName = key
 		}
 		if dsConfig.Connector == "mongodb" {
-			ds := datasource.New(map[string]interface{}{
+			ds := datasource.New(wst.M{
 				"name":      dsConfig.Name,
 				"connector": dsConfig.Connector,
 				"database":  dsConfig.Database,
@@ -375,7 +375,7 @@ func (app *WeStack) AsInterface() *wst.IApp {
 		FindModel: func(modelName string) interface{} {
 			return app.FindModel(modelName)
 		},
-		SwaggerPaths: func() *map[string]map[string]interface{} {
+		SwaggerPaths: func() *map[string]wst.M {
 			return app.SwaggerPaths()
 		},
 	}
@@ -405,7 +405,7 @@ func (app *WeStack) loadModelsFixedRoutes() {
 			log.Println("Mount POST " + loadedModel.BaseUrl)
 		}
 		loadedModel.RemoteMethod(func(ctx *fiber.Ctx) error {
-			var data *bson.M
+			var data *wst.M
 			err := json.Unmarshal(ctx.Body(), &data)
 			if err != nil {
 				return err
@@ -471,7 +471,7 @@ func (app *WeStack) loadModelsDynamicRoutes() {
 			if err != nil {
 				return err
 			}
-			var data *bson.M
+			var data *wst.M
 			err = json.Unmarshal(ctx.Body(), &data)
 			if err != nil {
 				return err
