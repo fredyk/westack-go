@@ -92,7 +92,7 @@ type ModelInstance struct {
 	Model *Model
 	Id    interface{}
 
-	data  bson.M
+	data  wst.M
 	bytes []byte
 }
 
@@ -101,10 +101,10 @@ type RegistryEntry struct {
 	Model *Model
 }
 
-func (modelInstance ModelInstance) ToJSON() map[string]interface{} {
+func (modelInstance ModelInstance) ToJSON() wst.M {
 	// Cannot hide here, it may be necessary
 	//modelInstance.HideProperties()
-	var result map[string]interface{}
+	var result wst.M
 	result = wst.CopyMap(modelInstance.data)
 	for relationName, relationConfig := range modelInstance.Model.Config.Relations {
 		if modelInstance.data[relationName] != nil {
@@ -120,7 +120,7 @@ func (modelInstance ModelInstance) ToJSON() map[string]interface{} {
 					relatedInstance := rawRelatedData.(*ModelInstance).ToJSON()
 					result[relationName] = relatedInstance
 				case "hasMany", "hasAndBelongsToMany":
-					aux := make([]map[string]interface{}, len(rawRelatedData.([]ModelInstance)))
+					aux := make(wst.A, len(rawRelatedData.([]ModelInstance)))
 					for idx, v := range rawRelatedData.([]ModelInstance) {
 						aux[idx] = v.ToJSON()
 					}
@@ -153,7 +153,7 @@ func (modelInstance ModelInstance) GetMany(relationName string) []ModelInstance 
 	return modelInstance.Get(relationName).([]ModelInstance)
 }
 
-func (loadedModel *Model) Build(data bson.M, fromDb bool) ModelInstance {
+func (loadedModel *Model) Build(data wst.M, fromDb bool) ModelInstance {
 
 	if data["id"] == nil {
 		data["id"] = data["_id"]
@@ -176,12 +176,12 @@ func (loadedModel *Model) Build(data bson.M, fromDb bool) ModelInstance {
 			if relatedModel != nil {
 				switch relationConfig.Type {
 				case "belongsTo", "hasOne":
-					relatedInstance := relatedModel.Build(rawRelatedData.(map[string]interface{}), false)
+					relatedInstance := relatedModel.Build(rawRelatedData.(wst.M), false)
 					data[relationName] = &relatedInstance
 				case "hasMany", "hasAndBelongsToMany":
 					result := make([]ModelInstance, len(rawRelatedData.(primitive.A)))
 					for idx, v := range rawRelatedData.(primitive.A) {
-						result[idx] = relatedModel.Build(v.(map[string]interface{}), false)
+						result[idx] = relatedModel.Build(v.(wst.M), false)
 					}
 					data[relationName] = result
 				}
@@ -205,19 +205,19 @@ func (loadedModel *Model) Build(data bson.M, fromDb bool) ModelInstance {
 	return modelInstance
 }
 
-func parseFilter(filter string) *map[string]interface{} {
-	var filterMap *map[string]interface{}
+func parseFilter(filter string) *wst.Filter {
+	var filterMap *wst.Filter
 	if filter != "" {
 		_ = json.Unmarshal([]byte(filter), &filterMap)
 	}
 	return filterMap
 }
 
-func (loadedModel *Model) FindMany(filterMap *map[string]interface{}) ([]ModelInstance, error) {
+func (loadedModel *Model) FindMany(filterMap *wst.Filter) ([]ModelInstance, error) {
 
 	lookups := loadedModel.ExtractLookupsFromFilter(filterMap)
 
-	var documents []map[string]interface{}
+	var documents wst.A
 	err := loadedModel.Datasource.FindMany(loadedModel.Name, filterMap, lookups).All(context.Background(), &documents)
 	if err != nil {
 		return nil, err
@@ -232,67 +232,61 @@ func (loadedModel *Model) FindMany(filterMap *map[string]interface{}) ([]ModelIn
 	return results, nil
 }
 
-func (loadedModel *Model) ExtractLookupsFromFilter(filterMap *map[string]interface{}) *[]map[string]interface{} {
+func (loadedModel *Model) ExtractLookupsFromFilter(filterMap *wst.Filter) *wst.A {
 
-	var targetWhere *map[string]interface{}
-	if filterMap != nil && (*filterMap)["where"] != nil {
-		whereCopy := (*filterMap)["where"].(map[string]interface{})
+	if filterMap == nil {
+		return nil
+	}
+
+	var targetWhere *wst.Where
+	if filterMap != nil && filterMap.Where != nil {
+		whereCopy := *filterMap.Where
 		targetWhere = &whereCopy
 	} else {
 		targetWhere = nil
 	}
 
-	var targetInclude *[]interface{}
-	if filterMap != nil && (*filterMap)["include"] != nil {
-		includeAsMaps, asMapsOk := (*filterMap)["include"].([]map[string]interface{})
-		if asMapsOk {
-			includeAsInterfaces := make([]interface{}, len(includeAsMaps))
-			for idx, v := range includeAsMaps {
-				includeAsInterfaces[idx] = v
-			}
-			targetInclude = &includeAsInterfaces
-		} else {
-			includeAsInterfaces := (*filterMap)["include"].([]interface{})
-			targetInclude = &includeAsInterfaces
+	var targetInclude *wst.Include
+	if filterMap != nil && filterMap.Include != nil {
+		//includeAsMaps, asMapsOk := filterMap.Include
+		//if asMapsOk {
+		//	includeAsInterfaces := make([]interface{}, len(includeAsMaps))
+		//	for idx, v := range includeAsMaps {
+		//		includeAsInterfaces[idx] = v
+		//	}
+		//	targetInclude = &includeAsInterfaces
+		//} else {
+		includeAsInterfaces := *filterMap.Include
+		targetInclude = &includeAsInterfaces
 
-		}
+		//}
 	} else {
 		targetInclude = nil
 	}
-	var targetOrder *[]interface{}
-	if filterMap != nil && (*filterMap)["order"] != nil {
-		orderValue := (*filterMap)["order"].([]interface{})
+	var targetOrder *wst.Order
+	if filterMap != nil && filterMap.Order != nil {
+		orderValue := *filterMap.Order
 		targetOrder = &orderValue
 	} else {
 		targetOrder = nil
 	}
-	var targetSkip int64
-	if filterMap != nil && (*filterMap)["skip"] != nil {
-		targetSkip = (*filterMap)["skip"].(int64)
-	} else {
-		targetSkip = 0
-	}
-	var targetLimit int64
-	if filterMap != nil && (*filterMap)["skip"] != nil {
-		targetLimit = (*filterMap)["skip"].(int64)
-	} else {
-		targetLimit = 0
-	}
+	var targetSkip = filterMap.Skip
+	var targetLimit = filterMap.Limit
 
-	var lookups *[]map[string]interface{}
+	var lookups *wst.A
 	if targetWhere != nil {
 		datasource.ReplaceObjectIds(*targetWhere)
-		lookups = &[]map[string]interface{}{
+		lookups = &wst.A{
 			{"$match": *targetWhere},
 		}
 	} else {
-		lookups = &[]map[string]interface{}{}
+		lookups = &wst.A{}
 	}
 
 	if targetOrder != nil && len(*targetOrder) > 0 {
-		orderMap := map[string]interface{}{}
+		orderMap := wst.M{}
 		for _, orderPair := range *targetOrder {
-			splt := strings.Split(orderPair.(string), " ")
+			splt := strings.Split(orderPair, " ")
 			key := splt[0]
 			directionSt := splt[1]
 			if strings.ToLower(strings.TrimSpace(directionSt)) == "asc" {
@@ -303,18 +297,18 @@ func (loadedModel *Model) ExtractLookupsFromFilter(filterMap *map[string]interfa
 				panic(fmt.Sprintf("Invalid direction %v while trying to sort by %v", directionSt, key))
 			}
 		}
-		*lookups = append(*lookups, map[string]interface{}{
+		*lookups = append(*lookups, wst.M{
 			"$sort": orderMap,
 		})
 	}
 
 	if targetSkip > 0 {
-		*lookups = append(*lookups, map[string]interface{}{
+		*lookups = append(*lookups, wst.M{
 			"$skip": targetSkip,
 		})
 	}
 	if targetLimit > 0 {
-		*lookups = append(*lookups, map[string]interface{}{
+		*lookups = append(*lookups, wst.M{
 			"$limit": targetLimit,
 		})
 	}
@@ -322,15 +316,15 @@ func (loadedModel *Model) ExtractLookupsFromFilter(filterMap *map[string]interfa
 	if targetInclude != nil {
 		for _, includeItem := range *targetInclude {
 
-			var targetScope interface{}
-			if (includeItem.(map[string]interface{}))["scope"] != nil {
-				scopeValue := (includeItem.(map[string]interface{}))["scope"].(map[string]interface{})
+			var targetScope *wst.Filter
+			if includeItem.Scope != nil {
+				scopeValue := *includeItem.Scope
 				targetScope = &scopeValue
 			} else {
 				targetScope = nil
 			}
 
-			relationName := includeItem.(map[string]interface{})["relation"].(string)
+			relationName := includeItem.Relation
 			relation := loadedModel.Config.Relations[relationName]
 			relatedModelName := relation.Model
 			relatedLoadedModel := (*loadedModel.modelRegistry)[relatedModelName]
@@ -360,43 +354,43 @@ func (loadedModel *Model) ExtractLookupsFromFilter(filterMap *map[string]interfa
 			if relatedLoadedModel.Datasource.Config["name"] == loadedModel.Datasource.Config["name"] {
 				switch relation.Type {
 				case "belongsTo", "hasMany":
-					var matching map[string]interface{}
-					var lookupLet map[string]interface{}
+					var matching wst.M
+					var lookupLet wst.M
 					switch relation.Type {
 					case "belongsTo":
-						lookupLet = map[string]interface{}{
+						lookupLet = wst.M{
 							relation.ForeignKey: fmt.Sprintf("$%v", relation.ForeignKey),
 						}
-						matching = map[string]interface{}{
+						matching = wst.M{
 							"$eq": []string{fmt.Sprintf("$%v", relation.PrimaryKey), fmt.Sprintf("$$%v", relation.ForeignKey)},
 						}
 						break
 					case "hasMany":
-						lookupLet = map[string]interface{}{
+						lookupLet = wst.M{
 							relation.ForeignKey: fmt.Sprintf("$%v", relation.PrimaryKey),
 						}
-						matching = map[string]interface{}{
+						matching = wst.M{
 							"$eq": []string{fmt.Sprintf("$%v", relation.ForeignKey), fmt.Sprintf("$$%v", relation.ForeignKey)},
 						}
 						break
 					}
 					pipeline := []interface{}{
-						map[string]interface{}{
-							"$match": map[string]interface{}{
-								"$expr": map[string]interface{}{
-									"$and": []map[string]interface{}{
+						wst.M{
+							"$match": wst.M{
+								"$expr": wst.M{
+									"$and": wst.A{
 										matching,
 									},
 								},
 							},
 						},
 					}
-					project := map[string]interface{}{}
+					project := wst.M{}
 					for _, propertyName := range relatedLoadedModel.Config.Hidden {
 						project[propertyName] = false
 					}
 					if len(project) > 0 {
-						pipeline = append(pipeline, map[string]interface{}{
+						pipeline = append(pipeline, wst.M{
 							"$project": project,
 						})
 					}
@@ -405,7 +399,7 @@ func (loadedModel *Model) ExtractLookupsFromFilter(filterMap *map[string]interfa
 						if loadedModel.App.Debug {
 							log.Println("Process recursive scope ", targetScope)
 						}
-						nestedLoopkups := relatedLoadedModel.ExtractLookupsFromFilter(targetScope.(*map[string]interface{}))
+						nestedLoopkups := relatedLoadedModel.ExtractLookupsFromFilter(targetScope)
 						if nestedLoopkups != nil {
 							if loadedModel.App.Debug {
 								log.Println("nested lookups: ", nestedLoopkups)
@@ -416,8 +410,8 @@ func (loadedModel *Model) ExtractLookupsFromFilter(filterMap *map[string]interfa
 						}
 					}
 
-					*lookups = append(*lookups, map[string]interface{}{
-						"$lookup": map[string]interface{}{
+					*lookups = append(*lookups, wst.M{
+						"$lookup": wst.M{
 							"from":     relatedLoadedModel.Name,
 							"let":      lookupLet,
 							"pipeline": pipeline,
@@ -428,8 +422,8 @@ func (loadedModel *Model) ExtractLookupsFromFilter(filterMap *map[string]interfa
 				}
 				switch relation.Type {
 				case "belongsTo":
-					*lookups = append(*lookups, map[string]interface{}{
-						"$unwind": map[string]interface{}{
+					*lookups = append(*lookups, wst.M{
+						"$unwind": wst.M{
 							"path":                       fmt.Sprintf("$%v", relationName),
 							"preserveNullAndEmptyArrays": true,
 						},
@@ -452,8 +446,8 @@ func (loadedModel *Model) ExtractLookupsFromFilter(filterMap *map[string]interfa
 	return lookups
 }
 
-func (loadedModel *Model) FindOne(filterMap *map[string]interface{}) (*ModelInstance, error) {
-	var documents []map[string]interface{}
+func (loadedModel *Model) FindOne(filterMap *wst.Filter) (*ModelInstance, error) {
+	var documents wst.A
 
 	lookups := loadedModel.ExtractLookupsFromFilter(filterMap)
 
@@ -470,8 +464,8 @@ func (loadedModel *Model) FindOne(filterMap *map[string]interface{}) (*ModelInst
 	}
 }
 
-func (loadedModel *Model) FindById(id interface{}, filterMap *map[string]interface{}) (*ModelInstance, error) {
-	var document map[string]interface{}
+func (loadedModel *Model) FindById(id interface{}, filterMap *wst.Filter) (*ModelInstance, error) {
+	var document wst.M
 
 	lookups := loadedModel.ExtractLookupsFromFilter(filterMap)
 
@@ -491,19 +485,19 @@ func (loadedModel *Model) FindById(id interface{}, filterMap *map[string]interfa
 
 func (loadedModel *Model) Create(data interface{}) (*ModelInstance, error) {
 
-	var finalData bson.M
+	var finalData wst.M
 	switch data.(type) {
-	case map[string]interface{}:
-		finalData = bson.M{}
-		for key, value := range data.(map[string]interface{}) {
-			finalData[key] = value
-		}
+	//case wst.M:
+	//	finalData = wst.M{}
+	//	for key, value := range data.(wst.M) {
+	//		finalData[key] = value
+	//	}
+	//	break
+	case wst.M:
+		finalData = data.(wst.M)
 		break
-	case bson.M:
-		finalData = data.(bson.M)
-		break
-	case *bson.M:
-		finalData = *data.(*bson.M)
+	case *wst.M:
+		finalData = *data.(*wst.M)
 		break
 	case ModelInstance:
 		finalData = data.(ModelInstance).ToJSON()
@@ -521,7 +515,7 @@ func (loadedModel *Model) Create(data interface{}) (*ModelInstance, error) {
 		IsNewInstance: true,
 	}
 	loadedModel.GetHandler("__operation__before_save")(&eventContext)
-	var document bson.M
+	var document wst.M
 	for key := range loadedModel.Config.Relations {
 		delete(finalData, key)
 	}
@@ -549,19 +543,19 @@ func (loadedModel *Model) Create(data interface{}) (*ModelInstance, error) {
 
 func (modelInstance *ModelInstance) UpdateAttributes(data interface{}) (*ModelInstance, error) {
 
-	var finalData bson.M
+	var finalData wst.M
 	switch data.(type) {
-	case map[string]interface{}:
-		finalData = bson.M{}
-		for key, value := range data.(map[string]interface{}) {
-			finalData[key] = value
-		}
+	//case wst.M:
+	//	finalData = wst.M{}
+	//	for key, value := range data.(wst.M) {
+	//		finalData[key] = value
+	//	}
+	//	break
+	case wst.M:
+		finalData = data.(wst.M)
 		break
-	case bson.M:
-		finalData = data.(bson.M)
-		break
-	case *bson.M:
-		finalData = *data.(*bson.M)
+	case *wst.M:
+		finalData = *data.(*wst.M)
 		break
 	case ModelInstance:
 		finalData = data.(ModelInstance).ToJSON()
@@ -580,7 +574,7 @@ func (modelInstance *ModelInstance) UpdateAttributes(data interface{}) (*ModelIn
 		IsNewInstance: false,
 	}
 	modelInstance.Model.GetHandler("__operation__before_save")(&eventContext)
-	var document bson.M
+	var document wst.M
 	for key := range modelInstance.Model.Config.Relations {
 		delete(finalData, key)
 	}
@@ -741,7 +735,7 @@ func (loadedModel *Model) FindManyRoute(c *fiber.Ctx) error {
 	filterMap := parseFilter(filterSt)
 
 	result, err := loadedModel.FindMany(filterMap)
-	out := make([]map[string]interface{}, len(result))
+	out := make(wst.A, len(result))
 	for idx, item := range result {
 		item.HideProperties()
 		out[idx] = item.ToJSON()
@@ -758,7 +752,7 @@ func (loadedModel *Model) FindByIdRoute(c *fiber.Ctx) error {
 	filterSt := c.Query("filter")
 	filterMap := parseFilter(filterSt)
 	if filterMap == nil {
-		filterMap = &map[string]interface{}{}
+		filterMap = &wst.Filter{}
 	}
 
 	if filterSt == "" {
@@ -824,30 +818,30 @@ func (loadedModel *Model) RemoteMethod(handler func(c *fiber.Ctx) error, options
 	fullPath = regexp.MustCompile("//+").ReplaceAllString(fullPath, "/")
 
 	if (*loadedModel.App.SwaggerPaths())[fullPath] == nil {
-		(*loadedModel.App.SwaggerPaths())[fullPath] = map[string]interface{}{}
+		(*loadedModel.App.SwaggerPaths())[fullPath] = wst.M{}
 	}
 
 	if description == "" {
 		description = fmt.Sprintf("%v %v.", operation, loadedModel.Config.Plural)
 	}
 
-	var parameters []map[string]interface{}
+	var parameters wst.A
 	if verb == "post" || verb == "put" || verb == "patch" {
-		parameters = []map[string]interface{}{
+		parameters = wst.A{
 			{
 				"name":        "data",
 				"in":          "body",
 				"description": "data",
 				"required":    "true",
-				"schema": map[string]interface{}{
+				"schema": wst.M{
 					"type": "object",
 				},
 			},
 		}
 	} else {
-		parameters = []map[string]interface{}{}
+		parameters = wst.A{}
 	}
-	(*loadedModel.App.SwaggerPaths())[fullPath][verb] = map[string]interface{}{
+	(*loadedModel.App.SwaggerPaths())[fullPath][verb] = wst.M{
 		"description": description,
 		"consumes": []string{
 			"*/*",
@@ -860,10 +854,10 @@ func (loadedModel *Model) RemoteMethod(handler func(c *fiber.Ctx) error, options
 		},
 		"parameters": parameters,
 		"summary":    description,
-		"responses": map[string]interface{}{
-			"200": map[string]interface{}{
+		"responses": wst.M{
+			"200": wst.M{
 				"description": "OK",
-				"schema": map[string]interface{}{
+				"schema": wst.M{
 					"type":                 "object",
 					"additionalProperties": true,
 				},
@@ -875,7 +869,7 @@ func (loadedModel *Model) RemoteMethod(handler func(c *fiber.Ctx) error, options
 }
 
 type EventContext struct {
-	Data          *bson.M
+	Data          *wst.M
 	Instance      *ModelInstance
 	Ctx           *fiber.Ctx
 	IsNewInstance bool

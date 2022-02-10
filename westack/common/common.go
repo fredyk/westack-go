@@ -10,11 +10,28 @@ import (
 
 type M map[string]interface{}
 
-type A []map[string]interface{}
+type A []M
+
+type Where M
+
+type Include []struct {
+	Relation string  `json:"relation"`
+	Scope    *Filter `json:"scope"`
+}
+
+type Order []string
+
+type Filter struct {
+	Where   *Where   `json:"where"`
+	Include *Include `json:"include"`
+	Order   *Order   `json:"order"`
+	Skip    int64    `json:"skip"`
+	Limit   int64    `json:"limit"`
+}
 
 type IApp struct {
 	Debug        bool
-	SwaggerPaths func() *map[string]map[string]interface{}
+	SwaggerPaths func() *map[string]M
 	FindModel    func(modelName string) interface{}
 }
 
@@ -24,7 +41,7 @@ func LoadFile(filePath string, out interface{}) error {
 		return err
 	}
 
-	//var result map[string]interface{}
+	//var result M
 	err2 := json.Unmarshal(jsonFile, &out)
 	if err2 != nil {
 		return err2
@@ -44,9 +61,9 @@ func DashedCase(st string) string {
 	return res
 }
 
-func CopyMap(src map[string]interface{}) map[string]interface{} {
+func CopyMap(src M) M {
 	// Create the target map
-	targetMap := make(map[string]interface{})
+	targetMap := make(M)
 
 	// Copy from the original map to the target map
 	for key, value := range src {
