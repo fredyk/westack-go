@@ -207,7 +207,7 @@ func ReplaceObjectIds(data interface{}) interface{} {
 
 	var finalData wst.M
 	switch data.(type) {
-	case int, int32, int64, float32, float64, bool, primitive.ObjectID, *primitive.ObjectID, time.Time:
+	case int, int32, int64, float32, float64, bool, primitive.ObjectID, *primitive.ObjectID, time.Time, primitive.DateTime:
 		return data
 	case string:
 		var newValue interface{}
@@ -275,7 +275,7 @@ func ReplaceObjectIds(data interface{}) interface{} {
 		var err error
 		var newValue interface{}
 		switch value.(type) {
-		case string, wst.Where, *wst.Where, wst.M, *wst.M, int, int32, int64, float32, float64, bool, primitive.ObjectID, *primitive.ObjectID, time.Time:
+		case string, wst.Where, *wst.Where, wst.M, *wst.M, int, int32, int64, float32, float64, bool, primitive.ObjectID, *primitive.ObjectID, time.Time, primitive.DateTime:
 			newValue = ReplaceObjectIds(value)
 			break
 		default:

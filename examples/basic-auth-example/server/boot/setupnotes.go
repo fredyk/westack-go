@@ -16,9 +16,9 @@ func SetupNotes(app *westack.WeStack) {
 	noteModel := app.FindModel("note")
 
 	// Check if user exists
-	user, _ := userModel.FindOne(&wst.Filter{Where: &wst.Where{"email": "test@example.com"}})
+	user, _ := userModel.FindOne(&wst.Filter{Where: &wst.Where{"email": "test@example.com"}}, nil)
 	if user == nil {
-		user, _ = userModel.Create(wst.M{"email": "test@example.com", "password": "1234"})
+		user, _ = userModel.Create(wst.M{"email": "test@example.com", "password": "1234"}, nil)
 	}
 	var typedUser models.User
 	err := user.Transform(&typedUser)
@@ -27,7 +27,7 @@ func SetupNotes(app *westack.WeStack) {
 	}
 
 	// Create a note for the user
-	if note, err := noteModel.Create(wst.M{"title": "A note", "body": "this is a note", "userId": typedUser.Id}); err != nil {
+	if note, err := noteModel.Create(wst.M{"title": "A note", "body": "this is a note", "userId": typedUser.Id}, nil); err != nil {
 		panic(fmt.Sprintf("Could not create note %v", err))
 	} else {
 		var typedNote models.Note
@@ -40,14 +40,14 @@ func SetupNotes(app *westack.WeStack) {
 		log.Println("Created note", typedNote, "for user", typedUser)
 
 		// Update the note
-		updated, err := note.UpdateAttributes(&wst.M{"date": time.Now()})
+		updated, err := note.UpdateAttributes(&wst.M{"date": time.Now()}, nil)
 		if err != nil {
 			panic(nil)
 		}
 		log.Println("Updated note ", updated.ToJSON())
 
 		// List user notes
-		notes, _ := noteModel.FindMany(&wst.Filter{Where: &wst.Where{"userId": typedUser.Id.Hex()}})
+		notes, _ := noteModel.FindMany(&wst.Filter{Where: &wst.Where{"userId": typedUser.Id.Hex()}}, nil)
 
 		log.Println("User notes:", len(notes))
 
@@ -62,7 +62,7 @@ func SetupNotes(app *westack.WeStack) {
 		log.Println("Deleted notes: ", deletedCount)
 
 		// Again list user notes
-		notes, _ = noteModel.FindMany(&wst.Filter{Where: &wst.Where{"userId": typedUser.Id.Hex()}})
+		notes, _ = noteModel.FindMany(&wst.Filter{Where: &wst.Where{"userId": typedUser.Id.Hex()}}, nil)
 
 		log.Println("User notes:", len(notes))
 
