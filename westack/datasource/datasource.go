@@ -228,7 +228,11 @@ func ReplaceObjectIds(data interface{}) interface{} {
 		if err != nil {
 			log.Println("WARNING: ", err)
 		}
-		return newValue
+		if newValue != nil {
+			return newValue
+		} else {
+			return data
+		}
 		break
 	case wst.Where:
 		finalData = wst.M{}
