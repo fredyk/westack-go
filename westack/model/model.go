@@ -153,7 +153,7 @@ func (modelInstance ModelInstance) GetMany(relationName string) []ModelInstance 
 	return modelInstance.Get(relationName).([]ModelInstance)
 }
 
-func (loadedModel *Model) Build(data wst.M, fromDb bool) ModelInstance {
+func (loadedModel *Model) Build(data wst.M, fromDb bool, baseContext *EventContext) ModelInstance {
 
 	if data["id"] == nil {
 		data["id"] = data["_id"]
@@ -176,12 +176,12 @@ func (loadedModel *Model) Build(data wst.M, fromDb bool) ModelInstance {
 			if relatedModel != nil {
 				switch relationConfig.Type {
 				case "belongsTo", "hasOne":
-					relatedInstance := relatedModel.Build(rawRelatedData.(wst.M), false)
+					relatedInstance := relatedModel.Build(rawRelatedData.(wst.M), false, baseContext)
 					data[relationName] = &relatedInstance
 				case "hasMany", "hasAndBelongsToMany":
 					result := make([]ModelInstance, len(rawRelatedData.(primitive.A)))
 					for idx, v := range rawRelatedData.(primitive.A) {
-						result[idx] = relatedModel.Build(v.(wst.M), false)
+						result[idx] = relatedModel.Build(v.(wst.M), false, baseContext)
 					}
 					data[relationName] = result
 				}
@@ -195,17 +195,17 @@ func (loadedModel *Model) Build(data wst.M, fromDb bool) ModelInstance {
 		data:  data,
 		Model: loadedModel,
 	}
-	eventContext := EventContext{
-		Data:     &data,
-		Instance: &modelInstance,
-		Ctx:      nil,
+	eventContext := &EventContext{
+		BaseContext: baseContext,
 	}
-	loadedModel.GetHandler("__operation__loaded")(&eventContext)
+	eventContext.Data = &data
+	eventContext.Instance = &modelInstance
+	loadedModel.GetHandler("__operation__loaded")(eventContext)
 
 	return modelInstance
 }
 
-func parseFilter(filter string) *wst.Filter {
+func ParseFilter(filter string) *wst.Filter {
 	var filterMap *wst.Filter
 	if filter != "" {
 		_ = json.Unmarshal([]byte(filter), &filterMap)
@@ -213,7 +213,7 @@ func parseFilter(filter string) *wst.Filter {
 	return filterMap
 }
 
-func (loadedModel *Model) FindMany(filterMap *wst.Filter) ([]ModelInstance, error) {
+func (loadedModel *Model) FindMany(filterMap *wst.Filter, baseContext *EventContext) ([]ModelInstance, error) {
 
 	lookups := loadedModel.ExtractLookupsFromFilter(filterMap)
 
@@ -226,7 +226,7 @@ func (loadedModel *Model) FindMany(filterMap *wst.Filter) ([]ModelInstance, erro
 	var results = make([]ModelInstance, len(documents))
 
 	for idx, document := range documents {
-		results[idx] = loadedModel.Build(document, true)
+		results[idx] = loadedModel.Build(document, true, baseContext)
 	}
 
 	return results, nil
@@ -446,7 +446,7 @@ func (loadedModel *Model) ExtractLookupsFromFilter(filterMap *wst.Filter) *wst.A
 	return lookups
 }
 
-func (loadedModel *Model) FindOne(filterMap *wst.Filter) (*ModelInstance, error) {
+func (loadedModel *Model) FindOne(filterMap *wst.Filter, baseContext *EventContext) (*ModelInstance, error) {
 	var documents wst.A
 
 	lookups := loadedModel.ExtractLookupsFromFilter(filterMap)
@@ -459,12 +459,12 @@ func (loadedModel *Model) FindOne(filterMap *wst.Filter) (*ModelInstance, error)
 	if len(documents) == 0 {
 		return nil, nil
 	} else {
-		modelInstance := loadedModel.Build(documents[0], true)
+		modelInstance := loadedModel.Build(documents[0], true, baseContext)
 		return &modelInstance, nil
 	}
 }
 
-func (loadedModel *Model) FindById(id interface{}, filterMap *wst.Filter) (*ModelInstance, error) {
+func (loadedModel *Model) FindById(id interface{}, filterMap *wst.Filter, baseContext *EventContext) (*ModelInstance, error) {
 	var document wst.M
 
 	lookups := loadedModel.ExtractLookupsFromFilter(filterMap)
@@ -475,7 +475,7 @@ func (loadedModel *Model) FindById(id interface{}, filterMap *wst.Filter) (*Mode
 		if err != nil {
 			return nil, err
 		} else {
-			result := loadedModel.Build(document, true)
+			result := loadedModel.Build(document, true, baseContext)
 			return &result, nil
 		}
 	} else {
@@ -483,7 +483,7 @@ func (loadedModel *Model) FindById(id interface{}, filterMap *wst.Filter) (*Mode
 	}
 }
 
-func (loadedModel *Model) Create(data interface{}) (*ModelInstance, error) {
+func (loadedModel *Model) Create(data interface{}, baseContext *EventContext) (*ModelInstance, error) {
 
 	var finalData wst.M
 	switch data.(type) {
@@ -515,12 +515,12 @@ func (loadedModel *Model) Create(data interface{}) (*ModelInstance, error) {
 		log.Fatal(fmt.Sprintf("Invalid input for Model.Create() <- %s", data))
 	}
 	datasource.ReplaceObjectIds(finalData)
-	eventContext := EventContext{
-		Data:          &finalData,
-		Ctx:           nil,
-		IsNewInstance: true,
+	eventContext := &EventContext{
+		BaseContext: baseContext,
 	}
-	loadedModel.GetHandler("__operation__before_save")(&eventContext)
+	eventContext.Data = &finalData
+	eventContext.IsNewInstance = true
+	loadedModel.GetHandler("__operation__before_save")(eventContext)
 	var document wst.M
 	for key := range loadedModel.Config.Relations {
 		delete(finalData, key)
@@ -531,14 +531,10 @@ func (loadedModel *Model) Create(data interface{}) (*ModelInstance, error) {
 		if err != nil {
 			return nil, err
 		} else {
-			result := loadedModel.Build(document, true)
+			result := loadedModel.Build(document, true, eventContext)
 			result.HideProperties()
-			loadedModel.GetHandler("__operation__after_save")(&EventContext{
-				Data:          &result.data,
-				Instance:      &result,
-				Ctx:           nil,
-				IsNewInstance: true,
-			})
+			eventContext.Instance = &result
+			loadedModel.GetHandler("__operation__after_save")(eventContext)
 			return &result, nil
 		}
 	} else {
@@ -547,7 +543,7 @@ func (loadedModel *Model) Create(data interface{}) (*ModelInstance, error) {
 
 }
 
-func (modelInstance *ModelInstance) UpdateAttributes(data interface{}) (*ModelInstance, error) {
+func (modelInstance *ModelInstance) UpdateAttributes(data interface{}, baseContext *EventContext) (*ModelInstance, error) {
 
 	var finalData wst.M
 	switch data.(type) {
@@ -579,13 +575,13 @@ func (modelInstance *ModelInstance) UpdateAttributes(data interface{}) (*ModelIn
 		log.Fatal(fmt.Sprintf("Invalid input for Model.UpdateAttributes() <- %s", data))
 	}
 	datasource.ReplaceObjectIds(finalData)
-	eventContext := EventContext{
-		Data:          &finalData,
-		Instance:      modelInstance,
-		Ctx:           nil,
-		IsNewInstance: false,
+	eventContext := &EventContext{
+		BaseContext: baseContext,
 	}
-	modelInstance.Model.GetHandler("__operation__before_save")(&eventContext)
+	eventContext.Data = &finalData
+	eventContext.Instance = modelInstance
+	eventContext.IsNewInstance = false
+	modelInstance.Model.GetHandler("__operation__before_save")(eventContext)
 	var document wst.M
 	for key := range modelInstance.Model.Config.Relations {
 		delete(finalData, key)
@@ -596,17 +592,14 @@ func (modelInstance *ModelInstance) UpdateAttributes(data interface{}) (*ModelIn
 		if err != nil {
 			return nil, err
 		} else {
-			err := modelInstance.Reload()
+			err := modelInstance.Reload(eventContext)
 			modelInstance.HideProperties()
 			if err != nil {
 				return nil, err
 			}
-			modelInstance.Model.GetHandler("__operation__after_save")(&EventContext{
-				Data:          &modelInstance.data,
-				Instance:      modelInstance,
-				Ctx:           nil,
-				IsNewInstance: false,
-			})
+			eventContext.Instance = modelInstance
+			eventContext.IsNewInstance = false
+			modelInstance.Model.GetHandler("__operation__after_save")(eventContext)
 			return modelInstance, nil
 		}
 	} else {
@@ -696,8 +689,8 @@ func (modelInstance ModelInstance) UncheckedTransform(out interface{}) interface
 	return out
 }
 
-func (modelInstance *ModelInstance) Reload() error {
-	newInstance, err := modelInstance.Model.FindById(modelInstance.Id, nil)
+func (modelInstance *ModelInstance) Reload(eventContext *EventContext) error {
+	newInstance, err := modelInstance.Model.FindById(modelInstance.Id, nil, eventContext)
 	if err != nil {
 		return err
 	}
@@ -740,44 +733,6 @@ func (modelInstance *ModelInstance) Reload() error {
 	}
 	modelInstance.bytes = _bytes
 	return nil
-}
-
-func (loadedModel *Model) FindManyRoute(c *fiber.Ctx) error {
-	filterSt := c.Query("filter")
-	filterMap := parseFilter(filterSt)
-
-	result, err := loadedModel.FindMany(filterMap)
-	out := make(wst.A, len(result))
-	for idx, item := range result {
-		item.HideProperties()
-		out[idx] = item.ToJSON()
-	}
-
-	if err != nil {
-		return handleError(c, err)
-	}
-	return c.JSON(out)
-}
-
-func (loadedModel *Model) FindByIdRoute(c *fiber.Ctx) error {
-	id := c.Params("id")
-	filterSt := c.Query("filter")
-	filterMap := parseFilter(filterSt)
-	if filterMap == nil {
-		filterMap = &wst.Filter{}
-	}
-
-	if filterSt == "" {
-
-	}
-	result, err := loadedModel.FindById(id, filterMap)
-	if result != nil {
-		result.HideProperties()
-	}
-	if err != nil {
-		return handleError(c, err)
-	}
-	return c.JSON(result.ToJSON())
 }
 
 type RemoteMethodOptionsHttp struct {
@@ -881,9 +836,12 @@ func (loadedModel *Model) RemoteMethod(handler func(c *fiber.Ctx) error, options
 }
 
 type EventContext struct {
+	BaseContext   *EventContext
+	Filter        *wst.Filter
 	Data          *wst.M
 	Instance      *ModelInstance
 	Ctx           *fiber.Ctx
+	Ephemeral     *wst.M
 	IsNewInstance bool
 	Result        interface{}
 	ModelID       interface{}

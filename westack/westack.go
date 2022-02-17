@@ -115,6 +115,33 @@ func (app *WeStack) loadModels() {
 			loadedModel.Router = &modelRouter
 
 			loadedModel.BaseUrl = app.RestApiRoot + "/" + plural
+			loadedModel.On("findMany", func(ctx *model.EventContext) error {
+				result, err := loadedModel.FindMany(ctx.Filter, ctx)
+				out := make(wst.A, len(result))
+				for idx, item := range result {
+					item.HideProperties()
+					out[idx] = item.ToJSON()
+				}
+
+				if err != nil {
+					return err
+				}
+				ctx.StatusCode = fiber.StatusOK
+				ctx.Result = out
+				return nil
+			})
+			loadedModel.On("findById", func(ctx *model.EventContext) error {
+				result, err := loadedModel.FindById(ctx.ModelID, ctx.Filter, ctx)
+				if result != nil {
+					result.HideProperties()
+				}
+				if err != nil {
+					return err
+				}
+				ctx.StatusCode = fiber.StatusOK
+				ctx.Result = result.ToJSON()
+				return nil
+			})
 			loadedModel.On("create", func(ctx *model.EventContext) error {
 
 				data := ctx.Data
@@ -125,7 +152,7 @@ func (app *WeStack) loadModels() {
 						return ctx.RestError(fiber.ErrBadRequest, fiber.Map{"error": "Invalid email"})
 					}
 					filter := wst.Filter{Where: &wst.Where{"email": (*data)["email"]}}
-					existent, err2 := loadedModel.FindOne(&filter)
+					existent, err2 := loadedModel.FindOne(&filter, ctx)
 					if err2 != nil {
 						return err2
 					}
@@ -146,7 +173,7 @@ func (app *WeStack) loadModels() {
 						log.Println("Create User")
 					}
 				}
-				created, err := loadedModel.Create(*data)
+				created, err := loadedModel.Create(*data, ctx)
 				if err != nil {
 					return err
 				}
@@ -157,7 +184,7 @@ func (app *WeStack) loadModels() {
 
 			loadedModel.On("instance_updateAttributes", func(ctx *model.EventContext) error {
 
-				inst, err := loadedModel.FindById(ctx.ModelID, nil)
+				inst, err := loadedModel.FindById(ctx.ModelID, nil, ctx)
 				if err != nil {
 					return err
 				}
@@ -170,7 +197,7 @@ func (app *WeStack) loadModels() {
 					}
 					(*ctx.Data)["password"] = string(hashed)
 				}
-				updated, err := inst.UpdateAttributes(ctx.Data)
+				updated, err := inst.UpdateAttributes(ctx.Data, ctx)
 				if err != nil {
 					return err
 				}
@@ -216,7 +243,7 @@ func (app *WeStack) loadModels() {
 						Where: &wst.Where{
 							"email": email,
 						},
-					})
+					}, ctx)
 					if len(users) == 0 {
 						return ctx.RestError(fiber.ErrNotFound, fiber.Map{"error": "User not found"})
 					}
@@ -260,6 +287,11 @@ func handleEvent(eventContext *model.EventContext, loadedModel *model.Model, eve
 	}
 	if eventContext.StatusCode == 0 {
 		eventContext.StatusCode = fiber.StatusNotImplemented
+	}
+	if eventContext.Ephemeral != nil {
+		for k, v := range *eventContext.Ephemeral {
+			(eventContext.Result.(wst.M))[k] = v
+		}
 	}
 	return eventContext.Ctx.Status(eventContext.StatusCode).JSON(eventContext.Result)
 }
@@ -394,7 +426,16 @@ func (app *WeStack) loadModelsFixedRoutes() {
 		if app.Debug {
 			log.Println("Mount GET " + loadedModel.BaseUrl)
 		}
-		loadedModel.RemoteMethod(loadedModel.FindManyRoute, model.RemoteMethodOptions{
+		loadedModel.RemoteMethod(func(ctx *fiber.Ctx) error {
+			filterSt := ctx.Query("filter")
+			filterMap := model.ParseFilter(filterSt)
+
+			eventContext := model.EventContext{
+				Filter: filterMap,
+				Ctx:    ctx,
+			}
+			return handleEvent(&eventContext, loadedModel, "findMany")
+		}, model.RemoteMethodOptions{
 			Http: model.RemoteMethodOptionsHttp{
 				Path: "/",
 				Verb: "get",
@@ -456,7 +497,19 @@ func (app *WeStack) loadModelsDynamicRoutes() {
 		if app.Debug {
 			log.Println("Mount GET " + loadedModel.BaseUrl + "/:id")
 		}
-		loadedModel.RemoteMethod(loadedModel.FindByIdRoute, model.RemoteMethodOptions{
+		loadedModel.RemoteMethod(func(ctx *fiber.Ctx) error {
+			id := ctx.Params("id")
+			filterSt := ctx.Query("filter")
+			filterMap := model.ParseFilter(filterSt)
+
+			eventContext := model.EventContext{
+				ModelID: id,
+				Filter:  filterMap,
+				Ctx:     ctx,
+			}
+			return handleEvent(&eventContext, loadedModel, "findById")
+
+		}, model.RemoteMethodOptions{
 			Http: model.RemoteMethodOptionsHttp{
 				Path: "/:id",
 				Verb: "get",
