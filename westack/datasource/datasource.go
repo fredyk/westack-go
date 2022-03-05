@@ -140,7 +140,7 @@ func findByObjectId(collectionName string, _id interface{}, ds *Datasource, look
 	}
 }
 
-func (ds *Datasource) Create(collectionName string, data *wst.M) *mongo.Cursor {
+func (ds *Datasource) Create(collectionName string, data *wst.M) (*mongo.Cursor, error) {
 	var connector string = ds.Config["connector"].(string)
 	switch connector {
 	case "mongodb":
@@ -150,11 +150,11 @@ func (ds *Datasource) Create(collectionName string, data *wst.M) *mongo.Cursor {
 		collection := database.Collection(collectionName)
 		cursor, err := collection.InsertOne(context.Background(), data)
 		if err != nil {
-			panic(err)
+			return nil, err
 		}
-		return findByObjectId(collectionName, cursor.InsertedID, ds, nil)
+		return findByObjectId(collectionName, cursor.InsertedID, ds, nil), nil
 	}
-	return nil
+	return nil, nil
 }
 
 func (ds *Datasource) UpdateById(collectionName string, id interface{}, data *wst.M) *mongo.Cursor {

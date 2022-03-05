@@ -532,7 +532,10 @@ func (loadedModel *Model) Create(data interface{}, baseContext *EventContext) (*
 	for key := range loadedModel.Config.Relations {
 		delete(finalData, key)
 	}
-	cursor := loadedModel.Datasource.Create(loadedModel.Name, &finalData)
+	cursor, err2 := loadedModel.Datasource.Create(loadedModel.Name, &finalData)
+	if err2 != nil {
+		return nil, err2
+	}
 	if cursor != nil {
 		err := cursor.Decode(&document)
 		if err != nil {
