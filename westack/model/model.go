@@ -200,7 +200,11 @@ func (loadedModel *Model) Build(data wst.M, fromDb bool, baseContext *EventConte
 	}
 	eventContext.Data = &data
 	eventContext.Instance = &modelInstance
-	loadedModel.GetHandler("__operation__loaded")(eventContext)
+	err := loadedModel.GetHandler("__operation__loaded")(eventContext)
+	if err != nil {
+		log.Println("Warning", err)
+		return ModelInstance{}
+	}
 
 	return modelInstance
 }
@@ -520,7 +524,10 @@ func (loadedModel *Model) Create(data interface{}, baseContext *EventContext) (*
 	}
 	eventContext.Data = &finalData
 	eventContext.IsNewInstance = true
-	loadedModel.GetHandler("__operation__before_save")(eventContext)
+	err := loadedModel.GetHandler("__operation__before_save")(eventContext)
+	if err != nil {
+		return nil, err
+	}
 	var document wst.M
 	for key := range loadedModel.Config.Relations {
 		delete(finalData, key)
@@ -534,7 +541,10 @@ func (loadedModel *Model) Create(data interface{}, baseContext *EventContext) (*
 			result := loadedModel.Build(document, true, eventContext)
 			result.HideProperties()
 			eventContext.Instance = &result
-			loadedModel.GetHandler("__operation__after_save")(eventContext)
+			err := loadedModel.GetHandler("__operation__after_save")(eventContext)
+			if err != nil {
+				return nil, err
+			}
 			return &result, nil
 		}
 	} else {
@@ -582,7 +592,10 @@ func (modelInstance *ModelInstance) UpdateAttributes(data interface{}, baseConte
 	eventContext.Instance = modelInstance
 	eventContext.ModelID = modelInstance.Id
 	eventContext.IsNewInstance = false
-	modelInstance.Model.GetHandler("__operation__before_save")(eventContext)
+	err := modelInstance.Model.GetHandler("__operation__before_save")(eventContext)
+	if err != nil {
+		return nil, err
+	}
 	var document wst.M
 	for key := range modelInstance.Model.Config.Relations {
 		delete(finalData, key)
@@ -601,7 +614,10 @@ func (modelInstance *ModelInstance) UpdateAttributes(data interface{}, baseConte
 			eventContext.Instance = modelInstance
 			eventContext.ModelID = modelInstance.Id
 			eventContext.IsNewInstance = false
-			modelInstance.Model.GetHandler("__operation__after_save")(eventContext)
+			err = modelInstance.Model.GetHandler("__operation__after_save")(eventContext)
+			if err != nil {
+				return nil, err
+			}
 			return modelInstance, nil
 		}
 	} else {
@@ -874,9 +890,12 @@ func wrapEventHandler(model *Model, eventKey string, handler func(eventContext *
 	if currentHandler != nil {
 		newHandler := handler
 		handler = func(eventContext *EventContext) error {
-			currentHandlerResult := currentHandler(eventContext)
-			if currentHandlerResult != nil {
-				return currentHandlerResult
+			currentHandlerError := currentHandler(eventContext)
+			if currentHandlerError != nil {
+				if model.App.Debug {
+					log.Println("WARNING: Stop handling on error", currentHandlerError)
+				}
+				return currentHandlerError
 			} else {
 				return newHandler(eventContext)
 			}
