@@ -580,6 +580,7 @@ func (modelInstance *ModelInstance) UpdateAttributes(data interface{}, baseConte
 	}
 	eventContext.Data = &finalData
 	eventContext.Instance = modelInstance
+	eventContext.ModelID = modelInstance.Id
 	eventContext.IsNewInstance = false
 	modelInstance.Model.GetHandler("__operation__before_save")(eventContext)
 	var document wst.M
@@ -598,6 +599,7 @@ func (modelInstance *ModelInstance) UpdateAttributes(data interface{}, baseConte
 				return nil, err
 			}
 			eventContext.Instance = modelInstance
+			eventContext.ModelID = modelInstance.Id
 			eventContext.IsNewInstance = false
 			modelInstance.Model.GetHandler("__operation__after_save")(eventContext)
 			return modelInstance, nil
