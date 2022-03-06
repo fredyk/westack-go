@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	casbinmodel "github.com/casbin/casbin/v2/model"
+	fileadapter "github.com/casbin/casbin/v2/persist/file-adapter"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"log"
@@ -31,6 +33,18 @@ type Relation struct {
 type ACL struct {
 	AccessType    string `json:"accessType"`
 	PrincipalType string `json:"principalType"`
+	PrincipalId   string `json:"principalId"`
+	Permission    string `json:"permission"`
+	Property      string `json:"property"`
+}
+
+type CasbinConfig struct {
+	RequestDefinition  string   `json:"requestDefinition"`
+	PolicyDefinition   string   `json:"policyDefinition"`
+	RoleDefinition     string   `json:"roleDefinition"`
+	PolicyEffect       string   `json:"policyEffect"`
+	MatchersDefinition string   `json:"matchersDefinition"`
+	Policies           []string `json:"policies"`
 }
 
 type Config struct {
@@ -43,6 +57,7 @@ type Config struct {
 	Relations  map[string]Relation `json:"relations"`
 	Acls       []ACL               `json:"acls"`
 	Hidden     []string            `json:"hidden"`
+	Casbin     CasbinConfig        `json:"casbin"`
 }
 
 type DataSourceConfig struct {
@@ -56,12 +71,14 @@ type DataSourceConfig struct {
 }
 
 type Model struct {
-	Name       string                 `json:"name"`
-	Config     Config                 `json:"-"`
-	Datasource *datasource.Datasource `json:"-"`
-	Router     *fiber.Router          `json:"-"`
-	App        *wst.IApp              `json:"-"`
-	BaseUrl    string                 `json:"-"`
+	Name          string                 `json:"name"`
+	Config        *Config                `json:"-"`
+	Datasource    *datasource.Datasource `json:"-"`
+	Router        *fiber.Router          `json:"-"`
+	App           *wst.IApp              `json:"-"`
+	BaseUrl       string                 `json:"-"`
+	CasbinModel   *casbinmodel.Model
+	CasbinAdapter **fileadapter.Adapter
 
 	eventHandlers map[string]func(eventContext *EventContext) error
 	modelRegistry *map[string]*Model
@@ -75,7 +92,7 @@ func (loadedModel *Model) SendError(ctx *fiber.Ctx, err error) error {
 	return err
 }
 
-func New(config Config, modelRegistry *map[string]*Model) *Model {
+func New(config *Config, modelRegistry *map[string]*Model) *Model {
 	loadedModel := &Model{
 		Name:          config.Name,
 		Config:        config,
