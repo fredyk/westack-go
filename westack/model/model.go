@@ -165,6 +165,20 @@ func (loadedModel *Model) Build(data wst.M, fromDb bool, baseContext *EventConte
 	_bytes, _ := bson.Marshal(data)
 	//data = common.CopyMap(data)
 
+	var targetBaseContext = baseContext
+	deepLevel := 0
+	for {
+		if targetBaseContext.BaseContext != nil {
+			if loadedModel.App.Debug {
+				log.Println("DEBUG: Found baseContext at level", deepLevel)
+			}
+			targetBaseContext = targetBaseContext.BaseContext
+		} else {
+			break
+		}
+		deepLevel++
+	}
+
 	for relationName, relationConfig := range loadedModel.Config.Relations {
 		if data[relationName] != nil {
 			if relationConfig.Type == "" {
@@ -176,12 +190,12 @@ func (loadedModel *Model) Build(data wst.M, fromDb bool, baseContext *EventConte
 			if relatedModel != nil {
 				switch relationConfig.Type {
 				case "belongsTo", "hasOne":
-					relatedInstance := relatedModel.Build(rawRelatedData.(wst.M), false, baseContext)
+					relatedInstance := relatedModel.Build(rawRelatedData.(wst.M), false, targetBaseContext)
 					data[relationName] = &relatedInstance
 				case "hasMany", "hasAndBelongsToMany":
 					result := make([]ModelInstance, len(rawRelatedData.(primitive.A)))
 					for idx, v := range rawRelatedData.(primitive.A) {
-						result[idx] = relatedModel.Build(v.(wst.M), false, baseContext)
+						result[idx] = relatedModel.Build(v.(wst.M), false, targetBaseContext)
 					}
 					data[relationName] = result
 				}
@@ -196,7 +210,7 @@ func (loadedModel *Model) Build(data wst.M, fromDb bool, baseContext *EventConte
 		Model: loadedModel,
 	}
 	eventContext := &EventContext{
-		BaseContext: baseContext,
+		BaseContext: targetBaseContext,
 	}
 	eventContext.Data = &data
 	eventContext.Instance = &modelInstance
@@ -219,6 +233,20 @@ func ParseFilter(filter string) *wst.Filter {
 
 func (loadedModel *Model) FindMany(filterMap *wst.Filter, baseContext *EventContext) ([]ModelInstance, error) {
 
+	var targetBaseContext = baseContext
+	deepLevel := 0
+	for {
+		if targetBaseContext.BaseContext != nil {
+			if loadedModel.App.Debug {
+				log.Println("DEBUG: Found baseContext at level", deepLevel)
+			}
+			targetBaseContext = targetBaseContext.BaseContext
+		} else {
+			break
+		}
+		deepLevel++
+	}
+
 	lookups := loadedModel.ExtractLookupsFromFilter(filterMap)
 
 	var documents wst.A
@@ -230,7 +258,7 @@ func (loadedModel *Model) FindMany(filterMap *wst.Filter, baseContext *EventCont
 	var results = make([]ModelInstance, len(documents))
 
 	for idx, document := range documents {
-		results[idx] = loadedModel.Build(document, true, baseContext)
+		results[idx] = loadedModel.Build(document, true, targetBaseContext)
 	}
 
 	return results, nil
@@ -451,6 +479,21 @@ func (loadedModel *Model) ExtractLookupsFromFilter(filterMap *wst.Filter) *wst.A
 }
 
 func (loadedModel *Model) FindOne(filterMap *wst.Filter, baseContext *EventContext) (*ModelInstance, error) {
+
+	var targetBaseContext = baseContext
+	deepLevel := 0
+	for {
+		if targetBaseContext.BaseContext != nil {
+			if loadedModel.App.Debug {
+				log.Println("DEBUG: Found baseContext at level", deepLevel)
+			}
+			targetBaseContext = targetBaseContext.BaseContext
+		} else {
+			break
+		}
+		deepLevel++
+	}
+
 	var documents wst.A
 
 	lookups := loadedModel.ExtractLookupsFromFilter(filterMap)
@@ -463,12 +506,27 @@ func (loadedModel *Model) FindOne(filterMap *wst.Filter, baseContext *EventConte
 	if len(documents) == 0 {
 		return nil, nil
 	} else {
-		modelInstance := loadedModel.Build(documents[0], true, baseContext)
+		modelInstance := loadedModel.Build(documents[0], true, targetBaseContext)
 		return &modelInstance, nil
 	}
 }
 
 func (loadedModel *Model) FindById(id interface{}, filterMap *wst.Filter, baseContext *EventContext) (*ModelInstance, error) {
+
+	var targetBaseContext = baseContext
+	deepLevel := 0
+	for {
+		if targetBaseContext.BaseContext != nil {
+			if loadedModel.App.Debug {
+				log.Println("DEBUG: Found baseContext at level", deepLevel)
+			}
+			targetBaseContext = targetBaseContext.BaseContext
+		} else {
+			break
+		}
+		deepLevel++
+	}
+
 	var document wst.M
 
 	lookups := loadedModel.ExtractLookupsFromFilter(filterMap)
@@ -479,7 +537,7 @@ func (loadedModel *Model) FindById(id interface{}, filterMap *wst.Filter, baseCo
 		if err != nil {
 			return nil, err
 		} else {
-			result := loadedModel.Build(document, true, baseContext)
+			result := loadedModel.Build(document, true, targetBaseContext)
 			return &result, nil
 		}
 	} else {
@@ -519,8 +577,23 @@ func (loadedModel *Model) Create(data interface{}, baseContext *EventContext) (*
 		log.Fatal(fmt.Sprintf("Invalid input for Model.Create() <- %s", data))
 	}
 	datasource.ReplaceObjectIds(finalData)
+
+	var targetBaseContext = baseContext
+	deepLevel := 0
+	for {
+		if targetBaseContext.BaseContext != nil {
+			if loadedModel.App.Debug {
+				log.Println("DEBUG: Found baseContext at level", deepLevel)
+			}
+			targetBaseContext = targetBaseContext.BaseContext
+		} else {
+			break
+		}
+		deepLevel++
+	}
+
 	eventContext := &EventContext{
-		BaseContext: baseContext,
+		BaseContext: targetBaseContext,
 	}
 	eventContext.Data = &finalData
 	eventContext.IsNewInstance = true
@@ -588,8 +661,23 @@ func (modelInstance *ModelInstance) UpdateAttributes(data interface{}, baseConte
 		log.Fatal(fmt.Sprintf("Invalid input for Model.UpdateAttributes() <- %s", data))
 	}
 	datasource.ReplaceObjectIds(finalData)
+
+	var targetBaseContext = baseContext
+	deepLevel := 0
+	for {
+		if targetBaseContext.BaseContext != nil {
+			if modelInstance.Model.App.Debug {
+				log.Println("DEBUG: Found baseContext at level", deepLevel)
+			}
+			targetBaseContext = targetBaseContext.BaseContext
+		} else {
+			break
+		}
+		deepLevel++
+	}
+
 	eventContext := &EventContext{
-		BaseContext: baseContext,
+		BaseContext: targetBaseContext,
 	}
 	eventContext.Data = &finalData
 	eventContext.Instance = modelInstance
