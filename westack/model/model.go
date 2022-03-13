@@ -261,6 +261,9 @@ func ParseFilter(filter string) *wst.Filter {
 
 func (loadedModel *Model) FindMany(filterMap *wst.Filter, baseContext *EventContext) ([]ModelInstance, error) {
 
+	if baseContext == nil {
+		baseContext = &EventContext{}
+	}
 	var targetBaseContext = baseContext
 	deepLevel := 0
 	for {
@@ -508,6 +511,9 @@ func (loadedModel *Model) ExtractLookupsFromFilter(filterMap *wst.Filter) *wst.A
 
 func (loadedModel *Model) FindOne(filterMap *wst.Filter, baseContext *EventContext) (*ModelInstance, error) {
 
+	if baseContext == nil {
+		baseContext = &EventContext{}
+	}
 	var targetBaseContext = baseContext
 	deepLevel := 0
 	for {
@@ -607,6 +613,9 @@ func (loadedModel *Model) Create(data interface{}, baseContext *EventContext) (*
 	}
 	datasource.ReplaceObjectIds(finalData)
 
+	if baseContext == nil {
+		baseContext = &EventContext{}
+	}
 	var targetBaseContext = baseContext
 	deepLevel := 0
 	for {
@@ -692,6 +701,9 @@ func (modelInstance *ModelInstance) UpdateAttributes(data interface{}, baseConte
 	}
 	datasource.ReplaceObjectIds(finalData)
 
+	if baseContext == nil {
+		baseContext = &EventContext{}
+	}
 	var targetBaseContext = baseContext
 	deepLevel := 0
 	for {

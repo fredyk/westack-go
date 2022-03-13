@@ -10,9 +10,10 @@ import (
 func main() {
 
 	app := westack.New(westack.WeStackOptions{
-		Debug:       false,
-		RestApiRoot: "/api/v1",
-		Port:        8023,
+		Debug:        false,
+		RestApiRoot:  "/api/v1",
+		Port:         8023,
+		JwtSecretKey: []byte(""),
 	})
 
 	app.Boot(ServerBoot)

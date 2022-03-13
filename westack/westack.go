@@ -1021,9 +1021,10 @@ func (app WeStack) Start(addr string) interface{} {
 }
 
 type WeStackOptions struct {
-	Debug       bool
-	RestApiRoot string
-	Port        int32
+	Debug        bool
+	RestApiRoot  string
+	Port         int32
+	JwtSecretKey []byte
 }
 
 func New(options WeStackOptions) *WeStack {
@@ -1039,6 +1040,7 @@ func New(options WeStackOptions) *WeStack {
 		Debug:         options.Debug,
 		RestApiRoot:   options.RestApiRoot,
 		Port:          options.Port,
+		JwtSecretKey:  options.JwtSecretKey,
 
 		init: time.Now(),
 	}

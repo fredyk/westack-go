@@ -21,9 +21,10 @@ var app *westack.WeStack
 
 func init() {
 	app = westack.New(westack.WeStackOptions{
-		Debug:       true,
-		RestApiRoot: "/api/v1",
-		Port:        8021,
+		Debug:        true,
+		RestApiRoot:  "/api/v1",
+		Port:         8021,
+		JwtSecretKey: []byte(""),
 	})
 	app.Boot(func(app *westack.WeStack) {
 
