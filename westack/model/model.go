@@ -547,6 +547,9 @@ func (loadedModel *Model) FindOne(filterMap *wst.Filter, baseContext *EventConte
 
 func (loadedModel *Model) FindById(id interface{}, filterMap *wst.Filter, baseContext *EventContext) (*ModelInstance, error) {
 
+	if baseContext == nil {
+		baseContext = &EventContext{}
+	}
 	var targetBaseContext = baseContext
 	deepLevel := 0
 	for {
@@ -1058,7 +1061,7 @@ func (ctx *EventContext) RestError(fiberError *fiber.Error, details fiber.Map) e
 	}
 }
 
-func (ctx *EventContext) GetBearer() (error, *BearerToken) {
+func (ctx *EventContext) GetBearer(loadedModel *Model) (error, *BearerToken) {
 
 	if ctx.Bearer != nil {
 		return nil, ctx.Bearer
@@ -1082,7 +1085,7 @@ func (ctx *EventContext) GetBearer() (error, *BearerToken) {
 			}
 
 			// hmacSampleSecret is a []byte containing your secret, e.g. []byte("my_secret_key")
-			return []byte(""), nil
+			return loadedModel.App.JwtSecretKey, nil
 		})
 
 		if token != nil {
@@ -1179,7 +1182,7 @@ func (loadedModel *Model) HandleRemoteMethod(name string, eventContext *EventCon
 	options := operationItem.Options
 	handler := operationItem.Handler
 
-	err, token := eventContext.GetBearer()
+	err, token := eventContext.GetBearer(loadedModel)
 	if err != nil {
 		return err
 	}
@@ -1214,6 +1217,9 @@ func (loadedModel *Model) HandleRemoteMethod(name string, eventContext *EventCon
 			objId = GetIDAsString(eventContext.ModelID)
 		} else {
 			objId = c.Params("id")
+			if objId == "" {
+				objId = "*"
+			}
 		}
 
 		allow, exp, err := loadedModel.Enforcer.EnforceEx(bearerUserIdSt, objId, action)
