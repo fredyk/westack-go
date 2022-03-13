@@ -17,5 +17,16 @@
       "keyThrough": "roleId"
     }
   },
-  "hidden": ["password"]
+  "hidden": [
+    "password"
+  ],
+  "casbin": {
+    "policyEffect": "$default",
+    "matchersDefinition": "$default && true",
+    "policies": [
+      "$owner,*,write,allow",
+      "$everyone,*,read,allow",
+      "$authenticated,*,create,allow"
+    ]
+  }
 }
