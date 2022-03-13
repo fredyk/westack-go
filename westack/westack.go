@@ -87,6 +87,22 @@ func IsOwnerFunc(args ...interface{}) (interface{}, error) {
 				userId = fmt.Sprintf("%v", userId)
 				break
 			}
+			userId = strings.TrimSpace(userId.(string))
+			//log.Println(fmt.Sprintf("DEBUG: Check %v <--> %v", requestSubj, userId))
+			return requestSubj.(string) == userId.(string), nil
+		}
+	} else {
+		userId := args[1]
+		if userId != nil {
+			switch userId.(type) {
+			case primitive.ObjectID:
+				userId = userId.(primitive.ObjectID).Hex()
+				break
+			default:
+				userId = fmt.Sprintf("%v", userId)
+				break
+			}
+			userId = strings.TrimSpace(userId.(string))
 			//log.Println(fmt.Sprintf("DEBUG: Check %v <--> %v", requestSubj, userId))
 			return requestSubj.(string) == userId.(string), nil
 		}
@@ -187,9 +203,9 @@ func (app *WeStack) loadModels() {
 			roleDefinition := "_, _"
 			policyEffect := "subjectPriority(p.eft) || deny"
 			matchersDefinition := fmt.Sprintf("" +
-				"(p.sub == '$owner' && isOwner(r.sub, r.obj)) || " +
+				//				"(p.sub == '$owner' && isOwner(r.sub, r.obj)) || " +
 				"(" +
-				"	g(r.sub, p.sub) && keyMatch(r.obj, p.obj) && keyMatch(r.act, p.act)" +
+				"	((p.sub == '$owner' && isOwner(r.sub, r.obj)) || g(r.sub, p.sub)) && keyMatch(r.obj, p.obj) && (g(r.act, p.act) || keyMatch(r.act, p.act))" +
 				")")
 			if loadedModel.Config.Casbin.RequestDefinition != "" {
 				requestDefinition = loadedModel.Config.Casbin.RequestDefinition
@@ -231,9 +247,10 @@ func (app *WeStack) loadModels() {
 			}
 
 			if config.Base == "User" {
-				casbModel.AddPolicy("p", "p", []string{replaceVarNames("$everyone,create,*,allow")})
-				casbModel.AddPolicy("p", "p", []string{replaceVarNames("$everyone,login,*,allow")})
+				casbModel.AddPolicy("p", "p", []string{replaceVarNames("$everyone,*,create,allow")})
+				casbModel.AddPolicy("p", "p", []string{replaceVarNames("$everyone,*,login,allow")})
 				casbModel.AddPolicy("p", "p", []string{replaceVarNames("$owner,*,*,allow")})
+				casbModel.AddPolicy("p", "p", []string{replaceVarNames("$authenticated,*,findSelf,allow")})
 			}
 
 			//casbModel.GetLogger().EnableLog(true)
@@ -348,7 +365,7 @@ func (app *WeStack) loadModels() {
 				ctx.Result = ""
 				return nil
 			}
-			loadedModel.On("deleteById", deleteByIdHandler)
+			loadedModel.On("instance_delete", deleteByIdHandler)
 
 			if config.Base == "User" {
 
@@ -559,90 +576,116 @@ func (app *WeStack) loadModelsFixedRoutes() {
 			continue
 		}
 
-		if app.Debug {
-			log.Println("Mount GET " + loadedModel.BaseUrl)
-		}
-		loadedModel.RemoteMethod(func(ctx *fiber.Ctx) error {
-			filterSt := ctx.Query("filter")
-			filterMap := model.ParseFilter(filterSt)
-
-			eventContext := model.EventContext{
-				Filter: filterMap,
-				Ctx:    ctx,
-			}
-			return handleEvent(&eventContext, loadedModel, "findMany")
-		}, model.RemoteMethodOptions{
-			Http: model.RemoteMethodOptionsHttp{
-				Path: "/",
-				Verb: "get",
-			},
-		})
-
-		if app.Debug {
-			log.Println("Mount POST " + loadedModel.BaseUrl)
-		}
-		loadedModel.RemoteMethod(func(ctx *fiber.Ctx) error {
-			var data *wst.M
-			err := json.Unmarshal(ctx.Body(), &data)
-			if err != nil {
-				return err
-			}
-			eventContext := model.EventContext{
-				Ctx:  ctx,
-				Data: data,
-			}
-			return handleEvent(&eventContext, loadedModel, "create")
-		}, model.RemoteMethodOptions{
-			Http: model.RemoteMethodOptionsHttp{
-				Path: "/",
-				Verb: "post",
-			},
-		})
-
-		if loadedModel.Config.Base == "User" {
-
-			loadedModel.RemoteMethod(func(ctx *fiber.Ctx) error {
-				eventContext := model.EventContext{
-					Ctx: ctx,
-				}
-				return handleEvent(&eventContext, loadedModel, "login")
-			}, model.RemoteMethodOptions{
-				Description: "Logins a user",
-				Http: model.RemoteMethodOptionsHttp{
-					Path: "/login",
-					Verb: "post",
-				},
-			},
-			)
-
-		}
-
-	}
-}
-
-func (app *WeStack) loadModelsDynamicRoutes() {
-	for _, entry := range *app.ModelRegistry {
-		loadedModel := entry
-		if !loadedModel.Config.Public {
-			if app.Debug {
-				log.Println("WARNING: Model", loadedModel.Name, "is not public")
-			}
-			continue
-		}
-
 		e, err := casbin.NewEnforcer(*loadedModel.CasbinModel, *loadedModel.CasbinAdapter, true)
 		if err != nil {
 			panic(err)
 		}
 
-		e.EnableAutoSave(true)
-		e.AddFunction("isOwner", IsOwnerFunc)
+		loadedModel.Enforcer = e
 
-		//user, err := e.AddRoleForUser("alice", replaceVarNames("$authenticated"))
-		//if err != nil {
-		//	panic(err)
-		//}
-		//log.Println("added role", user)
+		e.EnableAutoSave(true)
+		e.AddFunction("isOwner", func(arguments ...interface{}) (interface{}, error) {
+
+			subId := arguments[0]
+			objId := arguments[1]
+
+			switch objId.(type) {
+			case primitive.ObjectID:
+				objId = objId.(primitive.ObjectID).Hex()
+				break
+			case string:
+				break
+			default:
+				objId = fmt.Sprintf("%v", objId)
+				break
+			}
+			objId = strings.TrimSpace(objId.(string))
+
+			if objId == "" || objId == "*" {
+				return false, nil
+			}
+
+			switch subId.(type) {
+			case primitive.ObjectID:
+				subId = subId.(primitive.ObjectID).Hex()
+				break
+			case string:
+				break
+			default:
+				subId = fmt.Sprintf("%v", subId)
+				break
+			}
+			subId = strings.TrimSpace(subId.(string))
+
+			if subId == "" || subId == "*" {
+				return false, nil
+			}
+
+			roleKey := fmt.Sprintf("%v_OWNERS", objId)
+			usersForRole, err := loadedModel.Enforcer.GetUsersForRole(roleKey)
+			if err != nil {
+				return false, err
+			}
+
+			if usersForRole == nil || len(usersForRole) == 0 {
+				objUserId := ""
+				if loadedModel.Config.Base == "User" {
+					objUserId = model.GetIDAsString(objId)
+					loadedModel.Enforcer.AddRoleForUser(objUserId, roleKey)
+
+				} else {
+					for key, r := range loadedModel.Config.Relations {
+
+						if r.ForeignKey == "userId" {
+							//otherModel := loadedModel.App.FindModel(r.Model).(*Model)
+
+							thisInstance, err := loadedModel.FindById(objId, &wst.Filter{
+								Include: &wst.Include{{Relation: key}},
+							}, nil)
+							if err != nil {
+								return false, err
+							}
+
+							user := thisInstance.GetOne(key)
+
+							if user != nil {
+								objUserId = model.GetIDAsString(user.Id)
+
+								loadedModel.Enforcer.AddRoleForUser(objUserId, roleKey)
+								loadedModel.Enforcer.SavePolicy()
+
+							}
+
+							break
+
+						}
+
+					}
+				}
+
+				usersForRole = append(usersForRole, objUserId)
+			}
+			log.Println(usersForRole)
+
+			for _, userInRole := range usersForRole {
+				if subId == userInRole {
+					return true, nil
+				}
+			}
+
+			return false, nil
+
+		})
+
+		e.AddRoleForUser("findMany", replaceVarNames("read"))
+		e.AddRoleForUser("findById", replaceVarNames("read"))
+
+		e.AddRoleForUser("create", replaceVarNames("write"))
+		e.AddRoleForUser("instance_updateAttributes", replaceVarNames("write"))
+		e.AddRoleForUser("instance_delete", replaceVarNames("write"))
+
+		e.AddRoleForUser("read", replaceVarNames("*"))
+		e.AddRoleForUser("write", replaceVarNames("*"))
 
 		//err = adapter.SavePolicy(casbModel)
 		//if err != nil {
@@ -779,22 +822,140 @@ func (app *WeStack) loadModelsDynamicRoutes() {
 		//
 		//modelRouter.Use(authz.)
 
+		(*loadedModel.Router).Use("/", func(c *fiber.Ctx) error {
+
+			//authBytes := c.Request().Header.Peek("Authorization")
+			//
+			//requestActionType := "execute"
+			//
+			//switch strings.ToLower(c.Method()) {
+			//case "get", "head", "options":
+			//	requestActionType = "read"
+			//	break
+			//case "post", "put", "patch", "delete":
+			//	requestActionType = "write"
+			//	break
+			//}
+			//
+			//if requestActionType != "execute" && len(authBytes) == 0 || len(strings.TrimSpace(string(authBytes))) == 0 {
+			//	allow, err := loadedModel.Enforcer.Enforce("_EVERYONE_", "*", requestActionType)
+			//	if err != nil {
+			//		return err
+			//	}
+			//	if !allow {
+			//		return fiber.ErrUnauthorized
+			//	}
+			//}
+
+			//log.Println(fmt.Sprintf("DEBUG: Invoked %v method %v %v", loadedModel.Name, c.Method(), c.Path() ))
+			//log.Println("auth with", string(authBytes))
+			return c.Next()
+		})
+
+		if app.Debug {
+			log.Println("Mount GET " + loadedModel.BaseUrl)
+		}
+		loadedModel.RemoteMethod(func(eventContext *model.EventContext) error {
+			filterSt := eventContext.Ctx.Query("filter")
+			filterMap := model.ParseFilter(filterSt)
+
+			eventContext.Filter = filterMap
+			return handleEvent(eventContext, loadedModel, "findMany")
+		}, model.RemoteMethodOptions{
+			Name: "findMany",
+			Http: model.RemoteMethodOptionsHttp{
+				Path: "/",
+				Verb: "get",
+			},
+		})
+
+		if app.Debug {
+			log.Println("Mount POST " + loadedModel.BaseUrl)
+		}
+		loadedModel.RemoteMethod(func(eventContext *model.EventContext) error {
+			var data *wst.M
+			err := json.Unmarshal(eventContext.Ctx.Body(), &data)
+			if err != nil {
+				return err
+			}
+			eventContext.Data = data
+			return handleEvent(eventContext, loadedModel, "create")
+		}, model.RemoteMethodOptions{
+			Name: "create",
+			Http: model.RemoteMethodOptionsHttp{
+				Path: "/",
+				Verb: "post",
+			},
+		})
+
+		if loadedModel.Config.Base == "User" {
+
+			loadedModel.RemoteMethod(func(eventContext *model.EventContext) error {
+				return handleEvent(eventContext, loadedModel, "login")
+			}, model.RemoteMethodOptions{
+				Name:        "login",
+				Description: "Logins a user",
+				Http: model.RemoteMethodOptionsHttp{
+					Path: "/login",
+					Verb: "post",
+				},
+			},
+			)
+
+			loadedModel.RemoteMethod(func(eventContext *model.EventContext) error {
+
+				err, token := eventContext.GetBearer()
+				if err != nil {
+					return err
+				}
+				eventContext.ModelID = token.User.Id
+				return loadedModel.HandleRemoteMethod("findById", eventContext)
+
+			}, model.RemoteMethodOptions{
+				Name:        "findSelf",
+				Description: "Find user with their bearer",
+				Http: model.RemoteMethodOptionsHttp{
+					Path: "/me",
+					Verb: "get",
+				},
+			},
+			)
+
+		}
+
+	}
+}
+
+func (app *WeStack) loadModelsDynamicRoutes() {
+	for _, entry := range *app.ModelRegistry {
+		loadedModel := entry
+		if !loadedModel.Config.Public {
+			if app.Debug {
+				log.Println("WARNING: Model", loadedModel.Name, "is not public")
+			}
+			continue
+		}
+
 		if app.Debug {
 			log.Println("Mount GET " + loadedModel.BaseUrl + "/:id")
 		}
-		loadedModel.RemoteMethod(func(ctx *fiber.Ctx) error {
-			id := ctx.Params("id")
-			filterSt := ctx.Query("filter")
+		loadedModel.RemoteMethod(func(eventContext *model.EventContext) error {
+
+			id := eventContext.Ctx.Params("id")
+			if eventContext.ModelID == nil {
+				eventContext.ModelID = id
+			} else if asSt, asStOk := eventContext.ModelID.(string); asStOk && len(strings.TrimSpace(asSt)) == 0 {
+				eventContext.ModelID = id
+			}
+
+			filterSt := eventContext.Ctx.Query("filter")
 			filterMap := model.ParseFilter(filterSt)
 
-			eventContext := model.EventContext{
-				ModelID: id,
-				Filter:  filterMap,
-				Ctx:     ctx,
-			}
-			return handleEvent(&eventContext, loadedModel, "findById")
+			eventContext.Filter = filterMap
+			return handleEvent(eventContext, loadedModel, "findById")
 
 		}, model.RemoteMethodOptions{
+			Name: "findById",
 			Http: model.RemoteMethodOptionsHttp{
 				Path: "/:id",
 				Verb: "get",
@@ -804,23 +965,21 @@ func (app *WeStack) loadModelsDynamicRoutes() {
 		if app.Debug {
 			log.Println("Mount PATCH " + loadedModel.BaseUrl + "/:id")
 		}
-		loadedModel.RemoteMethod(func(ctx *fiber.Ctx) error {
-			id, err := primitive.ObjectIDFromHex(ctx.Params("id"))
+		loadedModel.RemoteMethod(func(eventContext *model.EventContext) error {
+			id, err := primitive.ObjectIDFromHex(eventContext.Ctx.Params("id"))
 			if err != nil {
 				return err
 			}
 			var data *wst.M
-			err = json.Unmarshal(ctx.Body(), &data)
+			err = json.Unmarshal(eventContext.Ctx.Body(), &data)
 			if err != nil {
 				return err
 			}
-			eventContext := model.EventContext{
-				Ctx:     ctx,
-				ModelID: &id,
-				Data:    data,
-			}
-			return handleEvent(&eventContext, loadedModel, "instance_updateAttributes")
+			eventContext.ModelID = &id
+			eventContext.Data = data
+			return handleEvent(eventContext, loadedModel, "instance_updateAttributes")
 		}, model.RemoteMethodOptions{
+			Name: "instance_updateAttributes",
 			Http: model.RemoteMethodOptionsHttp{
 				Path: "/:id",
 				Verb: "patch",
@@ -830,17 +989,15 @@ func (app *WeStack) loadModelsDynamicRoutes() {
 		if app.Debug {
 			log.Println("Mount DELETE " + loadedModel.BaseUrl + "/:id")
 		}
-		loadedModel.RemoteMethod(func(ctx *fiber.Ctx) error {
-			id, err := primitive.ObjectIDFromHex(ctx.Params("id"))
+		loadedModel.RemoteMethod(func(eventContext *model.EventContext) error {
+			id, err := primitive.ObjectIDFromHex(eventContext.Ctx.Params("id"))
 			if err != nil {
 				return err
 			}
-			eventContext := model.EventContext{
-				Ctx:     ctx,
-				ModelID: &id,
-			}
-			return handleEvent(&eventContext, loadedModel, "deleteById")
+			eventContext.ModelID = &id
+			return handleEvent(eventContext, loadedModel, "instance_delete")
 		}, model.RemoteMethodOptions{
+			Name: "instance_delete",
 			Http: model.RemoteMethodOptionsHttp{
 				Path: "/:id",
 				Verb: "delete",

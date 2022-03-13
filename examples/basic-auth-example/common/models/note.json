@@ -24,8 +24,9 @@
     "policyEffect": "$default",
     "matchersDefinition": "$default && true",
     "policies": [
-      "$owner,*,read,allow",
-      "$owner,*,write,allow"
+      "$owner,*,write,allow",
+      "$everyone,*,read,allow",
+      "$authenticated,*,create,allow"
     ]
   }
 }
