@@ -4,12 +4,18 @@ import (
 	"encoding/json"
 	"fmt"
 	swagger "github.com/arsmn/fiber-swagger/v2"
+	"github.com/casbin/casbin/v2"
+	casbinmodel "github.com/casbin/casbin/v2/model"
+	fileadapter "github.com/casbin/casbin/v2/persist/file-adapter"
 	"github.com/fredyk/westack-go/westack/common"
 	"github.com/fredyk/westack-go/westack/datasource"
 	"github.com/fredyk/westack-go/westack/model"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/recover"
 	"github.com/golang-jwt/jwt"
+	"os"
+	"regexp"
+
 	//"go.mongodb.org/mongo-driver/bson"
 	"runtime/debug"
 	"strings"
@@ -58,6 +64,53 @@ func (app *WeStack) FindModel(modelName string) *model.Model {
 	return result
 }
 
+func IsOwnerFunc(args ...interface{}) (interface{}, error) {
+	//log.Println(fmt.Sprintf("DEBUG: Check %v <--> %v", args[0], args[1]))
+	requestSubj := args[0]
+	switch requestSubj.(type) {
+	case primitive.ObjectID:
+		requestSubj = requestSubj.(primitive.ObjectID).Hex()
+		break
+	default:
+		requestSubj = fmt.Sprintf("%v", requestSubj)
+		break
+	}
+
+	if asMap, asMapOk := args[1].(map[string]interface{}); asMapOk {
+		userId := asMap["userId"]
+		if userId != nil {
+			switch userId.(type) {
+			case primitive.ObjectID:
+				userId = userId.(primitive.ObjectID).Hex()
+				break
+			default:
+				userId = fmt.Sprintf("%v", userId)
+				break
+			}
+			userId = strings.TrimSpace(userId.(string))
+			//log.Println(fmt.Sprintf("DEBUG: Check %v <--> %v", requestSubj, userId))
+			return requestSubj.(string) == userId.(string), nil
+		}
+	} else {
+		userId := args[1]
+		if userId != nil {
+			switch userId.(type) {
+			case primitive.ObjectID:
+				userId = userId.(primitive.ObjectID).Hex()
+				break
+			default:
+				userId = fmt.Sprintf("%v", userId)
+				break
+			}
+			userId = strings.TrimSpace(userId.(string))
+			//log.Println(fmt.Sprintf("DEBUG: Check %v <--> %v", requestSubj, userId))
+			return requestSubj.(string) == userId.(string), nil
+		}
+	}
+
+	return false, nil
+}
+
 func (app *WeStack) loadModels() {
 
 	fileInfos, err := ioutil.ReadDir("./common/models")
@@ -76,7 +129,7 @@ func (app *WeStack) loadModels() {
 		if strings.Split(fileInfo.Name(), ".")[1] != "json" {
 			continue
 		}
-		var config model.Config
+		var config *model.Config
 		err := wst.LoadFile("./common/models/"+fileInfo.Name(), &config)
 		if err != nil {
 			panic(err)
@@ -115,6 +168,100 @@ func (app *WeStack) loadModels() {
 			loadedModel.Router = &modelRouter
 
 			loadedModel.BaseUrl = app.RestApiRoot + "/" + plural
+
+			if len(loadedModel.Config.Acls) == 0 {
+				loadedModel.Config.Acls = append(loadedModel.Config.Acls, model.ACL{
+					AccessType:    "*",
+					PrincipalType: "ROLE",
+					PrincipalId:   "$everyone",
+					Permission:    "DENY",
+					Property:      "",
+				}, model.ACL{
+					AccessType:    "*",
+					PrincipalType: "ROLE",
+					PrincipalId:   "$authenticated",
+					Permission:    "ALLOW",
+					Property:      "",
+				})
+			}
+
+			casbModel := casbinmodel.NewModel()
+
+			f, err := os.OpenFile(fmt.Sprintf("common/models/%v.policies.csv", loadedModel.Name), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+			if err != nil {
+				panic(err)
+			}
+			err = f.Close()
+			if err != nil {
+				panic(err)
+			}
+
+			adapter := fileadapter.NewAdapter(fmt.Sprintf("common/models/%v.policies.csv", loadedModel.Name))
+
+			requestDefinition := "sub, obj, act"
+			policyDefinition := "sub, obj, act, eft"
+			roleDefinition := "_, _"
+			policyEffect := "subjectPriority(p.eft) || deny"
+			matchersDefinition := fmt.Sprintf("" +
+				//				"(p.sub == '$owner' && isOwner(r.sub, r.obj)) || " +
+				"(" +
+				"	((p.sub == '$owner' && isOwner(r.sub, r.obj)) || g(r.sub, p.sub)) && keyMatch(r.obj, p.obj) && (g(r.act, p.act) || keyMatch(r.act, p.act))" +
+				")")
+			if loadedModel.Config.Casbin.RequestDefinition != "" {
+				requestDefinition = loadedModel.Config.Casbin.RequestDefinition
+			}
+			if loadedModel.Config.Casbin.PolicyDefinition != "" {
+				policyDefinition = loadedModel.Config.Casbin.PolicyDefinition
+			}
+			if loadedModel.Config.Casbin.RoleDefinition != "" {
+				roleDefinition = loadedModel.Config.Casbin.RoleDefinition
+			}
+			if loadedModel.Config.Casbin.PolicyEffect != "" {
+				policyEffect = strings.ReplaceAll(loadedModel.Config.Casbin.PolicyEffect, "$default", policyEffect)
+			}
+			if loadedModel.Config.Casbin.MatchersDefinition != "" {
+				matchersDefinition = strings.ReplaceAll(loadedModel.Config.Casbin.MatchersDefinition, "$default", " ( "+matchersDefinition+" ) ")
+			}
+
+			casbModel.AddDef("r", "r", replaceVarNames(requestDefinition))
+			casbModel.AddDef("p", "p", replaceVarNames(policyDefinition))
+			casbModel.AddDef("g", "g", replaceVarNames(roleDefinition))
+			//casbModel.AddDef("e", "e", "subjectPriority(p.eft) || deny")
+			casbModel.AddDef("e", "e", replaceVarNames(policyEffect))
+			casbModel.AddDef("m", "m", replaceVarNames(matchersDefinition))
+			//casbModel.AddDef("m", "m2", "r_sub == 'bob'")
+
+			//err := casbModel.LoadModel("basic_model.conf")
+			//if err != nil {
+			//	panic(err)
+			//}
+
+			//policy, err := casbModel.AddPolicy("p", "alice,password,read")
+			if len(loadedModel.Config.Casbin.Policies) > 0 {
+				for _, p := range loadedModel.Config.Casbin.Policies {
+					casbModel.AddPolicy("p", "p", []string{replaceVarNames(p)})
+				}
+			} else {
+				casbModel.AddPolicy("p", "p", []string{replaceVarNames("$authenticated,*,read,allow")})
+				casbModel.AddPolicy("p", "p", []string{replaceVarNames("$owner,*,write,allow")})
+			}
+
+			if config.Base == "User" {
+				casbModel.AddPolicy("p", "p", []string{replaceVarNames("$everyone,*,create,allow")})
+				casbModel.AddPolicy("p", "p", []string{replaceVarNames("$everyone,*,login,allow")})
+				casbModel.AddPolicy("p", "p", []string{replaceVarNames("$owner,*,*,allow")})
+				casbModel.AddPolicy("p", "p", []string{replaceVarNames("$authenticated,*,findSelf,allow")})
+			}
+
+			//casbModel.GetLogger().EnableLog(true)
+			loadedModel.CasbinModel = &casbModel
+			loadedModel.CasbinAdapter = &adapter
+
+			err = adapter.SavePolicy(casbModel)
+			if err != nil {
+				panic(err)
+			}
+
 			loadedModel.On("findMany", func(ctx *model.EventContext) error {
 				result, err := loadedModel.FindMany(ctx.Filter, ctx)
 				out := make(wst.A, len(result))
@@ -218,7 +365,7 @@ func (app *WeStack) loadModels() {
 				ctx.Result = ""
 				return nil
 			}
-			loadedModel.On("deleteById", deleteByIdHandler)
+			loadedModel.On("instance_delete", deleteByIdHandler)
 
 			if config.Base == "User" {
 
@@ -278,6 +425,12 @@ func (app *WeStack) loadModels() {
 
 		}
 	}
+}
+
+func replaceVarNames(definition string) string {
+	return regexp.MustCompile("\\$(\\w+)").ReplaceAllStringFunc(definition, func(match string) string {
+		return "_" + strings.ToUpper(match[1:]) + "_"
+	})
 }
 
 func handleEvent(eventContext *model.EventContext, loadedModel *model.Model, event string) error {
@@ -423,19 +576,293 @@ func (app *WeStack) loadModelsFixedRoutes() {
 			continue
 		}
 
+		e, err := casbin.NewEnforcer(*loadedModel.CasbinModel, *loadedModel.CasbinAdapter, true)
+		if err != nil {
+			panic(err)
+		}
+
+		loadedModel.Enforcer = e
+
+		e.EnableAutoSave(true)
+		e.AddFunction("isOwner", func(arguments ...interface{}) (interface{}, error) {
+
+			subId := arguments[0]
+			objId := arguments[1]
+
+			switch objId.(type) {
+			case primitive.ObjectID:
+				objId = objId.(primitive.ObjectID).Hex()
+				break
+			case string:
+				break
+			default:
+				objId = fmt.Sprintf("%v", objId)
+				break
+			}
+			objId = strings.TrimSpace(objId.(string))
+
+			if objId == "" || objId == "*" {
+				return false, nil
+			}
+
+			switch subId.(type) {
+			case primitive.ObjectID:
+				subId = subId.(primitive.ObjectID).Hex()
+				break
+			case string:
+				break
+			default:
+				subId = fmt.Sprintf("%v", subId)
+				break
+			}
+			subId = strings.TrimSpace(subId.(string))
+
+			if subId == "" || subId == "*" {
+				return false, nil
+			}
+
+			roleKey := fmt.Sprintf("%v_OWNERS", objId)
+			usersForRole, err := loadedModel.Enforcer.GetUsersForRole(roleKey)
+			if err != nil {
+				return false, err
+			}
+
+			if usersForRole == nil || len(usersForRole) == 0 {
+				objUserId := ""
+				if loadedModel.Config.Base == "User" {
+					objUserId = model.GetIDAsString(objId)
+					loadedModel.Enforcer.AddRoleForUser(objUserId, roleKey)
+
+				} else {
+					for key, r := range loadedModel.Config.Relations {
+
+						if r.ForeignKey == "userId" {
+							//otherModel := loadedModel.App.FindModel(r.Model).(*Model)
+
+							thisInstance, err := loadedModel.FindById(objId, &wst.Filter{
+								Include: &wst.Include{{Relation: key}},
+							}, nil)
+							if err != nil {
+								return false, err
+							}
+
+							user := thisInstance.GetOne(key)
+
+							if user != nil {
+								objUserId = model.GetIDAsString(user.Id)
+
+								loadedModel.Enforcer.AddRoleForUser(objUserId, roleKey)
+								loadedModel.Enforcer.SavePolicy()
+
+							}
+
+							break
+
+						}
+
+					}
+				}
+
+				usersForRole = append(usersForRole, objUserId)
+			}
+			log.Println(usersForRole)
+
+			for _, userInRole := range usersForRole {
+				if subId == userInRole {
+					return true, nil
+				}
+			}
+
+			return false, nil
+
+		})
+
+		e.AddRoleForUser("findMany", replaceVarNames("read"))
+		e.AddRoleForUser("findById", replaceVarNames("read"))
+
+		e.AddRoleForUser("create", replaceVarNames("write"))
+		e.AddRoleForUser("instance_updateAttributes", replaceVarNames("write"))
+		e.AddRoleForUser("instance_delete", replaceVarNames("write"))
+
+		e.AddRoleForUser("read", replaceVarNames("*"))
+		e.AddRoleForUser("write", replaceVarNames("*"))
+
+		//err = adapter.SavePolicy(casbModel)
+		//if err != nil {
+		//	panic(err)
+		//}
+
+		err = e.SavePolicy()
+		if err != nil {
+			panic(err)
+		}
+
+		err = e.LoadPolicy()
+		if err != nil {
+			panic(err)
+		}
+
+		//casbModel.AddPolicy()
+		if app.Debug {
+			loadedModel.CasbinModel.PrintModel()
+		}
+
+		text := loadedModel.CasbinModel.ToText()
+		err = os.WriteFile(fmt.Sprintf("common/models/%v.casbin.dump.conf", loadedModel.Name), []byte(text), os.ModePerm)
+		if err != nil {
+			panic(err)
+		}
+
+		//aliceRoles, err := e.GetImplicitRolesForUser("alice")
+		//if err != nil {
+		//	panic(err)
+		//}
+		//log.Println("aliceRoles", aliceRoles)
+		//
+		//bobRoles, err := e.GetImplicitRolesForUser("bob")
+		//if err != nil {
+		//	panic(err)
+		//}
+		//log.Println("bobRoles", bobRoles)
+
+		//		if res, err := e.Enforce(/*casbin.EnforceContext{
+		//			RType: "r",
+		//			PType: "p",
+		//			EType: "e",
+		//			MType: "m",
+		//		},*/ "alice", "photo", "read"); res {
+		//			// permit alice to read data1
+		//			log.Println(fmt.Sprintf("allow access on %v", loadedModel.Name))
+		//		} else {
+		//			if err != nil {
+		//				// deny the request, show an error
+		//				panic(err)
+		//			} else {
+		//				log.Println(fmt.Sprintf("deny access on %v", loadedModel.Name))
+		//			}
+		//		}
+		//
+		//		if res, err := e.Enforce(
+		///*			casbin.EnforceContext{
+		//				RType: "r",
+		//				PType: "p",
+		//				EType: "e",
+		//				MType: "m",
+		//			},*/
+		//			"bob", "photo", "read"); res {
+		//			// permit alice to read data1
+		//			log.Println(fmt.Sprintf("allow access on %v", loadedModel.Name))
+		//		} else {
+		//			if err != nil {
+		//				// deny the request, show an error
+		//				panic(err)
+		//			} else {
+		//				log.Println(fmt.Sprintf("deny access on %v", loadedModel.Name))
+		//			}
+		//		}
+		//
+		//		if res, err := e.Enforce(/*casbin.EnforceContext{
+		//			RType: "r",
+		//			PType: "p",
+		//			EType: "e",
+		//			MType: "m",
+		//		},*/ "alice", "photo", "write"); res {
+		//			// permit alice to read data1
+		//			log.Println(fmt.Sprintf("allow access on %v", loadedModel.Name))
+		//		} else {
+		//			if err != nil {
+		//				// deny the request, show an error
+		//				panic(err)
+		//			} else {
+		//				log.Println(fmt.Sprintf("deny access on %v", loadedModel.Name))
+		//			}
+		//		}
+		//
+		//		if res, err := e.Enforce(/*casbin.EnforceContext{
+		//			RType: "r",
+		//			PType: "p",
+		//			EType: "e",
+		//			MType: "m",
+		//		},*/ "bob", "photo", "write"); res {
+		//			// permit alice to read data1
+		//			log.Println("allow access \"bob\", \"photo\", \"write\"")
+		//		} else {
+		//			if err != nil {
+		//				// deny the request, show an error
+		//				panic(err)
+		//			} else {
+		//				log.Println("deny access \"bob\", \"photo\", \"write\"")
+		//			}
+		//		}
+		//
+		//		if res, err := e.Enforce(/*casbin.EnforceContext{
+		//			RType: "r",
+		//			PType: "p",
+		//			EType: "e",
+		//			MType: "m",
+		//		},*/ "000000000000000000000000", map[string]interface{}{"photo": "a", "userId": "000000000000000000000000"}, "write"); res {
+		//			// permit alice to read data1
+		//			log.Println("allow access \"000000000000000000000000\", \"photo\", \"write\"")
+		//		} else {
+		//			if err != nil {
+		//				// deny the request, show an error
+		//				panic(err)
+		//			} else {
+		//				log.Println("deny access \"000000000000000000000000\", \"photo\", \"write\"")
+		//			}
+		//		}
+
+		//authz := fibercasbin.New(fibercasbin.Config{
+		//	ModelFilePath: "path/to/rbac_model.conf",
+		//	PolicyAdapter: xormadapter.NewAdapter("mysql", "root:@tcp(127.0.0.1:3306)/"),
+		//	Lookup: func(c *fiber.Ctx) string {
+		//		// fetch authenticated user subject
+		//	},
+		//})
+		//
+		//modelRouter.Use(authz.)
+
+		(*loadedModel.Router).Use("/", func(c *fiber.Ctx) error {
+
+			//authBytes := c.Request().Header.Peek("Authorization")
+			//
+			//requestActionType := "execute"
+			//
+			//switch strings.ToLower(c.Method()) {
+			//case "get", "head", "options":
+			//	requestActionType = "read"
+			//	break
+			//case "post", "put", "patch", "delete":
+			//	requestActionType = "write"
+			//	break
+			//}
+			//
+			//if requestActionType != "execute" && len(authBytes) == 0 || len(strings.TrimSpace(string(authBytes))) == 0 {
+			//	allow, err := loadedModel.Enforcer.Enforce("_EVERYONE_", "*", requestActionType)
+			//	if err != nil {
+			//		return err
+			//	}
+			//	if !allow {
+			//		return fiber.ErrUnauthorized
+			//	}
+			//}
+
+			//log.Println(fmt.Sprintf("DEBUG: Invoked %v method %v %v", loadedModel.Name, c.Method(), c.Path() ))
+			//log.Println("auth with", string(authBytes))
+			return c.Next()
+		})
+
 		if app.Debug {
 			log.Println("Mount GET " + loadedModel.BaseUrl)
 		}
-		loadedModel.RemoteMethod(func(ctx *fiber.Ctx) error {
-			filterSt := ctx.Query("filter")
+		loadedModel.RemoteMethod(func(eventContext *model.EventContext) error {
+			filterSt := eventContext.Ctx.Query("filter")
 			filterMap := model.ParseFilter(filterSt)
 
-			eventContext := model.EventContext{
-				Filter: filterMap,
-				Ctx:    ctx,
-			}
-			return handleEvent(&eventContext, loadedModel, "findMany")
+			eventContext.Filter = filterMap
+			return handleEvent(eventContext, loadedModel, "findMany")
 		}, model.RemoteMethodOptions{
+			Name: "findMany",
 			Http: model.RemoteMethodOptionsHttp{
 				Path: "/",
 				Verb: "get",
@@ -445,18 +872,16 @@ func (app *WeStack) loadModelsFixedRoutes() {
 		if app.Debug {
 			log.Println("Mount POST " + loadedModel.BaseUrl)
 		}
-		loadedModel.RemoteMethod(func(ctx *fiber.Ctx) error {
+		loadedModel.RemoteMethod(func(eventContext *model.EventContext) error {
 			var data *wst.M
-			err := json.Unmarshal(ctx.Body(), &data)
+			err := json.Unmarshal(eventContext.Ctx.Body(), &data)
 			if err != nil {
 				return err
 			}
-			eventContext := model.EventContext{
-				Ctx:  ctx,
-				Data: data,
-			}
-			return handleEvent(&eventContext, loadedModel, "create")
+			eventContext.Data = data
+			return handleEvent(eventContext, loadedModel, "create")
 		}, model.RemoteMethodOptions{
+			Name: "create",
 			Http: model.RemoteMethodOptionsHttp{
 				Path: "/",
 				Verb: "post",
@@ -465,16 +890,33 @@ func (app *WeStack) loadModelsFixedRoutes() {
 
 		if loadedModel.Config.Base == "User" {
 
-			loadedModel.RemoteMethod(func(ctx *fiber.Ctx) error {
-				eventContext := model.EventContext{
-					Ctx: ctx,
-				}
-				return handleEvent(&eventContext, loadedModel, "login")
+			loadedModel.RemoteMethod(func(eventContext *model.EventContext) error {
+				return handleEvent(eventContext, loadedModel, "login")
 			}, model.RemoteMethodOptions{
+				Name:        "login",
 				Description: "Logins a user",
 				Http: model.RemoteMethodOptionsHttp{
 					Path: "/login",
 					Verb: "post",
+				},
+			},
+			)
+
+			loadedModel.RemoteMethod(func(eventContext *model.EventContext) error {
+
+				err, token := eventContext.GetBearer()
+				if err != nil {
+					return err
+				}
+				eventContext.ModelID = token.User.Id
+				return loadedModel.HandleRemoteMethod("findById", eventContext)
+
+			}, model.RemoteMethodOptions{
+				Name:        "findSelf",
+				Description: "Find user with their bearer",
+				Http: model.RemoteMethodOptionsHttp{
+					Path: "/me",
+					Verb: "get",
 				},
 			},
 			)
@@ -497,19 +939,23 @@ func (app *WeStack) loadModelsDynamicRoutes() {
 		if app.Debug {
 			log.Println("Mount GET " + loadedModel.BaseUrl + "/:id")
 		}
-		loadedModel.RemoteMethod(func(ctx *fiber.Ctx) error {
-			id := ctx.Params("id")
-			filterSt := ctx.Query("filter")
+		loadedModel.RemoteMethod(func(eventContext *model.EventContext) error {
+
+			id := eventContext.Ctx.Params("id")
+			if eventContext.ModelID == nil {
+				eventContext.ModelID = id
+			} else if asSt, asStOk := eventContext.ModelID.(string); asStOk && len(strings.TrimSpace(asSt)) == 0 {
+				eventContext.ModelID = id
+			}
+
+			filterSt := eventContext.Ctx.Query("filter")
 			filterMap := model.ParseFilter(filterSt)
 
-			eventContext := model.EventContext{
-				ModelID: id,
-				Filter:  filterMap,
-				Ctx:     ctx,
-			}
-			return handleEvent(&eventContext, loadedModel, "findById")
+			eventContext.Filter = filterMap
+			return handleEvent(eventContext, loadedModel, "findById")
 
 		}, model.RemoteMethodOptions{
+			Name: "findById",
 			Http: model.RemoteMethodOptionsHttp{
 				Path: "/:id",
 				Verb: "get",
@@ -519,23 +965,21 @@ func (app *WeStack) loadModelsDynamicRoutes() {
 		if app.Debug {
 			log.Println("Mount PATCH " + loadedModel.BaseUrl + "/:id")
 		}
-		loadedModel.RemoteMethod(func(ctx *fiber.Ctx) error {
-			id, err := primitive.ObjectIDFromHex(ctx.Params("id"))
+		loadedModel.RemoteMethod(func(eventContext *model.EventContext) error {
+			id, err := primitive.ObjectIDFromHex(eventContext.Ctx.Params("id"))
 			if err != nil {
 				return err
 			}
 			var data *wst.M
-			err = json.Unmarshal(ctx.Body(), &data)
+			err = json.Unmarshal(eventContext.Ctx.Body(), &data)
 			if err != nil {
 				return err
 			}
-			eventContext := model.EventContext{
-				Ctx:     ctx,
-				ModelID: &id,
-				Data:    data,
-			}
-			return handleEvent(&eventContext, loadedModel, "instance_updateAttributes")
+			eventContext.ModelID = &id
+			eventContext.Data = data
+			return handleEvent(eventContext, loadedModel, "instance_updateAttributes")
 		}, model.RemoteMethodOptions{
+			Name: "instance_updateAttributes",
 			Http: model.RemoteMethodOptionsHttp{
 				Path: "/:id",
 				Verb: "patch",
@@ -545,17 +989,15 @@ func (app *WeStack) loadModelsDynamicRoutes() {
 		if app.Debug {
 			log.Println("Mount DELETE " + loadedModel.BaseUrl + "/:id")
 		}
-		loadedModel.RemoteMethod(func(ctx *fiber.Ctx) error {
-			id, err := primitive.ObjectIDFromHex(ctx.Params("id"))
+		loadedModel.RemoteMethod(func(eventContext *model.EventContext) error {
+			id, err := primitive.ObjectIDFromHex(eventContext.Ctx.Params("id"))
 			if err != nil {
 				return err
 			}
-			eventContext := model.EventContext{
-				Ctx:     ctx,
-				ModelID: &id,
-			}
-			return handleEvent(&eventContext, loadedModel, "deleteById")
+			eventContext.ModelID = &id
+			return handleEvent(eventContext, loadedModel, "instance_delete")
 		}, model.RemoteMethodOptions{
+			Name: "instance_delete",
 			Http: model.RemoteMethodOptionsHttp{
 				Path: "/:id",
 				Verb: "delete",
@@ -602,7 +1044,7 @@ func New(options WeStackOptions) *WeStack {
 	// Default middleware config
 	server.Use(recover.New(recover.Config{
 		EnableStackTrace: true,
-		StackTraceHandler: func(e interface{}) {
+		StackTraceHandler: func(c *fiber.Ctx, e interface{}) {
 			log.Println(e)
 			debug.PrintStack()
 		},
