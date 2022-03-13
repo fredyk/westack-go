@@ -412,6 +412,7 @@ func (app *WeStack) loadModels() {
 					token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 						"userId":  userIdHex,
 						"created": time.Now().UnixMilli(),
+						"ttl":     time.Now().UnixMilli() + 604800*2*1000,
 					})
 
 					// Sign and get the complete encoded token as a string using the secret
