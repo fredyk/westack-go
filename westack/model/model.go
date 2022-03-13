@@ -1085,16 +1085,18 @@ func (ctx *EventContext) GetBearer() (error, *BearerToken) {
 			return []byte(""), nil
 		})
 
-		if claims, ok := token.Claims.(jwt.MapClaims); ok && token.Valid {
+		if token != nil {
+			if claims, ok := token.Claims.(jwt.MapClaims); ok && token.Valid {
 
-			user = &BearerUser{
-				Id:   claims["userId"],
-				Data: claims,
+				user = &BearerUser{
+					Id:   claims["userId"],
+					Data: claims,
+				}
+
+				fmt.Println(claims["userId"], claims["created"])
+			} else {
+				fmt.Println(err)
 			}
-
-			fmt.Println(claims["userId"], claims["created"])
-		} else {
-			fmt.Println(err)
 		}
 
 		//headBytes, err := jwt.DecodeSegment(segments[0])
