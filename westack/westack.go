@@ -206,7 +206,7 @@ func (app *WeStack) loadModels() {
 			matchersDefinition := fmt.Sprintf("" +
 				//				"(p.sub == '$owner' && isOwner(r.sub, r.obj)) || " +
 				"(" +
-				"	((p.sub == '$owner' && isOwner(r.sub, r.obj)) || g(r.sub, p.sub)) && keyMatch(r.obj, p.obj) && (g(r.act, p.act) || keyMatch(r.act, p.act))" +
+				"	((p.sub == '$owner' && isOwner(r.sub, r.obj, p.obj)) || g(r.sub, p.sub)) && keyMatch(r.obj, p.obj) && (g(r.act, p.act) || keyMatch(r.act, p.act))" +
 				")")
 			if loadedModel.Config.Casbin.RequestDefinition != "" {
 				requestDefinition = loadedModel.Config.Casbin.RequestDefinition
@@ -592,6 +592,11 @@ func (app *WeStack) loadModelsFixedRoutes() {
 
 			subId := arguments[0]
 			objId := arguments[1]
+			policyObj := arguments[2]
+
+			if loadedModel.App.Debug {
+				log.Println(fmt.Sprintf("isOwner() of %v ?", policyObj))
+			}
 
 			switch objId.(type) {
 			case primitive.ObjectID:
@@ -669,7 +674,7 @@ func (app *WeStack) loadModelsFixedRoutes() {
 
 				usersForRole = append(usersForRole, objUserId)
 			}
-			log.Println(usersForRole)
+			//log.Println(usersForRole)
 
 			for _, userInRole := range usersForRole {
 				if subId == userInRole {
@@ -908,7 +913,7 @@ func (app *WeStack) loadModelsFixedRoutes() {
 
 			loadedModel.RemoteMethod(func(eventContext *model.EventContext) error {
 
-				err, token := eventContext.GetBearer()
+				err, token := eventContext.GetBearer(loadedModel)
 				if err != nil {
 					return err
 				}
