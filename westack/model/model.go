@@ -3,9 +3,12 @@ package model
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"github.com/casbin/casbin/v2"
 	casbinmodel "github.com/casbin/casbin/v2/model"
 	fileadapter "github.com/casbin/casbin/v2/persist/file-adapter"
+	"github.com/golang-jwt/jwt"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"log"
@@ -79,9 +82,11 @@ type Model struct {
 	BaseUrl       string                 `json:"-"`
 	CasbinModel   *casbinmodel.Model
 	CasbinAdapter **fileadapter.Adapter
+	Enforcer      *casbin.Enforcer
 
-	eventHandlers map[string]func(eventContext *EventContext) error
-	modelRegistry *map[string]*Model
+	eventHandlers    map[string]func(eventContext *EventContext) error
+	modelRegistry    *map[string]*Model
+	remoteMethodsMap map[string]*OperationItem
 }
 
 func (loadedModel *Model) SendError(ctx *fiber.Ctx, err error) error {
@@ -94,10 +99,11 @@ func (loadedModel *Model) SendError(ctx *fiber.Ctx, err error) error {
 
 func New(config *Config, modelRegistry *map[string]*Model) *Model {
 	loadedModel := &Model{
-		Name:          config.Name,
-		Config:        config,
-		modelRegistry: modelRegistry,
-		eventHandlers: map[string]func(eventContext *EventContext) error{},
+		Name:             config.Name,
+		Config:           config,
+		modelRegistry:    modelRegistry,
+		eventHandlers:    map[string]func(eventContext *EventContext) error{},
+		remoteMethodsMap: map[string]*OperationItem{},
 	}
 
 	(*modelRegistry)[config.Name] = loadedModel
@@ -118,7 +124,12 @@ type RegistryEntry struct {
 	Model *Model
 }
 
-func (modelInstance ModelInstance) ToJSON() wst.M {
+func (modelInstance *ModelInstance) ToJSON() wst.M {
+
+	if modelInstance == nil {
+		return nil
+	}
+
 	// Cannot hide here, it may be necessary
 	//modelInstance.HideProperties()
 	var result wst.M
@@ -527,7 +538,8 @@ func (loadedModel *Model) Create(data interface{}, baseContext *EventContext) (*
 		finalData = *data.(*wst.M)
 		break
 	case ModelInstance:
-		finalData = data.(ModelInstance).ToJSON()
+		value := data.(ModelInstance)
+		finalData = (&value).ToJSON()
 		break
 	case *ModelInstance:
 		finalData = data.(*ModelInstance).ToJSON()
@@ -596,7 +608,8 @@ func (modelInstance *ModelInstance) UpdateAttributes(data interface{}, baseConte
 		finalData = *data.(*wst.M)
 		break
 	case ModelInstance:
-		finalData = data.(ModelInstance).ToJSON()
+		value := data.(ModelInstance)
+		finalData = (&value).ToJSON()
 		break
 	case *ModelInstance:
 		finalData = data.(*ModelInstance).ToJSON()
@@ -779,14 +792,30 @@ type RemoteMethodOptionsHttp struct {
 }
 
 type RemoteMethodOptions struct {
+	Name        string
 	Description string
 	Http        RemoteMethodOptionsHttp
 }
 
-func (loadedModel *Model) RemoteMethod(handler func(c *fiber.Ctx) error, options RemoteMethodOptions) fiber.Router {
+type OperationItem struct {
+	Handler func(context *EventContext) error
+	Options RemoteMethodOptions
+}
+
+func (loadedModel *Model) RemoteMethod(handler func(context *EventContext) error, options RemoteMethodOptions) fiber.Router {
 	if !loadedModel.Config.Public {
 		panic(fmt.Sprintf("Trying to register a remote method in the private model: %v, you may set \"public\": true in the %v.json file", loadedModel.Name, loadedModel.Name))
 	}
+	options.Name = strings.TrimSpace(options.Name)
+	if options.Name == "" {
+		panic("Method name cannot be empty")
+	}
+	if loadedModel.remoteMethodsMap[options.Name] != nil {
+		panic(fmt.Sprintf("Already registered a remote method with name '%v'", options.Name))
+	}
+
+	loadedModel.Enforcer.AddRoleForUser(options.Name, "*")
+
 	var http = options.Http
 	path := strings.ToLower(http.Path)
 	verb := strings.ToLower(http.Verb)
@@ -870,10 +899,34 @@ func (loadedModel *Model) RemoteMethod(handler func(c *fiber.Ctx) error, options
 		},
 	}
 
-	return toInvoke(path, handler)
+	loadedModel.remoteMethodsMap[options.Name] = &OperationItem{
+		Handler: handler,
+		Options: options,
+	}
+
+	return toInvoke(path, func(ctx *fiber.Ctx) error {
+		return loadedModel.HandleRemoteMethod(options.Name, &EventContext{
+			Ctx: ctx,
+		})
+	})
+}
+
+type BearerUser struct {
+	Id   interface{}
+	Data interface{}
+}
+
+type BearerRole struct {
+	Name string
+}
+
+type BearerToken struct {
+	User  *BearerUser
+	Roles []BearerRole
 }
 
 type EventContext struct {
+	Bearer        *BearerToken
 	BaseContext   *EventContext
 	Filter        *wst.Filter
 	Data          *wst.M
@@ -903,6 +956,72 @@ func (ctx *EventContext) RestError(fiberError *fiber.Error, details fiber.Map) e
 		Details:    details,
 		Ctx:        ctx,
 	}
+}
+
+func (ctx *EventContext) GetBearer() (error, *BearerToken) {
+
+	if ctx.Bearer != nil {
+		return nil, ctx.Bearer
+	}
+	c := ctx.Ctx
+	authBytes := c.Request().Header.Peek("Authorization")
+
+	//action := options.Name
+
+	authBearerPair := strings.Split(strings.TrimSpace(string(authBytes)), "Bearer ")
+
+	var user *BearerUser
+	roles := make([]BearerRole, 0)
+	if len(authBearerPair) == 2 {
+		//segments := strings.Split(authBearerPair[1], ".")
+
+		token, err := jwt.Parse(authBearerPair[1], func(token *jwt.Token) (interface{}, error) {
+			// Don't forget to validate the alg is what you expect:
+			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+				return nil, fmt.Errorf("Unexpected signing method: %v", token.Header["alg"])
+			}
+
+			// hmacSampleSecret is a []byte containing your secret, e.g. []byte("my_secret_key")
+			return []byte(""), nil
+		})
+
+		if claims, ok := token.Claims.(jwt.MapClaims); ok && token.Valid {
+
+			user = &BearerUser{
+				Id:   claims["userId"],
+				Data: claims,
+			}
+
+			fmt.Println(claims["userId"], claims["created"])
+		} else {
+			fmt.Println(err)
+		}
+
+		//headBytes, err := jwt.DecodeSegment(segments[0])
+		//if err != nil {
+		//	return err, nil
+		//}
+		//headSt := string(headBytes)
+		//claimsBytes, err := jwt.DecodeSegment(segments[1])
+		//if err != nil {
+		//	return err, nil
+		//}
+		//claimsSt := string(claimsBytes)
+		//
+		//jwt.
+		//
+		//signBytes, err := jwt.DecodeSegment(segments[2])
+		//if err != nil {
+		//	return err, nil
+		//}
+		//signSt := string(signBytes)
+		//log.Println(headSt, claimsSt, signSt)
+	}
+	return nil, &BearerToken{
+		User:  user,
+		Roles: roles,
+	}
+
 }
 
 func wrapEventHandler(model *Model, eventKey string, handler func(eventContext *EventContext) error) func(eventContext *EventContext) error {
@@ -944,4 +1063,88 @@ func (loadedModel *Model) GetHandler(event string) func(eventContext *EventConte
 		}
 	}
 	return res
+}
+
+func (loadedModel *Model) HandleRemoteMethod(name string, eventContext *EventContext) error {
+
+	operationItem := loadedModel.remoteMethodsMap[name]
+
+	if operationItem == nil {
+		return errors.New(fmt.Sprintf("Method '%v' not found", name))
+	}
+
+	c := eventContext.Ctx
+	options := operationItem.Options
+	handler := operationItem.Handler
+
+	err, token := eventContext.GetBearer()
+	if err != nil {
+		return err
+	}
+
+	action := options.Name
+	if token.User == nil {
+		allow, exp, err := loadedModel.Enforcer.EnforceEx("_EVERYONE_", "*", action)
+		log.Println("Explain", exp)
+		if err != nil {
+			return err
+		}
+		if !allow {
+			return fiber.ErrUnauthorized
+		}
+	} else {
+
+		bearerUserIdSt := fmt.Sprintf("%v", token.User.Id)
+
+		for _, r := range token.Roles {
+			loadedModel.Enforcer.AddRoleForUser(bearerUserIdSt, r.Name)
+		}
+		loadedModel.Enforcer.AddRoleForUser(bearerUserIdSt, "_AUTHENTICATED_")
+		loadedModel.Enforcer.SavePolicy()
+
+		if eventContext.ModelID != nil {
+		}
+
+		//allow, exp, err := loadedModel.Enforcer.EnforceEx(bearerUserIdSt, eventContext.Instance.ToJSON(), action)
+
+		objId := "*"
+		if eventContext.ModelID != nil {
+			objId = GetIDAsString(eventContext.ModelID)
+		} else {
+			objId = c.Params("id")
+		}
+
+		allow, exp, err := loadedModel.Enforcer.EnforceEx(bearerUserIdSt, objId, action)
+		log.Println("Explain", exp)
+		if err != nil {
+			return err
+		}
+		if !allow {
+			return fiber.ErrUnauthorized
+		}
+
+	}
+
+	eventContext.Bearer = token
+
+	log.Println(fmt.Sprintf("DEBUG: Invoked %v.%v (%v %v)", loadedModel.Name, options.Name, c.Method(), c.Path()))
+	log.Println("auth with", token)
+
+	return handler(eventContext)
+}
+
+func GetIDAsString(idToConvert interface{}) string {
+	foundObjUserId := idToConvert
+	switch idToConvert.(type) {
+	case primitive.ObjectID:
+		foundObjUserId = idToConvert.(primitive.ObjectID).Hex()
+		break
+	case string:
+		foundObjUserId = idToConvert
+		break
+	default:
+		foundObjUserId = fmt.Sprintf("%v", idToConvert)
+		break
+	}
+	return foundObjUserId.(string)
 }

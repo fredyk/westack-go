@@ -9,6 +9,11 @@
     }
   },
   "relations": {
-
+    "user": {
+      "type": "belongsTo",
+      "model": "user",
+      "primaryKey": "_id",
+      "foreignKey": "userId"
+    }
   }
 }

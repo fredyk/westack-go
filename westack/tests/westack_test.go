@@ -127,9 +127,11 @@ func Test_WeStackDelete(t *testing.T) {
 	createUser(t, bodyBytes)
 
 	bodyBytes = createBody(t, body)
-	_, userId := login(t, bodyBytes)
+	bearer, userId := login(t, bodyBytes)
 
-	response, err := app.Server.Test(httptest.NewRequest("DELETE", fmt.Sprintf("/api/v1/users/%v", userId), nil))
+	request := httptest.NewRequest("DELETE", fmt.Sprintf("/api/v1/users/%v", userId), nil)
+	request.Header.Set("Authorization", fmt.Sprintf("Bearer %v", bearer))
+	response, err := app.Server.Test(request)
 	if err != nil {
 		t.Error(err)
 		return
