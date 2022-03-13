@@ -33,6 +33,7 @@ type IApp struct {
 	Debug        bool
 	SwaggerPaths func() *map[string]M
 	FindModel    func(modelName string) interface{}
+	JwtSecretKey []byte
 }
 
 func LoadFile(filePath string, out interface{}) error {
