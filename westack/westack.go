@@ -50,6 +50,7 @@ type WeStack struct {
 
 	_swaggerPaths map[string]wst.M
 	init          time.Time
+	JwtSecretKey  []byte
 }
 
 func (app WeStack) SwaggerPaths() *map[string]wst.M {
@@ -414,7 +415,7 @@ func (app *WeStack) loadModels() {
 					})
 
 					// Sign and get the complete encoded token as a string using the secret
-					tokenString, err := token.SignedString(hmacSampleSecret)
+					tokenString, err := token.SignedString(loadedModel.App.JwtSecretKey)
 
 					ctx.StatusCode = fiber.StatusOK
 					ctx.Result = fiber.Map{"id": tokenString, "userId": userIdHex}
@@ -556,7 +557,8 @@ func (app *WeStack) loadNotFoundRoutes() {
 
 func (app *WeStack) AsInterface() *wst.IApp {
 	return &wst.IApp{
-		Debug: app.Debug,
+		Debug:        app.Debug,
+		JwtSecretKey: app.JwtSecretKey,
 		FindModel: func(modelName string) interface{} {
 			return app.FindModel(modelName)
 		},
