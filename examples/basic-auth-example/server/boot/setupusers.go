@@ -21,12 +21,12 @@ func SetupUsers(app *westack.WeStack) {
 		return nil
 	})
 
-	userModel.On("login", func(ctx *model.EventContext) error {
-		log.Println("login instance ", ctx.Instance)
-		log.Println("login data ", ctx.Data)
-		ctx.Result = fiber.Map{"status": "Override login", "initial": ctx.Result}
-		return nil
-	})
+	//userModel.On("login", func(ctx *model.EventContext) error {
+	//	log.Println("login instance ", ctx.Instance)
+	//	log.Println("login data ", ctx.Data)
+	//	ctx.Result = fiber.Map{"status": "Override login", "initial": ctx.Result}
+	//	return nil
+	//})
 
 	userModel.RemoteMethod(func(context *model.EventContext) error {
 		return userModel.SendError(context.Ctx, (context).RestError(fiber.ErrTeapot, fiber.Map{"error": "I used to be a cup"}))
