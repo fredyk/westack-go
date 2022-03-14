@@ -1,17 +1,129 @@
 # westack-go
 
 ### Introduction
-This is an experimental migration of Loopback 3 to Go
+westack-go is a strongly opinionated framework which allows you to quickly setup a REST API server in a few minutes.
 
-### Basic example
+Just define your models in `json` format and westack-go will setup and expose all basic [CRUD](https://es.wikipedia.org/wiki/CRUD) methods for you 
 
+### Technologies
+westack-go uses technologies like [gofiber](https://github.com/gofiber/fiber) and [casbin](github.com/casbin/casbin) for REST and authentication
+
+### Databases
+It is only compatible with [mongo](go.mongodb.org/mongo-driver) for now.
+
+### Authentication
+Define [RBAC](https://casbin.org/docs/en/rbac) policies in your `json` models to restrict access to data.
+
+### Getting started
+
+Create your file structure like this:
+```
+- common
+  |- models
+  |  |- user.json
+  |  |- note.json
+  
+- server
+  |- main.go
+  
+- datasource.json
+- model-config.json
+```
+
+`user.json`
+```json
+{
+  "name": "user",
+  "base": "User",
+  "public": true,
+  "hidden": [
+    "password"
+  ],
+  "properties": {
+    "email": {
+      "type": "string",
+      "required": true
+    },
+    "password": {
+      "type": "string",
+      "required": true
+    }
+  },
+  "relations": {
+    "notes": {
+      "type": "hasMany",
+      "model": "note"
+    }
+  }
+}
+```
+
+`note.json`
+```json
+{
+  "name": "note",
+  "base": "PersistedModel",
+  "public": true,
+  "properties": {
+    "title": {
+      "type": "string",
+      "required": true
+    },
+    "body": {
+      "type": "string",
+      "required": true
+    }
+  },
+  "relations": {
+    "user": {
+      "type": "belongsTo",
+      "model": "user"
+    }
+  },
+  "casbin": {
+    "policies": [
+      "$everyone,*,*,deny",
+      "$authenticated,*,create,allow",
+      "$owner,*,*,allow"
+    ]
+  }
+}
+```
+
+`datasources.json`
+```json
+{
+  "db": {
+    "name": "db",
+    "host": "localhost",
+    "port": 27017,
+    "database": "example_db",
+    "password": "",
+    "user": "",
+    "connector": "mongodb"
+  }
+}
+```
+
+`model-config.json`
+```json
+{
+  "user": {
+    "dataSource": "db"
+  },
+  "note": {
+    "dataSource": "db"
+  }
+}
+```
+
+`main.go`
 ```go
 package main
 
 import (
 	"github.com/fredyk/westack-go/westack"
 	"github.com/gofiber/fiber/v2"
-	"log"
 )
 
 func main() {
@@ -31,10 +143,42 @@ func main() {
 
 	})
 
-	log.Fatal(app.Start(fmt.Sprintf(":%v", app.Port)))
+	app.Start(fmt.Sprintf(":%v", app.Port))
 
 }
+```
 
+Test it:
+
+1. Create a user
+```shell
+curl -X POST http://localhost:8023/api/v1/users -d '{"email":"exampleuser@example.com","password":"1234"}'
+```
+
+2. Login
+```shell
+curl -X POST http://localhost:8023/api/v1/users/login -d '{"email":"exampleuser@example.com","password":"1234"}'
+
+Response body: {"id":"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJjcmVhdGVkIjoxNjQ3MjUzMDczMTQ0LCJyb2xlcyI6WyJVU0VSIl0sInR0bCI6MTIwOTYwMDAwMCwidXNlcklkIjoiNjIyZjE2NDMzNzdjYTNmMWEzOTI0MWY0In0.sbl7QA2--X7MiPZ4DLRL2f5_z08VD5quItBDl2ybmGk","userId":"622f1643377ca3f1a39241f4"}
+```
+
+3. Find user data
+```shell
+curl http://localhost:8023/api/v1/users/me -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJjcmVhdGVkIjoxNjQ3MjUzMDczMTQ0LCJyb2xlcyI6WyJVU0VSIl0sInR0bCI6MTIwOTYwMDAwMCwidXNlcklkIjoiNjIyZjE2NDMzNzdjYTNmMWEzOTI0MWY0In0.sbl7QA2--X7MiPZ4DLRL2f5_z08VD5quItBDl2ybmGk'
+ 
+Response body: {"email":"exampleuser@example.com","id":"622f1643377ca3f1a39241f4"}
+```
+
+4. Create a note for the user
+```shell
+curl -X POST http://localhost:8023/api/v1/notes -d '{"title":"Note 1","body":"This is my first note","userId":"622f1643377ca3f1a39241f4"}'
+```
+
+5. Find again the user, now with their notes
+```shell
+curl -X GET 'http://localhost:8023/api/v1/users/me?filter=%7B"include":%5B%7B"relation":"notes"%7D%5D%7D' -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJjcmVhdGVkIjoxNjQ3MjUzMDczMTQ0LCJyb2xlcyI6WyJVU0VSIl0sInR0bCI6MTIwOTYwMDAwMCwidXNlcklkIjoiNjIyZjE2NDMzNzdjYTNmMWEzOTI0MWY0In0.sbl7QA2--X7MiPZ4DLRL2f5_z08VD5quItBDl2ybmGk'
+
+Response body: {"email":"exampleuser@example.com","id":"622f1643377ca3f1a39241f4","notes":[{"title":"Note 1","body":"This is my first note","userId":"622f1643377ca3f1a39241f4","id":"622f1643377ca3f1a39241f5"}]}
 ```
 
 ### Contribute
