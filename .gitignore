@@ -1,2 +1,7 @@
 /.idea/
 **/.idea/
+/examples/basic-auth-example/common/models/*.casbin.dump.conf
+/examples/basic-auth-example/common/models/*.policies.csv
+/westack/tests/common/models/*.casbin.dump.conf
+/westack/tests/common/models/*.policies.csv
+/examples/basic-auth-example/basic_model.conf
