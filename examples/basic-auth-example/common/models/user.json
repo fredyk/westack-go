@@ -10,6 +10,10 @@
     }
   },
   "relations": {
+    "notes": {
+      "type": "hasMany",
+      "model": "note"
+    },
     "roles": {
       "type": "hasAndBelongsToMany",
       "model": "Role",
