@@ -468,7 +468,7 @@ func (app *WeStack) loadDataSources() {
 	dsViper.SetConfigType("json") // REQUIRED if the config file does not have the extension in the name
 	//dsViper.AddConfigPath("/go/bin")          // path to look for the config file in
 	dsViper.AddConfigPath("./server") // call multiple times to add many search paths
-	//dsViper.AddConfigPath(".")                // optionally look for config in the working directory
+	dsViper.AddConfigPath(".")                // optionally look for config in the working directory
 
 	err := dsViper.ReadInConfig() // Find and read the config file
 	if err != nil { // Handle errors reading the config file
