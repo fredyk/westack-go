@@ -13,6 +13,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/recover"
 	"github.com/golang-jwt/jwt"
+	"github.com/spf13/viper"
 	"os"
 	"regexp"
 
@@ -120,8 +121,8 @@ func (app *WeStack) loadModels() {
 	}
 
 	var globalModelConfig *map[string]*model.Config
-	if err := wst.LoadFile("./model-config.json", &globalModelConfig); err != nil {
-		panic("Missing or invalid ./model-config.json: " + err.Error())
+	if err := wst.LoadFile("./server/model-config.json", &globalModelConfig); err != nil {
+		panic("Missing or invalid ./server/model-config.json: " + err.Error())
 	}
 
 	app._swaggerPaths = map[string]wst.M{}
@@ -453,22 +454,52 @@ func handleEvent(eventContext *model.EventContext, loadedModel *model.Model, eve
 }
 
 func (app *WeStack) loadDataSources() {
-	var allDatasources *map[string]*model.DataSourceConfig
-	if err := wst.LoadFile("./datasources.json", &allDatasources); err != nil {
-		panic(err)
+
+	dsViper := viper.New()
+
+	fileToLoad := ""
+	// Config from file depending on env
+	if env, present := os.LookupEnv("GO_ENV"); present {
+		fileToLoad = "datasources." + env
+		dsViper.SetConfigName(fileToLoad) // name of config file (without extension)
+	} else {
+		dsViper.SetConfigName("datasources") // name of config file (without extension)
+	}
+	dsViper.SetConfigType("json") // REQUIRED if the config file does not have the extension in the name
+	//dsViper.AddConfigPath("/go/bin")          // path to look for the config file in
+	dsViper.AddConfigPath("./server") // call multiple times to add many search paths
+	//dsViper.AddConfigPath(".")                // optionally look for config in the working directory
+
+	err := dsViper.ReadInConfig() // Find and read the config file
+	if err != nil { // Handle errors reading the config file
+		switch err.(type) {
+		case viper.ConfigFileNotFoundError:
+			log.Println(fmt.Sprintf("WARNING: %v.json not found, fallback to datasources.json", fileToLoad))
+			dsViper.SetConfigName("datasources") // name of config file (without extension)
+			err := dsViper.ReadInConfig() // Find and read the config file
+			if err != nil {
+				panic(fmt.Errorf("fatal error config file: %w", err))
+			}
+			break
+		default:
+			panic(fmt.Errorf("fatal error config file: %w", err))
+		}
 	}
 
-	for key, dsConfig := range *allDatasources {
-		dsName := dsConfig.Name
+	settings := dsViper.AllSettings()
+	for key, dsConfigAll := range settings {
+		dsConfig := dsConfigAll.(map[string]interface{})
+		dsName := dsConfig["name"].(string)
 		if dsName == "" {
 			dsName = key
 		}
-		if dsConfig.Connector == "mongodb" {
+		if dsConfig["connector"].(string) == "mongodb" {
+			port := dsViper.GetInt(key + ".port")
 			ds := datasource.New(wst.M{
-				"name":      dsConfig.Name,
-				"connector": dsConfig.Connector,
-				"database":  dsConfig.Database,
-				"url":       fmt.Sprintf("mongodb://%v:%v/%v", dsConfig.Host, dsConfig.Port, dsConfig.Database),
+				"name":      dsName,
+				"connector": dsConfig["connector"].(string),
+				"database":  dsConfig["database"].(string),
+				"url":       fmt.Sprintf("mongodb://%v:%v/%v", dsConfig["host"].(string), port, dsConfig["database"].(string)),
 			})
 			err := ds.Initialize()
 			if err != nil {
@@ -476,10 +507,10 @@ func (app *WeStack) loadDataSources() {
 			}
 			(*app.Datasources)[dsName] = ds
 			if app.Debug {
-				log.Println("Connected to database", dsConfig.Database)
+				log.Println("Connected to database", dsConfig["database"].(string))
 			}
 		} else {
-			panic("ERROR: connector " + dsConfig.Connector + " not supported")
+			panic("ERROR: connector " + dsConfig["connector"].(string) + " not supported")
 		}
 	}
 }
