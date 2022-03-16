@@ -1201,10 +1201,11 @@ func (loadedModel *Model) HandleRemoteMethod(name string, eventContext *EventCon
 
 		bearerUserIdSt := fmt.Sprintf("%v", token.User.Id)
 
+		loadedModel.Enforcer.AddRoleForUser(bearerUserIdSt, "_EVERYONE_")
+		loadedModel.Enforcer.AddRoleForUser(bearerUserIdSt, "_AUTHENTICATED_")
 		for _, r := range token.Roles {
 			loadedModel.Enforcer.AddRoleForUser(bearerUserIdSt, r.Name)
 		}
-		loadedModel.Enforcer.AddRoleForUser(bearerUserIdSt, "_AUTHENTICATED_")
 		loadedModel.Enforcer.SavePolicy()
 
 		if eventContext.ModelID != nil {
