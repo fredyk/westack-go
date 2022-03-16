@@ -25,9 +25,8 @@ Create your file structure like this:
   
 - server
   |- main.go
-  
-- datasource.json
-- model-config.json
+  |- datasource.json
+  |- model-config.json
 ```
 
 `user.json`
