@@ -74,15 +74,16 @@ type DataSourceConfig struct {
 }
 
 type Model struct {
-	Name          string                 `json:"name"`
-	Config        *Config                `json:"-"`
-	Datasource    *datasource.Datasource `json:"-"`
-	Router        *fiber.Router          `json:"-"`
-	App           *wst.IApp              `json:"-"`
-	BaseUrl       string                 `json:"-"`
-	CasbinModel   *casbinmodel.Model
-	CasbinAdapter **fileadapter.Adapter
-	Enforcer      *casbin.Enforcer
+	Name             string                 `json:"name"`
+	Config           *Config                `json:"-"`
+	Datasource       *datasource.Datasource `json:"-"`
+	Router           *fiber.Router          `json:"-"`
+	App              *wst.IApp              `json:"-"`
+	BaseUrl          string                 `json:"-"`
+	CasbinModel      *casbinmodel.Model
+	CasbinAdapter    **fileadapter.Adapter
+	Enforcer         *casbin.Enforcer
+	DisabledHandlers map[string]bool
 
 	eventHandlers    map[string]func(eventContext *EventContext) error
 	modelRegistry    *map[string]*Model
@@ -101,6 +102,8 @@ func New(config *Config, modelRegistry *map[string]*Model) *Model {
 	loadedModel := &Model{
 		Name:             config.Name,
 		Config:           config,
+		DisabledHandlers: map[string]bool{},
+
 		modelRegistry:    modelRegistry,
 		eventHandlers:    map[string]func(eventContext *EventContext) error{},
 		remoteMethodsMap: map[string]*OperationItem{},
@@ -197,9 +200,6 @@ func (loadedModel *Model) Build(data wst.M, fromDb bool, baseContext *EventConte
 	deepLevel := 0
 	for {
 		if targetBaseContext.BaseContext != nil {
-			if loadedModel.App.Debug {
-				log.Println("DEBUG: Found baseContext at level", deepLevel)
-			}
 			targetBaseContext = targetBaseContext.BaseContext
 		} else {
 			break
@@ -242,10 +242,13 @@ func (loadedModel *Model) Build(data wst.M, fromDb bool, baseContext *EventConte
 	}
 	eventContext.Data = &data
 	eventContext.Instance = &modelInstance
-	err := loadedModel.GetHandler("__operation__loaded")(eventContext)
-	if err != nil {
-		log.Println("Warning", err)
-		return ModelInstance{}
+
+	if loadedModel.DisabledHandlers["__operation__loaded"] != true {
+		err := loadedModel.GetHandler("__operation__loaded")(eventContext)
+		if err != nil {
+			log.Println("Warning", err)
+			return ModelInstance{}
+		}
 	}
 
 	return modelInstance
@@ -268,9 +271,6 @@ func (loadedModel *Model) FindMany(filterMap *wst.Filter, baseContext *EventCont
 	deepLevel := 0
 	for {
 		if targetBaseContext.BaseContext != nil {
-			if loadedModel.App.Debug {
-				log.Println("DEBUG: Found baseContext at level", deepLevel)
-			}
 			targetBaseContext = targetBaseContext.BaseContext
 		} else {
 			break
@@ -458,15 +458,8 @@ func (loadedModel *Model) ExtractLookupsFromFilter(filterMap *wst.Filter) *wst.A
 						})
 					}
 					if targetScope != nil {
-						//	TODO: Recursive
-						if loadedModel.App.Debug {
-							log.Println("Process recursive scope ", targetScope)
-						}
 						nestedLoopkups := relatedLoadedModel.ExtractLookupsFromFilter(targetScope)
 						if nestedLoopkups != nil {
-							if loadedModel.App.Debug {
-								log.Println("nested lookups: ", nestedLoopkups)
-							}
 							for _, v := range *nestedLoopkups {
 								pipeline = append(pipeline, v)
 							}
@@ -493,12 +486,6 @@ func (loadedModel *Model) ExtractLookupsFromFilter(filterMap *wst.Filter) *wst.A
 					})
 					break
 				}
-				if targetScope != nil {
-					if loadedModel.App.Debug {
-						lookupBytes, _ := json.Marshal(*lookups)
-						log.Println("final lookup: ", string(lookupBytes))
-					}
-				}
 
 			}
 		}
@@ -518,9 +505,6 @@ func (loadedModel *Model) FindOne(filterMap *wst.Filter, baseContext *EventConte
 	deepLevel := 0
 	for {
 		if targetBaseContext.BaseContext != nil {
-			if loadedModel.App.Debug {
-				log.Println("DEBUG: Found baseContext at level", deepLevel)
-			}
 			targetBaseContext = targetBaseContext.BaseContext
 		} else {
 			break
@@ -554,9 +538,6 @@ func (loadedModel *Model) FindById(id interface{}, filterMap *wst.Filter, baseCo
 	deepLevel := 0
 	for {
 		if targetBaseContext.BaseContext != nil {
-			if loadedModel.App.Debug {
-				log.Println("DEBUG: Found baseContext at level", deepLevel)
-			}
 			targetBaseContext = targetBaseContext.BaseContext
 		} else {
 			break
@@ -623,9 +604,6 @@ func (loadedModel *Model) Create(data interface{}, baseContext *EventContext) (*
 	deepLevel := 0
 	for {
 		if targetBaseContext.BaseContext != nil {
-			if loadedModel.App.Debug {
-				log.Println("DEBUG: Found baseContext at level", deepLevel)
-			}
 			targetBaseContext = targetBaseContext.BaseContext
 		} else {
 			break
@@ -638,9 +616,11 @@ func (loadedModel *Model) Create(data interface{}, baseContext *EventContext) (*
 	}
 	eventContext.Data = &finalData
 	eventContext.IsNewInstance = true
-	err := loadedModel.GetHandler("__operation__before_save")(eventContext)
-	if err != nil {
-		return nil, err
+	if loadedModel.DisabledHandlers["__operation__before_save"] != true {
+		err := loadedModel.GetHandler("__operation__before_save")(eventContext)
+		if err != nil {
+			return nil, err
+		}
 	}
 	var document wst.M
 	for key := range loadedModel.Config.Relations {
@@ -658,9 +638,11 @@ func (loadedModel *Model) Create(data interface{}, baseContext *EventContext) (*
 			result := loadedModel.Build(document, true, eventContext)
 			result.HideProperties()
 			eventContext.Instance = &result
-			err := loadedModel.GetHandler("__operation__after_save")(eventContext)
-			if err != nil {
-				return nil, err
+			if loadedModel.DisabledHandlers["__operation__after_save"] != true {
+				err := loadedModel.GetHandler("__operation__after_save")(eventContext)
+				if err != nil {
+					return nil, err
+				}
 			}
 			return &result, nil
 		}
@@ -711,9 +693,6 @@ func (modelInstance *ModelInstance) UpdateAttributes(data interface{}, baseConte
 	deepLevel := 0
 	for {
 		if targetBaseContext.BaseContext != nil {
-			if modelInstance.Model.App.Debug {
-				log.Println("DEBUG: Found baseContext at level", deepLevel)
-			}
 			targetBaseContext = targetBaseContext.BaseContext
 		} else {
 			break
@@ -728,9 +707,11 @@ func (modelInstance *ModelInstance) UpdateAttributes(data interface{}, baseConte
 	eventContext.Instance = modelInstance
 	eventContext.ModelID = modelInstance.Id
 	eventContext.IsNewInstance = false
-	err := modelInstance.Model.GetHandler("__operation__before_save")(eventContext)
-	if err != nil {
-		return nil, err
+	if modelInstance.Model.DisabledHandlers["__operation__before_save"] != true {
+		err := modelInstance.Model.GetHandler("__operation__before_save")(eventContext)
+		if err != nil {
+			return nil, err
+		}
 	}
 	var document wst.M
 	for key := range modelInstance.Model.Config.Relations {
@@ -750,9 +731,11 @@ func (modelInstance *ModelInstance) UpdateAttributes(data interface{}, baseConte
 			eventContext.Instance = modelInstance
 			eventContext.ModelID = modelInstance.Id
 			eventContext.IsNewInstance = false
-			err = modelInstance.Model.GetHandler("__operation__after_save")(eventContext)
-			if err != nil {
-				return nil, err
+			if modelInstance.Model.DisabledHandlers["__operation__after_save"] != true {
+				err = modelInstance.Model.GetHandler("__operation__after_save")(eventContext)
+				if err != nil {
+					return nil, err
+				}
 			}
 			return modelInstance, nil
 		}
@@ -1009,7 +992,8 @@ func (loadedModel *Model) RemoteMethod(handler func(context *EventContext) error
 
 	return toInvoke(path, func(ctx *fiber.Ctx) error {
 		return loadedModel.HandleRemoteMethod(options.Name, &EventContext{
-			Ctx: ctx,
+			Ctx:    ctx,
+			Remote: &options,
 		})
 	})
 }
@@ -1028,14 +1012,17 @@ type BearerToken struct {
 	Roles []BearerRole
 }
 
+type EphemeralData wst.M
+
 type EventContext struct {
 	Bearer        *BearerToken
 	BaseContext   *EventContext
+	Remote        *RemoteMethodOptions
 	Filter        *wst.Filter
 	Data          *wst.M
 	Instance      *ModelInstance
 	Ctx           *fiber.Ctx
-	Ephemeral     *wst.M
+	Ephemeral     *EphemeralData
 	IsNewInstance bool
 	Result        interface{}
 	ModelID       interface{}
@@ -1048,25 +1035,36 @@ type WeStackError struct {
 	Ctx        *EventContext
 }
 
+func (eventContext *EventContext) UpdateEphemeral(newData *wst.M) {
+	if eventContext != nil && newData != nil {
+		if eventContext.Ephemeral == nil {
+			eventContext.Ephemeral = &EphemeralData{}
+		}
+		for k, v := range *newData {
+			(*eventContext.Ephemeral)[k] = v
+		}
+	}
+}
+
 func (err *WeStackError) Error() string {
 	return fmt.Sprintf("%v %v: %v", err.FiberError.Code, err.FiberError.Error(), err.Details)
 }
 
-func (ctx *EventContext) RestError(fiberError *fiber.Error, details fiber.Map) error {
-	ctx.Result = details
+func (eventContext *EventContext) RestError(fiberError *fiber.Error, details fiber.Map) error {
+	eventContext.Result = details
 	return &WeStackError{
 		FiberError: fiberError,
 		Details:    details,
-		Ctx:        ctx,
+		Ctx:        eventContext,
 	}
 }
 
-func (ctx *EventContext) GetBearer(loadedModel *Model) (error, *BearerToken) {
+func (eventContext *EventContext) GetBearer(loadedModel *Model) (error, *BearerToken) {
 
-	if ctx.Bearer != nil {
-		return nil, ctx.Bearer
+	if eventContext.Bearer != nil {
+		return nil, eventContext.Bearer
 	}
-	c := ctx.Ctx
+	c := eventContext.Ctx
 	authBytes := c.Request().Header.Peek("Authorization")
 
 	//action := options.Name
@@ -1160,6 +1158,7 @@ func (loadedModel *Model) Observe(operation string, handler func(eventContext *E
 func (loadedModel *Model) GetHandler(event string) func(eventContext *EventContext) error {
 	res := loadedModel.eventHandlers[event]
 	if res == nil {
+		loadedModel.DisabledHandlers[event] = true
 		res = func(eventContext *EventContext) error {
 			if loadedModel.App.Debug {
 				log.Println("no handler found for ", loadedModel.Name, ".", event)
@@ -1188,6 +1187,11 @@ func (loadedModel *Model) HandleRemoteMethod(name string, eventContext *EventCon
 	}
 
 	action := options.Name
+
+	if loadedModel.App.Debug {
+		log.Println(fmt.Sprintf("DEBUG: Check auth for %v.%v (%v %v)", loadedModel.Name, options.Name, c.Method(), c.Path()))
+	}
+
 	if token.User == nil {
 		allow, exp, err := loadedModel.Enforcer.EnforceEx("_EVERYONE_", "*", action)
 		log.Println("Explain", exp)
@@ -1224,7 +1228,10 @@ func (loadedModel *Model) HandleRemoteMethod(name string, eventContext *EventCon
 		}
 
 		allow, exp, err := loadedModel.Enforcer.EnforceEx(bearerUserIdSt, objId, action)
-		log.Println("Explain", exp)
+
+		if loadedModel.App.Debug {
+			log.Println("Explain", exp)
+		}
 		if err != nil {
 			return err
 		}
@@ -1235,9 +1242,6 @@ func (loadedModel *Model) HandleRemoteMethod(name string, eventContext *EventCon
 	}
 
 	eventContext.Bearer = token
-
-	log.Println(fmt.Sprintf("DEBUG: Invoked %v.%v (%v %v)", loadedModel.Name, options.Name, c.Method(), c.Path()))
-	log.Println("auth with", token)
 
 	return handler(eventContext)
 }
