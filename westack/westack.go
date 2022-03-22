@@ -438,9 +438,11 @@ func replaceVarNames(definition string) string {
 }
 
 func handleEvent(eventContext *model.EventContext, loadedModel *model.Model, event string) error {
-	err := loadedModel.GetHandler(event)(eventContext)
-	if err != nil {
-		return loadedModel.SendError(eventContext.Ctx, err)
+	if loadedModel.DisabledHandlers[event] != true {
+		err := loadedModel.GetHandler(event)(eventContext)
+		if err != nil {
+			return loadedModel.SendError(eventContext.Ctx, err)
+		}
 	}
 	if eventContext.StatusCode == 0 {
 		eventContext.StatusCode = fiber.StatusNotImplemented
@@ -468,15 +470,15 @@ func (app *WeStack) loadDataSources() {
 	dsViper.SetConfigType("json") // REQUIRED if the config file does not have the extension in the name
 	//dsViper.AddConfigPath("/go/bin")          // path to look for the config file in
 	dsViper.AddConfigPath("./server") // call multiple times to add many search paths
-	dsViper.AddConfigPath(".")                // optionally look for config in the working directory
+	dsViper.AddConfigPath(".")        // optionally look for config in the working directory
 
 	err := dsViper.ReadInConfig() // Find and read the config file
-	if err != nil { // Handle errors reading the config file
+	if err != nil {               // Handle errors reading the config file
 		switch err.(type) {
 		case viper.ConfigFileNotFoundError:
 			log.Println(fmt.Sprintf("WARNING: %v.json not found, fallback to datasources.json", fileToLoad))
 			dsViper.SetConfigName("datasources") // name of config file (without extension)
-			err := dsViper.ReadInConfig() // Find and read the config file
+			err := dsViper.ReadInConfig()        // Find and read the config file
 			if err != nil {
 				panic(fmt.Errorf("fatal error config file: %w", err))
 			}
@@ -752,145 +754,6 @@ func (app *WeStack) loadModelsFixedRoutes() {
 		if err != nil {
 			panic(err)
 		}
-
-		//aliceRoles, err := e.GetImplicitRolesForUser("alice")
-		//if err != nil {
-		//	panic(err)
-		//}
-		//log.Println("aliceRoles", aliceRoles)
-		//
-		//bobRoles, err := e.GetImplicitRolesForUser("bob")
-		//if err != nil {
-		//	panic(err)
-		//}
-		//log.Println("bobRoles", bobRoles)
-
-		//		if res, err := e.Enforce(/*casbin.EnforceContext{
-		//			RType: "r",
-		//			PType: "p",
-		//			EType: "e",
-		//			MType: "m",
-		//		},*/ "alice", "photo", "read"); res {
-		//			// permit alice to read data1
-		//			log.Println(fmt.Sprintf("allow access on %v", loadedModel.Name))
-		//		} else {
-		//			if err != nil {
-		//				// deny the request, show an error
-		//				panic(err)
-		//			} else {
-		//				log.Println(fmt.Sprintf("deny access on %v", loadedModel.Name))
-		//			}
-		//		}
-		//
-		//		if res, err := e.Enforce(
-		///*			casbin.EnforceContext{
-		//				RType: "r",
-		//				PType: "p",
-		//				EType: "e",
-		//				MType: "m",
-		//			},*/
-		//			"bob", "photo", "read"); res {
-		//			// permit alice to read data1
-		//			log.Println(fmt.Sprintf("allow access on %v", loadedModel.Name))
-		//		} else {
-		//			if err != nil {
-		//				// deny the request, show an error
-		//				panic(err)
-		//			} else {
-		//				log.Println(fmt.Sprintf("deny access on %v", loadedModel.Name))
-		//			}
-		//		}
-		//
-		//		if res, err := e.Enforce(/*casbin.EnforceContext{
-		//			RType: "r",
-		//			PType: "p",
-		//			EType: "e",
-		//			MType: "m",
-		//		},*/ "alice", "photo", "write"); res {
-		//			// permit alice to read data1
-		//			log.Println(fmt.Sprintf("allow access on %v", loadedModel.Name))
-		//		} else {
-		//			if err != nil {
-		//				// deny the request, show an error
-		//				panic(err)
-		//			} else {
-		//				log.Println(fmt.Sprintf("deny access on %v", loadedModel.Name))
-		//			}
-		//		}
-		//
-		//		if res, err := e.Enforce(/*casbin.EnforceContext{
-		//			RType: "r",
-		//			PType: "p",
-		//			EType: "e",
-		//			MType: "m",
-		//		},*/ "bob", "photo", "write"); res {
-		//			// permit alice to read data1
-		//			log.Println("allow access \"bob\", \"photo\", \"write\"")
-		//		} else {
-		//			if err != nil {
-		//				// deny the request, show an error
-		//				panic(err)
-		//			} else {
-		//				log.Println("deny access \"bob\", \"photo\", \"write\"")
-		//			}
-		//		}
-		//
-		//		if res, err := e.Enforce(/*casbin.EnforceContext{
-		//			RType: "r",
-		//			PType: "p",
-		//			EType: "e",
-		//			MType: "m",
-		//		},*/ "000000000000000000000000", map[string]interface{}{"photo": "a", "userId": "000000000000000000000000"}, "write"); res {
-		//			// permit alice to read data1
-		//			log.Println("allow access \"000000000000000000000000\", \"photo\", \"write\"")
-		//		} else {
-		//			if err != nil {
-		//				// deny the request, show an error
-		//				panic(err)
-		//			} else {
-		//				log.Println("deny access \"000000000000000000000000\", \"photo\", \"write\"")
-		//			}
-		//		}
-
-		//authz := fibercasbin.New(fibercasbin.Config{
-		//	ModelFilePath: "path/to/rbac_model.conf",
-		//	PolicyAdapter: xormadapter.NewAdapter("mysql", "root:@tcp(127.0.0.1:3306)/"),
-		//	Lookup: func(c *fiber.Ctx) string {
-		//		// fetch authenticated user subject
-		//	},
-		//})
-		//
-		//modelRouter.Use(authz.)
-
-		(*loadedModel.Router).Use("/", func(c *fiber.Ctx) error {
-
-			//authBytes := c.Request().Header.Peek("Authorization")
-			//
-			//requestActionType := "execute"
-			//
-			//switch strings.ToLower(c.Method()) {
-			//case "get", "head", "options":
-			//	requestActionType = "read"
-			//	break
-			//case "post", "put", "patch", "delete":
-			//	requestActionType = "write"
-			//	break
-			//}
-			//
-			//if requestActionType != "execute" && len(authBytes) == 0 || len(strings.TrimSpace(string(authBytes))) == 0 {
-			//	allow, err := loadedModel.Enforcer.Enforce("_EVERYONE_", "*", requestActionType)
-			//	if err != nil {
-			//		return err
-			//	}
-			//	if !allow {
-			//		return fiber.ErrUnauthorized
-			//	}
-			//}
-
-			//log.Println(fmt.Sprintf("DEBUG: Invoked %v method %v %v", loadedModel.Name, c.Method(), c.Path() ))
-			//log.Println("auth with", string(authBytes))
-			return c.Next()
-		})
 
 		if app.Debug {
 			log.Println("Mount GET " + loadedModel.BaseUrl)
