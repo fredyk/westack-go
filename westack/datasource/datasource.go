@@ -49,7 +49,7 @@ func (ds *Datasource) Initialize() error {
 		go func() {
 			for {
 				time.Sleep(time.Second * 30)
-				err := db.Ping(mongoCtx, nil)
+				err := ds.Db.(*mongo.Client).Ping(mongoCtx, nil)
 				if err != nil {
 					log.Printf("Reconnecting %v\n", ds.Config["url"])
 					db, err := mongo.Connect(mongoCtx, options.Client().ApplyURI(ds.Config["url"].(string)))
