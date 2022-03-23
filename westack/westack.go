@@ -294,6 +294,11 @@ func (app *WeStack) loadModels() {
 			loadedModel.On("create", func(ctx *model.EventContext) error {
 
 				data := ctx.Data
+				if (*data)["created"] == nil {
+					timeNow := time.Now()
+					(*data)["created"] = timeNow
+				}
+
 				if config.Base == "User" {
 
 					if (*data)["email"] == nil || strings.TrimSpace((*data)["email"].(string)) == "" {
@@ -338,15 +343,21 @@ func (app *WeStack) loadModels() {
 					return err
 				}
 
-				if config.Base == "User" && (*ctx.Data)["password"] != nil && (*ctx.Data)["password"] != "" {
+				data := ctx.Data
+				if (*data)["modified"] == nil {
+					timeNow := time.Now()
+					(*data)["modified"] = timeNow
+				}
+
+				if config.Base == "User" && (*data)["password"] != nil && (*data)["password"] != "" {
 					log.Println("Update User")
-					hashed, err := bcrypt.GenerateFromPassword([]byte((*ctx.Data)["password"].(string)), 10)
+					hashed, err := bcrypt.GenerateFromPassword([]byte((*data)["password"].(string)), 10)
 					if err != nil {
 						return err
 					}
-					(*ctx.Data)["password"] = string(hashed)
+					(*data)["password"] = string(hashed)
 				}
-				updated, err := inst.UpdateAttributes(ctx.Data, ctx)
+				updated, err := inst.UpdateAttributes(data, ctx)
 				if err != nil {
 					return err
 				}
