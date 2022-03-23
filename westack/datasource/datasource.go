@@ -44,7 +44,25 @@ func (ds *Datasource) Initialize() error {
 		if err != nil {
 			return err
 		}
-		ds.Db = *db
+		ds.Db = db
+
+		go func() {
+			for {
+				time.Sleep(time.Second * 30)
+				err := db.Ping(mongoCtx, nil)
+				if err != nil {
+					log.Printf("Reconnecting %v\n", ds.Config["url"])
+					db, err := mongo.Connect(mongoCtx, options.Client().ApplyURI(ds.Config["url"].(string)))
+					if err != nil {
+						log.Printf("Could not reconnect %v: %v\n", ds.Config["url"], err)
+						continue
+					}
+					ds.Db = db
+				} else {
+					//log.Println("Ping OK")
+				}
+			}
+		}()
 	default:
 		return errors.New("Invalid connector " + connector)
 	}
@@ -58,7 +76,7 @@ func (ds *Datasource) FindMany(collectionName string, filter *wst.Filter, lookup
 	var connector string = ds.Config["connector"].(string)
 	switch connector {
 	case "mongodb":
-		var db mongo.Client = ds.Db.(mongo.Client)
+		var db *mongo.Client = ds.Db.(*mongo.Client)
 
 		database := db.Database(ds.Config["database"].(string))
 		collection := database.Collection(collectionName)
@@ -144,7 +162,7 @@ func (ds *Datasource) Create(collectionName string, data *wst.M) (*mongo.Cursor,
 	var connector string = ds.Config["connector"].(string)
 	switch connector {
 	case "mongodb":
-		var db mongo.Client = ds.Db.(mongo.Client)
+		var db *mongo.Client = ds.Db.(*mongo.Client)
 
 		database := db.Database(ds.Config["database"].(string))
 		collection := database.Collection(collectionName)
@@ -161,7 +179,7 @@ func (ds *Datasource) UpdateById(collectionName string, id interface{}, data *ws
 	var connector = ds.Config["connector"].(string)
 	switch connector {
 	case "mongodb":
-		var db = ds.Db.(mongo.Client)
+		var db = ds.Db.(*mongo.Client)
 
 		database := db.Database(ds.Config["database"].(string))
 		collection := database.Collection(collectionName)
@@ -179,7 +197,7 @@ func (ds *Datasource) DeleteById(collectionName string, id interface{}) int64 {
 	var connector = ds.Config["connector"].(string)
 	switch connector {
 	case "mongodb":
-		var db = ds.Db.(mongo.Client)
+		var db = ds.Db.(*mongo.Client)
 
 		database := db.Database(ds.Config["database"].(string))
 		collection := database.Collection(collectionName)
