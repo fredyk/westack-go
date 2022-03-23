@@ -5,6 +5,7 @@ import (
 	"github.com/fredyk/westack-go/westack/model"
 	"github.com/gofiber/fiber/v2"
 	"log"
+	"time"
 )
 
 func SetupUsers(app *westack.WeStack) {
@@ -13,6 +14,7 @@ func SetupUsers(app *westack.WeStack) {
 
 	userModel.Observe("before save", func(eventContext *model.EventContext) error {
 		log.Println("Before saving ", eventContext.Data, eventContext.IsNewInstance)
+		eventContext.Data["modified"] = time.Now()
 		return nil
 	})
 
