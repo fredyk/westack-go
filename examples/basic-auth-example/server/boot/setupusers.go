@@ -14,7 +14,11 @@ func SetupUsers(app *westack.WeStack) {
 
 	userModel.Observe("before save", func(eventContext *model.EventContext) error {
 		log.Println("Before saving ", eventContext.Data, eventContext.IsNewInstance)
-		eventContext.Data["modified"] = time.Now()
+		timeNow := time.Now()
+		if eventContext.IsNewInstance {
+			eventContext.Data["created"] = timeNow
+		}
+		eventContext.Data["modified"] = timeNow
 		return nil
 	})
 
