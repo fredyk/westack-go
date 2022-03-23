@@ -1194,7 +1194,9 @@ func (loadedModel *Model) HandleRemoteMethod(name string, eventContext *EventCon
 
 	if token.User == nil {
 		allow, exp, err := loadedModel.Enforcer.EnforceEx("_EVERYONE_", "*", action)
-		log.Println("Explain", exp)
+		if loadedModel.App.Debug {
+			log.Println("Explain", exp)
+		}
 		if err != nil {
 			return err
 		}
