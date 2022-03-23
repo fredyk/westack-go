@@ -51,11 +51,13 @@ func (ds *Datasource) Initialize() error {
 				time.Sleep(time.Second * 15)
 				err := ds.Db.(*mongo.Client).Ping(mongoCtx, nil)
 				if err != nil {
-					log.Printf("Reconnecting %v\n", ds.Config["url"])
+					log.Printf("Reconnecting %v...\n", ds.Config["url"])
 					db, err := mongo.Connect(mongoCtx, options.Client().ApplyURI(ds.Config["url"].(string)))
 					if err != nil {
 						log.Printf("Could not reconnect %v: %v\n", ds.Config["url"], err)
 						continue
+					} else {
+						log.Printf("successfully reconnected to %v\n", ds.Config["url"])
 					}
 					ds.Db = db
 				} else {
