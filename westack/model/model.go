@@ -1088,15 +1088,12 @@ func (eventContext *EventContext) GetBearer(loadedModel *Model) (error, *BearerT
 
 		if token != nil {
 			if claims, ok := token.Claims.(jwt.MapClaims); ok && token.Valid {
-
 				user = &BearerUser{
 					Id:   claims["userId"],
 					Data: claims,
 				}
-
-				fmt.Println(claims["userId"], claims["created"])
 			} else {
-				fmt.Println(err)
+				log.Println(err)
 			}
 		}
 
