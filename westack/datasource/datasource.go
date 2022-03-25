@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	wst "github.com/fredyk/westack-go/westack/common"
+	"github.com/spf13/viper"
+
 	//"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -31,16 +33,46 @@ func NewError(code int, message string) *OperationError {
 }
 
 type Datasource struct {
-	Config wst.M
-	Db     interface{}
+	Name  string
+	Db    interface{}
+	Viper *viper.Viper
+
+	Key string
 }
 
 func (ds *Datasource) Initialize() error {
-	var connector string = ds.Config["connector"].(string)
+	var connector string = ds.Viper.GetString(ds.Key + ".connector")
 	switch connector {
 	case "mongodb":
 		mongoCtx := context.Background()
-		db, err := mongo.Connect(mongoCtx, options.Client().ApplyURI(ds.Config["url"].(string)))
+
+		dsViper := ds.Viper
+
+		var clientOpts *options.ClientOptions
+
+		url := ""
+		if dsViper.GetString(ds.Key+".url") != "" {
+			url = dsViper.GetString(ds.Key + ".url")
+		} else {
+			port := 0
+			if dsViper.GetInt(ds.Key+".port") > 0 {
+				port = dsViper.GetInt(ds.Key + ".port")
+			}
+			url = fmt.Sprintf("mongodb://%v:%v/%v", dsViper.GetString(ds.Key+".host"), port, dsViper.GetString(ds.Key+".database"))
+			log.Printf("Using composed url %v\n", url)
+		}
+
+		if dsViper.GetString(ds.Key+".username") != "" && dsViper.GetString(ds.Key+".password") != "" {
+			credential := options.Credential{
+				Username: dsViper.GetString(ds.Key + ".username"),
+				Password: dsViper.GetString(ds.Key + ".password"),
+			}
+			clientOpts = options.Client().ApplyURI(url).SetAuth(credential)
+		} else {
+			clientOpts = options.Client().ApplyURI(url)
+		}
+
+		db, err := mongo.Connect(mongoCtx, clientOpts)
 		if err != nil {
 			return err
 		}
@@ -51,13 +83,13 @@ func (ds *Datasource) Initialize() error {
 				time.Sleep(time.Second * 15)
 				err := ds.Db.(*mongo.Client).Ping(mongoCtx, nil)
 				if err != nil {
-					log.Printf("Reconnecting %v...\n", ds.Config["url"])
-					db, err := mongo.Connect(mongoCtx, options.Client().ApplyURI(ds.Config["url"].(string)))
+					log.Printf("Reconnecting %v...\n", url)
+					db, err := mongo.Connect(mongoCtx, clientOpts)
 					if err != nil {
-						log.Printf("Could not reconnect %v: %v\n", ds.Config["url"], err)
+						log.Printf("Could not reconnect %v: %v\n", url, err)
 						continue
 					} else {
-						log.Printf("successfully reconnected to %v\n", ds.Config["url"])
+						log.Printf("successfully reconnected to %v\n", url)
 					}
 					ds.Db = db
 				} else {
@@ -75,12 +107,12 @@ func (ds *Datasource) FindMany(collectionName string, filter *wst.Filter, lookup
 	if err := validateFilter(filter); err != nil {
 		panic(err)
 	}
-	var connector string = ds.Config["connector"].(string)
+	var connector string = ds.Viper.GetString(ds.Key + ".connector")
 	switch connector {
 	case "mongodb":
 		var db *mongo.Client = ds.Db.(*mongo.Client)
 
-		database := db.Database(ds.Config["database"].(string))
+		database := db.Database(ds.Viper.GetString(ds.Key + ".database"))
 		collection := database.Collection(collectionName)
 		//var targetWhere wst.M
 		//if filter != nil && (*filter)["where"] != nil {
@@ -161,12 +193,12 @@ func findByObjectId(collectionName string, _id interface{}, ds *Datasource, look
 }
 
 func (ds *Datasource) Create(collectionName string, data *wst.M) (*mongo.Cursor, error) {
-	var connector string = ds.Config["connector"].(string)
+	var connector string = ds.Viper.GetString(ds.Key + ".connector")
 	switch connector {
 	case "mongodb":
 		var db *mongo.Client = ds.Db.(*mongo.Client)
 
-		database := db.Database(ds.Config["database"].(string))
+		database := db.Database(ds.Viper.GetString(ds.Key + ".database"))
 		collection := database.Collection(collectionName)
 		cursor, err := collection.InsertOne(context.Background(), data)
 		if err != nil {
@@ -178,12 +210,12 @@ func (ds *Datasource) Create(collectionName string, data *wst.M) (*mongo.Cursor,
 }
 
 func (ds *Datasource) UpdateById(collectionName string, id interface{}, data *wst.M) *mongo.Cursor {
-	var connector = ds.Config["connector"].(string)
+	var connector = ds.Viper.GetString(ds.Key + ".connector")
 	switch connector {
 	case "mongodb":
 		var db = ds.Db.(*mongo.Client)
 
-		database := db.Database(ds.Config["database"].(string))
+		database := db.Database(ds.Viper.GetString(ds.Key + ".database"))
 		collection := database.Collection(collectionName)
 		delete(*data, "id")
 		delete(*data, "_id")
@@ -196,12 +228,12 @@ func (ds *Datasource) UpdateById(collectionName string, id interface{}, data *ws
 }
 
 func (ds *Datasource) DeleteById(collectionName string, id interface{}) int64 {
-	var connector = ds.Config["connector"].(string)
+	var connector = ds.Viper.GetString(ds.Key + ".connector")
 	switch connector {
 	case "mongodb":
 		var db = ds.Db.(*mongo.Client)
 
-		database := db.Database(ds.Config["database"].(string))
+		database := db.Database(ds.Viper.GetString(ds.Key + ".database"))
 		collection := database.Collection(collectionName)
 		if result, err := collection.DeleteOne(context.Background(), wst.M{"_id": id}); err != nil {
 			panic(err)
@@ -212,9 +244,16 @@ func (ds *Datasource) DeleteById(collectionName string, id interface{}) int64 {
 	return 0
 }
 
-func New(config wst.M) *Datasource {
+func New(dsKey string, dsViper *viper.Viper) *Datasource {
+	name := dsViper.GetString(dsKey + ".name")
+	if name == "" {
+		name = dsKey
+	}
 	ds := &Datasource{
-		Config: config,
+		Name:  name,
+		Viper: dsViper,
+
+		Key: dsKey,
 	}
 	return ds
 }

@@ -414,7 +414,7 @@ func (loadedModel *Model) ExtractLookupsFromFilter(filterMap *wst.Filter) *wst.A
 				}
 			}
 
-			if relatedLoadedModel.Datasource.Config["name"] == loadedModel.Datasource.Config["name"] {
+			if relatedLoadedModel.Datasource.Name == loadedModel.Datasource.Name {
 				switch relation.Type {
 				case "belongsTo", "hasMany":
 					var matching wst.M

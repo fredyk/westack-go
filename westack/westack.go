@@ -500,30 +500,25 @@ func (app *WeStack) loadDataSources() {
 	}
 
 	settings := dsViper.AllSettings()
-	for key, dsConfigAll := range settings {
-		dsConfig := dsConfigAll.(map[string]interface{})
-		dsName := dsConfig["name"].(string)
+	for key, _ := range settings {
+		dsConfig := dsViper.Get(key)
+		log.Println(dsConfig)
+		dsName := dsViper.GetString(key + ".name")
 		if dsName == "" {
 			dsName = key
 		}
-		if dsConfig["connector"].(string) == "mongodb" {
-			port := dsViper.GetInt(key + ".port")
-			ds := datasource.New(wst.M{
-				"name":      dsName,
-				"connector": dsConfig["connector"].(string),
-				"database":  dsConfig["database"].(string),
-				"url":       fmt.Sprintf("mongodb://%v:%v/%v", dsConfig["host"].(string), port, dsConfig["database"].(string)),
-			})
+		if dsViper.GetString(key+".connector") == "mongodb" {
+			ds := datasource.New(key, dsViper)
 			err := ds.Initialize()
 			if err != nil {
 				panic(err)
 			}
 			(*app.Datasources)[dsName] = ds
 			if app.Debug {
-				log.Println("Connected to database", dsConfig["database"].(string))
+				log.Println("Connected to database", dsViper.GetString(key+".database"))
 			}
 		} else {
-			panic("ERROR: connector " + dsConfig["connector"].(string) + " not supported")
+			panic("ERROR: connector " + dsViper.GetString(key+".connector") + " not supported")
 		}
 	}
 }
