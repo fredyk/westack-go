@@ -74,6 +74,7 @@ func CopyMap(src M) M {
 }
 
 func Transform(in interface{}, out interface{}) error {
+	// TODO: move marshal and unmarshal to easyjson
 	bytes, err := bson.Marshal(in)
 	if err != nil {
 		return err
