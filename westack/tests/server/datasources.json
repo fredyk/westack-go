@@ -5,7 +5,7 @@
     "database": "example_db_1",
     "password": "",
     "name": "db",
-    "user": "",
+    "username": "",
     "connector": "mongodb",
     "useNewUrlParser": true,
     "allowExtendedOperators": true

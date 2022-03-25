@@ -98,7 +98,7 @@ Create your file structure like this:
     "port": 27017,
     "database": "example_db",
     "password": "",
-    "user": "",
+    "username": "",
     "connector": "mongodb"
   }
 }
