@@ -37,14 +37,16 @@ type Datasource struct {
 	Db    interface{}
 	Viper *viper.Viper
 
-	Key string
+	Key         string
+	Context     context.Context
+	ctxCancelFn context.CancelFunc
 }
 
 func (ds *Datasource) Initialize() error {
 	var connector string = ds.Viper.GetString(ds.Key + ".connector")
 	switch connector {
 	case "mongodb":
-		mongoCtx := context.Background()
+		mongoCtx := ds.Context
 
 		dsViper := ds.Viper
 
@@ -103,7 +105,7 @@ func (ds *Datasource) Initialize() error {
 	return nil
 }
 
-func (ds *Datasource) FindMany(collectionName string, filter *wst.Filter, lookups *wst.A) *mongo.Cursor {
+func (ds *Datasource) FindMany(collectionName string, filter *wst.Filter, lookups *wst.A) (*wst.A, error) {
 	if err := validateFilter(filter); err != nil {
 		panic(err)
 	}
@@ -129,15 +131,27 @@ func (ds *Datasource) FindMany(collectionName string, filter *wst.Filter, lookup
 			pipeline = append(pipeline, *lookups...)
 		}
 		allowDiskUse := true
-		cursor, err := collection.Aggregate(context.Background(), pipeline, &options.AggregateOptions{
+		ctx := ds.Context
+		cursor, err := collection.Aggregate(ctx, pipeline, &options.AggregateOptions{
 			AllowDiskUse: &allowDiskUse,
 		})
 		if err != nil {
-			panic(err)
+			return nil, err
 		}
-		return cursor
+		defer func(cursor *mongo.Cursor, ctx context.Context) {
+			err := cursor.Close(ctx)
+			if err != nil {
+				panic(err)
+			}
+		}(cursor, ctx)
+		var documents wst.A
+		err = cursor.All(ds.Context, &documents)
+		if err != nil {
+			return nil, err
+		}
+		return &documents, nil
 	}
-	return nil
+	return nil, errors.New(fmt.Sprintf("invalid connector %v", connector))
 }
 
 func validateFilter(filter *wst.Filter) error {
@@ -155,7 +169,7 @@ func validateFilter(filter *wst.Filter) error {
 }
 
 //goland:noinspection GoUnusedParameter
-func (ds *Datasource) FindById(collectionName string, id interface{}, filter *wst.Filter, lookups *wst.A) *mongo.Cursor {
+func (ds *Datasource) FindById(collectionName string, id interface{}, filter *wst.Filter, lookups *wst.A) (*wst.M, error) {
 	var _id interface{}
 	switch id.(type) {
 	case string:
@@ -172,7 +186,7 @@ func (ds *Datasource) FindById(collectionName string, id interface{}, filter *ws
 	return findByObjectId(collectionName, _id, ds, lookups)
 }
 
-func findByObjectId(collectionName string, _id interface{}, ds *Datasource, lookups *wst.A) *mongo.Cursor {
+func findByObjectId(collectionName string, _id interface{}, ds *Datasource, lookups *wst.A) (*wst.M, error) {
 	filter := &wst.Filter{Where: &wst.Where{"_id": _id}}
 	wrappedLookups := &wst.A{
 		{
@@ -184,15 +198,18 @@ func findByObjectId(collectionName string, _id interface{}, ds *Datasource, look
 	if lookups != nil {
 		*wrappedLookups = append(*wrappedLookups, *lookups...)
 	}
-	cursor := ds.FindMany(collectionName, filter, wrappedLookups)
-	if cursor.Next(context.Background()) {
-		return cursor
+	results, err := ds.FindMany(collectionName, filter, wrappedLookups)
+	if err != nil {
+		return nil, err
+	}
+	if results != nil && len(*results) > 0 {
+		return &(*results)[0], nil
 	} else {
-		return nil
+		return nil, errors.New("document not found")
 	}
 }
 
-func (ds *Datasource) Create(collectionName string, data *wst.M) (*mongo.Cursor, error) {
+func (ds *Datasource) Create(collectionName string, data *wst.M) (*wst.M, error) {
 	var connector string = ds.Viper.GetString(ds.Key + ".connector")
 	switch connector {
 	case "mongodb":
@@ -200,16 +217,16 @@ func (ds *Datasource) Create(collectionName string, data *wst.M) (*mongo.Cursor,
 
 		database := db.Database(ds.Viper.GetString(ds.Key + ".database"))
 		collection := database.Collection(collectionName)
-		cursor, err := collection.InsertOne(context.Background(), data)
+		insertOneResult, err := collection.InsertOne(ds.Context, data)
 		if err != nil {
 			return nil, err
 		}
-		return findByObjectId(collectionName, cursor.InsertedID, ds, nil), nil
+		return findByObjectId(collectionName, insertOneResult.InsertedID, ds, nil)
 	}
-	return nil, nil
+	return nil, errors.New(fmt.Sprintf("invalid connector %v", connector))
 }
 
-func (ds *Datasource) UpdateById(collectionName string, id interface{}, data *wst.M) *mongo.Cursor {
+func (ds *Datasource) UpdateById(collectionName string, id interface{}, data *wst.M) (*wst.M, error) {
 	var connector = ds.Viper.GetString(ds.Key + ".connector")
 	switch connector {
 	case "mongodb":
@@ -219,12 +236,12 @@ func (ds *Datasource) UpdateById(collectionName string, id interface{}, data *ws
 		collection := database.Collection(collectionName)
 		delete(*data, "id")
 		delete(*data, "_id")
-		if _, err := collection.UpdateOne(context.Background(), wst.M{"_id": id}, wst.M{"$set": *data}); err != nil {
+		if _, err := collection.UpdateOne(ds.Context, wst.M{"_id": id}, wst.M{"$set": *data}); err != nil {
 			panic(err)
 		}
 		return findByObjectId(collectionName, id, ds, nil)
 	}
-	return nil
+	return nil, errors.New(fmt.Sprintf("invalid connector %v", connector))
 }
 
 func (ds *Datasource) DeleteById(collectionName string, id interface{}) int64 {
@@ -235,7 +252,7 @@ func (ds *Datasource) DeleteById(collectionName string, id interface{}) int64 {
 
 		database := db.Database(ds.Viper.GetString(ds.Key + ".database"))
 		collection := database.Collection(collectionName)
-		if result, err := collection.DeleteOne(context.Background(), wst.M{"_id": id}); err != nil {
+		if result, err := collection.DeleteOne(ds.Context, wst.M{"_id": id}); err != nil {
 			panic(err)
 		} else {
 			return result.DeletedCount
@@ -244,16 +261,20 @@ func (ds *Datasource) DeleteById(collectionName string, id interface{}) int64 {
 	return 0
 }
 
-func New(dsKey string, dsViper *viper.Viper) *Datasource {
+func New(dsKey string, dsViper *viper.Viper, parentContext context.Context) *Datasource {
 	name := dsViper.GetString(dsKey + ".name")
 	if name == "" {
 		name = dsKey
 	}
+	ctx, ctxCancelFn := context.WithCancel(parentContext)
 	ds := &Datasource{
 		Name:  name,
 		Viper: dsViper,
 
 		Key: dsKey,
+
+		Context:     ctx,
+		ctxCancelFn: ctxCancelFn,
 	}
 	return ds
 }

@@ -1,6 +1,7 @@
 package westack
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	swagger "github.com/arsmn/fiber-swagger/v2"
@@ -385,6 +386,7 @@ func (app *WeStack) loadModels() {
 				loadedModel.On("login", func(ctx *model.EventContext) error {
 					var loginBody *LoginBody
 					var data *wst.M
+					// TODO: move marshal and unmarshal to easyjson
 					err := json.Unmarshal(ctx.Ctx.Body(), &loginBody)
 					err = json.Unmarshal(ctx.Ctx.Body(), &data)
 					if err != nil {
@@ -500,15 +502,14 @@ func (app *WeStack) loadDataSources() {
 	}
 
 	settings := dsViper.AllSettings()
+	ctx := context.Background()
 	for key, _ := range settings {
-		dsConfig := dsViper.Get(key)
-		log.Println(dsConfig)
 		dsName := dsViper.GetString(key + ".name")
 		if dsName == "" {
 			dsName = key
 		}
 		if dsViper.GetString(key+".connector") == "mongodb" {
-			ds := datasource.New(key, dsViper)
+			ds := datasource.New(key, dsViper, ctx)
 			err := ds.Initialize()
 			if err != nil {
 				panic(err)

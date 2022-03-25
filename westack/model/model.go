@@ -1,7 +1,6 @@
 package model
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -280,15 +279,17 @@ func (loadedModel *Model) FindMany(filterMap *wst.Filter, baseContext *EventCont
 
 	lookups := loadedModel.ExtractLookupsFromFilter(filterMap)
 
-	var documents wst.A
-	err := loadedModel.Datasource.FindMany(loadedModel.Name, filterMap, lookups).All(context.Background(), &documents)
+	documents, err := loadedModel.Datasource.FindMany(loadedModel.Name, filterMap, lookups)
 	if err != nil {
 		return nil, err
 	}
+	if documents == nil {
+		return nil, errors.New("invalid query result")
+	}
 
-	var results = make([]ModelInstance, len(documents))
+	var results = make([]ModelInstance, len(*documents))
 
-	for idx, document := range documents {
+	for idx, document := range *documents {
 		results[idx] = loadedModel.Build(document, true, targetBaseContext)
 	}
 
@@ -512,19 +513,17 @@ func (loadedModel *Model) FindOne(filterMap *wst.Filter, baseContext *EventConte
 		deepLevel++
 	}
 
-	var documents wst.A
-
 	lookups := loadedModel.ExtractLookupsFromFilter(filterMap)
 
-	err := loadedModel.Datasource.FindMany(loadedModel.Name, filterMap, lookups).All(context.Background(), &documents)
+	documents, err := loadedModel.Datasource.FindMany(loadedModel.Name, filterMap, lookups)
 	if err != nil {
 		return nil, err
 	}
 
-	if len(documents) == 0 {
+	if documents == nil || len(*documents) == 0 {
 		return nil, nil
 	} else {
-		modelInstance := loadedModel.Build(documents[0], true, targetBaseContext)
+		modelInstance := loadedModel.Build((*documents)[0], true, targetBaseContext)
 		return &modelInstance, nil
 	}
 }
@@ -545,21 +544,16 @@ func (loadedModel *Model) FindById(id interface{}, filterMap *wst.Filter, baseCo
 		deepLevel++
 	}
 
-	var document wst.M
-
 	lookups := loadedModel.ExtractLookupsFromFilter(filterMap)
 
-	cursor := loadedModel.Datasource.FindById(loadedModel.Name, id, filterMap, lookups)
-	if cursor != nil {
-		err := cursor.Decode(&document)
-		if err != nil {
-			return nil, err
-		} else {
-			result := loadedModel.Build(document, true, targetBaseContext)
-			return &result, nil
-		}
-	} else {
+	document, err := loadedModel.Datasource.FindById(loadedModel.Name, id, filterMap, lookups)
+	if err != nil {
+		return nil, err
+	} else if document == nil {
 		return nil, datasource.NewError(404, fmt.Sprintf("%v %v not found", loadedModel.Name, id))
+	} else {
+		result := loadedModel.Build(*document, true, targetBaseContext)
+		return &result, nil
 	}
 }
 
@@ -622,32 +616,26 @@ func (loadedModel *Model) Create(data interface{}, baseContext *EventContext) (*
 			return nil, err
 		}
 	}
-	var document wst.M
 	for key := range loadedModel.Config.Relations {
 		delete(finalData, key)
 	}
-	cursor, err2 := loadedModel.Datasource.Create(loadedModel.Name, &finalData)
-	if err2 != nil {
-		return nil, err2
-	}
-	if cursor != nil {
-		err := cursor.Decode(&document)
-		if err != nil {
-			return nil, err
-		} else {
-			result := loadedModel.Build(document, true, eventContext)
-			result.HideProperties()
-			eventContext.Instance = &result
-			if loadedModel.DisabledHandlers["__operation__after_save"] != true {
-				err := loadedModel.GetHandler("__operation__after_save")(eventContext)
-				if err != nil {
-					return nil, err
-				}
-			}
-			return &result, nil
-		}
-	} else {
+	document, err := loadedModel.Datasource.Create(loadedModel.Name, &finalData)
+
+	if err != nil {
+		return nil, err
+	} else if document == nil {
 		return nil, datasource.NewError(400, "Could not create document")
+	} else {
+		result := loadedModel.Build(*document, true, eventContext)
+		result.HideProperties()
+		eventContext.Instance = &result
+		if loadedModel.DisabledHandlers["__operation__after_save"] != true {
+			err := loadedModel.GetHandler("__operation__after_save")(eventContext)
+			if err != nil {
+				return nil, err
+			}
+		}
+		return &result, nil
 	}
 
 }
@@ -713,34 +701,32 @@ func (modelInstance *ModelInstance) UpdateAttributes(data interface{}, baseConte
 			return nil, err
 		}
 	}
-	var document wst.M
+
 	for key := range modelInstance.Model.Config.Relations {
 		delete(finalData, key)
 	}
-	cursor := modelInstance.Model.Datasource.UpdateById(modelInstance.Model.Name, modelInstance.Id, &finalData)
-	if cursor != nil {
-		err := cursor.Decode(&document)
+	document, err := modelInstance.Model.Datasource.UpdateById(modelInstance.Model.Name, modelInstance.Id, &finalData)
+
+	if err != nil {
+		return nil, err
+	} else if document == nil {
+		return nil, datasource.NewError(400, "Could not update document")
+	} else {
+		err := modelInstance.Reload(eventContext)
+		modelInstance.HideProperties()
 		if err != nil {
 			return nil, err
-		} else {
-			err := modelInstance.Reload(eventContext)
-			modelInstance.HideProperties()
+		}
+		eventContext.Instance = modelInstance
+		eventContext.ModelID = modelInstance.Id
+		eventContext.IsNewInstance = false
+		if modelInstance.Model.DisabledHandlers["__operation__after_save"] != true {
+			err = modelInstance.Model.GetHandler("__operation__after_save")(eventContext)
 			if err != nil {
 				return nil, err
 			}
-			eventContext.Instance = modelInstance
-			eventContext.ModelID = modelInstance.Id
-			eventContext.IsNewInstance = false
-			if modelInstance.Model.DisabledHandlers["__operation__after_save"] != true {
-				err = modelInstance.Model.GetHandler("__operation__after_save")(eventContext)
-				if err != nil {
-					return nil, err
-				}
-			}
-			return modelInstance, nil
 		}
-	} else {
-		return nil, datasource.NewError(400, "Could not create document")
+		return modelInstance, nil
 	}
 }
 
