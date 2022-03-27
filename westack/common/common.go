@@ -32,7 +32,7 @@ type Filter struct {
 type IApp struct {
 	Debug        bool
 	SwaggerPaths func() *map[string]M
-	FindModel    func(modelName string) interface{}
+	FindModel    func(modelName string) (interface{}, error)
 	JwtSecretKey []byte
 }
 

@@ -3,6 +3,7 @@ package westack
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	swagger "github.com/arsmn/fiber-swagger/v2"
 	"github.com/casbin/casbin/v2"
@@ -59,12 +60,12 @@ func (app WeStack) SwaggerPaths() *map[string]wst.M {
 	return &app._swaggerPaths
 }
 
-func (app *WeStack) FindModel(modelName string) *model.Model {
+func (app *WeStack) FindModel(modelName string) (*model.Model, error) {
 	result := (*app.ModelRegistry)[modelName]
 	if result == nil {
-		panic(fmt.Sprintf("Model %v not found", modelName))
+		return nil, errors.New(fmt.Sprintf("Model %v not found", modelName))
 	}
-	return result
+	return result, nil
 }
 
 func IsOwnerFunc(args ...interface{}) (interface{}, error) {
@@ -601,7 +602,7 @@ func (app *WeStack) AsInterface() *wst.IApp {
 	return &wst.IApp{
 		Debug:        app.Debug,
 		JwtSecretKey: app.JwtSecretKey,
-		FindModel: func(modelName string) interface{} {
+		FindModel: func(modelName string) (interface{}, error) {
 			return app.FindModel(modelName)
 		},
 		SwaggerPaths: func() *map[string]wst.M {

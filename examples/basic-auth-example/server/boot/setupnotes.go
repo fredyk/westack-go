@@ -12,8 +12,12 @@ import (
 func SetupNotes(app *westack.WeStack) {
 
 	// Declare models
-	userModel := app.FindModel("user")
-	noteModel := app.FindModel("note")
+	noteModel, err := app.FindModel("note")
+	if err != nil {
+		log.Printf("ERROR: SetupNotes() --> %v\n", err)
+		return
+	}
+	userModel, _ := app.FindModel("user")
 
 	// Check if user exists
 	user, err := userModel.FindOne(&wst.Filter{Where: &wst.Where{"email": "test@example.com"}}, nil)
