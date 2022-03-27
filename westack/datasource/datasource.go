@@ -47,7 +47,7 @@ func (ds *Datasource) Initialize() error {
 	var connector string = ds.Viper.GetString(ds.Key + ".connector")
 	switch connector {
 	case "mongodb":
-		mongoCtx, cancelFn := context.WithTimeout(ds.Context, time.Second*30)
+		mongoCtx, cancelFn := context.WithCancel(ds.Context)
 
 		dsViper := ds.Viper
 
@@ -95,7 +95,7 @@ func (ds *Datasource) Initialize() error {
 			for {
 				time.Sleep(time.Second * 5)
 
-				mongoCtx, cancelFn := context.WithTimeout(mongoCtx, time.Second*30)
+				mongoCtx, cancelFn = context.WithCancel(mongoCtx)
 				err := ds.Db.(*mongo.Client).Ping(mongoCtx, readpref.SecondaryPreferred())
 				if err != nil {
 
