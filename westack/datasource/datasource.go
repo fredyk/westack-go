@@ -80,11 +80,16 @@ func (ds *Datasource) Initialize() error {
 		}
 		ds.Db = db
 
+		init := time.Now().UnixMilli()
 		go func() {
 			for {
-				time.Sleep(time.Second * 15)
+				time.Sleep(time.Second * 30)
 				err := ds.Db.(*mongo.Client).Ping(mongoCtx, nil)
 				if err != nil {
+
+					log.Fatalf("Mongo client disconnected after %v ms", time.Now().UnixMilli()-init)
+
+					// TODO: Maybe reactivate
 					log.Printf("Reconnecting %v...\n", url)
 					db, err := mongo.Connect(mongoCtx, clientOpts)
 					if err != nil {
