@@ -10,8 +10,11 @@ import (
 
 func SetupUsers(app *westack.WeStack) {
 
-	userModel := app.FindModel("user")
-
+	userModel, err := app.FindModel("user")
+	if err != nil {
+		log.Printf("ERROR: SetupUsers() --> %v\n", err)
+		return
+	}
 	userModel.Observe("before save", func(eventContext *model.EventContext) error {
 		log.Println("Before saving ", eventContext.Data, eventContext.IsNewInstance)
 		//timeNow := time.Now()

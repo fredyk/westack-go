@@ -143,7 +143,10 @@ func (modelInstance *ModelInstance) ToJSON() wst.M {
 				continue
 			}
 			rawRelatedData := modelInstance.data[relationName]
-			relatedModel := modelInstance.Model.App.FindModel(relationConfig.Model).(*Model)
+			relatedModel, err := modelInstance.Model.App.FindModel(relationConfig.Model)
+			if err != nil {
+				return nil
+			}
 			if relatedModel != nil {
 				switch relationConfig.Type {
 				case "belongsTo", "hasOne":
@@ -213,16 +216,20 @@ func (loadedModel *Model) Build(data wst.M, fromDb bool, baseContext *EventConte
 				continue
 			}
 			rawRelatedData := data[relationName]
-			relatedModel := loadedModel.App.FindModel(relationConfig.Model).(*Model)
+			relatedModel, err := loadedModel.App.FindModel(relationConfig.Model)
+			if err != nil {
+				log.Printf("ERROR: Model.Build() --> %v\n", err)
+				return ModelInstance{}
+			}
 			if relatedModel != nil {
 				switch relationConfig.Type {
 				case "belongsTo", "hasOne":
-					relatedInstance := relatedModel.Build(rawRelatedData.(wst.M), false, targetBaseContext)
+					relatedInstance := relatedModel.(*Model).Build(rawRelatedData.(wst.M), false, targetBaseContext)
 					data[relationName] = &relatedInstance
 				case "hasMany", "hasAndBelongsToMany":
 					result := make([]ModelInstance, len(rawRelatedData.(primitive.A)))
 					for idx, v := range rawRelatedData.(primitive.A) {
-						result[idx] = relatedModel.Build(v.(wst.M), false, targetBaseContext)
+						result[idx] = relatedModel.(*Model).Build(v.(wst.M), false, targetBaseContext)
 					}
 					data[relationName] = result
 				}

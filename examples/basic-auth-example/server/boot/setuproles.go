@@ -8,7 +8,12 @@ import (
 
 func SetupRoles(app *westack.WeStack) {
 
-	app.FindModel("role").Observe("loaded", func(eventContext *model.EventContext) error {
+	RoleModel, err := app.FindModel("role")
+	if err != nil {
+		log.Printf("ERROR: SetupRoles() --> %v\n", err)
+		return
+	}
+	RoleModel.Observe("loaded", func(eventContext *model.EventContext) error {
 		log.Println("loaded role ", eventContext.Data)
 		return nil
 	})
