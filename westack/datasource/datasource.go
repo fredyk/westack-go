@@ -75,6 +75,8 @@ func (ds *Datasource) Initialize() error {
 			clientOpts = options.Client().ApplyURI(url)
 		}
 
+		clientOpts = clientOpts.SetSocketTimeout(time.Second * 30).SetSocketTimeout(time.Second * 30).SetServerSelectionTimeout(time.Second * 30)
+
 		db, err := mongo.Connect(mongoCtx, clientOpts)
 		if err != nil {
 			cancelFn()
@@ -99,13 +101,13 @@ func (ds *Datasource) Initialize() error {
 					log.Printf("Reconnecting %v...\n", url)
 					db, err := mongo.Connect(mongoCtx, clientOpts)
 					if err != nil {
-						log.Printf("Could not reconnect %v: %v\n", url, err)
-						continue
+						cancelFn()
+						log.Fatalf("Could not reconnect %v: %v\n", url, err)
 					} else {
 						err = ds.Db.(*mongo.Client).Ping(mongoCtx, readpref.SecondaryPreferred())
 						if err != nil {
 							cancelFn()
-							log.Fatalf("Mongo client disconnected after %v ms", time.Now().UnixMilli()-init)
+							log.Fatalf("Mongo client disconnected after %vms: %v", time.Now().UnixMilli()-init, err)
 						}
 
 						log.Printf("successfully reconnected to %v\n", url)
