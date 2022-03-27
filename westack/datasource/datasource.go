@@ -94,6 +94,8 @@ func (ds *Datasource) Initialize() error {
 		go func() {
 			for {
 				time.Sleep(time.Second * 30)
+
+				mongoCtx, cancelFn := context.WithTimeout(ds.Context, time.Second*30)
 				err := ds.Db.(*mongo.Client).Ping(mongoCtx, readpref.SecondaryPreferred())
 				if err != nil {
 
