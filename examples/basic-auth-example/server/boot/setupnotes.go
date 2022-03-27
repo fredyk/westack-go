@@ -16,12 +16,18 @@ func SetupNotes(app *westack.WeStack) {
 	noteModel := app.FindModel("note")
 
 	// Check if user exists
-	user, _ := userModel.FindOne(&wst.Filter{Where: &wst.Where{"email": "test@example.com"}}, nil)
+	user, err := userModel.FindOne(&wst.Filter{Where: &wst.Where{"email": "test@example.com"}}, nil)
+	if err != nil {
+		panic(err)
+	}
 	if user == nil {
-		user, _ = userModel.Create(wst.M{"email": "test@example.com", "password": "1234"}, nil)
+		user, err = userModel.Create(wst.M{"email": "test@example.com", "password": "1234"}, nil)
+		if err != nil {
+			panic(err)
+		}
 	}
 	var typedUser models.User
-	err := user.Transform(&typedUser)
+	err = user.Transform(&typedUser)
 	if err != nil {
 		panic(err)
 	}
