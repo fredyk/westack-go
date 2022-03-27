@@ -6,6 +6,7 @@ import (
 	"fmt"
 	wst "github.com/fredyk/westack-go/westack/common"
 	"github.com/spf13/viper"
+	"go.mongodb.org/mongo-driver/mongo/readpref"
 
 	//"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -46,7 +47,7 @@ func (ds *Datasource) Initialize() error {
 	var connector string = ds.Viper.GetString(ds.Key + ".connector")
 	switch connector {
 	case "mongodb":
-		mongoCtx := ds.Context
+		mongoCtx, cancelFn := context.WithTimeout(ds.Context, time.Second*30)
 
 		dsViper := ds.Viper
 
@@ -78,16 +79,20 @@ func (ds *Datasource) Initialize() error {
 		if err != nil {
 			return err
 		}
+
+		err = ds.Db.(*mongo.Client).Ping(mongoCtx, readpref.SecondaryPreferred())
+		if err != nil {
+			return err
+		}
+
 		ds.Db = db
 
 		init := time.Now().UnixMilli()
 		go func() {
 			for {
 				time.Sleep(time.Second * 30)
-				err := ds.Db.(*mongo.Client).Ping(mongoCtx, nil)
+				err := ds.Db.(*mongo.Client).Ping(mongoCtx, readpref.SecondaryPreferred())
 				if err != nil {
-
-					log.Fatalf("Mongo client disconnected after %v ms", time.Now().UnixMilli()-init)
 
 					// TODO: Maybe reactivate
 					log.Printf("Reconnecting %v...\n", url)
@@ -96,6 +101,12 @@ func (ds *Datasource) Initialize() error {
 						log.Printf("Could not reconnect %v: %v\n", url, err)
 						continue
 					} else {
+						err = ds.Db.(*mongo.Client).Ping(mongoCtx, readpref.SecondaryPreferred())
+						if err != nil {
+							cancelFn()
+							log.Fatalf("Mongo client disconnected after %v ms", time.Now().UnixMilli()-init)
+						}
+
 						log.Printf("successfully reconnected to %v\n", url)
 					}
 					ds.Db = db
