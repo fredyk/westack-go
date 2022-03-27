@@ -77,15 +77,16 @@ func (ds *Datasource) Initialize() error {
 
 		db, err := mongo.Connect(mongoCtx, clientOpts)
 		if err != nil {
+			cancelFn()
 			return err
 		}
+		ds.Db = db
 
 		err = ds.Db.(*mongo.Client).Ping(mongoCtx, readpref.SecondaryPreferred())
 		if err != nil {
+			cancelFn()
 			return err
 		}
-
-		ds.Db = db
 
 		init := time.Now().UnixMilli()
 		go func() {
