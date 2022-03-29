@@ -92,7 +92,16 @@ type Model struct {
 func (loadedModel *Model) SendError(ctx *fiber.Ctx, err error) error {
 	switch err.(type) {
 	case *WeStackError:
-		return ctx.Status((err).(*WeStackError).FiberError.Code).JSON(fiber.Map{"error": err.(*WeStackError).FiberError.Error(), "details": err.(*WeStackError).Details})
+		return ctx.Status((err).(*WeStackError).FiberError.Code).JSON(fiber.Map{
+			"error": fiber.Map{
+				"statusCode": (err).(*WeStackError).FiberError.Code,
+				"name":       "Error",
+				"code":       err.(*WeStackError).Code,
+				"error":      err.(*WeStackError).FiberError.Error(),
+				"message":    (err.(*WeStackError).Details)["message"],
+				"details":    err.(*WeStackError).Details,
+			},
+		})
 	}
 	return err
 }
@@ -1024,6 +1033,7 @@ type EventContext struct {
 
 type WeStackError struct {
 	FiberError *fiber.Error
+	Code       string
 	Details    fiber.Map
 	Ctx        *EventContext
 }
@@ -1043,10 +1053,11 @@ func (err *WeStackError) Error() string {
 	return fmt.Sprintf("%v %v: %v", err.FiberError.Code, err.FiberError.Error(), err.Details)
 }
 
-func (eventContext *EventContext) RestError(fiberError *fiber.Error, details fiber.Map) error {
+func (eventContext *EventContext) RestError(fiberError *fiber.Error, code string, details fiber.Map) error {
 	eventContext.Result = details
 	return &WeStackError{
 		FiberError: fiberError,
+		Code:       code,
 		Details:    details,
 		Ctx:        eventContext,
 	}
