@@ -38,7 +38,7 @@ func SetupUsers(app *westack.WeStack) {
 	//})
 
 	userModel.RemoteMethod(func(context *model.EventContext) error {
-		return userModel.SendError(context.Ctx, (context).RestError(fiber.ErrTeapot, fiber.Map{"error": "I used to be a cup"}))
+		return userModel.SendError(context.Ctx, (context).RestError(fiber.ErrTeapot, code, fiber.Map{"error": "I used to be a cup"}))
 	}, model.RemoteMethodOptions{
 		Name:        "exampleMethod",
 		Description: "Example error",
