@@ -75,7 +75,7 @@ func (ds *Datasource) Initialize() error {
 			clientOpts = options.Client().ApplyURI(url)
 		}
 
-		clientOpts = clientOpts.SetSocketTimeout(time.Second * 30).SetSocketTimeout(time.Second * 30).SetServerSelectionTimeout(time.Second * 30).SetMinPoolSize(128).SetMaxPoolSize(500)
+		clientOpts = clientOpts.SetSocketTimeout(time.Second * 30).SetSocketTimeout(time.Second * 30).SetServerSelectionTimeout(time.Second * 30).SetMinPoolSize(2).SetMaxPoolSize(28)
 
 		db, err := mongo.Connect(mongoCtx, clientOpts)
 		if err != nil {
