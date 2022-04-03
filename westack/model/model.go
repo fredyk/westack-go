@@ -508,33 +508,21 @@ func (loadedModel *Model) ExtractLookupsFromFilter(filterMap *wst.Filter, disabl
 
 func (loadedModel *Model) FindOne(filterMap *wst.Filter, baseContext *EventContext) (*Instance, error) {
 
-	if baseContext == nil {
-		baseContext = &EventContext{}
+	if filterMap == nil {
+		filterMap = &wst.Filter{}
 	}
-	var targetBaseContext = baseContext
-	deepLevel := 0
-	for {
-		if targetBaseContext.BaseContext != nil {
-			targetBaseContext = targetBaseContext.BaseContext
-		} else {
-			break
-		}
-		deepLevel++
-	}
+	filterMap.Limit = 1
 
-	lookups := loadedModel.ExtractLookupsFromFilter(filterMap, baseContext.DisableTypeConversions)
-
-	documents, err := loadedModel.Datasource.FindMany(loadedModel.Name, lookups)
+	instances, err := loadedModel.FindMany(filterMap, baseContext)
 	if err != nil {
 		return nil, err
 	}
 
-	if documents == nil || len(*documents) == 0 {
-		return nil, nil
-	} else {
-		modelInstance := loadedModel.Build((*documents)[0], targetBaseContext)
-		return &modelInstance, nil
+	if len(instances) > 0 {
+		return &instances[0], nil
 	}
+
+	return nil, nil
 }
 
 func (loadedModel *Model) FindById(id interface{}, filterMap *wst.Filter, baseContext *EventContext) (*Instance, error) {
