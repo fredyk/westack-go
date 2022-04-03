@@ -46,7 +46,6 @@ func SetupNotes(app *westack.WeStack) {
 			panic(err)
 		}
 
-		//id := typedNote.Id
 		log.Println("Created note", typedNote, "for user", typedUser)
 
 		// Update the note

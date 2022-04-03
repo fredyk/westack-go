@@ -6,12 +6,10 @@ import (
 	"fmt"
 	wst "github.com/fredyk/westack-go/westack/common"
 	"github.com/spf13/viper"
-	"go.mongodb.org/mongo-driver/mongo/readpref"
-
-	//"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
+	"go.mongodb.org/mongo-driver/mongo/readpref"
 	"log"
 	"regexp"
 	"time"
@@ -44,7 +42,7 @@ type Datasource struct {
 }
 
 func (ds *Datasource) Initialize() error {
-	var connector string = ds.Viper.GetString(ds.Key + ".connector")
+	var connector = ds.Viper.GetString(ds.Key + ".connector")
 	switch connector {
 	case "mongodb":
 		mongoCtx, cancelFn := context.WithCancel(ds.Context)
@@ -98,8 +96,6 @@ func (ds *Datasource) Initialize() error {
 				mongoCtx, cancelFn = context.WithCancel(mongoCtx)
 				err := ds.Db.(*mongo.Client).Ping(mongoCtx, readpref.SecondaryPreferred())
 				if err != nil {
-
-					// TODO: Maybe reactivate
 					log.Printf("Reconnecting %v...\n", url)
 					db, err := mongo.Connect(mongoCtx, clientOpts)
 					if err != nil {
@@ -115,8 +111,6 @@ func (ds *Datasource) Initialize() error {
 						log.Printf("successfully reconnected to %v\n", url)
 					}
 					ds.Db = db
-				} else {
-					//log.Println("Ping OK")
 				}
 			}
 		}()
@@ -126,27 +120,16 @@ func (ds *Datasource) Initialize() error {
 	return nil
 }
 
-func (ds *Datasource) FindMany(collectionName string, filter *wst.Filter, lookups *wst.A) (*wst.A, error) {
-	if err := validateFilter(filter); err != nil {
-		panic(err)
-	}
-	var connector string = ds.Viper.GetString(ds.Key + ".connector")
+func (ds *Datasource) FindMany(collectionName string, lookups *wst.A) (*wst.A, error) {
+	var connector = ds.Viper.GetString(ds.Key + ".connector")
 	switch connector {
 	case "mongodb":
-		var db *mongo.Client = ds.Db.(*mongo.Client)
+		var db = ds.Db.(*mongo.Client)
 
 		database := db.Database(ds.Viper.GetString(ds.Key + ".database"))
 		collection := database.Collection(collectionName)
-		//var targetWhere wst.M
-		//if filter != nil && (*filter)["where"] != nil {
-		//	targetWhere = (*filter)["where"].(wst.M)
-		//} else {
-		//	targetWhere = wst.M{}
-		//}
-		//ReplaceObjectIds(targetWhere)
-		pipeline := wst.A{
-			//{"$match": targetWhere},
-		}
+
+		pipeline := wst.A{}
 
 		if lookups != nil {
 			pipeline = append(pipeline, *lookups...)
@@ -175,30 +158,13 @@ func (ds *Datasource) FindMany(collectionName string, filter *wst.Filter, lookup
 	return nil, errors.New(fmt.Sprintf("invalid connector %v", connector))
 }
 
-func validateFilter(filter *wst.Filter) error {
-	if filter == nil {
-		return nil
-	}
-	//for key := range *filter {
-	//	if key == "where" || key == "include" || key == "skip" || key == "limit" || key == "order" {
-	//
-	//	} else {
-	//		return NewError(400, fmt.Sprintf("Invalid key %v in filter", key))
-	//	}
-	//}
-	return nil
-}
-
-//goland:noinspection GoUnusedParameter
-func (ds *Datasource) FindById(collectionName string, id interface{}, filter *wst.Filter, lookups *wst.A) (*wst.M, error) {
+func (ds *Datasource) FindById(collectionName string, id interface{}, lookups *wst.A) (*wst.M, error) {
 	var _id interface{}
 	switch id.(type) {
 	case string:
 		var err error
 		_id, err = primitive.ObjectIDFromHex(id.(string))
 		if err != nil {
-			//log.Println("WARNING: _id", _id, " is not a valid ObjectID:", err.Error())
-			//return nil
 			_id = id
 		}
 	default:
@@ -208,7 +174,6 @@ func (ds *Datasource) FindById(collectionName string, id interface{}, filter *ws
 }
 
 func findByObjectId(collectionName string, _id interface{}, ds *Datasource, lookups *wst.A) (*wst.M, error) {
-	filter := &wst.Filter{Where: &wst.Where{"_id": _id}}
 	wrappedLookups := &wst.A{
 		{
 			"$match": wst.M{
@@ -219,7 +184,7 @@ func findByObjectId(collectionName string, _id interface{}, ds *Datasource, look
 	if lookups != nil {
 		*wrappedLookups = append(*wrappedLookups, *lookups...)
 	}
-	results, err := ds.FindMany(collectionName, filter, wrappedLookups)
+	results, err := ds.FindMany(collectionName, wrappedLookups)
 	if err != nil {
 		return nil, err
 	}
@@ -231,10 +196,10 @@ func findByObjectId(collectionName string, _id interface{}, ds *Datasource, look
 }
 
 func (ds *Datasource) Create(collectionName string, data *wst.M) (*wst.M, error) {
-	var connector string = ds.Viper.GetString(ds.Key + ".connector")
+	var connector = ds.Viper.GetString(ds.Key + ".connector")
 	switch connector {
 	case "mongodb":
-		var db *mongo.Client = ds.Db.(*mongo.Client)
+		var db = ds.Db.(*mongo.Client)
 
 		database := db.Database(ds.Viper.GetString(ds.Key + ".database"))
 		collection := database.Collection(collectionName)
@@ -321,10 +286,6 @@ func ReplaceObjectIds(data interface{}) interface{} {
 			//layout := "2006-01-02T15:04:05.000-03:00"
 			layout := "2006-01-02T15:04:05.000Z"
 			newValue, err = time.Parse(layout, data.(string))
-			//if err == nil {
-			//	newValue = newValue.(time.Time).Unix()
-			//	newValue = primitive.Timestamp{T: uint32(newValue.(int64))}
-			//}
 		}
 		if err != nil {
 			log.Println("WARNING: ", err)
@@ -334,7 +295,6 @@ func ReplaceObjectIds(data interface{}) interface{} {
 		} else {
 			return data
 		}
-		break
 	case wst.Where:
 		finalData = wst.M{}
 		for key, value := range data.(wst.Where) {
@@ -433,9 +393,9 @@ func ReplaceObjectIds(data interface{}) interface{} {
 				(*data.(*map[string]interface{}))[key] = newValue
 				break
 			default:
-				log.Fatal(fmt.Sprintf("Invalid input ReplaceObjectIds() <- %s", data))
+				log.Println(fmt.Sprintf("WARNING: invalid input ReplaceObjectIds() <- %s", data))
+				break
 			}
-			//log.Println(fmt.Sprintf("DEBUG: Converted %v to %v", value, newValue))
 		} else if err != nil {
 			log.Println("WARNING: ", err)
 		}

@@ -9,7 +9,7 @@ import (
 
 func main() {
 
-	app := westack.New(westack.WeStackOptions{
+	app := westack.New(westack.Options{
 		Debug:        false,
 		RestApiRoot:  "/api/v1",
 		Port:         8023,
@@ -18,7 +18,6 @@ func main() {
 
 	app.Boot(ServerBoot)
 
-	// For the ones pending to be done
 	app.Server.Get("/*", func(c *fiber.Ctx) error {
 		log.Println("GET: " + c.Path())
 		return c.Status(404).JSON(fiber.Map{"error": fiber.Map{"status": 404, "message": fmt.Sprintf("Unknown method %v %v", c.Method(), c.Path())}})

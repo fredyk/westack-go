@@ -122,7 +122,7 @@ func New(config *Config, modelRegistry *map[string]*Model) *Model {
 	return loadedModel
 }
 
-type ModelInstance struct {
+type Instance struct {
 	Model *Model
 	Id    interface{}
 
@@ -135,14 +135,12 @@ type RegistryEntry struct {
 	Model *Model
 }
 
-func (modelInstance *ModelInstance) ToJSON() wst.M {
+func (modelInstance *Instance) ToJSON() wst.M {
 
 	if modelInstance == nil {
 		return nil
 	}
 
-	// Cannot hide here, it may be necessary
-	//modelInstance.HideProperties()
 	var result wst.M
 	result = wst.CopyMap(modelInstance.data)
 	for relationName, relationConfig := range modelInstance.Model.Config.Relations {
@@ -159,11 +157,11 @@ func (modelInstance *ModelInstance) ToJSON() wst.M {
 			if relatedModel != nil {
 				switch relationConfig.Type {
 				case "belongsTo", "hasOne":
-					relatedInstance := rawRelatedData.(*ModelInstance).ToJSON()
+					relatedInstance := rawRelatedData.(*Instance).ToJSON()
 					result[relationName] = relatedInstance
 				case "hasMany", "hasAndBelongsToMany":
-					aux := make(wst.A, len(rawRelatedData.([]ModelInstance)))
-					for idx, v := range rawRelatedData.([]ModelInstance) {
+					aux := make(wst.A, len(rawRelatedData.([]Instance)))
+					for idx, v := range rawRelatedData.([]Instance) {
 						aux[idx] = v.ToJSON()
 					}
 					result[relationName] = aux
@@ -175,27 +173,27 @@ func (modelInstance *ModelInstance) ToJSON() wst.M {
 	return result
 }
 
-func (modelInstance ModelInstance) Get(relationName string) interface{} {
+func (modelInstance Instance) Get(relationName string) interface{} {
 	result := modelInstance.data[relationName]
 	switch modelInstance.Model.Config.Relations[relationName].Type {
 	case "hasMany", "hasAndBelongsToMany":
 		if result == nil {
-			result = make([]ModelInstance, 0)
+			result = make([]Instance, 0)
 		}
 		break
 	}
 	return result
 }
 
-func (modelInstance ModelInstance) GetOne(relationName string) *ModelInstance {
-	return modelInstance.Get(relationName).(*ModelInstance)
+func (modelInstance Instance) GetOne(relationName string) *Instance {
+	return modelInstance.Get(relationName).(*Instance)
 }
 
-func (modelInstance ModelInstance) GetMany(relationName string) []ModelInstance {
-	return modelInstance.Get(relationName).([]ModelInstance)
+func (modelInstance Instance) GetMany(relationName string) []Instance {
+	return modelInstance.Get(relationName).([]Instance)
 }
 
-func (loadedModel *Model) Build(data wst.M, fromDb bool, baseContext *EventContext) ModelInstance {
+func (loadedModel *Model) Build(data wst.M, baseContext *EventContext) Instance {
 
 	if data["id"] == nil {
 		data["id"] = data["_id"]
@@ -205,7 +203,6 @@ func (loadedModel *Model) Build(data wst.M, fromDb bool, baseContext *EventConte
 	}
 
 	_bytes, _ := bson.Marshal(data)
-	//data = common.CopyMap(data)
 
 	var targetBaseContext = baseContext
 	deepLevel := 0
@@ -228,17 +225,17 @@ func (loadedModel *Model) Build(data wst.M, fromDb bool, baseContext *EventConte
 			relatedModel, err := loadedModel.App.FindModel(relationConfig.Model)
 			if err != nil {
 				log.Printf("ERROR: Model.Build() --> %v\n", err)
-				return ModelInstance{}
+				return Instance{}
 			}
 			if relatedModel != nil {
 				switch relationConfig.Type {
 				case "belongsTo", "hasOne":
-					relatedInstance := relatedModel.(*Model).Build(rawRelatedData.(wst.M), false, targetBaseContext)
+					relatedInstance := relatedModel.(*Model).Build(rawRelatedData.(wst.M), targetBaseContext)
 					data[relationName] = &relatedInstance
 				case "hasMany", "hasAndBelongsToMany":
-					result := make([]ModelInstance, len(rawRelatedData.(primitive.A)))
+					result := make([]Instance, len(rawRelatedData.(primitive.A)))
 					for idx, v := range rawRelatedData.(primitive.A) {
-						result[idx] = relatedModel.(*Model).Build(v.(wst.M), false, targetBaseContext)
+						result[idx] = relatedModel.(*Model).Build(v.(wst.M), targetBaseContext)
 					}
 					data[relationName] = result
 				}
@@ -246,7 +243,7 @@ func (loadedModel *Model) Build(data wst.M, fromDb bool, baseContext *EventConte
 		}
 	}
 
-	modelInstance := ModelInstance{
+	modelInstance := Instance{
 		Id:    data["id"],
 		bytes: _bytes,
 		data:  data,
@@ -262,7 +259,7 @@ func (loadedModel *Model) Build(data wst.M, fromDb bool, baseContext *EventConte
 		err := loadedModel.GetHandler("__operation__loaded")(eventContext)
 		if err != nil {
 			log.Println("Warning", err)
-			return ModelInstance{}
+			return Instance{}
 		}
 	}
 
@@ -277,7 +274,7 @@ func ParseFilter(filter string) *wst.Filter {
 	return filterMap
 }
 
-func (loadedModel *Model) FindMany(filterMap *wst.Filter, baseContext *EventContext) ([]ModelInstance, error) {
+func (loadedModel *Model) FindMany(filterMap *wst.Filter, baseContext *EventContext) ([]Instance, error) {
 
 	if baseContext == nil {
 		baseContext = &EventContext{}
@@ -295,7 +292,7 @@ func (loadedModel *Model) FindMany(filterMap *wst.Filter, baseContext *EventCont
 
 	lookups := loadedModel.ExtractLookupsFromFilter(filterMap)
 
-	documents, err := loadedModel.Datasource.FindMany(loadedModel.Name, filterMap, lookups)
+	documents, err := loadedModel.Datasource.FindMany(loadedModel.Name, lookups)
 	if err != nil {
 		return nil, err
 	}
@@ -303,10 +300,10 @@ func (loadedModel *Model) FindMany(filterMap *wst.Filter, baseContext *EventCont
 		return nil, errors.New("invalid query result")
 	}
 
-	var results = make([]ModelInstance, len(*documents))
+	var results = make([]Instance, len(*documents))
 
 	for idx, document := range *documents {
-		results[idx] = loadedModel.Build(document, true, targetBaseContext)
+		results[idx] = loadedModel.Build(document, targetBaseContext)
 	}
 
 	return results, nil
@@ -328,18 +325,8 @@ func (loadedModel *Model) ExtractLookupsFromFilter(filterMap *wst.Filter) *wst.A
 
 	var targetInclude *wst.Include
 	if filterMap != nil && filterMap.Include != nil {
-		//includeAsMaps, asMapsOk := filterMap.Include
-		//if asMapsOk {
-		//	includeAsInterfaces := make([]interface{}, len(includeAsMaps))
-		//	for idx, v := range includeAsMaps {
-		//		includeAsInterfaces[idx] = v
-		//	}
-		//	targetInclude = &includeAsInterfaces
-		//} else {
 		includeAsInterfaces := *filterMap.Include
 		targetInclude = &includeAsInterfaces
-
-		//}
 	} else {
 		targetInclude = nil
 	}
@@ -513,7 +500,7 @@ func (loadedModel *Model) ExtractLookupsFromFilter(filterMap *wst.Filter) *wst.A
 	return lookups
 }
 
-func (loadedModel *Model) FindOne(filterMap *wst.Filter, baseContext *EventContext) (*ModelInstance, error) {
+func (loadedModel *Model) FindOne(filterMap *wst.Filter, baseContext *EventContext) (*Instance, error) {
 
 	if baseContext == nil {
 		baseContext = &EventContext{}
@@ -531,7 +518,7 @@ func (loadedModel *Model) FindOne(filterMap *wst.Filter, baseContext *EventConte
 
 	lookups := loadedModel.ExtractLookupsFromFilter(filterMap)
 
-	documents, err := loadedModel.Datasource.FindMany(loadedModel.Name, filterMap, lookups)
+	documents, err := loadedModel.Datasource.FindMany(loadedModel.Name, lookups)
 	if err != nil {
 		return nil, err
 	}
@@ -539,12 +526,12 @@ func (loadedModel *Model) FindOne(filterMap *wst.Filter, baseContext *EventConte
 	if documents == nil || len(*documents) == 0 {
 		return nil, nil
 	} else {
-		modelInstance := loadedModel.Build((*documents)[0], true, targetBaseContext)
+		modelInstance := loadedModel.Build((*documents)[0], targetBaseContext)
 		return &modelInstance, nil
 	}
 }
 
-func (loadedModel *Model) FindById(id interface{}, filterMap *wst.Filter, baseContext *EventContext) (*ModelInstance, error) {
+func (loadedModel *Model) FindById(id interface{}, filterMap *wst.Filter, baseContext *EventContext) (*Instance, error) {
 
 	if baseContext == nil {
 		baseContext = &EventContext{}
@@ -562,18 +549,18 @@ func (loadedModel *Model) FindById(id interface{}, filterMap *wst.Filter, baseCo
 
 	lookups := loadedModel.ExtractLookupsFromFilter(filterMap)
 
-	document, err := loadedModel.Datasource.FindById(loadedModel.Name, id, filterMap, lookups)
+	document, err := loadedModel.Datasource.FindById(loadedModel.Name, id, lookups)
 	if err != nil {
 		return nil, err
 	} else if document == nil {
 		return nil, datasource.NewError(404, fmt.Sprintf("%v %v not found", loadedModel.Name, id))
 	} else {
-		result := loadedModel.Build(*document, true, targetBaseContext)
+		result := loadedModel.Build(*document, targetBaseContext)
 		return &result, nil
 	}
 }
 
-func (loadedModel *Model) Create(data interface{}, baseContext *EventContext) (*ModelInstance, error) {
+func (loadedModel *Model) Create(data interface{}, baseContext *EventContext) (*Instance, error) {
 
 	var finalData wst.M
 	switch data.(type) {
@@ -595,12 +582,12 @@ func (loadedModel *Model) Create(data interface{}, baseContext *EventContext) (*
 	case *wst.M:
 		finalData = *data.(*wst.M)
 		break
-	case ModelInstance:
-		value := data.(ModelInstance)
+	case Instance:
+		value := data.(Instance)
 		finalData = (&value).ToJSON()
 		break
-	case *ModelInstance:
-		finalData = data.(*ModelInstance).ToJSON()
+	case *Instance:
+		finalData = data.(*Instance).ToJSON()
 		break
 	default:
 		log.Fatal(fmt.Sprintf("Invalid input for Model.Create() <- %s", data))
@@ -642,7 +629,7 @@ func (loadedModel *Model) Create(data interface{}, baseContext *EventContext) (*
 	} else if document == nil {
 		return nil, datasource.NewError(400, "Could not create document")
 	} else {
-		result := loadedModel.Build(*document, true, eventContext)
+		result := loadedModel.Build(*document, eventContext)
 		result.HideProperties()
 		eventContext.Instance = &result
 		if loadedModel.DisabledHandlers["__operation__after_save"] != true {
@@ -656,7 +643,7 @@ func (loadedModel *Model) Create(data interface{}, baseContext *EventContext) (*
 
 }
 
-func (modelInstance *ModelInstance) UpdateAttributes(data interface{}, baseContext *EventContext) (*ModelInstance, error) {
+func (modelInstance *Instance) UpdateAttributes(data interface{}, baseContext *EventContext) (*Instance, error) {
 
 	var finalData wst.M
 	switch data.(type) {
@@ -678,12 +665,12 @@ func (modelInstance *ModelInstance) UpdateAttributes(data interface{}, baseConte
 	case *wst.M:
 		finalData = *data.(*wst.M)
 		break
-	case ModelInstance:
-		value := data.(ModelInstance)
+	case Instance:
+		value := data.(Instance)
 		finalData = (&value).ToJSON()
 		break
-	case *ModelInstance:
-		finalData = data.(*ModelInstance).ToJSON()
+	case *Instance:
+		finalData = data.(*Instance).ToJSON()
 		break
 	default:
 		log.Fatal(fmt.Sprintf("Invalid input for Model.UpdateAttributes() <- %s", data))
@@ -752,8 +739,6 @@ func (loadedModel *Model) DeleteById(id interface{}) (int64, error) {
 	switch id.(type) {
 	case string:
 		if aux, err := primitive.ObjectIDFromHex(id.(string)); err != nil {
-			// id can be a non-objectid
-			//return 0, err
 			finalId = aux
 		} else {
 			finalId = aux
@@ -770,13 +755,7 @@ func (loadedModel *Model) DeleteById(id interface{}) (int64, error) {
 			log.Println(fmt.Sprintf("WARNING: Invalid input for Model.DeleteById() <- %s", id))
 		}
 	}
-	//eventContext := EventContext{
-	//	Data:          &finalId,
-	//	Instance:      modelInstance,
-	//	Ctx:           nil,
-	//	IsNewInstance: false,
-	//}
-	//modelInstance.Model.GetHandler("__operation__before_save")(&eventContext)
+	//TODO: Invoke hook for __operation__before_delete and __operation__after_delete
 	deletedCount := loadedModel.Datasource.DeleteById(loadedModel.Name, finalId)
 	if deletedCount > 0 {
 		return deletedCount, nil
@@ -785,34 +764,14 @@ func (loadedModel *Model) DeleteById(id interface{}) (int64, error) {
 	}
 }
 
-func handleError(c *fiber.Ctx, err error) error {
-	switch err.(type) {
-	case *datasource.OperationError:
-		return c.Status(err.(*datasource.OperationError).Code).JSON(fiber.Map{"error": fiber.Map{"status": err.(*datasource.OperationError).Code, "message": err.(*datasource.OperationError).Message}})
-	default:
-		return c.Status(500).JSON(fiber.Map{"error": fiber.Map{"status": 500, "message": "Internal Server Error"}})
-	}
-}
-
-func (modelInstance ModelInstance) HideProperties() {
+func (modelInstance Instance) HideProperties() {
 	for _, propertyName := range modelInstance.Model.Config.Hidden {
 		delete(modelInstance.data, propertyName)
 		// TODO: Hide in nested
-		//for relationName, relation := range modelInstance.Model.Config.Relations {
-		//	switch relation.Type {
-		//	case "belongsTo":
-		//		if modelInstance.data[relationName] != nil {
-		//
-		//		}
-		//		break
-		//	case "hasMany":
-		//		break
-		//	}
-		//}
 	}
 }
 
-func (modelInstance ModelInstance) Transform(out interface{}) error {
+func (modelInstance Instance) Transform(out interface{}) error {
 	err := bson.Unmarshal(modelInstance.bytes, out)
 	if err != nil {
 		return err
@@ -820,7 +779,7 @@ func (modelInstance ModelInstance) Transform(out interface{}) error {
 	return nil
 }
 
-func (modelInstance ModelInstance) UncheckedTransform(out interface{}) interface{} {
+func (modelInstance Instance) UncheckedTransform(out interface{}) interface{} {
 	err := modelInstance.Transform(out)
 	if err != nil {
 		panic(err)
@@ -828,43 +787,21 @@ func (modelInstance ModelInstance) UncheckedTransform(out interface{}) interface
 	return out
 }
 
-func (modelInstance *ModelInstance) Reload(eventContext *EventContext) error {
+func (modelInstance *Instance) Reload(eventContext *EventContext) error {
 	newInstance, err := modelInstance.Model.FindById(modelInstance.Id, nil, eventContext)
 	if err != nil {
 		return err
 	}
-	for k, _ := range modelInstance.data {
+	for k := range modelInstance.data {
 		if modelInstance.Model.Config.Relations[k].Model == "" {
-			// Delete this non-relation key
 			delete(modelInstance.data, k)
 		}
 	}
 	for k, v := range newInstance.data {
 		if modelInstance.Model.Config.Relations[k].Model == "" {
-			// Add this non-relation key
 			modelInstance.data[k] = v
 		}
 	}
-	// It's better not to update relations because of performance
-	//for relationName, relation := range modelInstance.Model.Config.Relations {
-	//	switch relation.Type {
-	//	case "belongsTo", "hasOne":
-	//		err := modelInstance.GetOne(relationName).Reload()
-	//		if err != nil {
-	//			return err
-	//		}
-	//		//modelInstance.data[relationName] =  modelInstance.GetOne(relationName).data
-	//		break
-	//	case "hasMany", "hasAndBelongsToMany":
-	//		for _, related := range modelInstance.GetMany(relationName) {
-	//			err := related.Reload()
-	//			if err != nil {
-	//				return err
-	//			}
-	//		}
-	//		break
-	//	}
-	//}
 	modelInstance.data = newInstance.data
 	_bytes, err := bson.Marshal(modelInstance.data)
 	if err != nil {
@@ -902,7 +839,10 @@ func (loadedModel *Model) RemoteMethod(handler func(context *EventContext) error
 		panic(fmt.Sprintf("Already registered a remote method with name '%v'", options.Name))
 	}
 
-	loadedModel.Enforcer.AddRoleForUser(options.Name, "*")
+	_, err := loadedModel.Enforcer.AddRoleForUser(options.Name, "*")
+	if err != nil {
+		panic(err)
+	}
 
 	var http = options.Http
 	path := strings.ToLower(http.Path)
@@ -1022,7 +962,7 @@ type EventContext struct {
 	Remote        *RemoteMethodOptions
 	Filter        *wst.Filter
 	Data          *wst.M
-	Instance      *ModelInstance
+	Instance      *Instance
 	Ctx           *fiber.Ctx
 	Ephemeral     *EphemeralData
 	IsNewInstance bool
@@ -1071,22 +1011,18 @@ func (eventContext *EventContext) GetBearer(loadedModel *Model) (error, *BearerT
 	c := eventContext.Ctx
 	authBytes := c.Request().Header.Peek("Authorization")
 
-	//action := options.Name
-
 	authBearerPair := strings.Split(strings.TrimSpace(string(authBytes)), "Bearer ")
 
 	var user *BearerUser
 	roles := make([]BearerRole, 0)
 	if len(authBearerPair) == 2 {
-		//segments := strings.Split(authBearerPair[1], ".")
 
 		token, err := jwt.Parse(authBearerPair[1], func(token *jwt.Token) (interface{}, error) {
-			// Don't forget to validate the alg is what you expect:
+
 			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-				return nil, fmt.Errorf("Unexpected signing method: %v", token.Header["alg"])
+				return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
 			}
 
-			// hmacSampleSecret is a []byte containing your secret, e.g. []byte("my_secret_key")
 			return loadedModel.App.JwtSecretKey, nil
 		})
 
@@ -1101,25 +1037,6 @@ func (eventContext *EventContext) GetBearer(loadedModel *Model) (error, *BearerT
 			}
 		}
 
-		//headBytes, err := jwt.DecodeSegment(segments[0])
-		//if err != nil {
-		//	return err, nil
-		//}
-		//headSt := string(headBytes)
-		//claimsBytes, err := jwt.DecodeSegment(segments[1])
-		//if err != nil {
-		//	return err, nil
-		//}
-		//claimsSt := string(claimsBytes)
-		//
-		//jwt.
-		//
-		//signBytes, err := jwt.DecodeSegment(segments[2])
-		//if err != nil {
-		//	return err, nil
-		//}
-		//signSt := string(signBytes)
-		//log.Println(headSt, claimsSt, signSt)
 	}
 	return nil, &BearerToken{
 		User:  user,
@@ -1208,17 +1125,27 @@ func (loadedModel *Model) HandleRemoteMethod(name string, eventContext *EventCon
 
 		bearerUserIdSt := fmt.Sprintf("%v", token.User.Id)
 
-		loadedModel.Enforcer.AddRoleForUser(bearerUserIdSt, "_EVERYONE_")
-		loadedModel.Enforcer.AddRoleForUser(bearerUserIdSt, "_AUTHENTICATED_")
-		for _, r := range token.Roles {
-			loadedModel.Enforcer.AddRoleForUser(bearerUserIdSt, r.Name)
+		_, err := loadedModel.Enforcer.AddRoleForUser(bearerUserIdSt, "_EVERYONE_")
+		if err != nil {
+			return err
 		}
-		loadedModel.Enforcer.SavePolicy()
+		_, err = loadedModel.Enforcer.AddRoleForUser(bearerUserIdSt, "_AUTHENTICATED_")
+		if err != nil {
+			return err
+		}
+		for _, r := range token.Roles {
+			_, err := loadedModel.Enforcer.AddRoleForUser(bearerUserIdSt, r.Name)
+			if err != nil {
+				return err
+			}
+		}
+		err = loadedModel.Enforcer.SavePolicy()
+		if err != nil {
+			return err
+		}
 
 		if eventContext.ModelID != nil {
 		}
-
-		//allow, exp, err := loadedModel.Enforcer.EnforceEx(bearerUserIdSt, eventContext.Instance.ToJSON(), action)
 
 		objId := "*"
 		if eventContext.ModelID != nil {
