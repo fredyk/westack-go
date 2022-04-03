@@ -99,376 +99,398 @@ func (app *WeStack) loadModels() {
 		}
 
 		loadedModel := model.New(config, app.ModelRegistry)
-		loadedModel.App = app.AsInterface()
-		loadedModel.Datasource = dataSource
+		app.setupModel(loadedModel, dataSource)
+	}
 
-		defer func() {
-			for relationName, relation := range *loadedModel.Config.Relations {
-				relatedModelName := relation.Model
-				relatedLoadedModel := (*loadedModel.GetModelRegistry())[relatedModelName]
+	for _, loadedModel := range *app.ModelRegistry {
+		fixRelations(loadedModel)
+	}
+}
 
-				if relatedLoadedModel == nil {
-					log.Println()
-					log.Printf("WARNING: related model %v not found for relation %v.%v", relatedModelName, loadedModel.Name, relationName)
-					log.Println()
-					continue
-				}
+func (app *WeStack) setupModel(loadedModel *model.Model, dataSource *datasource.Datasource) {
 
-				if relation.PrimaryKey == nil {
-					sId := "_id"
-					relation.PrimaryKey = &sId
-				}
+	loadedModel.App = app.AsInterface()
+	loadedModel.Datasource = dataSource
 
-				if relation.ForeignKey == nil {
-					switch relation.Type {
-					case "belongsTo":
-						foreignKey := strings.ToLower(relatedModelName[:1]) + relatedModelName[1:] + "Id"
-						relation.ForeignKey = &foreignKey
-						//(*loadedModel.Config.Relations)[relationName] = relation
-						break
-					case "hasOne", "hasMany":
-						foreignKey := strings.ToLower(loadedModel.Name[:1]) + loadedModel.Name[1:] + "Id"
-						relation.ForeignKey = &foreignKey
-						//(*loadedModel.Config.Relations)[relationName] = relation
-						break
-					}
-				}
-			}
-		}()
+	config := loadedModel.Config
 
-		if config.Base == "Role" {
-			app.RoleModel = loadedModel
+	if config.Base == "Role" {
+		app.RoleModel = loadedModel
 
-			roleMappingModel := model.New(&model.Config{
-				Name:       "RoleMapping",
-				Plural:     "role-mappings",
-				Base:       "PersistedModel",
-				Datasource: config.Datasource,
-				Public:     false,
-				Properties: nil,
-				Relations: &map[string]*model.Relation{
-					"role": {
-						Type:  "belongsTo",
-						Model: config.Name,
-						//PrimaryKey: "",
-						//ForeignKey: "",
-					},
-					"user": {
-						Type:  "belongsTo",
-						Model: "user",
-						//PrimaryKey: "",
-						//ForeignKey: "",
-					},
+		roleMappingModel := model.New(&model.Config{
+			Name:       "RoleMapping",
+			Plural:     "role-mappings",
+			Base:       "PersistedModel",
+			Datasource: config.Datasource,
+			Public:     false,
+			Properties: nil,
+			Relations: &map[string]*model.Relation{
+				"role": {
+					Type:  "belongsTo",
+					Model: config.Name,
+					//PrimaryKey: "",
+					//ForeignKey: "",
 				},
-				//Casbin:     nil,
-			}, app.ModelRegistry)
-			roleMappingModel.App = app.AsInterface()
-			roleMappingModel.Datasource = dataSource
+				"user": {
+					Type:  "belongsTo",
+					Model: "user",
+					//PrimaryKey: "",
+					//ForeignKey: "",
+				},
+			},
+			Casbin: model.CasbinConfig{
+				Policies: []string{
+					"$owner,*,__get__role,allow",
+				},
+			},
+		}, app.ModelRegistry)
+		roleMappingModel.App = app.AsInterface()
+		roleMappingModel.Datasource = dataSource
 
-			app.RoleMappingModel = roleMappingModel
-		}
+		app.RoleMappingModel = roleMappingModel
+		app.setupModel(roleMappingModel, dataSource)
+	}
 
-		if config.Base == "User" {
+	if config.Base == "User" {
 
-			loadedModel.On("login", func(ctx *model.EventContext) error {
-				var loginBody *LoginBody
-				var data *wst.M
-				// TODO: move marshal and unmarshal to easyjson
-				err := json.Unmarshal(ctx.Ctx.Body(), &loginBody)
-				err = json.Unmarshal(ctx.Ctx.Body(), &data)
+		loadedModel.On("login", func(ctx *model.EventContext) error {
+			var loginBody *LoginBody
+			var data *wst.M
+			// TODO: move marshal and unmarshal to easyjson
+			err := json.Unmarshal(ctx.Ctx.Body(), &loginBody)
+			err = json.Unmarshal(ctx.Ctx.Body(), &data)
+			if err != nil {
+				ctx.StatusCode = fiber.StatusBadRequest
+				ctx.Result = fiber.Map{"error": err}
+				return err
+			}
+			ctx.Data = data
+
+			if (*data)["email"] == nil || strings.TrimSpace((*data)["email"].(string)) == "" {
+				return ctx.RestError(fiber.ErrBadRequest, "USERNAME_EMAIL_REQUIRED", fiber.Map{"message": "username or email is required"})
+			}
+
+			if (*data)["password"] == nil || strings.TrimSpace((*data)["password"].(string)) == "" {
+				return ctx.RestError(fiber.ErrUnauthorized, "LOGIN_FAILED", fiber.Map{"message": "login failed"})
+			}
+
+			email := loginBody.Email
+			users, err := loadedModel.FindMany(&wst.Filter{
+				Where: &wst.Where{
+					"email": email,
+				},
+			}, ctx)
+			if len(users) == 0 {
+				return ctx.RestError(fiber.ErrUnauthorized, "LOGIN_FAILED", fiber.Map{"message": "login failed"})
+			}
+			firstUser := users[0]
+			ctx.Instance = &firstUser
+
+			firstUserData := firstUser.ToJSON()
+			savedPassword := firstUserData["password"]
+			err = bcrypt.CompareHashAndPassword([]byte(savedPassword.(string)), []byte(loginBody.Password))
+			if err != nil {
+				return ctx.RestError(fiber.ErrUnauthorized, "LOGIN_FAILED", fiber.Map{"message": "login failed"})
+			}
+
+			userIdHex := firstUser.Id.(primitive.ObjectID).Hex()
+
+			roleNames := []string{"USER"}
+			if app.RoleMappingModel != nil {
+				ctx.Bearer = &model.BearerToken{
+					User: &model.BearerUser{
+						System: true,
+					},
+					Roles: []model.BearerRole{},
+				}
+				roleContext := &model.EventContext{
+					BaseContext:            ctx,
+					DisableTypeConversions: true,
+				}
+				roleEntries, err := app.RoleMappingModel.FindMany(&wst.Filter{Where: &wst.Where{
+					"principalType": "USER",
+					"$or": []wst.M{
+						{
+							"principalId": userIdHex,
+						},
+						{
+							"principalId": firstUser.Id,
+						},
+					},
+				}, Include: &wst.Include{{Relation: "role"}}}, roleContext)
 				if err != nil {
-					ctx.StatusCode = fiber.StatusBadRequest
-					ctx.Result = fiber.Map{"error": err}
 					return err
 				}
-				ctx.Data = data
-
-				if (*data)["email"] == nil || strings.TrimSpace((*data)["email"].(string)) == "" {
-					return ctx.RestError(fiber.ErrBadRequest, "USERNAME_EMAIL_REQUIRED", fiber.Map{"message": "username or email is required"})
+				for _, roleEntry := range roleEntries {
+					role := roleEntry.GetOne("role")
+					roleNames = append(roleNames, role.ToJSON()["name"].(string))
 				}
+			}
 
-				if (*data)["password"] == nil || strings.TrimSpace((*data)["password"].(string)) == "" {
-					return ctx.RestError(fiber.ErrUnauthorized, "LOGIN_FAILED", fiber.Map{"message": "login failed"})
-				}
-
-				email := loginBody.Email
-				users, err := loadedModel.FindMany(&wst.Filter{
-					Where: &wst.Where{
-						"email": email,
-					},
-				}, ctx)
-				if len(users) == 0 {
-					return ctx.RestError(fiber.ErrUnauthorized, "LOGIN_FAILED", fiber.Map{"message": "login failed"})
-				}
-				firstUser := users[0]
-				ctx.Instance = &firstUser
-
-				firstUserData := firstUser.ToJSON()
-				savedPassword := firstUserData["password"]
-				err = bcrypt.CompareHashAndPassword([]byte(savedPassword.(string)), []byte(loginBody.Password))
-				if err != nil {
-					return ctx.RestError(fiber.ErrUnauthorized, "LOGIN_FAILED", fiber.Map{"message": "login failed"})
-				}
-
-				userIdHex := firstUser.Id.(primitive.ObjectID).Hex()
-
-				roleNames := []string{"USER"}
-				if app.RoleMappingModel != nil {
-					roleContext := &model.EventContext{
-						BaseContext:            ctx,
-						DisableTypeConversions: true,
-					}
-					roleEntries, err := app.RoleMappingModel.FindMany(&wst.Filter{Where: &wst.Where{
-						"principalType": "USER",
-						"$or": []wst.M{
-							{
-								"principalId": userIdHex,
-							},
-							{
-								"principalId": firstUser.Id,
-							},
-						},
-					}, Include: &wst.Include{{Relation: "role"}}}, roleContext)
-					if err != nil {
-						return err
-					}
-					for _, roleEntry := range roleEntries {
-						role := roleEntry.GetOne("role")
-						roleNames = append(roleNames, role.ToJSON()["name"].(string))
-					}
-				}
-
-				token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-					"userId":  userIdHex,
-					"created": time.Now().UnixMilli(),
-					"ttl":     604800 * 2 * 1000,
-					"roles":   roleNames,
-				})
-
-				tokenString, err := token.SignedString(loadedModel.App.JwtSecretKey)
-
-				ctx.StatusCode = fiber.StatusOK
-				ctx.Result = fiber.Map{"id": tokenString, "userId": userIdHex}
-				return nil
+			token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+				"userId":  userIdHex,
+				"created": time.Now().UnixMilli(),
+				"ttl":     604800 * 2 * 1000,
+				"roles":   roleNames,
 			})
 
+			tokenString, err := token.SignedString(loadedModel.App.JwtSecretKey)
+
+			ctx.StatusCode = fiber.StatusOK
+			ctx.Result = fiber.Map{"id": tokenString, "userId": userIdHex}
+			return nil
+		})
+
+	}
+
+	var plural string
+	if config.Plural != "" {
+		plural = config.Plural
+	} else {
+		plural = wst.DashedCase(config.Name) + "s"
+	}
+	config.Plural = plural
+
+	if len(loadedModel.Config.Acls) == 0 {
+		loadedModel.Config.Acls = append(loadedModel.Config.Acls, model.ACL{
+			AccessType:    "*",
+			PrincipalType: "ROLE",
+			PrincipalId:   "$everyone",
+			Permission:    "DENY",
+			Property:      "",
+		}, model.ACL{
+			AccessType:    "*",
+			PrincipalType: "ROLE",
+			PrincipalId:   "$authenticated",
+			Permission:    "ALLOW",
+			Property:      "",
+		})
+	}
+
+	casbModel := casbinmodel.NewModel()
+
+	f, err := os.OpenFile(fmt.Sprintf("common/models/%v.policies.csv", loadedModel.Name), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		panic(err)
+	}
+	err = f.Close()
+	if err != nil {
+		panic(err)
+	}
+
+	adapter := fileadapter.NewAdapter(fmt.Sprintf("common/models/%v.policies.csv", loadedModel.Name))
+
+	requestDefinition := "sub, obj, act"
+	policyDefinition := "sub, obj, act, eft"
+	roleDefinition := "_, _"
+	policyEffect := "subjectPriority(p.eft) || deny"
+	matchersDefinition := fmt.Sprintf("" +
+		"(" +
+		"	((p.sub == '$owner' && isOwner(r.sub, r.obj, p.obj)) || g(r.sub, p.sub)) && keyMatch(r.obj, p.obj) && (g(r.act, p.act) || keyMatch(r.act, p.act))" +
+		")")
+	if loadedModel.Config.Casbin.RequestDefinition != "" {
+		requestDefinition = loadedModel.Config.Casbin.RequestDefinition
+	}
+	if loadedModel.Config.Casbin.PolicyDefinition != "" {
+		policyDefinition = loadedModel.Config.Casbin.PolicyDefinition
+	}
+	if loadedModel.Config.Casbin.RoleDefinition != "" {
+		roleDefinition = loadedModel.Config.Casbin.RoleDefinition
+	}
+	if loadedModel.Config.Casbin.PolicyEffect != "" {
+		policyEffect = strings.ReplaceAll(loadedModel.Config.Casbin.PolicyEffect, "$default", policyEffect)
+	}
+	if loadedModel.Config.Casbin.MatchersDefinition != "" {
+		matchersDefinition = strings.ReplaceAll(loadedModel.Config.Casbin.MatchersDefinition, "$default", " ( "+matchersDefinition+" ) ")
+	}
+
+	casbModel.AddDef("r", "r", replaceVarNames(requestDefinition))
+	casbModel.AddDef("p", "p", replaceVarNames(policyDefinition))
+	casbModel.AddDef("g", "g", replaceVarNames(roleDefinition))
+	casbModel.AddDef("e", "e", replaceVarNames(policyEffect))
+	casbModel.AddDef("m", "m", replaceVarNames(matchersDefinition))
+
+	if len(loadedModel.Config.Casbin.Policies) > 0 {
+		for _, p := range loadedModel.Config.Casbin.Policies {
+			casbModel.AddPolicy("p", "p", []string{replaceVarNames(p)})
 		}
+	} else {
+		casbModel.AddPolicy("p", "p", []string{replaceVarNames("$authenticated,*,read,allow")})
+		casbModel.AddPolicy("p", "p", []string{replaceVarNames("$owner,*,write,allow")})
+	}
 
-		if loadedModel.Config.Public {
-			var plural string
-			if config.Plural != "" {
-				plural = config.Plural
-			} else {
-				plural = wst.DashedCase(config.Name) + "s"
+	if config.Base == "User" {
+		casbModel.AddPolicy("p", "p", []string{replaceVarNames("$everyone,*,create,allow")})
+		casbModel.AddPolicy("p", "p", []string{replaceVarNames("$everyone,*,login,allow")})
+		casbModel.AddPolicy("p", "p", []string{replaceVarNames("$owner,*,*,allow")})
+		casbModel.AddPolicy("p", "p", []string{replaceVarNames("$authenticated,*,findSelf,allow")})
+	}
+
+	loadedModel.CasbinModel = &casbModel
+	loadedModel.CasbinAdapter = &adapter
+
+	err = adapter.SavePolicy(casbModel)
+	if err != nil {
+		panic(err)
+	}
+	if loadedModel.Config.Public {
+
+		modelRouter := app.Server.Group(app.RestApiRoot+"/"+plural, func(ctx *fiber.Ctx) error {
+			return ctx.Next()
+		})
+		loadedModel.Router = &modelRouter
+
+		loadedModel.BaseUrl = app.RestApiRoot + "/" + plural
+
+		loadedModel.On("findMany", func(ctx *model.EventContext) error {
+			result, err := loadedModel.FindMany(ctx.Filter, ctx)
+			out := make(wst.A, len(result))
+			for idx, item := range result {
+				item.HideProperties()
+				out[idx] = item.ToJSON()
 			}
-			config.Plural = plural
 
-			modelRouter := app.Server.Group(app.RestApiRoot+"/"+plural, func(ctx *fiber.Ctx) error {
-				return ctx.Next()
-			})
-			loadedModel.Router = &modelRouter
-
-			loadedModel.BaseUrl = app.RestApiRoot + "/" + plural
-
-			if len(loadedModel.Config.Acls) == 0 {
-				loadedModel.Config.Acls = append(loadedModel.Config.Acls, model.ACL{
-					AccessType:    "*",
-					PrincipalType: "ROLE",
-					PrincipalId:   "$everyone",
-					Permission:    "DENY",
-					Property:      "",
-				}, model.ACL{
-					AccessType:    "*",
-					PrincipalType: "ROLE",
-					PrincipalId:   "$authenticated",
-					Permission:    "ALLOW",
-					Property:      "",
-				})
-			}
-
-			casbModel := casbinmodel.NewModel()
-
-			f, err := os.OpenFile(fmt.Sprintf("common/models/%v.policies.csv", loadedModel.Name), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 			if err != nil {
-				panic(err)
+				return err
 			}
-			err = f.Close()
+			ctx.StatusCode = fiber.StatusOK
+			ctx.Result = out
+			return nil
+		})
+		loadedModel.On("findById", func(ctx *model.EventContext) error {
+			result, err := loadedModel.FindById(ctx.ModelID, ctx.Filter, ctx)
+			if result != nil {
+				result.HideProperties()
+			}
 			if err != nil {
-				panic(err)
+				return err
 			}
+			ctx.StatusCode = fiber.StatusOK
+			ctx.Result = result.ToJSON()
+			return nil
+		})
+		loadedModel.On("create", func(ctx *model.EventContext) error {
 
-			adapter := fileadapter.NewAdapter(fmt.Sprintf("common/models/%v.policies.csv", loadedModel.Name))
-
-			requestDefinition := "sub, obj, act"
-			policyDefinition := "sub, obj, act, eft"
-			roleDefinition := "_, _"
-			policyEffect := "subjectPriority(p.eft) || deny"
-			matchersDefinition := fmt.Sprintf("" +
-				"(" +
-				"	((p.sub == '$owner' && isOwner(r.sub, r.obj, p.obj)) || g(r.sub, p.sub)) && keyMatch(r.obj, p.obj) && (g(r.act, p.act) || keyMatch(r.act, p.act))" +
-				")")
-			if loadedModel.Config.Casbin.RequestDefinition != "" {
-				requestDefinition = loadedModel.Config.Casbin.RequestDefinition
-			}
-			if loadedModel.Config.Casbin.PolicyDefinition != "" {
-				policyDefinition = loadedModel.Config.Casbin.PolicyDefinition
-			}
-			if loadedModel.Config.Casbin.RoleDefinition != "" {
-				roleDefinition = loadedModel.Config.Casbin.RoleDefinition
-			}
-			if loadedModel.Config.Casbin.PolicyEffect != "" {
-				policyEffect = strings.ReplaceAll(loadedModel.Config.Casbin.PolicyEffect, "$default", policyEffect)
-			}
-			if loadedModel.Config.Casbin.MatchersDefinition != "" {
-				matchersDefinition = strings.ReplaceAll(loadedModel.Config.Casbin.MatchersDefinition, "$default", " ( "+matchersDefinition+" ) ")
-			}
-
-			casbModel.AddDef("r", "r", replaceVarNames(requestDefinition))
-			casbModel.AddDef("p", "p", replaceVarNames(policyDefinition))
-			casbModel.AddDef("g", "g", replaceVarNames(roleDefinition))
-			casbModel.AddDef("e", "e", replaceVarNames(policyEffect))
-			casbModel.AddDef("m", "m", replaceVarNames(matchersDefinition))
-
-			if len(loadedModel.Config.Casbin.Policies) > 0 {
-				for _, p := range loadedModel.Config.Casbin.Policies {
-					casbModel.AddPolicy("p", "p", []string{replaceVarNames(p)})
-				}
-			} else {
-				casbModel.AddPolicy("p", "p", []string{replaceVarNames("$authenticated,*,read,allow")})
-				casbModel.AddPolicy("p", "p", []string{replaceVarNames("$owner,*,write,allow")})
+			data := ctx.Data
+			if (*data)["created"] == nil {
+				timeNow := time.Now()
+				(*data)["created"] = timeNow
 			}
 
 			if config.Base == "User" {
-				casbModel.AddPolicy("p", "p", []string{replaceVarNames("$everyone,*,create,allow")})
-				casbModel.AddPolicy("p", "p", []string{replaceVarNames("$everyone,*,login,allow")})
-				casbModel.AddPolicy("p", "p", []string{replaceVarNames("$owner,*,*,allow")})
-				casbModel.AddPolicy("p", "p", []string{replaceVarNames("$authenticated,*,findSelf,allow")})
+
+				if (*data)["email"] == nil || strings.TrimSpace((*data)["email"].(string)) == "" {
+					// TODO: Validate email
+					return ctx.RestError(fiber.ErrBadRequest, "EMAIL_PRESENCE", fiber.Map{"message": "Invalid email"})
+				}
+				filter := wst.Filter{Where: &wst.Where{"email": (*data)["email"]}}
+				existent, err2 := loadedModel.FindOne(&filter, ctx)
+				if err2 != nil {
+					return err2
+				}
+				if existent != nil {
+					return ctx.RestError(fiber.ErrConflict, "EMAIL_UNIQUENESS", fiber.Map{"message": "User exists"})
+				}
+
+				if (*data)["password"] == nil || strings.TrimSpace((*data)["password"].(string)) == "" {
+					return ctx.RestError(fiber.ErrBadRequest, "PASSWORD_BLANK", fiber.Map{"message": "Invalid password"})
+				}
+				hashed, err := bcrypt.GenerateFromPassword([]byte((*data)["password"].(string)), 10)
+				if err != nil {
+					return err
+				}
+				(*data)["password"] = string(hashed)
+
+				if app.Debug {
+					log.Println("Create User")
+				}
 			}
-
-			loadedModel.CasbinModel = &casbModel
-			loadedModel.CasbinAdapter = &adapter
-
-			err = adapter.SavePolicy(casbModel)
+			created, err := loadedModel.Create(*data, ctx)
 			if err != nil {
-				panic(err)
+				return err
+			}
+			ctx.StatusCode = fiber.StatusOK
+			ctx.Result = created.ToJSON()
+			return nil
+		})
+
+		loadedModel.On("instance_updateAttributes", func(ctx *model.EventContext) error {
+
+			inst, err := loadedModel.FindById(ctx.ModelID, nil, ctx)
+			if err != nil {
+				return err
 			}
 
-			loadedModel.On("findMany", func(ctx *model.EventContext) error {
-				result, err := loadedModel.FindMany(ctx.Filter, ctx)
-				out := make(wst.A, len(result))
-				for idx, item := range result {
-					item.HideProperties()
-					out[idx] = item.ToJSON()
-				}
-
-				if err != nil {
-					return err
-				}
-				ctx.StatusCode = fiber.StatusOK
-				ctx.Result = out
-				return nil
-			})
-			loadedModel.On("findById", func(ctx *model.EventContext) error {
-				result, err := loadedModel.FindById(ctx.ModelID, ctx.Filter, ctx)
-				if result != nil {
-					result.HideProperties()
-				}
-				if err != nil {
-					return err
-				}
-				ctx.StatusCode = fiber.StatusOK
-				ctx.Result = result.ToJSON()
-				return nil
-			})
-			loadedModel.On("create", func(ctx *model.EventContext) error {
-
-				data := ctx.Data
-				if (*data)["created"] == nil {
-					timeNow := time.Now()
-					(*data)["created"] = timeNow
-				}
-
-				if config.Base == "User" {
-
-					if (*data)["email"] == nil || strings.TrimSpace((*data)["email"].(string)) == "" {
-						// TODO: Validate email
-						return ctx.RestError(fiber.ErrBadRequest, "EMAIL_PRESENCE", fiber.Map{"message": "Invalid email"})
-					}
-					filter := wst.Filter{Where: &wst.Where{"email": (*data)["email"]}}
-					existent, err2 := loadedModel.FindOne(&filter, ctx)
-					if err2 != nil {
-						return err2
-					}
-					if existent != nil {
-						return ctx.RestError(fiber.ErrConflict, "EMAIL_UNIQUENESS", fiber.Map{"message": "User exists"})
-					}
-
-					if (*data)["password"] == nil || strings.TrimSpace((*data)["password"].(string)) == "" {
-						return ctx.RestError(fiber.ErrBadRequest, "PASSWORD_BLANK", fiber.Map{"message": "Invalid password"})
-					}
-					hashed, err := bcrypt.GenerateFromPassword([]byte((*data)["password"].(string)), 10)
-					if err != nil {
-						return err
-					}
-					(*data)["password"] = string(hashed)
-
-					if app.Debug {
-						log.Println("Create User")
-					}
-				}
-				created, err := loadedModel.Create(*data, ctx)
-				if err != nil {
-					return err
-				}
-				ctx.StatusCode = fiber.StatusOK
-				ctx.Result = created.ToJSON()
-				return nil
-			})
-
-			loadedModel.On("instance_updateAttributes", func(ctx *model.EventContext) error {
-
-				inst, err := loadedModel.FindById(ctx.ModelID, nil, ctx)
-				if err != nil {
-					return err
-				}
-
-				data := ctx.Data
-				if (*data)["modified"] == nil {
-					timeNow := time.Now()
-					(*data)["modified"] = timeNow
-				}
-
-				if config.Base == "User" && (*data)["password"] != nil && (*data)["password"] != "" {
-					log.Println("Update User")
-					hashed, err := bcrypt.GenerateFromPassword([]byte((*data)["password"].(string)), 10)
-					if err != nil {
-						return err
-					}
-					(*data)["password"] = string(hashed)
-				}
-				updated, err := inst.UpdateAttributes(data, ctx)
-				if err != nil {
-					return err
-				}
-				ctx.StatusCode = fiber.StatusOK
-				ctx.Result = updated.ToJSON()
-				return nil
-			})
-
-			deleteByIdHandler := func(ctx *model.EventContext) error {
-				deletedCount, err := loadedModel.DeleteById(ctx.ModelID)
-				if err != nil {
-					return err
-				}
-				if deletedCount != 1 {
-					return ctx.RestError(fiber.ErrBadRequest, "BAD_REQUEST", fiber.Map{"message": fmt.Sprintf("Deleted %v instances for %v", deletedCount, ctx.ModelID)})
-				}
-				ctx.StatusCode = fiber.StatusNoContent
-				ctx.Result = ""
-				return nil
+			data := ctx.Data
+			if (*data)["modified"] == nil {
+				timeNow := time.Now()
+				(*data)["modified"] = timeNow
 			}
-			loadedModel.On("instance_delete", deleteByIdHandler)
 
+			if config.Base == "User" && (*data)["password"] != nil && (*data)["password"] != "" {
+				log.Println("Update User")
+				hashed, err := bcrypt.GenerateFromPassword([]byte((*data)["password"].(string)), 10)
+				if err != nil {
+					return err
+				}
+				(*data)["password"] = string(hashed)
+			}
+			updated, err := inst.UpdateAttributes(data, ctx)
+			if err != nil {
+				return err
+			}
+			ctx.StatusCode = fiber.StatusOK
+			ctx.Result = updated.ToJSON()
+			return nil
+		})
+
+		deleteByIdHandler := func(ctx *model.EventContext) error {
+			deletedCount, err := loadedModel.DeleteById(ctx.ModelID)
+			if err != nil {
+				return err
+			}
+			if deletedCount != 1 {
+				return ctx.RestError(fiber.ErrBadRequest, "BAD_REQUEST", fiber.Map{"message": fmt.Sprintf("Deleted %v instances for %v", deletedCount, ctx.ModelID)})
+			}
+			ctx.StatusCode = fiber.StatusNoContent
+			ctx.Result = ""
+			return nil
+		}
+		loadedModel.On("instance_delete", deleteByIdHandler)
+
+	}
+}
+
+func fixRelations(loadedModel *model.Model) {
+	for relationName, relation := range *loadedModel.Config.Relations {
+		relatedModelName := relation.Model
+		relatedLoadedModel := (*loadedModel.GetModelRegistry())[relatedModelName]
+
+		if relatedLoadedModel == nil {
+			log.Println()
+			log.Printf("WARNING: related model %v not found for relation %v.%v", relatedModelName, loadedModel.Name, relationName)
+			log.Println()
+			continue
+		}
+
+		if relation.PrimaryKey == nil {
+			sId := "_id"
+			relation.PrimaryKey = &sId
+		}
+
+		if relation.ForeignKey == nil {
+			switch relation.Type {
+			case "belongsTo":
+				foreignKey := strings.ToLower(relatedModelName[:1]) + relatedModelName[1:] + "Id"
+				relation.ForeignKey = &foreignKey
+				//(*loadedModel.Config.Relations)[relationName] = relation
+				break
+			case "hasOne", "hasMany":
+				foreignKey := strings.ToLower(loadedModel.Name[:1]) + loadedModel.Name[1:] + "Id"
+				relation.ForeignKey = &foreignKey
+				//(*loadedModel.Config.Relations)[relationName] = relation
+				break
+			}
 		}
 	}
 }
@@ -628,12 +650,6 @@ func (app *WeStack) AsInterface() *wst.IApp {
 func (app *WeStack) loadModelsFixedRoutes() {
 	for _, entry := range *app.ModelRegistry {
 		loadedModel := entry
-		if !loadedModel.Config.Public {
-			if app.Debug {
-				log.Println("WARNING: Model", loadedModel.Name, "is not public")
-			}
-			continue
-		}
 
 		e, err := casbin.NewEnforcer(*loadedModel.CasbinModel, *loadedModel.CasbinAdapter, true)
 		if err != nil {
@@ -797,6 +813,12 @@ func (app *WeStack) loadModelsFixedRoutes() {
 		err = os.WriteFile(fmt.Sprintf("common/models/%v.casbin.dump.conf", loadedModel.Name), []byte(text), os.ModePerm)
 		if err != nil {
 			panic(err)
+		}
+		if !loadedModel.Config.Public {
+			if app.Debug {
+				log.Println("WARNING: Model", loadedModel.Name, "is not public")
+			}
+			continue
 		}
 
 		if app.Debug {
