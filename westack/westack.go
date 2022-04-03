@@ -33,12 +33,14 @@ type LoginBody struct {
 }
 
 type WeStack struct {
-	ModelRegistry *map[string]*model.Model
-	Datasources   *map[string]*datasource.Datasource
-	Server        *fiber.App
-	Debug         bool
-	RestApiRoot   string
-	Port          int32
+	ModelRegistry    *map[string]*model.Model
+	Datasources      *map[string]*datasource.Datasource
+	Server           *fiber.App
+	Debug            bool
+	RestApiRoot      string
+	Port             int32
+	RoleModel        *model.Model
+	RoleMappingModel *model.Model
 
 	_swaggerPaths map[string]wst.M
 	init          time.Time
@@ -96,6 +98,124 @@ func (app *WeStack) loadModels() {
 		loadedModel := model.New(config, app.ModelRegistry)
 		loadedModel.App = app.AsInterface()
 		loadedModel.Datasource = dataSource
+
+		if config.Base == "Role" {
+			app.RoleModel = loadedModel
+
+			roleMappingModel := model.New(&model.Config{
+				Name:       "RoleMapping",
+				Plural:     "role-mappings",
+				Base:       "PersistedModel",
+				Datasource: config.Datasource,
+				Public:     false,
+				Properties: nil,
+				Relations: map[string]model.Relation{
+					"role": {
+						Type:  "belongsTo",
+						Model: config.Name,
+						//PrimaryKey: "",
+						//ForeignKey: "",
+					},
+					"user": {
+						Type:  "belongsTo",
+						Model: "user",
+						//PrimaryKey: "",
+						//ForeignKey: "",
+					},
+				},
+				//Casbin:     nil,
+			}, app.ModelRegistry)
+			roleMappingModel.App = app.AsInterface()
+			roleMappingModel.Datasource = dataSource
+
+			app.RoleMappingModel = roleMappingModel
+		}
+
+		if config.Base == "User" {
+
+			loadedModel.On("login", func(ctx *model.EventContext) error {
+				var loginBody *LoginBody
+				var data *wst.M
+				// TODO: move marshal and unmarshal to easyjson
+				err := json.Unmarshal(ctx.Ctx.Body(), &loginBody)
+				err = json.Unmarshal(ctx.Ctx.Body(), &data)
+				if err != nil {
+					ctx.StatusCode = fiber.StatusBadRequest
+					ctx.Result = fiber.Map{"error": err}
+					return err
+				}
+				ctx.Data = data
+
+				if (*data)["email"] == nil || strings.TrimSpace((*data)["email"].(string)) == "" {
+					return ctx.RestError(fiber.ErrBadRequest, "USERNAME_EMAIL_REQUIRED", fiber.Map{"message": "username or email is required"})
+				}
+
+				if (*data)["password"] == nil || strings.TrimSpace((*data)["password"].(string)) == "" {
+					return ctx.RestError(fiber.ErrUnauthorized, "LOGIN_FAILED", fiber.Map{"message": "login failed"})
+				}
+
+				email := loginBody.Email
+				users, err := loadedModel.FindMany(&wst.Filter{
+					Where: &wst.Where{
+						"email": email,
+					},
+				}, ctx)
+				if len(users) == 0 {
+					return ctx.RestError(fiber.ErrUnauthorized, "LOGIN_FAILED", fiber.Map{"message": "login failed"})
+				}
+				firstUser := users[0]
+				ctx.Instance = &firstUser
+
+				firstUserData := firstUser.ToJSON()
+				savedPassword := firstUserData["password"]
+				err = bcrypt.CompareHashAndPassword([]byte(savedPassword.(string)), []byte(loginBody.Password))
+				if err != nil {
+					return ctx.RestError(fiber.ErrUnauthorized, "LOGIN_FAILED", fiber.Map{"message": "login failed"})
+				}
+
+				userIdHex := firstUser.Id.(primitive.ObjectID).Hex()
+
+				roleNames := []string{"USER"}
+				if app.RoleMappingModel != nil {
+					roleContext := &model.EventContext{
+						BaseContext:            ctx,
+						DisableTypeConversions: true,
+					}
+					roleEntries, err := app.RoleMappingModel.FindMany(&wst.Filter{Where: &wst.Where{
+						"principalType": "USER",
+						"$or": []wst.M{
+							{
+								"principalId": userIdHex,
+							},
+							{
+								"principalId": firstUser.Id,
+							},
+						},
+					}, Include: &wst.Include{{Relation: "role"}}}, roleContext)
+					if err != nil {
+						return err
+					}
+					for _, roleEntry := range roleEntries {
+						role := roleEntry.GetOne("role")
+						roleNames = append(roleNames, role.ToJSON()["name"].(string))
+					}
+				}
+
+				token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+					"userId":  userIdHex,
+					"created": time.Now().UnixMilli(),
+					"ttl":     604800 * 2 * 1000,
+					"roles":   roleNames,
+				})
+
+				tokenString, err := token.SignedString(loadedModel.App.JwtSecretKey)
+
+				ctx.StatusCode = fiber.StatusOK
+				ctx.Result = fiber.Map{"id": tokenString, "userId": userIdHex}
+				return nil
+			})
+
+		}
 
 		if loadedModel.Config.Public {
 			var plural string
@@ -311,66 +431,6 @@ func (app *WeStack) loadModels() {
 				return nil
 			}
 			loadedModel.On("instance_delete", deleteByIdHandler)
-
-			if config.Base == "User" {
-
-				loadedModel.On("login", func(ctx *model.EventContext) error {
-					var loginBody *LoginBody
-					var data *wst.M
-					// TODO: move marshal and unmarshal to easyjson
-					err := json.Unmarshal(ctx.Ctx.Body(), &loginBody)
-					err = json.Unmarshal(ctx.Ctx.Body(), &data)
-					if err != nil {
-						ctx.StatusCode = fiber.StatusBadRequest
-						ctx.Result = fiber.Map{"error": err}
-						return err
-					}
-					ctx.Data = data
-
-					if (*data)["email"] == nil || strings.TrimSpace((*data)["email"].(string)) == "" {
-						return ctx.RestError(fiber.ErrBadRequest, "USERNAME_EMAIL_REQUIRED", fiber.Map{"message": "username or email is required"})
-					}
-
-					if (*data)["password"] == nil || strings.TrimSpace((*data)["password"].(string)) == "" {
-						return ctx.RestError(fiber.ErrUnauthorized, "LOGIN_FAILED", fiber.Map{"message": "login failed"})
-					}
-
-					email := loginBody.Email
-					users, err := loadedModel.FindMany(&wst.Filter{
-						Where: &wst.Where{
-							"email": email,
-						},
-					}, ctx)
-					if len(users) == 0 {
-						return ctx.RestError(fiber.ErrUnauthorized, "LOGIN_FAILED", fiber.Map{"message": "login failed"})
-					}
-					firstUser := users[0]
-					ctx.Instance = &firstUser
-
-					firstUserData := firstUser.ToJSON()
-					savedPassword := firstUserData["password"]
-					err = bcrypt.CompareHashAndPassword([]byte(savedPassword.(string)), []byte(loginBody.Password))
-					if err != nil {
-						return ctx.RestError(fiber.ErrUnauthorized, "LOGIN_FAILED", fiber.Map{"message": "login failed"})
-					}
-
-					userIdHex := firstUser.Id.(primitive.ObjectID).Hex()
-
-					token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-						"userId":  userIdHex,
-						"created": time.Now().UnixMilli(),
-						"ttl":     604800 * 2 * 1000,
-						"roles":   []string{"USER"},
-					})
-
-					tokenString, err := token.SignedString(loadedModel.App.JwtSecretKey)
-
-					ctx.StatusCode = fiber.StatusOK
-					ctx.Result = fiber.Map{"id": tokenString, "userId": userIdHex}
-					return nil
-				})
-
-			}
 
 		}
 	}
