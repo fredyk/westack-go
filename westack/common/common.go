@@ -14,11 +14,12 @@ type A []M
 
 type Where M
 
-type Include []struct {
+type IncludeItem struct {
 	Relation string  `json:"relation"`
 	Scope    *Filter `json:"scope"`
 }
 
+type Include []IncludeItem
 type Order []string
 
 type Filter struct {

@@ -82,6 +82,9 @@ func (app *WeStack) loadModels() {
 		if err != nil {
 			panic(err)
 		}
+		if config.Relations == nil {
+			config.Relations = &map[string]*model.Relation{}
+		}
 
 		configFromGlobal := (*globalModelConfig)[config.Name]
 
@@ -99,6 +102,40 @@ func (app *WeStack) loadModels() {
 		loadedModel.App = app.AsInterface()
 		loadedModel.Datasource = dataSource
 
+		defer func() {
+			for relationName, relation := range *loadedModel.Config.Relations {
+				relatedModelName := relation.Model
+				relatedLoadedModel := (*loadedModel.GetModelRegistry())[relatedModelName]
+
+				if relatedLoadedModel == nil {
+					log.Println()
+					log.Printf("WARNING: related model %v not found for relation %v.%v", relatedModelName, loadedModel.Name, relationName)
+					log.Println()
+					continue
+				}
+
+				if relation.PrimaryKey == nil {
+					sId := "_id"
+					relation.PrimaryKey = &sId
+				}
+
+				if relation.ForeignKey == nil {
+					switch relation.Type {
+					case "belongsTo":
+						foreignKey := strings.ToLower(relatedModelName[:1]) + relatedModelName[1:] + "Id"
+						relation.ForeignKey = &foreignKey
+						//(*loadedModel.Config.Relations)[relationName] = relation
+						break
+					case "hasOne", "hasMany":
+						foreignKey := strings.ToLower(loadedModel.Name[:1]) + loadedModel.Name[1:] + "Id"
+						relation.ForeignKey = &foreignKey
+						//(*loadedModel.Config.Relations)[relationName] = relation
+						break
+					}
+				}
+			}
+		}()
+
 		if config.Base == "Role" {
 			app.RoleModel = loadedModel
 
@@ -109,7 +146,7 @@ func (app *WeStack) loadModels() {
 				Datasource: config.Datasource,
 				Public:     false,
 				Properties: nil,
-				Relations: map[string]model.Relation{
+				Relations: &map[string]*model.Relation{
 					"role": {
 						Type:  "belongsTo",
 						Model: config.Name,
@@ -664,9 +701,9 @@ func (app *WeStack) loadModelsFixedRoutes() {
 					}
 
 				} else {
-					for key, r := range loadedModel.Config.Relations {
+					for key, r := range *loadedModel.Config.Relations {
 
-						if r.ForeignKey == "userId" {
+						if *r.ForeignKey == "userId" {
 
 							thisInstance, err := loadedModel.FindById(objId, &wst.Filter{
 								Include: &wst.Include{{Relation: key}},

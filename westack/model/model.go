@@ -26,10 +26,10 @@ type Property struct {
 }
 
 type Relation struct {
-	Type       string `json:"type"`
-	Model      string `json:"model"`
-	PrimaryKey string `json:"primaryKey"`
-	ForeignKey string `json:"foreignKey"`
+	Type       string  `json:"type"`
+	Model      string  `json:"model"`
+	PrimaryKey *string `json:"primaryKey"`
+	ForeignKey *string `json:"foreignKey"`
 }
 
 type ACL struct {
@@ -50,16 +50,16 @@ type CasbinConfig struct {
 }
 
 type Config struct {
-	Name       string              `json:"name"`
-	Plural     string              `json:"plural"`
-	Base       string              `json:"base"`
-	Datasource string              `json:"dataSource"`
-	Public     bool                `json:"public"`
-	Properties map[string]Property `json:"properties"`
-	Relations  map[string]Relation `json:"relations"`
-	Acls       []ACL               `json:"acls"`
-	Hidden     []string            `json:"hidden"`
-	Casbin     CasbinConfig        `json:"casbin"`
+	Name       string                `json:"name"`
+	Plural     string                `json:"plural"`
+	Base       string                `json:"base"`
+	Datasource string                `json:"dataSource"`
+	Public     bool                  `json:"public"`
+	Properties map[string]Property   `json:"properties"`
+	Relations  *map[string]*Relation `json:"relations"`
+	Acls       []ACL                 `json:"acls"`
+	Hidden     []string              `json:"hidden"`
+	Casbin     CasbinConfig          `json:"casbin"`
 }
 
 type DataSourceConfig struct {
@@ -87,6 +87,10 @@ type Model struct {
 	eventHandlers    map[string]func(eventContext *EventContext) error
 	modelRegistry    *map[string]*Model
 	remoteMethodsMap map[string]*OperationItem
+}
+
+func (loadedModel *Model) GetModelRegistry() *map[string]*Model {
+	return loadedModel.modelRegistry
 }
 
 func (loadedModel *Model) SendError(ctx *fiber.Ctx, err error) error {
@@ -143,7 +147,7 @@ func (modelInstance *Instance) ToJSON() wst.M {
 
 	var result wst.M
 	result = wst.CopyMap(modelInstance.data)
-	for relationName, relationConfig := range modelInstance.Model.Config.Relations {
+	for relationName, relationConfig := range *modelInstance.Model.Config.Relations {
 		if modelInstance.data[relationName] != nil {
 			if relationConfig.Type == "" {
 				// relation not found
@@ -175,7 +179,7 @@ func (modelInstance *Instance) ToJSON() wst.M {
 
 func (modelInstance Instance) Get(relationName string) interface{} {
 	result := modelInstance.data[relationName]
-	switch modelInstance.Model.Config.Relations[relationName].Type {
+	switch (*modelInstance.Model.Config.Relations)[relationName].Type {
 	case "hasMany", "hasAndBelongsToMany":
 		if result == nil {
 			result = make([]Instance, 0)
@@ -219,7 +223,7 @@ func (loadedModel *Model) Build(data wst.M, baseContext *EventContext) Instance 
 		deepLevel++
 	}
 
-	for relationName, relationConfig := range loadedModel.Config.Relations {
+	for relationName, relationConfig := range *loadedModel.Config.Relations {
 		if data[relationName] != nil {
 			if relationConfig.Type == "" {
 				// relation not found
@@ -234,13 +238,25 @@ func (loadedModel *Model) Build(data wst.M, baseContext *EventContext) Instance 
 			if relatedModel != nil {
 				switch relationConfig.Type {
 				case "belongsTo", "hasOne":
-					relatedInstance := relatedModel.(*Model).Build(rawRelatedData.(wst.M), targetBaseContext)
+					var relatedInstance Instance
+					if asInstance, asInstanceOk := rawRelatedData.(Instance); asInstanceOk {
+						relatedInstance = asInstance
+					} else {
+						relatedInstance = relatedModel.(*Model).Build(rawRelatedData.(wst.M), targetBaseContext)
+					}
 					data[relationName] = &relatedInstance
 				case "hasMany", "hasAndBelongsToMany":
-					result := make([]Instance, len(rawRelatedData.(primitive.A)))
-					for idx, v := range rawRelatedData.(primitive.A) {
-						result[idx] = relatedModel.(*Model).Build(v.(wst.M), targetBaseContext)
+
+					var result []Instance
+					if asInstanceList, asInstanceListOk := rawRelatedData.([]Instance); asInstanceListOk {
+						result = asInstanceList
+					} else {
+						result := make([]Instance, len(rawRelatedData.(primitive.A)))
+						for idx, v := range rawRelatedData.(primitive.A) {
+							result[idx] = relatedModel.(*Model).Build(v.(wst.M), targetBaseContext)
+						}
 					}
+
 					data[relationName] = result
 				}
 			}
@@ -304,6 +320,30 @@ func (loadedModel *Model) FindMany(filterMap *wst.Filter, baseContext *EventCont
 		return nil, errors.New("invalid query result")
 	}
 
+	var targetInclude *wst.Include
+	if filterMap != nil && filterMap.Include != nil {
+		includeAsInterfaces := *filterMap.Include
+		targetInclude = &includeAsInterfaces
+	} else {
+		targetInclude = nil
+	}
+	if targetInclude != nil {
+		for _, includeItem := range *targetInclude {
+			err := loadedModel.mergeRelated(documents, includeItem, targetBaseContext)
+			if err != nil {
+				return nil, err
+			}
+			relationName := includeItem.Relation
+			relation := (*loadedModel.Config.Relations)[relationName]
+			relatedModelName := relation.Model
+			relatedLoadedModel := (*loadedModel.modelRegistry)[relatedModelName]
+			if relatedLoadedModel == nil {
+				return nil, errors.New("related model not found")
+			}
+
+		}
+	}
+
 	var results = make([]Instance, len(*documents))
 
 	for idx, document := range *documents {
@@ -327,13 +367,6 @@ func (loadedModel *Model) ExtractLookupsFromFilter(filterMap *wst.Filter, disabl
 		targetWhere = nil
 	}
 
-	var targetInclude *wst.Include
-	if filterMap != nil && filterMap.Include != nil {
-		includeAsInterfaces := *filterMap.Include
-		targetInclude = &includeAsInterfaces
-	} else {
-		targetInclude = nil
-	}
 	var targetOrder *wst.Order
 	if filterMap != nil && filterMap.Order != nil {
 		orderValue := *filterMap.Order
@@ -386,6 +419,13 @@ func (loadedModel *Model) ExtractLookupsFromFilter(filterMap *wst.Filter, disabl
 		})
 	}
 
+	var targetInclude *wst.Include
+	if filterMap != nil && filterMap.Include != nil {
+		includeAsInterfaces := *filterMap.Include
+		targetInclude = &includeAsInterfaces
+	} else {
+		targetInclude = nil
+	}
 	if targetInclude != nil {
 		for _, includeItem := range *targetInclude {
 
@@ -398,7 +438,7 @@ func (loadedModel *Model) ExtractLookupsFromFilter(filterMap *wst.Filter, disabl
 			}
 
 			relationName := includeItem.Relation
-			relation := loadedModel.Config.Relations[relationName]
+			relation := (*loadedModel.Config.Relations)[relationName]
 			relatedModelName := relation.Model
 			relatedLoadedModel := (*loadedModel.modelRegistry)[relatedModelName]
 
@@ -409,38 +449,23 @@ func (loadedModel *Model) ExtractLookupsFromFilter(filterMap *wst.Filter, disabl
 				continue
 			}
 
-			if relation.PrimaryKey == "" {
-				relation.PrimaryKey = "_id"
-			}
-
-			if relation.ForeignKey == "" {
-				switch relation.Type {
-				case "belongsTo":
-					relation.ForeignKey = strings.ToLower(relatedModelName[:1]) + relatedModelName[1:] + "Id"
-					break
-				case "hasMany":
-					relation.ForeignKey = strings.ToLower(loadedModel.Name[:1]) + loadedModel.Name[1:] + "Id"
-					break
-				}
-			}
-
 			if relatedLoadedModel.Datasource.Name == loadedModel.Datasource.Name {
 				switch relation.Type {
-				case "belongsTo", "hasMany":
+				case "belongsTo", "hasOne", "hasMany":
 					var matching wst.M
 					var lookupLet wst.M
 					switch relation.Type {
 					case "belongsTo":
 						lookupLet = wst.M{
-							relation.ForeignKey: fmt.Sprintf("$%v", relation.ForeignKey),
+							*relation.ForeignKey: fmt.Sprintf("$%v", relation.ForeignKey),
 						}
 						matching = wst.M{
 							"$eq": []string{fmt.Sprintf("$%v", relation.PrimaryKey), fmt.Sprintf("$$%v", relation.ForeignKey)},
 						}
 						break
-					case "hasMany":
+					case "hasOne", "hasMany":
 						lookupLet = wst.M{
-							relation.ForeignKey: fmt.Sprintf("$%v", relation.PrimaryKey),
+							*relation.ForeignKey: fmt.Sprintf("$%v", relation.PrimaryKey),
 						}
 						matching = wst.M{
 							"$eq": []string{fmt.Sprintf("$%v", relation.ForeignKey), fmt.Sprintf("$$%v", relation.ForeignKey)},
@@ -487,7 +512,7 @@ func (loadedModel *Model) ExtractLookupsFromFilter(filterMap *wst.Filter, disabl
 					break
 				}
 				switch relation.Type {
-				case "belongsTo":
+				case "hasOne", "belongsTo":
 					*lookups = append(*lookups, wst.M{
 						"$unwind": wst.M{
 							"path":                       fmt.Sprintf("$%v", relationName),
@@ -621,7 +646,7 @@ func (loadedModel *Model) Create(data interface{}, baseContext *EventContext) (*
 			return nil, err
 		}
 	}
-	for key := range loadedModel.Config.Relations {
+	for key := range *loadedModel.Config.Relations {
 		delete(finalData, key)
 	}
 	document, err := loadedModel.Datasource.Create(loadedModel.Name, &finalData)
@@ -709,7 +734,7 @@ func (modelInstance *Instance) UpdateAttributes(data interface{}, baseContext *E
 		}
 	}
 
-	for key := range modelInstance.Model.Config.Relations {
+	for key := range *modelInstance.Model.Config.Relations {
 		delete(finalData, key)
 	}
 	document, err := modelInstance.Model.Datasource.UpdateById(modelInstance.Model.Name, modelInstance.Id, &finalData)
@@ -797,12 +822,12 @@ func (modelInstance *Instance) Reload(eventContext *EventContext) error {
 		return err
 	}
 	for k := range modelInstance.data {
-		if modelInstance.Model.Config.Relations[k].Model == "" {
+		if (*modelInstance.Model.Config.Relations)[k].Model == "" {
 			delete(modelInstance.data, k)
 		}
 	}
 	for k, v := range newInstance.data {
-		if modelInstance.Model.Config.Relations[k].Model == "" {
+		if (*modelInstance.Model.Config.Relations)[k].Model == "" {
 			modelInstance.data[k] = v
 		}
 	}
@@ -1188,6 +1213,86 @@ func (loadedModel *Model) HandleRemoteMethod(name string, eventContext *EventCon
 	eventContext.Bearer = token
 
 	return handler(eventContext)
+}
+
+func (loadedModel *Model) mergeRelated(documents *wst.A, includeItem wst.IncludeItem, baseContext *EventContext) error {
+
+	relationName := includeItem.Relation
+	relation := (*loadedModel.Config.Relations)[relationName]
+	relatedModelName := relation.Model
+	relatedLoadedModel := (*loadedModel.modelRegistry)[relatedModelName]
+
+	if relatedLoadedModel == nil {
+		log.Println()
+		log.Printf("WARNING: related model %v not found for relation %v.%v", relatedModelName, loadedModel.Name, relationName)
+		log.Println()
+		return nil
+	}
+
+	if relatedLoadedModel.Datasource.Name != loadedModel.Datasource.Name {
+		switch relation.Type {
+		case "belongsTo", "hasOne", "hasMany":
+			keyFrom := ""
+			keyTo := ""
+			switch relation.Type {
+			case "belongsTo":
+				keyFrom = *relation.PrimaryKey
+				keyTo = *relation.ForeignKey
+				break
+			case "hasOne", "hasMany":
+				keyFrom = *relation.ForeignKey
+				keyTo = *relation.PrimaryKey
+				break
+			}
+
+			var targetScope *wst.Filter
+			if includeItem.Scope != nil {
+				scopeValue := *includeItem.Scope
+				targetScope = &scopeValue
+			} else {
+				targetScope = &wst.Filter{}
+			}
+
+			if targetScope.Where == nil {
+				targetScope.Where = &wst.Where{}
+			}
+
+			for _, document := range *documents {
+				(*targetScope.Where)[keyFrom] = document[keyTo]
+				switch relation.Type {
+				case "belongsTo", "hasOne":
+					targetScope.Limit = 1
+					break
+				}
+				relatedInstances, err := relatedLoadedModel.FindMany(targetScope, baseContext)
+				if err != nil {
+					return err
+				}
+
+				for _, relatedInstance := range relatedInstances {
+					relatedInstance.HideProperties()
+				}
+
+				switch relation.Type {
+				case "belongsTo", "hasOne":
+					if len(relatedInstances) > 0 {
+						document[relationName] = relatedInstances[0]
+					} else {
+						document[relationName] = nil
+					}
+					break
+				case "hasMany":
+					document[relationName] = relatedInstances
+					break
+				}
+
+			}
+
+			break
+		}
+
+	}
+	return nil
 }
 
 func GetIDAsString(idToConvert interface{}) string {
