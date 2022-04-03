@@ -12,6 +12,7 @@ import (
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"log"
 	"regexp"
+	"runtime/debug"
 	"strings"
 
 	"github.com/fredyk/westack-go/westack/common"
@@ -329,16 +330,31 @@ func (loadedModel *Model) FindMany(filterMap *wst.Filter, baseContext *EventCont
 	}
 	if targetInclude != nil {
 		for _, includeItem := range *targetInclude {
-			err := loadedModel.mergeRelated(documents, includeItem, targetBaseContext)
-			if err != nil {
-				return nil, err
-			}
 			relationName := includeItem.Relation
 			relation := (*loadedModel.Config.Relations)[relationName]
 			relatedModelName := relation.Model
 			relatedLoadedModel := (*loadedModel.modelRegistry)[relatedModelName]
 			if relatedLoadedModel == nil {
 				return nil, errors.New("related model not found")
+			}
+
+			objId := "*"
+			if len(*documents) == 1 {
+				objId = (*documents)[0]["_id"].(primitive.ObjectID).Hex()
+			}
+			err, allowed := loadedModel.EnforceEx(targetBaseContext.Bearer, objId, fmt.Sprintf("__get__%v", relationName), targetBaseContext)
+			if err != nil && err != fiber.ErrUnauthorized {
+				return nil, err
+			}
+			if !allowed {
+				for _, doc := range *documents {
+					delete(doc, relationName)
+				}
+			} else {
+				err := loadedModel.mergeRelated(documents, includeItem, targetBaseContext)
+				if err != nil {
+					return nil, err
+				}
 			}
 
 		}
@@ -457,18 +473,18 @@ func (loadedModel *Model) ExtractLookupsFromFilter(filterMap *wst.Filter, disabl
 					switch relation.Type {
 					case "belongsTo":
 						lookupLet = wst.M{
-							*relation.ForeignKey: fmt.Sprintf("$%v", relation.ForeignKey),
+							*relation.ForeignKey: fmt.Sprintf("$%v", *relation.ForeignKey),
 						}
 						matching = wst.M{
-							"$eq": []string{fmt.Sprintf("$%v", relation.PrimaryKey), fmt.Sprintf("$$%v", relation.ForeignKey)},
+							"$eq": []string{fmt.Sprintf("$%v", *relation.PrimaryKey), fmt.Sprintf("$$%v", *relation.ForeignKey)},
 						}
 						break
 					case "hasOne", "hasMany":
 						lookupLet = wst.M{
-							*relation.ForeignKey: fmt.Sprintf("$%v", relation.PrimaryKey),
+							*relation.ForeignKey: fmt.Sprintf("$%v", *relation.PrimaryKey),
 						}
 						matching = wst.M{
-							"$eq": []string{fmt.Sprintf("$%v", relation.ForeignKey), fmt.Sprintf("$$%v", relation.ForeignKey)},
+							"$eq": []string{fmt.Sprintf("$%v", *relation.ForeignKey), fmt.Sprintf("$$%v", *relation.ForeignKey)},
 						}
 						break
 					}
@@ -970,8 +986,9 @@ func (loadedModel *Model) RemoteMethod(handler func(context *EventContext) error
 }
 
 type BearerUser struct {
-	Id   interface{}
-	Data interface{}
+	Id     interface{}
+	Data   interface{}
+	System bool
 }
 
 type BearerRole struct {
@@ -1093,6 +1110,7 @@ func wrapEventHandler(model *Model, eventKey string, handler func(eventContext *
 			if currentHandlerError != nil {
 				if model.App.Debug {
 					log.Println("WARNING: Stop handling on error", currentHandlerError)
+					debug.PrintStack()
 				}
 				return currentHandlerError
 			} else {
@@ -1149,16 +1167,45 @@ func (loadedModel *Model) HandleRemoteMethod(name string, eventContext *EventCon
 		log.Println(fmt.Sprintf("DEBUG: Check auth for %v.%v (%v %v)", loadedModel.Name, options.Name, c.Method(), c.Path()))
 	}
 
+	objId := "*"
+	if eventContext.ModelID != nil {
+		objId = GetIDAsString(eventContext.ModelID)
+	} else {
+		objId = c.Params("id")
+		if objId == "" {
+			objId = "*"
+		}
+	}
+
+	err, allowed := loadedModel.EnforceEx(token, objId, action, eventContext)
+	if err != nil {
+		return err
+	}
+	if !allowed {
+		return fiber.ErrUnauthorized
+	}
+
+	eventContext.Bearer = token
+
+	return handler(eventContext)
+}
+
+func (loadedModel *Model) EnforceEx(token *BearerToken, objId string, action string, eventContext *EventContext) (error, bool) {
+
+	if token.User != nil && token.User.System == true {
+		return nil, true
+	}
+
 	if token.User == nil {
 		allow, exp, err := loadedModel.Enforcer.EnforceEx("_EVERYONE_", "*", action)
 		if loadedModel.App.Debug {
 			log.Println("Explain", exp)
 		}
 		if err != nil {
-			return err
+			return err, false
 		}
-		if !allow {
-			return fiber.ErrUnauthorized
+		if allow {
+			return nil, true
 		}
 	} else {
 
@@ -1166,34 +1213,24 @@ func (loadedModel *Model) HandleRemoteMethod(name string, eventContext *EventCon
 
 		_, err := loadedModel.Enforcer.AddRoleForUser(bearerUserIdSt, "_EVERYONE_")
 		if err != nil {
-			return err
+			return err, false
 		}
 		_, err = loadedModel.Enforcer.AddRoleForUser(bearerUserIdSt, "_AUTHENTICATED_")
 		if err != nil {
-			return err
+			return err, false
 		}
 		for _, r := range token.Roles {
 			_, err := loadedModel.Enforcer.AddRoleForUser(bearerUserIdSt, r.Name)
 			if err != nil {
-				return err
+				return err, false
 			}
 		}
 		err = loadedModel.Enforcer.SavePolicy()
 		if err != nil {
-			return err
+			return err, false
 		}
 
 		if eventContext.ModelID != nil {
-		}
-
-		objId := "*"
-		if eventContext.ModelID != nil {
-			objId = GetIDAsString(eventContext.ModelID)
-		} else {
-			objId = c.Params("id")
-			if objId == "" {
-				objId = "*"
-			}
 		}
 
 		allow, exp, err := loadedModel.Enforcer.EnforceEx(bearerUserIdSt, objId, action)
@@ -1202,17 +1239,14 @@ func (loadedModel *Model) HandleRemoteMethod(name string, eventContext *EventCon
 			log.Println("Explain", exp)
 		}
 		if err != nil {
-			return err
+			return err, false
 		}
-		if !allow {
-			return fiber.ErrUnauthorized
+		if allow {
+			return nil, true
 		}
 
 	}
-
-	eventContext.Bearer = token
-
-	return handler(eventContext)
+	return fiber.ErrUnauthorized, false
 }
 
 func (loadedModel *Model) mergeRelated(documents *wst.A, includeItem wst.IncludeItem, baseContext *EventContext) error {
