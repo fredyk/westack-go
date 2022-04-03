@@ -41,8 +41,6 @@ func LoadFile(filePath string, out interface{}) error {
 	if err != nil {
 		return err
 	}
-
-	//var result M
 	err2 := json.Unmarshal(jsonFile, &out)
 	if err2 != nil {
 		return err2
@@ -63,10 +61,7 @@ func DashedCase(st string) string {
 }
 
 func CopyMap(src M) M {
-	// Create the target map
 	targetMap := make(M)
-
-	// Copy from the original map to the target map
 	for key, value := range src {
 		targetMap[key] = value
 	}
