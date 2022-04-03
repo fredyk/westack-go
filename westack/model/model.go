@@ -186,7 +186,11 @@ func (modelInstance Instance) Get(relationName string) interface{} {
 }
 
 func (modelInstance Instance) GetOne(relationName string) *Instance {
-	return modelInstance.Get(relationName).(*Instance)
+	result := modelInstance.Get(relationName)
+	if result == nil {
+		return nil
+	}
+	return result.(*Instance)
 }
 
 func (modelInstance Instance) GetMany(relationName string) []Instance {
@@ -290,7 +294,7 @@ func (loadedModel *Model) FindMany(filterMap *wst.Filter, baseContext *EventCont
 		deepLevel++
 	}
 
-	lookups := loadedModel.ExtractLookupsFromFilter(filterMap)
+	lookups := loadedModel.ExtractLookupsFromFilter(filterMap, baseContext.DisableTypeConversions)
 
 	documents, err := loadedModel.Datasource.FindMany(loadedModel.Name, lookups)
 	if err != nil {
@@ -309,7 +313,7 @@ func (loadedModel *Model) FindMany(filterMap *wst.Filter, baseContext *EventCont
 	return results, nil
 }
 
-func (loadedModel *Model) ExtractLookupsFromFilter(filterMap *wst.Filter) *wst.A {
+func (loadedModel *Model) ExtractLookupsFromFilter(filterMap *wst.Filter, disableTypeConversions bool) *wst.A {
 
 	if filterMap == nil {
 		return nil
@@ -342,7 +346,9 @@ func (loadedModel *Model) ExtractLookupsFromFilter(filterMap *wst.Filter) *wst.A
 
 	var lookups *wst.A
 	if targetWhere != nil {
-		datasource.ReplaceObjectIds(*targetWhere)
+		if !disableTypeConversions {
+			datasource.ReplaceObjectIds(*targetWhere)
+		}
 		lookups = &wst.A{
 			{"$match": *targetWhere},
 		}
@@ -410,10 +416,10 @@ func (loadedModel *Model) ExtractLookupsFromFilter(filterMap *wst.Filter) *wst.A
 			if relation.ForeignKey == "" {
 				switch relation.Type {
 				case "belongsTo":
-					relation.ForeignKey = relatedModelName + "Id"
+					relation.ForeignKey = strings.ToLower(relatedModelName[:1]) + relatedModelName[1:] + "Id"
 					break
 				case "hasMany":
-					relation.ForeignKey = loadedModel.Name + "Id"
+					relation.ForeignKey = strings.ToLower(loadedModel.Name[:1]) + loadedModel.Name[1:] + "Id"
 					break
 				}
 			}
@@ -462,7 +468,7 @@ func (loadedModel *Model) ExtractLookupsFromFilter(filterMap *wst.Filter) *wst.A
 						})
 					}
 					if targetScope != nil {
-						nestedLoopkups := relatedLoadedModel.ExtractLookupsFromFilter(targetScope)
+						nestedLoopkups := relatedLoadedModel.ExtractLookupsFromFilter(targetScope, disableTypeConversions)
 						if nestedLoopkups != nil {
 							for _, v := range *nestedLoopkups {
 								pipeline = append(pipeline, v)
@@ -516,7 +522,7 @@ func (loadedModel *Model) FindOne(filterMap *wst.Filter, baseContext *EventConte
 		deepLevel++
 	}
 
-	lookups := loadedModel.ExtractLookupsFromFilter(filterMap)
+	lookups := loadedModel.ExtractLookupsFromFilter(filterMap, baseContext.DisableTypeConversions)
 
 	documents, err := loadedModel.Datasource.FindMany(loadedModel.Name, lookups)
 	if err != nil {
@@ -547,7 +553,7 @@ func (loadedModel *Model) FindById(id interface{}, filterMap *wst.Filter, baseCo
 		deepLevel++
 	}
 
-	lookups := loadedModel.ExtractLookupsFromFilter(filterMap)
+	lookups := loadedModel.ExtractLookupsFromFilter(filterMap, baseContext.DisableTypeConversions)
 
 	document, err := loadedModel.Datasource.FindById(loadedModel.Name, id, lookups)
 	if err != nil {
@@ -592,7 +598,6 @@ func (loadedModel *Model) Create(data interface{}, baseContext *EventContext) (*
 	default:
 		log.Fatal(fmt.Sprintf("Invalid input for Model.Create() <- %s", data))
 	}
-	datasource.ReplaceObjectIds(finalData)
 
 	if baseContext == nil {
 		baseContext = &EventContext{}
@@ -606,6 +611,9 @@ func (loadedModel *Model) Create(data interface{}, baseContext *EventContext) (*
 			break
 		}
 		deepLevel++
+	}
+	if !baseContext.DisableTypeConversions {
+		datasource.ReplaceObjectIds(finalData)
 	}
 
 	eventContext := &EventContext{
@@ -675,7 +683,6 @@ func (modelInstance *Instance) UpdateAttributes(data interface{}, baseContext *E
 	default:
 		log.Fatal(fmt.Sprintf("Invalid input for Model.UpdateAttributes() <- %s", data))
 	}
-	datasource.ReplaceObjectIds(finalData)
 
 	if baseContext == nil {
 		baseContext = &EventContext{}
@@ -689,6 +696,9 @@ func (modelInstance *Instance) UpdateAttributes(data interface{}, baseContext *E
 			break
 		}
 		deepLevel++
+	}
+	if !baseContext.DisableTypeConversions {
+		datasource.ReplaceObjectIds(finalData)
 	}
 
 	eventContext := &EventContext{
@@ -957,18 +967,19 @@ type BearerToken struct {
 type EphemeralData wst.M
 
 type EventContext struct {
-	Bearer        *BearerToken
-	BaseContext   *EventContext
-	Remote        *RemoteMethodOptions
-	Filter        *wst.Filter
-	Data          *wst.M
-	Instance      *Instance
-	Ctx           *fiber.Ctx
-	Ephemeral     *EphemeralData
-	IsNewInstance bool
-	Result        interface{}
-	ModelID       interface{}
-	StatusCode    int
+	Bearer                 *BearerToken
+	BaseContext            *EventContext
+	Remote                 *RemoteMethodOptions
+	Filter                 *wst.Filter
+	Data                   *wst.M
+	Instance               *Instance
+	Ctx                    *fiber.Ctx
+	Ephemeral              *EphemeralData
+	IsNewInstance          bool
+	Result                 interface{}
+	ModelID                interface{}
+	StatusCode             int
+	DisableTypeConversions bool
 }
 
 type WeStackError struct {
@@ -1028,9 +1039,18 @@ func (eventContext *EventContext) GetBearer(loadedModel *Model) (error, *BearerT
 
 		if token != nil {
 			if claims, ok := token.Claims.(jwt.MapClaims); ok && token.Valid {
+				claimRoles := claims["roles"]
+				userId := claims["userId"]
 				user = &BearerUser{
-					Id:   claims["userId"],
+					Id:   userId,
 					Data: claims,
+				}
+				if claimRoles != nil {
+					for _, role := range claimRoles.([]interface{}) {
+						roles = append(roles, BearerRole{
+							Name: role.(string),
+						})
+					}
 				}
 			} else {
 				log.Println(err)
