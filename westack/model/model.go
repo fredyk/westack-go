@@ -526,32 +526,38 @@ func (loadedModel *Model) FindOne(filterMap *wst.Filter, baseContext *EventConte
 }
 
 func (loadedModel *Model) FindById(id interface{}, filterMap *wst.Filter, baseContext *EventContext) (*Instance, error) {
-
-	if baseContext == nil {
-		baseContext = &EventContext{}
-	}
-	var targetBaseContext = baseContext
-	deepLevel := 0
-	for {
-		if targetBaseContext.BaseContext != nil {
-			targetBaseContext = targetBaseContext.BaseContext
-		} else {
-			break
+	var _id interface{}
+	switch id.(type) {
+	case string:
+		var err error
+		_id, err = primitive.ObjectIDFromHex(id.(string))
+		if err != nil {
+			_id = id
 		}
-		deepLevel++
+	default:
+		_id = id
 	}
 
-	lookups := loadedModel.ExtractLookupsFromFilter(filterMap, baseContext.DisableTypeConversions)
+	if filterMap == nil {
+		filterMap = &wst.Filter{}
+	}
+	if filterMap.Where == nil {
+		filterMap.Where = &wst.Where{}
+	}
 
-	document, err := loadedModel.Datasource.FindById(loadedModel.Name, id, lookups)
+	(*filterMap.Where)["_id"] = _id
+	filterMap.Limit = 1
+
+	instances, err := loadedModel.FindMany(filterMap, baseContext)
 	if err != nil {
 		return nil, err
-	} else if document == nil {
-		return nil, datasource.NewError(404, fmt.Sprintf("%v %v not found", loadedModel.Name, id))
-	} else {
-		result := loadedModel.Build(*document, targetBaseContext)
-		return &result, nil
 	}
+
+	if len(instances) > 0 {
+		return &instances[0], nil
+	}
+
+	return nil, nil
 }
 
 func (loadedModel *Model) Create(data interface{}, baseContext *EventContext) (*Instance, error) {

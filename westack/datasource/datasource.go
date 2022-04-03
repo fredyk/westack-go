@@ -158,21 +158,6 @@ func (ds *Datasource) FindMany(collectionName string, lookups *wst.A) (*wst.A, e
 	return nil, errors.New(fmt.Sprintf("invalid connector %v", connector))
 }
 
-func (ds *Datasource) FindById(collectionName string, id interface{}, lookups *wst.A) (*wst.M, error) {
-	var _id interface{}
-	switch id.(type) {
-	case string:
-		var err error
-		_id, err = primitive.ObjectIDFromHex(id.(string))
-		if err != nil {
-			_id = id
-		}
-	default:
-		_id = id
-	}
-	return findByObjectId(collectionName, _id, ds, lookups)
-}
-
 func findByObjectId(collectionName string, _id interface{}, ds *Datasource, lookups *wst.A) (*wst.M, error) {
 	wrappedLookups := &wst.A{
 		{
