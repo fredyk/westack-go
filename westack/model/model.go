@@ -252,7 +252,7 @@ func (loadedModel *Model) Build(data wst.M, baseContext *EventContext) Instance 
 					if asInstanceList, asInstanceListOk := rawRelatedData.([]Instance); asInstanceListOk {
 						result = asInstanceList
 					} else {
-						result := make([]Instance, len(rawRelatedData.(primitive.A)))
+						result = make([]Instance, len(rawRelatedData.(primitive.A)))
 						for idx, v := range rawRelatedData.(primitive.A) {
 							result[idx] = relatedModel.(*Model).Build(v.(wst.M), targetBaseContext)
 						}
@@ -342,7 +342,12 @@ func (loadedModel *Model) FindMany(filterMap *wst.Filter, baseContext *EventCont
 			if len(*documents) == 1 {
 				objId = (*documents)[0]["_id"].(primitive.ObjectID).Hex()
 			}
-			err, allowed := loadedModel.EnforceEx(targetBaseContext.Bearer, objId, fmt.Sprintf("__get__%v", relationName), targetBaseContext)
+
+			action := fmt.Sprintf("__get__%v", relationName)
+			if loadedModel.App.Debug {
+				log.Printf("DEBUG: Check %v.%v\n", loadedModel.Name, action)
+			}
+			err, allowed := loadedModel.EnforceEx(targetBaseContext.Bearer, objId, action, targetBaseContext)
 			if err != nil && err != fiber.ErrUnauthorized {
 				return nil, err
 			}
@@ -838,12 +843,12 @@ func (modelInstance *Instance) Reload(eventContext *EventContext) error {
 		return err
 	}
 	for k := range modelInstance.data {
-		if (*modelInstance.Model.Config.Relations)[k].Model == "" {
+		if (*modelInstance.Model.Config.Relations)[k] == nil {
 			delete(modelInstance.data, k)
 		}
 	}
 	for k, v := range newInstance.data {
-		if (*modelInstance.Model.Config.Relations)[k].Model == "" {
+		if (*modelInstance.Model.Config.Relations)[k] == nil {
 			modelInstance.data[k] = v
 		}
 	}
