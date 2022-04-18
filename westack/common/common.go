@@ -10,6 +10,30 @@ import (
 
 type M map[string]interface{}
 
+func (m M) GetM(key string) M {
+	if m == nil {
+		return nil
+	}
+	if v, ok := m[key]; ok {
+		if vv, ok := v.(M); ok {
+			return vv
+		}
+	}
+	return nil
+}
+
+func (m M) GetString(key string) string {
+	if m == nil {
+		return ""
+	}
+	if v, ok := m[key]; ok {
+		if vv, ok := v.(string); ok {
+			return vv
+		}
+	}
+	return ""
+}
+
 type A []M
 
 type Where M
