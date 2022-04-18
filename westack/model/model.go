@@ -135,6 +135,8 @@ type Instance struct {
 	bytes []byte
 }
 
+type InstanceA []Instance
+
 type RegistryEntry struct {
 	Name  string
 	Model *Model
@@ -175,6 +177,14 @@ func (modelInstance *Instance) ToJSON() wst.M {
 		}
 	}
 
+	return result
+}
+
+func (instances InstanceA) ToJSON() []wst.M {
+	result := make([]wst.M, len(instances))
+	for idx, instance := range instances {
+		result[idx] = instance.ToJSON()
+	}
 	return result
 }
 
@@ -295,7 +305,7 @@ func ParseFilter(filter string) *wst.Filter {
 	return filterMap
 }
 
-func (loadedModel *Model) FindMany(filterMap *wst.Filter, baseContext *EventContext) ([]Instance, error) {
+func (loadedModel *Model) FindMany(filterMap *wst.Filter, baseContext *EventContext) (InstanceA, error) {
 
 	if baseContext == nil {
 		baseContext = &EventContext{}
