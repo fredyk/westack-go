@@ -723,7 +723,11 @@ func (app *WeStack) loadModelsFixedRoutes() {
 
 							thisInstance, err := loadedModel.FindById(objId, &wst.Filter{
 								Include: &wst.Include{{Relation: key}},
-							}, nil)
+							}, &model.EventContext{
+								Bearer: &model.BearerToken{
+									User: &model.BearerUser{System: true},
+								},
+							})
 							if err != nil {
 								return false, err
 							}
