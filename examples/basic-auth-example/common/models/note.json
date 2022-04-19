@@ -3,26 +3,15 @@
   "base": "PersistedModel",
   "public": true,
   "properties": {
-    "email": {
-      "type": "string",
-      "required": true
-    }
+
   },
   "relations": {
-    "roles": {
-      "type": "hasAndBelongsToMany",
-      "model": "Role",
-      "modelThrough": "RoleMapping",
-      "foreignKey": "userId",
-      "keyThrough": "roleId"
+    "user": {
+      "type": "belongsTo",
+      "model": "user"
     }
   },
-  "hidden": [
-    "password"
-  ],
   "casbin": {
-    "policyEffect": "$default",
-    "matchersDefinition": "$default && true",
     "policies": [
       "$owner,*,write,allow",
       "$everyone,*,read,allow",

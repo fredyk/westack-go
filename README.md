@@ -9,7 +9,7 @@ Just define your models in `json` format and westack-go will setup and expose al
 westack-go uses technologies like [gofiber](https://github.com/gofiber/fiber) and [casbin](github.com/casbin/casbin) for REST and authentication
 
 ### Databases
-It is only compatible with [mongo](go.mongodb.org/mongo-driver) for now.
+It is only compatible with [mongo](go.mongodb.org/mongo-driver).
 
 ### Authentication
 Define [RBAC](https://casbin.org/docs/en/rbac) policies in your `json` models to restrict access to data.
@@ -170,7 +170,7 @@ Response body: {"email":"exampleuser@example.com","id":"622f1643377ca3f1a39241f4
 
 4. Create a note for the user
 ```shell
-$ curl -X POST http://localhost:8023/api/v1/notes  -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJjcmVhdGVkIjoxNjQ3MjUzMDczMTQ0LCJyb2xlcyI6WyJVU0VSIl0sInR0bCI6MTIwOTYwMDAwMCwidXNlcklkIjoiNjIyZjE2NDMzNzdjYTNmMWEzOTI0MWY0In0.sbl7QA2--X7MiPZ4DLRL2f5_z08VD5quItBDl2ybmGk' -d '{"title":"Note 1","body":"This is my first note","userId":"622f1643377ca3f1a39241f4"}'
+$ curl -X POST http://localhost:8023/api/v1/notes -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJjcmVhdGVkIjoxNjQ3MjUzMDczMTQ0LCJyb2xlcyI6WyJVU0VSIl0sInR0bCI6MTIwOTYwMDAwMCwidXNlcklkIjoiNjIyZjE2NDMzNzdjYTNmMWEzOTI0MWY0In0.sbl7QA2--X7MiPZ4DLRL2f5_z08VD5quItBDl2ybmGk' -d '{"title":"Note 1","body":"This is my first note","userId":"622f1643377ca3f1a39241f4"}'
 ```
 
 5. Find again the user, now with their notes
@@ -178,6 +178,20 @@ $ curl -X POST http://localhost:8023/api/v1/notes  -H 'Authorization: Bearer eyJ
 $ curl 'http://localhost:8023/api/v1/users/me?filter=%7B"include":%5B%7B"relation":"notes"%7D%5D%7D' -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJjcmVhdGVkIjoxNjQ3MjUzMDczMTQ0LCJyb2xlcyI6WyJVU0VSIl0sInR0bCI6MTIwOTYwMDAwMCwidXNlcklkIjoiNjIyZjE2NDMzNzdjYTNmMWEzOTI0MWY0In0.sbl7QA2--X7MiPZ4DLRL2f5_z08VD5quItBDl2ybmGk'
 
 Response body: {"email":"exampleuser@example.com","id":"622f1643377ca3f1a39241f4","notes":[{"title":"Note 1","body":"This is my first note","userId":"622f1643377ca3f1a39241f4","id":"622f1643377ca3f1a39241f5"}]}
+```
+
+6. Find the single note
+```shell
+$ curl http://localhost:8023/api/v1/notes/622f1643377ca3f1a39241f5 -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJjcmVhdGVkIjoxNjUwNDA2ODEzNDY3LCJyb2xlcyI6WyJVU0VSIl0sInR0bCI6MTIwOTYwMDAwMCwidXNlcklkIjoiNjI1ZjM1OTE0NzU5YWJiOGZhMmE1YzljIn0.hWeMlZrhTFAac4LXTSiSIQ7uy7VhAlg1L9DKG3QPTpg'
+
+Response body: {"title":"Note 1","body":"This is my first note","userId":"622f1643377ca3f1a39241f4","id":"622f1643377ca3f1a39241f5"}
+```
+
+7. Update the note
+```shell
+$ curl -X PATCH http://localhost:8023/api/v1/notes/622f1643377ca3f1a39241f5 -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJjcmVhdGVkIjoxNjUwNDA2ODEzNDY3LCJyb2xlcyI6WyJVU0VSIl0sInR0bCI6MTIwOTYwMDAwMCwidXNlcklkIjoiNjI1ZjM1OTE0NzU5YWJiOGZhMmE1YzljIn0.hWeMlZrhTFAac4LXTSiSIQ7uy7VhAlg1L9DKG3QPTpg' -d '{"body":"I modified the note body"}'
+
+Response body: {"title":"Note 1","body":"I modified the note body","userId":"622f1643377ca3f1a39241f4","id":"622f1643377ca3f1a39241f5"}
 ```
 
 ### Contribute

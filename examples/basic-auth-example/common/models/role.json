@@ -1,7 +1,8 @@
 {
   "name": "role",
+  "base": "Role",
   "plural": "roles",
-  "public": true,
+  "public": false,
   "properties": {
     "name": {
       "type": "string",
@@ -9,11 +10,6 @@
     }
   },
   "relations": {
-    "user": {
-      "type": "belongsTo",
-      "model": "user",
-      "primaryKey": "_id",
-      "foreignKey": "userId"
-    }
+
   }
 }

@@ -16,7 +16,7 @@
     },
     "roles": {
       "type": "hasAndBelongsToMany",
-      "model": "Role",
+      "model": "role",
       "modelThrough": "RoleMapping",
       "foreignKey": "userId",
       "keyThrough": "roleId"
