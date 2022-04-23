@@ -66,7 +66,7 @@ func (app *WeStack) loadModels() {
 		panic("Error while loading models: " + err.Error())
 	}
 
-	var globalModelConfig *map[string]*model.Config
+	var globalModelConfig *map[string]*model.SimplifiedConfig
 	if err := wst.LoadFile("./server/model-config.json", &globalModelConfig); err != nil {
 		panic("Missing or invalid ./server/model-config.json: " + err.Error())
 	}
@@ -118,10 +118,10 @@ func (app *WeStack) setupModel(loadedModel *model.Model, dataSource *datasource.
 		app.RoleModel = loadedModel
 
 		roleMappingModel := model.New(&model.Config{
-			Name:       "RoleMapping",
-			Plural:     "role-mappings",
-			Base:       "PersistedModel",
-			Datasource: config.Datasource,
+			Name:   "RoleMapping",
+			Plural: "role-mappings",
+			Base:   "PersistedModel",
+			//Datasource: config.Datasource,
 			Public:     false,
 			Properties: nil,
 			Relations: &map[string]*model.Relation{
@@ -250,22 +250,6 @@ func (app *WeStack) setupModel(loadedModel *model.Model, dataSource *datasource.
 		plural = wst.DashedCase(config.Name) + "s"
 	}
 	config.Plural = plural
-
-	if len(loadedModel.Config.Acls) == 0 {
-		loadedModel.Config.Acls = append(loadedModel.Config.Acls, model.ACL{
-			AccessType:    "*",
-			PrincipalType: "ROLE",
-			PrincipalId:   "$everyone",
-			Permission:    "DENY",
-			Property:      "",
-		}, model.ACL{
-			AccessType:    "*",
-			PrincipalType: "ROLE",
-			PrincipalId:   "$authenticated",
-			Permission:    "ALLOW",
-			Property:      "",
-		})
-	}
 
 	casbModel := casbinmodel.NewModel()
 

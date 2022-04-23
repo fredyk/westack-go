@@ -54,13 +54,15 @@ type Config struct {
 	Name       string                `json:"name"`
 	Plural     string                `json:"plural"`
 	Base       string                `json:"base"`
-	Datasource string                `json:"dataSource"`
 	Public     bool                  `json:"public"`
 	Properties map[string]Property   `json:"properties"`
 	Relations  *map[string]*Relation `json:"relations"`
-	Acls       []ACL                 `json:"acls"`
 	Hidden     []string              `json:"hidden"`
 	Casbin     CasbinConfig          `json:"casbin"`
+}
+
+type SimplifiedConfig struct {
+	Datasource string `json:"dataSource"`
 }
 
 type DataSourceConfig struct {
