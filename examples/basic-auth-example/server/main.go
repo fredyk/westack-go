@@ -5,15 +5,26 @@ import (
 	"github.com/fredyk/westack-go/westack"
 	"github.com/gofiber/fiber/v2"
 	"log"
+	"os"
 )
 
 func main() {
 
+	jwtSecretKey := ""
+	if s, present := os.LookupEnv("JWT_SECRET"); present {
+		jwtSecretKey = s
+	}
+	debug := true
+	if envDebug, _ := os.LookupEnv("DEBUG"); envDebug == "true" {
+		debug = true
+	} else if env, present := os.LookupEnv("GO_ENV"); present && env == "PRODUCTION" {
+		debug = false
+	}
 	app := westack.New(westack.Options{
 		Debug:        false,
 		RestApiRoot:  "/api/v1",
 		Port:         8023,
-		JwtSecretKey: []byte(""),
+		JwtSecretKey: []byte(jwtSecretKey),
 	})
 
 	app.Boot(ServerBoot)
