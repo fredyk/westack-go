@@ -247,7 +247,7 @@ func (app *WeStack) setupModel(loadedModel *model.Model, dataSource *datasource.
 	if config.Plural != "" {
 		plural = config.Plural
 	} else {
-		plural = wst.DashedCase(regexp.MustCompile("y$").ReplaceAllString(config.Name, "$1ie")) + "s"
+		plural = wst.DashedCase(regexp.MustCompile("y$").ReplaceAllString(config.Name, "ie")) + "s"
 	}
 	config.Plural = plural
 
