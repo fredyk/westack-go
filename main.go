@@ -2,8 +2,8 @@ package main
 
 import (
 	"fmt"
-	"github.com/fredyk/westack-go/examples/basic-auth-example/server"
 	"github.com/fredyk/westack-go/westack"
+	"github.com/gofiber/fiber/v2"
 	"log"
 	"os"
 )
@@ -27,7 +27,9 @@ func main() {
 		JwtSecretKey: []byte(jwtSecretKey),
 	})
 
-	app.Boot(server.ServerBoot)
+	app.Boot(func(app *westack.WeStack) {
+
+	})
 
 	app.Server.Get("/*", func(c *fiber.Ctx) error {
 		log.Println("GET: " + c.Path())
