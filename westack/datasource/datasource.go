@@ -274,7 +274,7 @@ func ReplaceObjectIds(data interface{}) interface{} {
 		} else if regexp.MustCompile("^(\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2})([Z]+)?$").MatchString(data.(string)) {
 			layout := "2006-01-02T15:04:05Z"
 			newValue, err = time.Parse(layout, data.(string))
-		} else if regexp.MustCompile("^(\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}})([Z]+)?$").MatchString(data.(string)) {
+		} else if regexp.MustCompile("^(\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3})([Z]+)?$").MatchString(data.(string)) {
 			layout := "2006-01-02T15:04:05.000Z"
 			newValue, err = time.Parse(layout, data.(string))
 		}
