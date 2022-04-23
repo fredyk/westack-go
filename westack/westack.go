@@ -353,43 +353,66 @@ func (app *WeStack) setupModel(loadedModel *model.Model, dataSource *datasource.
 			ctx.Result = result.ToJSON()
 			return nil
 		})
-		loadedModel.On("create", func(ctx *model.EventContext) error {
 
+		loadedModel.Observe("before save", func(ctx *model.EventContext) error {
 			data := ctx.Data
-			if (*data)["created"] == nil {
+
+			if (*data)["modified"] == nil {
 				timeNow := time.Now()
-				(*data)["created"] = timeNow
+				(*data)["modified"] = timeNow
 			}
 
-			if config.Base == "User" {
-
-				if (*data)["email"] == nil || strings.TrimSpace((*data)["email"].(string)) == "" {
-					// TODO: Validate email
-					return ctx.RestError(fiber.ErrBadRequest, "EMAIL_PRESENCE", fiber.Map{"message": "Invalid email"})
-				}
-				filter := wst.Filter{Where: &wst.Where{"email": (*data)["email"]}}
-				existent, err2 := loadedModel.FindOne(&filter, ctx)
-				if err2 != nil {
-					return err2
-				}
-				if existent != nil {
-					return ctx.RestError(fiber.ErrConflict, "EMAIL_UNIQUENESS", fiber.Map{"message": "User exists"})
+			if ctx.IsNewInstance {
+				if (*data)["created"] == nil {
+					timeNow := time.Now()
+					(*data)["created"] = timeNow
 				}
 
-				if (*data)["password"] == nil || strings.TrimSpace((*data)["password"].(string)) == "" {
-					return ctx.RestError(fiber.ErrBadRequest, "PASSWORD_BLANK", fiber.Map{"message": "Invalid password"})
-				}
-				hashed, err := bcrypt.GenerateFromPassword([]byte((*data)["password"].(string)), 10)
-				if err != nil {
-					return err
-				}
-				(*data)["password"] = string(hashed)
+				if config.Base == "User" {
+					if (*data)["email"] == nil || strings.TrimSpace((*data)["email"].(string)) == "" {
+						// TODO: Validate email
+						return ctx.RestError(fiber.ErrBadRequest, "EMAIL_PRESENCE", fiber.Map{"message": "Invalid email"})
+					}
+					filter := wst.Filter{Where: &wst.Where{"email": (*data)["email"]}}
+					existent, err2 := loadedModel.FindOne(&filter, ctx)
+					if err2 != nil {
+						return err2
+					}
+					if existent != nil {
+						return ctx.RestError(fiber.ErrConflict, "EMAIL_UNIQUENESS", fiber.Map{"message": "User exists"})
+					}
 
-				if app.Debug {
-					log.Println("Create User")
+					if (*data)["password"] == nil || strings.TrimSpace((*data)["password"].(string)) == "" {
+						return ctx.RestError(fiber.ErrBadRequest, "PASSWORD_BLANK", fiber.Map{"message": "Invalid password"})
+					}
+					hashed, err := bcrypt.GenerateFromPassword([]byte((*data)["password"].(string)), 10)
+					if err != nil {
+						return err
+					}
+					(*data)["password"] = string(hashed)
+
+					if app.Debug {
+						log.Println("Create User")
+					}
+				}
+
+			} else {
+				if config.Base == "User" {
+					if (*data)["password"] != nil && (*data)["password"] != "" {
+						log.Println("Update User")
+						hashed, err := bcrypt.GenerateFromPassword([]byte((*data)["password"].(string)), 10)
+						if err != nil {
+							return err
+						}
+						(*data)["password"] = string(hashed)
+					}
 				}
 			}
-			created, err := loadedModel.Create(*data, ctx)
+			return nil
+		})
+
+		loadedModel.On("create", func(ctx *model.EventContext) error {
+			created, err := loadedModel.Create(*ctx.Data, ctx)
 			if err != nil {
 				return err
 			}
@@ -405,21 +428,7 @@ func (app *WeStack) setupModel(loadedModel *model.Model, dataSource *datasource.
 				return err
 			}
 
-			data := ctx.Data
-			if (*data)["modified"] == nil {
-				timeNow := time.Now()
-				(*data)["modified"] = timeNow
-			}
-
-			if config.Base == "User" && (*data)["password"] != nil && (*data)["password"] != "" {
-				log.Println("Update User")
-				hashed, err := bcrypt.GenerateFromPassword([]byte((*data)["password"].(string)), 10)
-				if err != nil {
-					return err
-				}
-				(*data)["password"] = string(hashed)
-			}
-			updated, err := inst.UpdateAttributes(data, ctx)
+			updated, err := inst.UpdateAttributes(ctx.Data, ctx)
 			if err != nil {
 				return err
 			}
