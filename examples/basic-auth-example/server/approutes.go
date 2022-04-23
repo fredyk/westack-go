@@ -1,4 +1,4 @@
-package main
+package server
 
 import (
 	"github.com/fredyk/westack-go/examples/basic-auth-example/server/boot"
