@@ -10,15 +10,16 @@ import (
 
 func main() {
 
+	debug := false
+	if envDebug, _ := os.LookupEnv("DEBUG"); envDebug == "true" {
+		debug = true
+	}
 	jwtSecretKey := ""
 	if s, present := os.LookupEnv("JWT_SECRET"); present {
 		jwtSecretKey = s
-	}
-	debug := true
-	if envDebug, _ := os.LookupEnv("DEBUG"); envDebug == "true" {
-		debug = true
-	} else if env, present := os.LookupEnv("GO_ENV"); present && env == "PRODUCTION" {
-		debug = false
+		if debug {
+			log.Printf("<JWT_SECRET size=%v> found\n", len(jwtSecretKey))
+		}
 	}
 	app := westack.New(westack.Options{
 		Debug:        false,
