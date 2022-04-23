@@ -32,7 +32,7 @@ var DefaulRole = model.Config{
 	Name:   "role",
 	Plural: "roles",
 	Base:   "Role",
-	Public: true,
+	Public: false,
 	Properties: map[string]model.Property{
 		"name": {
 			Type:     "string",
