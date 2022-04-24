@@ -5,12 +5,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	swagger "github.com/arsmn/fiber-swagger/v2"
 	"github.com/casbin/casbin/v2"
 	casbinmodel "github.com/casbin/casbin/v2/model"
 	fileadapter "github.com/casbin/casbin/v2/persist/file-adapter"
 	"github.com/fredyk/westack-go/westack/common"
 	"github.com/fredyk/westack-go/westack/datasource"
+	"github.com/fredyk/westack-go/westack/lib"
 	"github.com/fredyk/westack-go/westack/model"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/recover"
@@ -584,8 +584,8 @@ func (app *WeStack) Boot(customRoutesCallback func(app *WeStack)) {
 
 	app.Server.Get("/swagger/doc.json", func(ctx *fiber.Ctx) error {
 		return ctx.JSON(fiber.Map{
-			"schemes": []string{"http"},
-			"swagger": "2.0",
+			//"schemes": []string{"http"},
+			"openapi": "3.0.1",
 			"info": fiber.Map{
 				"description":    "This is your go-based API Server.",
 				"title":          "Swagger API",
@@ -599,15 +599,44 @@ func (app *WeStack) Boot(customRoutesCallback func(app *WeStack)) {
 					"name": "Apache 2.0",
 					"url":  "http://www.apache.org/licenses/LICENSE-2.0.html",
 				},
-				"version": "2.0",
+				"version": "3.0",
 			},
-			"host":     fmt.Sprintf("127.0.0.1:%v", app.Port),
-			"basePath": "/",
-			"paths":    app.SwaggerPaths(),
+			"components": fiber.Map{
+				"securitySchemes": fiber.Map{
+					"bearerAuth": fiber.Map{
+						"type":         "http",
+						"scheme":       "bearer",
+						"bearerFormat": "JWT",
+					},
+				},
+			},
+			//"security": fiber.Map{
+			//	"bearerAuth": fiber.Map{
+			//		"type": "http",
+			//		"scheme": "bearer",
+			//		"bearerFormat": "JWT",
+			//	},
+			//},
+			"servers": []fiber.Map{
+				{
+					"url": fmt.Sprintf("http://127.0.0.1:%v", app.Port),
+				},
+			},
+			//"basePath": "/",
+			"paths": app.SwaggerPaths(),
 		})
 	})
 
-	app.Server.Get("/swagger/*", swagger.Handler) // default
+	//app.Server.Get("/swagger/*", swagger.New(swagger.Config{
+	//	//DeepLinking:       false,
+	//	//DocExpansion:      "",
+	//	//OAuth:             nil,
+	//	//OAuth2RedirectUrl: "",
+	//	//URL:               "",
+	//})) // default
+	app.Server.Get("/swagger/*", func(ctx *fiber.Ctx) error {
+		return ctx.Type("html", "utf-8").Send(lib.SwaggerUIStatic)
+	}) // default
 
 }
 

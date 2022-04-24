@@ -949,45 +949,63 @@ func (loadedModel *Model) RemoteMethod(handler func(context *EventContext) error
 		description = fmt.Sprintf("%v %v.", operation, loadedModel.Config.Plural)
 	}
 
-	var parameters wst.A
+	pathDef := wst.M{
+		//"description": description,
+		//"consumes": []string{
+		//	"*/*",
+		//},
+		//"produces": []string{
+		//	"application/json",
+		//},
+		"tags": []string{
+			loadedModel.Config.Name,
+		},
+		//"requestBody": requestBody,
+		"summary": description,
+		"security": []fiber.Map{
+			{"bearerAuth": []string{}},
+		},
+		"responses": wst.M{
+			"200": wst.M{
+				"description": "OK",
+				"content": wst.M{
+					"application/json": wst.M{
+						"schema": wst.M{
+							"type": "object",
+						},
+					},
+				},
+				//"$ref": "#/components/schemas/" + loadedModel.Config.Name,
+				//"schema": wst.M{
+				//	"type":                 "object",
+				//	"additionalProperties": true,
+				//},
+			},
+		},
+	}
+
 	if verb == "post" || verb == "put" || verb == "patch" {
-		parameters = wst.A{
-			{
-				"name":        "data",
-				"in":          "body",
-				"description": "data",
-				"required":    "true",
-				"schema": wst.M{
-					"type": "object",
+		pathDef["requestBody"] = wst.M{
+			"description": "data",
+			"required":    true,
+			//"name":        "data",
+			//"in":          "body",
+			//"schema": wst.M{
+			//	"type": "object",
+			//},
+			"content": wst.M{
+				"application/json": wst.M{
+					"schema": wst.M{
+						"type": "object",
+					},
 				},
 			},
 		}
 	} else {
-		parameters = wst.A{}
+		//requestBody = wst.M{}
 	}
-	(*loadedModel.App.SwaggerPaths())[fullPath][verb] = wst.M{
-		"description": description,
-		"consumes": []string{
-			"*/*",
-		},
-		"produces": []string{
-			"application/json",
-		},
-		"tags": []string{
-			loadedModel.Config.Name,
-		},
-		"parameters": parameters,
-		"summary":    description,
-		"responses": wst.M{
-			"200": wst.M{
-				"description": "OK",
-				"schema": wst.M{
-					"type":                 "object",
-					"additionalProperties": true,
-				},
-			},
-		},
-	}
+
+	(*loadedModel.App.SwaggerPaths())[fullPath][verb] = pathDef
 
 	loadedModel.remoteMethodsMap[options.Name] = &OperationItem{
 		Handler: handler,
