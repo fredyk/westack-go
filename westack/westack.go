@@ -583,6 +583,9 @@ func (app *WeStack) Boot(customRoutesCallback func(app *WeStack)) {
 	app.loadNotFoundRoutes()
 
 	app.Server.Get("/swagger/doc.json", func(ctx *fiber.Ctx) error {
+
+		hostname := ctx.Hostname()
+
 		return ctx.JSON(fiber.Map{
 			//"schemes": []string{"http"},
 			"openapi": "3.0.1",
@@ -620,6 +623,9 @@ func (app *WeStack) Boot(customRoutesCallback func(app *WeStack)) {
 			"servers": []fiber.Map{
 				{
 					"url": fmt.Sprintf("http://127.0.0.1:%v", app.Port),
+				},
+				{
+					"url": fmt.Sprintf("https://%v", hostname),
 				},
 			},
 			//"basePath": "/",
