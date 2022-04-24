@@ -622,10 +622,10 @@ func (app *WeStack) Boot(customRoutesCallback func(app *WeStack)) {
 			//},
 			"servers": []fiber.Map{
 				{
-					"url": fmt.Sprintf("http://127.0.0.1:%v", app.Port),
+					"url": fmt.Sprintf("https://%v", hostname),
 				},
 				{
-					"url": fmt.Sprintf("https://%v", hostname),
+					"url": fmt.Sprintf("http://127.0.0.1:%v", app.Port),
 				},
 			},
 			//"basePath": "/",
