@@ -1111,6 +1111,17 @@ func (loadedModel *Model) RemoteMethod(handler func(context *EventContext) error
 		}
 	} else {
 		//requestBody = wst.M{}
+		pathDef["parameters"] = []wst.M{
+			{
+				"name":        "filter",
+				"in":          "query",
+				"description": "JSON Filter",
+				"required":    false,
+				"schema": wst.M{
+					"type": "string",
+				},
+			},
+		}
 	}
 
 	(*loadedModel.App.SwaggerPaths())[fullPath][verb] = pathDef
@@ -1127,8 +1138,13 @@ func (loadedModel *Model) RemoteMethod(handler func(context *EventContext) error
 		}
 		err2 := loadedModel.HandleRemoteMethod(options.Name, eventContext)
 		if err2 != nil {
-			debug.PrintStack()
-			return loadedModel.SendError(eventContext.BaseContext.Ctx, err2)
+
+			if err2 == fiber.ErrUnauthorized {
+				err2 = eventContext.NewError(fiber.ErrUnauthorized, "UNAUTHORIZED", fiber.Map{"message": "Unauthorized"})
+			}
+
+			log.Printf("Error in remote method %v.%v (%v %v%v): %v\n", loadedModel.Name, options.Name, strings.ToUpper(verb), loadedModel.BaseUrl, path, err2.Error())
+			return loadedModel.SendError(eventContext.Ctx, err2)
 		}
 		return nil
 	})
@@ -1172,6 +1188,7 @@ type WeStackError struct {
 	Code       string
 	Details    fiber.Map
 	Ctx        *EventContext
+	detailsSt  *string
 }
 
 func (eventContext *EventContext) UpdateEphemeral(newData *wst.M) {
@@ -1186,7 +1203,17 @@ func (eventContext *EventContext) UpdateEphemeral(newData *wst.M) {
 }
 
 func (err *WeStackError) Error() string {
-	return fmt.Sprintf("%v %v: %v", err.FiberError.Code, err.FiberError.Error(), err.Details)
+	if err.detailsSt == nil {
+		bytes, err2 := json.Marshal(err.Details)
+		st := ""
+		if err2 != nil {
+			st = fmt.Sprintf("%v", err.Details)
+		} else {
+			st = string(bytes)
+		}
+		err.detailsSt = &st
+	}
+	return fmt.Sprintf("%v %v: %v", err.FiberError.Code, err.FiberError.Error(), *err.detailsSt)
 }
 
 func (eventContext *EventContext) NewError(fiberError *fiber.Error, code string, details fiber.Map) error {
