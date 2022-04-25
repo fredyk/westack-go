@@ -104,10 +104,11 @@ type Filter struct {
 }
 
 type IApp struct {
-	Debug        bool
-	SwaggerPaths func() *map[string]M
-	FindModel    func(modelName string) (interface{}, error)
-	JwtSecretKey []byte
+	Debug          bool
+	SwaggerPaths   func() *map[string]M
+	FindModel      func(modelName string) (interface{}, error)
+	FindDatasource func(datasource string) (interface{}, error)
+	JwtSecretKey   []byte
 }
 
 func LoadFile(filePath string, out interface{}) error {

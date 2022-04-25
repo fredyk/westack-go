@@ -7,6 +7,10 @@ import (
 	"github.com/casbin/casbin/v2"
 	casbinmodel "github.com/casbin/casbin/v2/model"
 	fileadapter "github.com/casbin/casbin/v2/persist/file-adapter"
+	"github.com/fredyk/westack-go/westack/common"
+	"github.com/fredyk/westack-go/westack/datasource"
+	"github.com/go-redis/redis/v8"
+	"github.com/gofiber/fiber/v2"
 	"github.com/golang-jwt/jwt"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -14,10 +18,7 @@ import (
 	"regexp"
 	"runtime/debug"
 	"strings"
-
-	"github.com/fredyk/westack-go/westack/common"
-	"github.com/fredyk/westack-go/westack/datasource"
-	"github.com/gofiber/fiber/v2"
+	"time"
 )
 
 type Property struct {
@@ -54,6 +55,12 @@ type CasbinConfig struct {
 	Policies           []string `json:"policies"`
 }
 
+type CacheConfig struct {
+	Datasource string     `json:"datasource"`
+	Ttl        int        `json:"ttl"`
+	Keys       [][]string `json:"keys"`
+}
+
 type Config struct {
 	Name       string                `json:"name"`
 	Plural     string                `json:"plural"`
@@ -63,6 +70,7 @@ type Config struct {
 	Relations  *map[string]*Relation `json:"relations"`
 	Hidden     []string              `json:"hidden"`
 	Casbin     CasbinConfig          `json:"casbin"`
+	Cache      CacheConfig           `json:"cache"`
 }
 
 type SimplifiedConfig struct {
@@ -95,7 +103,8 @@ type Model struct {
 	modelRegistry    *map[string]*Model
 	remoteMethodsMap map[string]*OperationItem
 
-	authCache map[string]map[string]map[string]bool
+	authCache           map[string]map[string]map[string]bool
+	hasHiddenProperties bool
 }
 
 func (loadedModel *Model) GetModelRegistry() *map[string]*Model {
@@ -175,12 +184,14 @@ func (modelInstance *Instance) ToJSON() wst.M {
 				case isSingleRelation(relationConfig.Type):
 					relatedInstance := rawRelatedData.(*Instance).ToJSON()
 					result[relationName] = relatedInstance
+					break
 				case isManyRelation(relationConfig.Type):
 					aux := make(wst.A, len(rawRelatedData.([]Instance)))
 					for idx, v := range rawRelatedData.([]Instance) {
 						aux[idx] = v.ToJSON()
 					}
 					result[relationName] = aux
+					break
 				}
 			}
 		}
@@ -377,6 +388,79 @@ func (loadedModel *Model) FindMany(filterMap *wst.Filter, baseContext *EventCont
 
 	for idx, document := range *documents {
 		results[idx] = loadedModel.Build(document, targetBaseContext)
+
+		if loadedModel.Config.Cache.Datasource != "" {
+			cacheDs, err := loadedModel.App.FindDatasource(loadedModel.Config.Cache.Datasource)
+			if err != nil {
+				return nil, err
+			}
+
+			safeCacheDs := cacheDs.(*datasource.Datasource)
+
+			toCache := wst.CopyMap(document)
+
+			for _, keyGroup := range loadedModel.Config.Cache.Keys {
+				canonicalId := ""
+				for idx, key := range keyGroup {
+					if idx > 0 {
+						canonicalId = fmt.Sprintf("%v:", canonicalId)
+					}
+					v := (document)[key]
+					if key == "_id" && v == nil && document["id"] != nil {
+						v = document["id"]
+					}
+					switch v.(type) {
+					case primitive.ObjectID:
+						v = v.(primitive.ObjectID).Hex()
+						break
+					case *primitive.ObjectID:
+						v = v.(*primitive.ObjectID).Hex()
+						break
+					default:
+						break
+					}
+					canonicalId = fmt.Sprintf("%v%v:%v", canonicalId, key, v)
+				}
+				toCache["_redId"] = canonicalId
+				_, err := safeCacheDs.Create(loadedModel.Config.Name, &toCache)
+				if err != nil {
+					return nil, err
+				}
+			}
+
+			connectorName := safeCacheDs.Key + ".connector"
+			switch safeCacheDs.Viper.GetString(connectorName) {
+			case "redis":
+				baseKey := fmt.Sprintf("%v:%v", safeCacheDs.Viper.GetString(safeCacheDs.Key+".database"), loadedModel.Config.Name)
+				for _, keyGroup := range loadedModel.Config.Cache.Keys {
+					keyToExpire := baseKey
+					for _, key := range keyGroup {
+						v := (document)[key]
+						switch v.(type) {
+						case primitive.ObjectID:
+							v = v.(primitive.ObjectID).Hex()
+							break
+						case *primitive.ObjectID:
+							v = v.(*primitive.ObjectID).Hex()
+							break
+						default:
+							break
+						}
+						keyToExpire = fmt.Sprintf("%v:%v:%v", keyToExpire, key, v)
+					}
+					cmd := safeCacheDs.Db.(*redis.Client).Expire(safeCacheDs.Context, keyToExpire, time.Duration(loadedModel.Config.Cache.Ttl)*time.Second)
+					_, err := cmd.Result()
+					if err != nil {
+						return nil, err
+					}
+				}
+				break
+			default:
+				return nil, errors.New(fmt.Sprintf("Unsupported cache connector %v", connectorName))
+			}
+
+		}
+
 	}
 
 	return results, nil
@@ -869,6 +953,24 @@ func (modelInstance *Instance) Reload(eventContext *EventContext) error {
 	return nil
 }
 
+func (modelInstance *Instance) GetString(key string) string {
+	if modelInstance.data[key] != nil {
+		return modelInstance.data[key].(string)
+	}
+	return ""
+}
+
+func (modelInstance *Instance) GetFloat64(key string) float64 {
+	if modelInstance.data[key] != nil {
+		if v, ok := modelInstance.data[key].(float32); ok {
+			return float64(v)
+		} else {
+			return modelInstance.data[key].(float64)
+		}
+	}
+	return 0.0
+}
+
 type RemoteMethodOptionsHttp struct {
 	Path string
 	Verb string
@@ -1238,7 +1340,7 @@ func (loadedModel *Model) EnforceEx(token *BearerToken, objId string, action str
 		bearerUserIdSt = "_EVERYONE_"
 		targetObjId = "*"
 		if result, isPresent := loadedModel.authCache[bearerUserIdSt][targetObjId][action]; isPresent {
-			if loadedModel.App.Debug {
+			if loadedModel.App.Debug || !result {
 				log.Printf("DEBUG: Cache hit for %v.%v ---> %v\n", loadedModel.Name, action, result)
 			}
 			return nil, result
@@ -1250,7 +1352,7 @@ func (loadedModel *Model) EnforceEx(token *BearerToken, objId string, action str
 		targetObjId = objId
 
 		if result, isPresent := loadedModel.authCache[bearerUserIdSt][targetObjId][action]; isPresent {
-			if loadedModel.App.Debug {
+			if loadedModel.App.Debug || !result {
 				log.Printf("DEBUG: Cache hit for %v.%v ---> %v\n", loadedModel.Name, action, result)
 			}
 			return nil, result
@@ -1310,10 +1412,15 @@ func (loadedModel *Model) mergeRelated(relationDeepLevel byte, documents *wst.A,
 		return nil
 	}
 
+	parentDocs := documents
+
 	relationName := includeItem.Relation
 	relation := (*loadedModel.Config.Relations)[relationName]
 	relatedModelName := relation.Model
 	relatedLoadedModel := (*loadedModel.modelRegistry)[relatedModelName]
+
+	parentModel := loadedModel
+	parentRelationName := relationName
 
 	if relatedLoadedModel == nil {
 		log.Println()
@@ -1373,35 +1480,92 @@ func (loadedModel *Model) mergeRelated(relationDeepLevel byte, documents *wst.A,
 				targetScope = &wst.Filter{}
 			}
 
+			wasEmptyWhere := false
 			if targetScope.Where == nil {
 				targetScope.Where = &wst.Where{}
+				wasEmptyWhere = true
 			}
 
-			for _, document := range *documents {
-				(*targetScope.Where)[keyFrom] = document[keyTo]
-				switch relation.Type {
-				case "belongsTo", "hasOne":
-					targetScope.Limit = 1
-					break
-				}
-				relatedInstances, err := relatedLoadedModel.FindMany(targetScope, baseContext)
-				if err != nil {
-					return err
+			cachedRelatedDocs := make([]InstanceA, len(*documents))
+			localCache := map[string]InstanceA{}
+
+			for documentIdx, document := range *documents {
+
+				if wasEmptyWhere && relatedLoadedModel.Config.Cache.Datasource != "" /* && keyFrom == relatedLoadedModel.Config.Cache.Keys*/ {
+
+					cacheDs, err := loadedModel.App.FindDatasource(relatedLoadedModel.Config.Cache.Datasource)
+					if err != nil {
+						return err
+					}
+					safeCacheDs := cacheDs.(*datasource.Datasource)
+
+					//baseKey := fmt.Sprintf("%v:%v", safeCacheDs.Viper.GetString(safeCacheDs.Key+".database"), relatedLoadedModel.Config.Name)
+					for _, keyGroup := range relatedLoadedModel.Config.Cache.Keys {
+
+						if len(keyGroup) == 1 && keyGroup[0] == keyFrom {
+
+							cacheKeyTo := fmt.Sprintf("%v:%v", keyFrom, document[keyTo])
+
+							if localCache[cacheKeyTo] != nil {
+								cachedRelatedDocs[documentIdx] = localCache[cacheKeyTo]
+							} else {
+								var cachedDocs *wst.A
+
+								cacheLookups := &wst.A{wst.M{"$match": wst.M{keyFrom: cacheKeyTo}}}
+								cachedDocs, err = safeCacheDs.FindMany(relatedLoadedModel.Config.Name, cacheLookups)
+								if err != nil {
+									return err
+								}
+
+								for _, cachedDoc := range *cachedDocs {
+									cachedInstance := relatedLoadedModel.Build(cachedDoc, baseContext)
+									if cachedRelatedDocs[documentIdx] == nil {
+										cachedRelatedDocs[documentIdx] = InstanceA{}
+									}
+									cachedRelatedDocs[documentIdx] = append(cachedRelatedDocs[documentIdx], cachedInstance)
+								}
+								localCache[cacheKeyTo] = cachedRelatedDocs[documentIdx]
+							}
+
+						}
+					}
+
 				}
 
-				for _, relatedInstance := range relatedInstances {
-					relatedInstance.HideProperties()
+				relatedInstances := cachedRelatedDocs[documentIdx]
+				if relatedInstances == nil {
+
+					(*targetScope.Where)[keyFrom] = document[keyTo]
+					if isSingleRelation(relation.Type) {
+						targetScope.Limit = 1
+					}
+
+					var err error
+					relatedInstances, err = relatedLoadedModel.FindMany(targetScope, baseContext)
+					if err != nil {
+						return err
+					}
+				} else {
+					if loadedModel.App.Debug {
+						log.Printf("Found cache for %v.%v[%v]\n", loadedModel.Name, relationName, documentIdx)
+					}
 				}
 
-				switch relation.Type {
-				case "belongsTo", "hasOne":
+				if loadedModel.hasHiddenProperties {
+					for _, relatedInstance := range relatedInstances {
+						relatedInstance.HideProperties()
+					}
+				}
+
+				switch {
+				case isSingleRelation(relation.Type):
 					if len(relatedInstances) > 0 {
 						document[relationName] = relatedInstances[0]
 					} else {
 						document[relationName] = nil
 					}
 					break
-				case "hasMany":
+				case isManyRelation(relation.Type):
 					document[relationName] = relatedInstances
 					break
 				}
@@ -1417,47 +1581,48 @@ func (loadedModel *Model) mergeRelated(relationDeepLevel byte, documents *wst.A,
 			if includeItem.Scope.Include != nil {
 
 				for _, includeItem := range *includeItem.Scope.Include {
-					//relationName := includeItem.Relation
+					relationName := includeItem.Relation
 					//relation := (*loadedModel.Config.Relations)[relationName]
 					_isSingleRelation := isSingleRelation(relation.Type)
 					_isManyRelation := !_isSingleRelation
 					//relatedModelName := relation.Model
 					//relatedLoadedModel := (*loadedModel.modelRegistry)[relatedModelName]
 
-					for _, doc := range *documents {
+					nestedDocuments := make(wst.A, 0)
 
-						var documents *wst.A
+					for _, doc := range *documents {
 
 						switch {
 						case _isSingleRelation:
-							if doc[relationName] != nil {
+							if doc[parentRelationName] != nil {
 								documentsValue := make(wst.A, 1)
 
-								if relatedInstance, ok := doc[relationName].(map[string]interface{}); ok {
+								if relatedInstance, ok := doc[parentRelationName].(map[string]interface{}); ok {
 									documentsValue[0] = wst.M{}
 									for k, v := range relatedInstance {
 										documentsValue[0][k] = v
 									}
-								} else if relatedInstance, ok := doc[relationName].(wst.M); ok {
+								} else if relatedInstance, ok := doc[parentRelationName].(wst.M); ok {
 									documentsValue[0] = relatedInstance
 								} else {
-									log.Printf("WARNING: Invalid type for %v.%v %s\n", loadedModel.Name, relationName, doc[relationName])
+									log.Printf("WARNING: Invalid type for %v.%v %s\n", loadedModel.Name, relationName, doc[parentRelationName])
 								}
 
-								documents = &documentsValue
+								//documents = &documentsValue
+								nestedDocuments = append(nestedDocuments, documentsValue...)
 							}
 							break
 						case _isManyRelation:
-							if doc[relationName] != nil {
+							if doc[parentRelationName] != nil {
 
-								if asGeneric, ok := doc[relationName].([]interface{}); ok {
+								if asGeneric, ok := doc[parentRelationName].([]interface{}); ok {
 									relatedInstances := asGeneric
-									documents = wst.AFromGenericSlice(&relatedInstances)
-								} else if asPrimitiveA, ok := doc[relationName].(primitive.A); ok {
+									nestedDocuments = append(nestedDocuments, *wst.AFromGenericSlice(&relatedInstances)...)
+								} else if asPrimitiveA, ok := doc[parentRelationName].(primitive.A); ok {
 									relatedInstances := asPrimitiveA
-									documents = wst.AFromPrimitiveSlice(&relatedInstances)
-								} else if asA, ok := doc[relationName].(wst.A); ok {
-									documents = &asA
+									nestedDocuments = append(nestedDocuments, *wst.AFromPrimitiveSlice(&relatedInstances)...)
+								} else if asA, ok := doc[parentRelationName].(wst.A); ok {
+									nestedDocuments = append(nestedDocuments, asA...)
 								} else {
 									log.Println("WARNING: unknown type for relation", relationName, "in", loadedModel.Name)
 									continue
@@ -1467,11 +1632,14 @@ func (loadedModel *Model) mergeRelated(relationDeepLevel byte, documents *wst.A,
 							break
 						}
 
-						loadedModel := relatedLoadedModel
-						err := loadedModel.mergeRelated(relationDeepLevel+1, documents, includeItem, baseContext)
-						if err != nil {
-							return err
-						}
+					}
+					loadedModel := relatedLoadedModel
+					if loadedModel.App.Debug {
+						log.Printf("Dispatch nested relation %v.%v.%v (n=%v, m=%v)\n", parentModel.Name, parentRelationName, relationName, len(*parentDocs), len(nestedDocuments))
+					}
+					err := loadedModel.mergeRelated(relationDeepLevel+1, &nestedDocuments, includeItem, baseContext)
+					if err != nil {
+						return err
 					}
 
 				}
@@ -1480,6 +1648,12 @@ func (loadedModel *Model) mergeRelated(relationDeepLevel byte, documents *wst.A,
 	}
 
 	return nil
+}
+
+func (loadedModel *Model) Initialize() {
+	if len(loadedModel.Config.Hidden) > 0 {
+		loadedModel.hasHiddenProperties = true
+	}
 }
 
 func GetIDAsString(idToConvert interface{}) string {

@@ -59,6 +59,16 @@ func (app *WeStack) FindModel(modelName string) (*model.Model, error) {
 	return result, nil
 }
 
+func (app WeStack) FindDatasource(dsName string) (*datasource.Datasource, error) {
+	result := (*app.Datasources)[dsName]
+
+	if result == nil {
+		return nil, errors.New(fmt.Sprintf("Datasource %v not found", dsName))
+	}
+
+	return result, nil
+}
+
 func (app *WeStack) loadModels() {
 
 	fileInfos, err := ioutil.ReadDir("./common/models")
@@ -113,6 +123,8 @@ func (app *WeStack) setupModel(loadedModel *model.Model, dataSource *datasource.
 	loadedModel.Datasource = dataSource
 
 	config := loadedModel.Config
+
+	loadedModel.Initialize()
 
 	if config.Base == "Role" {
 		app.RoleModel = loadedModel
@@ -552,7 +564,8 @@ func (app *WeStack) loadDataSources() {
 		if dsName == "" {
 			dsName = key
 		}
-		if dsViper.GetString(key+".connector") == "mongodb" {
+		connector := dsViper.GetString(key + ".connector")
+		if connector == "mongodb" /* || connector == "memory"*/ || connector == "redis" {
 			ds := datasource.New(key, dsViper, ctx)
 			err := ds.Initialize()
 			if err != nil {
@@ -563,7 +576,7 @@ func (app *WeStack) loadDataSources() {
 				log.Println("Connected to database", dsViper.GetString(key+".database"))
 			}
 		} else {
-			panic("ERROR: connector " + dsViper.GetString(key+".connector") + " not supported")
+			panic("ERROR: connector " + connector + " not supported")
 		}
 	}
 }
@@ -668,6 +681,9 @@ func (app *WeStack) AsInterface() *wst.IApp {
 		JwtSecretKey: app.JwtSecretKey,
 		FindModel: func(modelName string) (interface{}, error) {
 			return app.FindModel(modelName)
+		},
+		FindDatasource: func(datasource string) (interface{}, error) {
+			return app.FindDatasource(datasource)
 		},
 		SwaggerPaths: func() *map[string]wst.M {
 			return app.SwaggerPaths()
