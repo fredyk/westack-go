@@ -353,17 +353,7 @@ func ReplaceObjectIds(data interface{}) interface{} {
 									asList[i] = ReplaceObjectIds(asListItem).(wst.M)
 								}
 							} else {
-								asList, asGenericListOk := value.([]interface{})
-								if asGenericListOk {
-									for i, asListItem := range asList {
-										asList[i] = ReplaceObjectIds(asListItem)
-									}
-								} else {
-									_, asStringListOk := value.([]string)
-									if !asStringListOk {
-										log.Println(fmt.Sprintf("WARNING: What to do with %v (%s)?", value, value))
-									}
-								}
+								log.Println(fmt.Sprintf("WARNING: What to do with %v (%s)?", value, value))
 							}
 						}
 					}
