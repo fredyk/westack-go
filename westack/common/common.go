@@ -3,7 +3,9 @@ package wst
 import (
 	"encoding/json"
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"io/ioutil"
+	"log"
 	"regexp"
 	"strings"
 )
@@ -35,6 +37,53 @@ func (m M) GetString(key string) string {
 }
 
 type A []M
+
+func AFromGenericSlice(in *[]interface{}) *A {
+
+	if in == nil {
+		return nil
+	}
+
+	out := make(A, len(*in))
+
+	for idx, inDoc := range *in {
+		if vv, ok := inDoc.(M); ok {
+			out[idx] = vv
+		} else {
+			log.Println("ERROR: AFromGenericSlice: not an M")
+			out[idx] = M{}
+		}
+	}
+
+	return &out
+}
+
+func AFromPrimitiveSlice(in *primitive.A) *A {
+
+	if in == nil {
+		return nil
+	}
+
+	out := make(A, len(*in))
+
+	for idx, inDoc := range *in {
+		if vv, ok := inDoc.(primitive.M); ok {
+
+			out[idx] = M{}
+			for k, v := range vv {
+				out[idx][k] = v
+			}
+
+		} else if vv, ok := inDoc.(M); ok {
+			out[idx] = vv
+		} else {
+			log.Println("ERROR: AFromPrimitiveSlice: not a primitive.M")
+			out[idx] = M{}
+		}
+	}
+
+	return &out
+}
 
 type Where M
 
