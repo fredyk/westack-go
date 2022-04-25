@@ -31,6 +31,10 @@ type Relation struct {
 	Model      string  `json:"model"`
 	PrimaryKey *string `json:"primaryKey"`
 	ForeignKey *string `json:"foreignKey"`
+	Options    struct {
+		//Inverse bool `json:"inverse"`
+		SkipAuth bool `json:"skipAuth"`
+	} `json:"options"`
 }
 
 type ACL struct {
@@ -90,6 +94,8 @@ type Model struct {
 	eventHandlers    map[string]func(eventContext *EventContext) error
 	modelRegistry    *map[string]*Model
 	remoteMethodsMap map[string]*OperationItem
+
+	authCache map[string]map[string]map[string]bool
 }
 
 func (loadedModel *Model) GetModelRegistry() *map[string]*Model {
@@ -122,6 +128,7 @@ func New(config *Config, modelRegistry *map[string]*Model) *Model {
 		modelRegistry:    modelRegistry,
 		eventHandlers:    map[string]func(eventContext *EventContext) error{},
 		remoteMethodsMap: map[string]*OperationItem{},
+		authCache:        map[string]map[string]map[string]bool{},
 	}
 
 	(*modelRegistry)[config.Name] = loadedModel
@@ -164,11 +171,11 @@ func (modelInstance *Instance) ToJSON() wst.M {
 				return nil
 			}
 			if relatedModel != nil {
-				switch relationConfig.Type {
-				case "belongsTo", "hasOne":
+				switch {
+				case isSingleRelation(relationConfig.Type):
 					relatedInstance := rawRelatedData.(*Instance).ToJSON()
 					result[relationName] = relatedInstance
-				case "hasMany", "hasAndBelongsToMany":
+				case isManyRelation(relationConfig.Type):
 					aux := make(wst.A, len(rawRelatedData.([]Instance)))
 					for idx, v := range rawRelatedData.([]Instance) {
 						aux[idx] = v.ToJSON()
@@ -180,6 +187,14 @@ func (modelInstance *Instance) ToJSON() wst.M {
 	}
 
 	return result
+}
+
+func isManyRelation(relationType string) bool {
+	return relationType == "hasMany" || relationType == "hasManyThrough" || relationType == "hasAndBelongsToMany"
+}
+
+func isSingleRelation(relationType string) bool {
+	return relationType == "hasOne" || relationType == "belongsTo"
 }
 
 func (instances InstanceA) ToJSON() []wst.M {
@@ -350,28 +365,9 @@ func (loadedModel *Model) FindMany(filterMap *wst.Filter, baseContext *EventCont
 				return nil, errors.New("related model not found")
 			}
 
-			objId := "*"
-			if len(*documents) == 1 {
-				objId = (*documents)[0]["_id"].(primitive.ObjectID).Hex()
-			}
-
-			action := fmt.Sprintf("__get__%v", relationName)
-			if loadedModel.App.Debug {
-				log.Printf("DEBUG: Check %v.%v\n", loadedModel.Name, action)
-			}
-			err, allowed := loadedModel.EnforceEx(targetBaseContext.Bearer, objId, action, targetBaseContext)
-			if err != nil && err != fiber.ErrUnauthorized {
+			err := loadedModel.mergeRelated(1, documents, includeItem, targetBaseContext)
+			if err != nil {
 				return nil, err
-			}
-			if !allowed {
-				for _, doc := range *documents {
-					delete(doc, relationName)
-				}
-			} else {
-				err := loadedModel.mergeRelated(documents, includeItem, targetBaseContext)
-				if err != nil {
-					return nil, err
-				}
 			}
 
 		}
@@ -1227,24 +1223,38 @@ func (loadedModel *Model) HandleRemoteMethod(name string, eventContext *EventCon
 
 func (loadedModel *Model) EnforceEx(token *BearerToken, objId string, action string, eventContext *EventContext) (error, bool) {
 
-	if token.User != nil && token.User.System == true {
+	if token != nil && token.User != nil && token.User.System == true {
 		return nil, true
 	}
 
-	if token.User == nil {
-		allow, exp, err := loadedModel.Enforcer.EnforceEx("_EVERYONE_", "*", action)
-		if loadedModel.App.Debug {
-			log.Println("Explain", exp)
+	if token == nil {
+		log.Printf("WARNING: Trying to enforce without token at %v.%v\n", loadedModel.Name, action)
+	}
+
+	var bearerUserIdSt string
+	var targetObjId string
+
+	if token == nil || token.User == nil {
+		bearerUserIdSt = "_EVERYONE_"
+		targetObjId = "*"
+		if result, isPresent := loadedModel.authCache[bearerUserIdSt][targetObjId][action]; isPresent {
+			if loadedModel.App.Debug {
+				log.Printf("DEBUG: Cache hit for %v.%v ---> %v\n", loadedModel.Name, action, result)
+			}
+			return nil, result
 		}
-		if err != nil {
-			return err, false
-		}
-		if allow {
-			return nil, true
-		}
+
 	} else {
 
-		bearerUserIdSt := fmt.Sprintf("%v", token.User.Id)
+		bearerUserIdSt = fmt.Sprintf("%v", token.User.Id)
+		targetObjId = objId
+
+		if result, isPresent := loadedModel.authCache[bearerUserIdSt][targetObjId][action]; isPresent {
+			if loadedModel.App.Debug {
+				log.Printf("DEBUG: Cache hit for %v.%v ---> %v\n", loadedModel.Name, action, result)
+			}
+			return nil, result
+		}
 
 		_, err := loadedModel.Enforcer.AddRoleForUser(bearerUserIdSt, "_EVERYONE_")
 		if err != nil {
@@ -1265,26 +1275,40 @@ func (loadedModel *Model) EnforceEx(token *BearerToken, objId string, action str
 			return err, false
 		}
 
-		if eventContext.ModelID != nil {
-		}
+	}
 
-		allow, exp, err := loadedModel.Enforcer.EnforceEx(bearerUserIdSt, objId, action)
+	allow, exp, err := loadedModel.Enforcer.EnforceEx(bearerUserIdSt, targetObjId, action)
 
-		if loadedModel.App.Debug {
-			log.Println("Explain", exp)
+	if loadedModel.App.Debug {
+		log.Println("Explain", exp)
+	}
+	if err != nil {
+		loadedModel.authCache[bearerUserIdSt][targetObjId][action] = false
+		return err, false
+	}
+	if allow {
+		if loadedModel.authCache[bearerUserIdSt] == nil {
+			loadedModel.authCache[bearerUserIdSt] = map[string]map[string]bool{}
 		}
-		if err != nil {
-			return err, false
+		if loadedModel.authCache[bearerUserIdSt][targetObjId] == nil {
+			loadedModel.authCache[bearerUserIdSt][targetObjId] = map[string]bool{}
 		}
-		if allow {
-			return nil, true
-		}
+		loadedModel.authCache[bearerUserIdSt][targetObjId][action] = true
+		return nil, true
 
 	}
 	return fiber.ErrUnauthorized, false
 }
 
-func (loadedModel *Model) mergeRelated(documents *wst.A, includeItem wst.IncludeItem, baseContext *EventContext) error {
+/*
+params:
+	- relationDeepLevel: Starts at 1 (Root is 0)
+*/
+func (loadedModel *Model) mergeRelated(relationDeepLevel byte, documents *wst.A, includeItem wst.IncludeItem, baseContext *EventContext) error {
+
+	if documents == nil {
+		return nil
+	}
 
 	relationName := includeItem.Relation
 	relation := (*loadedModel.Config.Relations)[relationName]
@@ -1296,6 +1320,33 @@ func (loadedModel *Model) mergeRelated(documents *wst.A, includeItem wst.Include
 		log.Printf("WARNING: related model %v not found for relation %v.%v", relatedModelName, loadedModel.Name, relationName)
 		log.Println()
 		return nil
+	}
+
+	//if relation.Options.SkipAuth && relationDeepLevel > 1 {
+	// Only skip auth checking for relations above the level 1
+	if relation.Options.SkipAuth {
+		if loadedModel.App.Debug {
+			log.Printf("DEBUG: SkipAuth %v.%v\n", loadedModel.Name, relationName)
+		}
+	} else {
+		objId := "*"
+		if len(*documents) == 1 {
+			objId = (*documents)[0]["_id"].(primitive.ObjectID).Hex()
+		}
+
+		action := fmt.Sprintf("__get__%v", relationName)
+		if loadedModel.App.Debug {
+			log.Printf("DEBUG: Check %v.%v\n", loadedModel.Name, action)
+		}
+		err, allowed := loadedModel.EnforceEx(baseContext.Bearer, objId, action, baseContext)
+		if err != nil && err != fiber.ErrUnauthorized {
+			return err
+		}
+		if !allowed {
+			for _, doc := range *documents {
+				delete(doc, relationName)
+			}
+		}
 	}
 
 	if relatedLoadedModel.Datasource.Name != loadedModel.Datasource.Name {
@@ -1360,7 +1411,74 @@ func (loadedModel *Model) mergeRelated(documents *wst.A, includeItem wst.Include
 			break
 		}
 
+	} else {
+
+		if includeItem.Scope != nil && documents != nil && len(*documents) > 0 {
+			if includeItem.Scope.Include != nil {
+
+				for _, includeItem := range *includeItem.Scope.Include {
+					//relationName := includeItem.Relation
+					//relation := (*loadedModel.Config.Relations)[relationName]
+					_isSingleRelation := isSingleRelation(relation.Type)
+					_isManyRelation := !_isSingleRelation
+					//relatedModelName := relation.Model
+					//relatedLoadedModel := (*loadedModel.modelRegistry)[relatedModelName]
+
+					for _, doc := range *documents {
+
+						var documents *wst.A
+
+						switch {
+						case _isSingleRelation:
+							if doc[relationName] != nil {
+								documentsValue := make(wst.A, 1)
+
+								if relatedInstance, ok := doc[relationName].(map[string]interface{}); ok {
+									documentsValue[0] = wst.M{}
+									for k, v := range relatedInstance {
+										documentsValue[0][k] = v
+									}
+								} else if relatedInstance, ok := doc[relationName].(wst.M); ok {
+									documentsValue[0] = relatedInstance
+								} else {
+									log.Printf("WARNING: Invalid type for %v.%v %s\n", loadedModel.Name, relationName, doc[relationName])
+								}
+
+								documents = &documentsValue
+							}
+							break
+						case _isManyRelation:
+							if doc[relationName] != nil {
+
+								if asGeneric, ok := doc[relationName].([]interface{}); ok {
+									relatedInstances := asGeneric
+									documents = wst.AFromGenericSlice(&relatedInstances)
+								} else if asPrimitiveA, ok := doc[relationName].(primitive.A); ok {
+									relatedInstances := asPrimitiveA
+									documents = wst.AFromPrimitiveSlice(&relatedInstances)
+								} else if asA, ok := doc[relationName].(wst.A); ok {
+									documents = &asA
+								} else {
+									log.Println("WARNING: unknown type for relation", relationName, "in", loadedModel.Name)
+									continue
+								}
+
+							}
+							break
+						}
+
+						loadedModel := relatedLoadedModel
+						err := loadedModel.mergeRelated(relationDeepLevel+1, documents, includeItem, baseContext)
+						if err != nil {
+							return err
+						}
+					}
+
+				}
+			}
+		}
 	}
+
 	return nil
 }
 
