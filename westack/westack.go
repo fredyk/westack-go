@@ -179,11 +179,11 @@ func (app *WeStack) setupModel(loadedModel *model.Model, dataSource *datasource.
 			ctx.Data = data
 
 			if (*data)["email"] == nil || strings.TrimSpace((*data)["email"].(string)) == "" {
-				return ctx.RestError(fiber.ErrBadRequest, "USERNAME_EMAIL_REQUIRED", fiber.Map{"message": "username or email is required"})
+				return ctx.NewError(fiber.ErrBadRequest, "USERNAME_EMAIL_REQUIRED", fiber.Map{"message": "username or email is required"})
 			}
 
 			if (*data)["password"] == nil || strings.TrimSpace((*data)["password"].(string)) == "" {
-				return ctx.RestError(fiber.ErrUnauthorized, "LOGIN_FAILED", fiber.Map{"message": "login failed"})
+				return ctx.NewError(fiber.ErrUnauthorized, "LOGIN_FAILED", fiber.Map{"message": "login failed"})
 			}
 
 			email := loginBody.Email
@@ -193,7 +193,7 @@ func (app *WeStack) setupModel(loadedModel *model.Model, dataSource *datasource.
 				},
 			}, ctx)
 			if len(users) == 0 {
-				return ctx.RestError(fiber.ErrUnauthorized, "LOGIN_FAILED", fiber.Map{"message": "login failed"})
+				return ctx.NewError(fiber.ErrUnauthorized, "LOGIN_FAILED", fiber.Map{"message": "login failed"})
 			}
 			firstUser := users[0]
 			ctx.Instance = &firstUser
@@ -202,7 +202,7 @@ func (app *WeStack) setupModel(loadedModel *model.Model, dataSource *datasource.
 			savedPassword := firstUserData["password"]
 			err = bcrypt.CompareHashAndPassword([]byte(savedPassword.(string)), []byte(loginBody.Password))
 			if err != nil {
-				return ctx.RestError(fiber.ErrUnauthorized, "LOGIN_FAILED", fiber.Map{"message": "login failed"})
+				return ctx.NewError(fiber.ErrUnauthorized, "LOGIN_FAILED", fiber.Map{"message": "login failed"})
 			}
 
 			userIdHex := firstUser.Id.(primitive.ObjectID).Hex()
@@ -383,7 +383,7 @@ func (app *WeStack) setupModel(loadedModel *model.Model, dataSource *datasource.
 				if config.Base == "User" {
 					if (*data)["email"] == nil || strings.TrimSpace((*data)["email"].(string)) == "" {
 						// TODO: Validate email
-						return ctx.RestError(fiber.ErrBadRequest, "EMAIL_PRESENCE", fiber.Map{"message": "Invalid email"})
+						return ctx.NewError(fiber.ErrBadRequest, "EMAIL_PRESENCE", fiber.Map{"message": "Invalid email"})
 					}
 					filter := wst.Filter{Where: &wst.Where{"email": (*data)["email"]}}
 					existent, err2 := loadedModel.FindOne(&filter, ctx)
@@ -391,11 +391,11 @@ func (app *WeStack) setupModel(loadedModel *model.Model, dataSource *datasource.
 						return err2
 					}
 					if existent != nil {
-						return ctx.RestError(fiber.ErrConflict, "EMAIL_UNIQUENESS", fiber.Map{"message": "User exists"})
+						return ctx.NewError(fiber.ErrConflict, "EMAIL_UNIQUENESS", fiber.Map{"message": "User exists"})
 					}
 
 					if (*data)["password"] == nil || strings.TrimSpace((*data)["password"].(string)) == "" {
-						return ctx.RestError(fiber.ErrBadRequest, "PASSWORD_BLANK", fiber.Map{"message": "Invalid password"})
+						return ctx.NewError(fiber.ErrBadRequest, "PASSWORD_BLANK", fiber.Map{"message": "Invalid password"})
 					}
 					hashed, err := bcrypt.GenerateFromPassword([]byte((*data)["password"].(string)), 10)
 					if err != nil {
@@ -455,7 +455,7 @@ func (app *WeStack) setupModel(loadedModel *model.Model, dataSource *datasource.
 				return err
 			}
 			if deletedCount != 1 {
-				return ctx.RestError(fiber.ErrBadRequest, "BAD_REQUEST", fiber.Map{"message": fmt.Sprintf("Deleted %v instances for %v", deletedCount, ctx.ModelID)})
+				return ctx.NewError(fiber.ErrBadRequest, "BAD_REQUEST", fiber.Map{"message": fmt.Sprintf("Deleted %v instances for %v", deletedCount, ctx.ModelID)})
 			}
 			ctx.StatusCode = fiber.StatusNoContent
 			ctx.Result = ""
@@ -510,7 +510,7 @@ func handleEvent(eventContext *model.EventContext, loadedModel *model.Model, eve
 	if loadedModel.DisabledHandlers[event] != true {
 		err := loadedModel.GetHandler(event)(eventContext)
 		if err != nil {
-			return loadedModel.SendError(eventContext.Ctx, err)
+			return err
 		}
 	}
 	if eventContext.StatusCode == 0 {

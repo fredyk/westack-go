@@ -124,8 +124,17 @@ func (loadedModel *Model) SendError(ctx *fiber.Ctx, err error) error {
 				"details":    err.(*WeStackError).Details,
 			},
 		})
+	default:
+		return ctx.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": fiber.Map{
+				"statusCode": 500,
+				"name":       "InternalServerError",
+				"code":       "INTERNAL_SERVER_ERROR",
+				"error":      err.Error(),
+				"message":    err.Error(),
+			},
+		})
 	}
-	return err
 }
 
 func New(config *Config, modelRegistry *map[string]*Model) *Model {
@@ -389,7 +398,8 @@ func (loadedModel *Model) FindMany(filterMap *wst.Filter, baseContext *EventCont
 	for idx, document := range *documents {
 		results[idx] = loadedModel.Build(document, targetBaseContext)
 
-		if loadedModel.Config.Cache.Datasource != "" {
+		if targetInclude == nil && loadedModel.Config.Cache.Datasource != "" {
+			// Dont cache if include is set
 			cacheDs, err := loadedModel.App.FindDatasource(loadedModel.Config.Cache.Datasource)
 			if err != nil {
 				return nil, err
@@ -1111,10 +1121,16 @@ func (loadedModel *Model) RemoteMethod(handler func(context *EventContext) error
 	}
 
 	return toInvoke(path, func(ctx *fiber.Ctx) error {
-		return loadedModel.HandleRemoteMethod(options.Name, &EventContext{
+		eventContext := &EventContext{
 			Ctx:    ctx,
 			Remote: &options,
-		})
+		}
+		err2 := loadedModel.HandleRemoteMethod(options.Name, eventContext)
+		if err2 != nil {
+			debug.PrintStack()
+			return loadedModel.SendError(eventContext.BaseContext.Ctx, err2)
+		}
+		return nil
 	})
 }
 
@@ -1173,7 +1189,7 @@ func (err *WeStackError) Error() string {
 	return fmt.Sprintf("%v %v: %v", err.FiberError.Code, err.FiberError.Error(), err.Details)
 }
 
-func (eventContext *EventContext) RestError(fiberError *fiber.Error, code string, details fiber.Map) error {
+func (eventContext *EventContext) NewError(fiberError *fiber.Error, code string, details fiber.Map) error {
 	eventContext.Result = details
 	return &WeStackError{
 		FiberError: fiberError,
