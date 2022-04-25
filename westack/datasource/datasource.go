@@ -5,7 +5,10 @@ import (
 	"errors"
 	"fmt"
 	wst "github.com/fredyk/westack-go/westack/common"
+	"github.com/go-redis/redis/v8"
+	"github.com/google/uuid"
 	"github.com/spf13/viper"
+	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
@@ -42,12 +45,11 @@ type Datasource struct {
 }
 
 func (ds *Datasource) Initialize() error {
-	var connector = ds.Viper.GetString(ds.Key + ".connector")
+	dsViper := ds.Viper
+	var connector = dsViper.GetString(ds.Key + ".connector")
 	switch connector {
 	case "mongodb":
 		mongoCtx, cancelFn := context.WithCancel(ds.Context)
-
-		dsViper := ds.Viper
 
 		var clientOpts *options.ClientOptions
 
@@ -114,6 +116,21 @@ func (ds *Datasource) Initialize() error {
 				}
 			}
 		}()
+		break
+	case "redis":
+
+		// Create redis client
+		var rClient *redis.Client = redis.NewClient(&redis.Options{
+			Addr:     dsViper.GetString(ds.Key + ".url"),
+			Password: dsViper.GetString(ds.Key + ".password"), // no password set
+			DB:       dsViper.GetInt(ds.Key + ".database"),    // use default DB
+		})
+		ds.Db = rClient
+
+		break
+	//case "memory":
+	//	ds.Db = make(map[interface{}]interface{})
+	//	break
 	default:
 		return errors.New("Invalid connector " + connector)
 	}
@@ -154,30 +171,114 @@ func (ds *Datasource) FindMany(collectionName string, lookups *wst.A) (*wst.A, e
 			return nil, err
 		}
 		return &documents, nil
+	case "redis":
+		var rClient = ds.Db.(*redis.Client)
+
+		if lookups == nil || len(*lookups) == 0 {
+			return nil, errors.New("empty query")
+		}
+
+		potentialMatchStage := (*lookups)[0]
+
+		var _id interface{}
+		if match, isPresent := potentialMatchStage["$match"]; !isPresent {
+			return nil, errors.New("invalid first stage for redis. First stage must contain $match")
+		} else {
+			if asM, ok := match.(wst.M); !ok {
+				return nil, errors.New(fmt.Sprintf("invalid $match value type %s", asM))
+			} else {
+				if len(asM) == 0 {
+					return nil, errors.New("empty $match")
+				} else {
+					for _, v := range asM {
+						//key := fmt.Sprintf("%v:%v:%v", ds.Viper.GetString(ds.Keys+".database"), collectionName, k)
+						_id = v
+						break
+					}
+				}
+			}
+		}
+
+		cmd := rClient.Get(ds.Context, fmt.Sprintf("%v:%v:%v", ds.Viper.GetString(ds.Key+".database"), collectionName, _id))
+		err := cmd.Err()
+
+		if err != nil {
+			if err.Error() == "redis: nil" {
+				return &wst.A{}, nil
+			} else {
+				return nil, err
+			}
+		}
+
+		bytes, err := cmd.Bytes()
+		if err != nil {
+			return nil, err
+		}
+
+		out := make(wst.A, 1)
+		err = bson.Unmarshal(bytes, &out[0])
+		if err != nil {
+			return nil, err
+		}
+
+		return &out, nil
 	}
 	return nil, errors.New(fmt.Sprintf("invalid connector %v", connector))
 }
 
 func findByObjectId(collectionName string, _id interface{}, ds *Datasource, lookups *wst.A) (*wst.M, error) {
-	wrappedLookups := &wst.A{
-		{
-			"$match": wst.M{
-				"_id": _id,
+	var connector = ds.Viper.GetString(ds.Key + ".connector")
+	switch connector {
+	case "mongodb":
+		wrappedLookups := &wst.A{
+			{
+				"$match": wst.M{
+					"_id": _id,
+				},
 			},
-		},
+		}
+		if lookups != nil {
+			*wrappedLookups = append(*wrappedLookups, *lookups...)
+		}
+		results, err := ds.FindMany(collectionName, wrappedLookups)
+		if err != nil {
+			return nil, err
+		}
+		if results != nil && len(*results) > 0 {
+			return &(*results)[0], nil
+		} else {
+			return nil, errors.New("document not found")
+		}
+	//case "memory":
+	//	if result, isPresent := ds.Db.(map[interface{}]wst.M)[_id]; isPresent {
+	//		return &result, nil
+	//	} else {
+	//		return ???
+	//	}
+	case "redis":
+		var rClient = ds.Db.(*redis.Client)
+
+		cmd := rClient.Get(ds.Context, fmt.Sprintf("%v:%v:%v", ds.Viper.GetString(ds.Key+".database"), collectionName, _id))
+		err := cmd.Err()
+
+		if err != nil {
+			return nil, err
+		}
+
+		bytes, err := cmd.Bytes()
+		if err != nil {
+			return nil, err
+		}
+
+		var out wst.M
+		err = bson.Unmarshal(bytes, &out)
+		if err != nil {
+			return nil, err
+		}
+
+		return &out, nil
 	}
-	if lookups != nil {
-		*wrappedLookups = append(*wrappedLookups, *lookups...)
-	}
-	results, err := ds.FindMany(collectionName, wrappedLookups)
-	if err != nil {
-		return nil, err
-	}
-	if results != nil && len(*results) > 0 {
-		return &(*results)[0], nil
-	} else {
-		return nil, errors.New("document not found")
-	}
+	return nil, errors.New(fmt.Sprintf("invalid connector %v", connector))
 }
 
 func (ds *Datasource) Create(collectionName string, data *wst.M) (*wst.M, error) {
@@ -193,6 +294,46 @@ func (ds *Datasource) Create(collectionName string, data *wst.M) (*wst.M, error)
 			return nil, err
 		}
 		return findByObjectId(collectionName, insertOneResult.InsertedID, ds, nil)
+	case "redis":
+		var rClient = ds.Db.(*redis.Client)
+
+		var id interface{}
+
+		if (*data)["_redId"] == nil {
+			id = uuid.New().String()
+			(*data)["_redId"] = id
+		} else {
+			id = (*data)["_redId"]
+		}
+
+		bytes, err := bson.Marshal(data)
+		if err != nil {
+			return nil, err
+		}
+
+		//key := fmt.Sprintf("%v:%v:%v", ds.Viper.GetString(ds.Key+".database"), collectionName, id)
+		key := fmt.Sprintf("%v:%v:%v", ds.Viper.GetString(ds.Key+".database"), collectionName, id)
+
+		statusCmd := rClient.Set(ds.Context, key, bytes, 0)
+		err = statusCmd.Err()
+		if err != nil {
+			return nil, err
+		}
+		return findByObjectId(collectionName, id, ds, nil)
+		//case "memory":
+		//	dict := ds.Db.(map[interface{}]interface{})
+		//
+		//	var id interface{}
+		//	if (*data)["_id"] == nil {
+		//		id = uuid.New()
+		//		(*data)["_id"] = id
+		//	} else {
+		//		id = (*data)["_id"]
+		//	}
+		//
+		//	dict[id] = data
+		//
+		//	return findByObjectId(collectionName, id, ds, nil)
 	}
 	return nil, errors.New(fmt.Sprintf("invalid connector %v", connector))
 }
