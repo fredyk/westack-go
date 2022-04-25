@@ -1020,10 +1020,10 @@ func (app WeStack) Start(addr string) interface{} {
 }
 
 type Options struct {
-	Debug        bool
+	debug        bool
 	RestApiRoot  string
 	Port         int32
-	JwtSecretKey []byte
+	jwtSecretKey []byte
 }
 
 func New(options Options) *WeStack {
@@ -1032,14 +1032,23 @@ func New(options Options) *WeStack {
 	modelRegistry := make(map[string]*model.Model)
 	datasources := make(map[string]*datasource.Datasource)
 
+	jwtSecretKey := ""
+	if s, present := os.LookupEnv("JWT_SECRET"); present {
+		jwtSecretKey = s
+	}
+	_debug := false
+	if envDebug, _ := os.LookupEnv("DEBUG"); envDebug == "true" {
+		_debug = true
+	}
+
 	app := WeStack{
 		ModelRegistry: &modelRegistry,
 		Server:        server,
 		Datasources:   &datasources,
-		Debug:         options.Debug,
+		Debug:         _debug,
 		RestApiRoot:   options.RestApiRoot,
 		Port:          options.Port,
-		JwtSecretKey:  options.JwtSecretKey,
+		JwtSecretKey:  []byte(jwtSecretKey),
 
 		init: time.Now(),
 	}
