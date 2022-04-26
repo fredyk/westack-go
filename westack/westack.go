@@ -599,6 +599,12 @@ func (app *WeStack) Boot(customRoutesCallback func(app *WeStack)) {
 
 		hostname := ctx.Hostname()
 
+		matchedProtocol := "https"
+
+		if strings.Contains(hostname, "localhost") || regexp.MustCompile("^[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}").MatchString(hostname) {
+			matchedProtocol = "http"
+		}
+
 		return ctx.JSON(fiber.Map{
 			//"schemes": []string{"http"},
 			"openapi": "3.0.1",
@@ -635,7 +641,7 @@ func (app *WeStack) Boot(customRoutesCallback func(app *WeStack)) {
 			//},
 			"servers": []fiber.Map{
 				{
-					"url": fmt.Sprintf("https://%v", hostname),
+					"url": fmt.Sprintf("%v://%v", matchedProtocol, hostname),
 				},
 				{
 					"url": fmt.Sprintf("http://127.0.0.1:%v", app.Port),
