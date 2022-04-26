@@ -1000,6 +1000,14 @@ func (modelInstance *Instance) GetObjectId(key string) primitive.ObjectID {
 	return primitive.ObjectID{}
 }
 
+func (modelInstance *Instance) GetM(key string) *wst.M {
+	if modelInstance.data[key] != nil {
+		v := modelInstance.data[key].(wst.M)
+		return &v
+	}
+	return nil
+}
+
 type RemoteMethodOptionsHttp struct {
 	Path string
 	Verb string
