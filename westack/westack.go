@@ -870,16 +870,18 @@ func (app *WeStack) loadModelsFixedRoutes() {
 			return handleEvent(eventContext, loadedModel, "findMany")
 		}, model.RemoteMethodOptions{
 			Name: "findMany",
-			Http: model.RemoteMethodOptionsHttp{
-				Args: model.RemoteMethodOptionsHttpArgs{
-					{
-						Name:        "filter",
-						Type:        "string",
-						Description: "",
-						In:          "query",
-						Required:    false,
+			Accepts: model.RemoteMethodOptionsHttpArgs{
+				{
+					Arg:         "filter",
+					Type:        "string",
+					Description: "",
+					Http: model.ArgHttp{
+						Source: "query",
 					},
+					Required: false,
 				},
+			},
+			Http: model.RemoteMethodOptionsHttp{
 				Path: "/",
 				Verb: "get",
 			},
@@ -898,16 +900,16 @@ func (app *WeStack) loadModelsFixedRoutes() {
 			return handleEvent(eventContext, loadedModel, "create")
 		}, model.RemoteMethodOptions{
 			Name: "create",
-			Http: model.RemoteMethodOptionsHttp{
-				Args: model.RemoteMethodOptionsHttpArgs{
-					{
-						Name:        "body",
-						Type:        "object",
-						Description: "",
-						In:          "body",
-						Required:    true,
-					},
+			Accepts: model.RemoteMethodOptionsHttpArgs{
+				{
+					Arg:         "body",
+					Type:        "object",
+					Description: "",
+					Http:        model.ArgHttp{Source: "body"},
+					Required:    true,
 				},
+			},
+			Http: model.RemoteMethodOptionsHttp{
 				Path: "/",
 				Verb: "post",
 			},
@@ -920,16 +922,16 @@ func (app *WeStack) loadModelsFixedRoutes() {
 			}, model.RemoteMethodOptions{
 				Name:        "login",
 				Description: "Logins a user",
-				Http: model.RemoteMethodOptionsHttp{
-					Args: model.RemoteMethodOptionsHttpArgs{
-						{
-							Name:        "data",
-							Type:        "object",
-							Description: "",
-							In:          "body",
-							Required:    false,
-						},
+				Accepts: model.RemoteMethodOptionsHttpArgs{
+					{
+						Arg:         "data",
+						Type:        "object",
+						Description: "",
+						Http:        model.ArgHttp{Source: "body"},
+						Required:    false,
 					},
+				},
+				Http: model.RemoteMethodOptionsHttp{
 					Path: "/login",
 					Verb: "post",
 				},
@@ -948,16 +950,18 @@ func (app *WeStack) loadModelsFixedRoutes() {
 			}, model.RemoteMethodOptions{
 				Name:        "findSelf",
 				Description: "Find user with their bearer",
-				Http: model.RemoteMethodOptionsHttp{
-					Args: model.RemoteMethodOptionsHttpArgs{
-						{
-							Name:        "filter",
-							Type:        "string",
-							Description: "",
-							In:          "query",
-							Required:    false,
+				Accepts: model.RemoteMethodOptionsHttpArgs{
+					{
+						Arg:         "filter",
+						Type:        "string",
+						Description: "",
+						Http: model.ArgHttp{
+							Source: "query",
 						},
+						Required: false,
 					},
+				},
+				Http: model.RemoteMethodOptionsHttp{
 					Path: "/me",
 					Verb: "get",
 				},
@@ -995,16 +999,16 @@ func (app *WeStack) loadModelsDynamicRoutes() {
 
 		}, model.RemoteMethodOptions{
 			Name: "findById",
-			Http: model.RemoteMethodOptionsHttp{
-				Args: model.RemoteMethodOptionsHttpArgs{
-					{
-						Name:        "filter",
-						Type:        "string",
-						Description: "",
-						In:          "query",
-						Required:    false,
-					},
+			Accepts: model.RemoteMethodOptionsHttpArgs{
+				{
+					Arg:         "filter",
+					Type:        "string",
+					Description: "",
+					Http:        model.ArgHttp{Source: "query"},
+					Required:    false,
 				},
+			},
+			Http: model.RemoteMethodOptionsHttp{
 				Path: "/:id",
 				Verb: "get",
 			},
@@ -1028,16 +1032,16 @@ func (app *WeStack) loadModelsDynamicRoutes() {
 			return handleEvent(eventContext, loadedModel, "instance_updateAttributes")
 		}, model.RemoteMethodOptions{
 			Name: "instance_updateAttributes",
-			Http: model.RemoteMethodOptionsHttp{
-				Args: model.RemoteMethodOptionsHttpArgs{
-					{
-						Name:        "data",
-						Type:        "object",
-						Description: "",
-						In:          "body",
-						Required:    true,
-					},
+			Accepts: model.RemoteMethodOptionsHttpArgs{
+				{
+					Arg:         "data",
+					Type:        "object",
+					Description: "",
+					Http:        model.ArgHttp{Source: "body"},
+					Required:    true,
 				},
+			},
+			Http: model.RemoteMethodOptionsHttp{
 				Path: "/:id",
 				Verb: "patch",
 			},
