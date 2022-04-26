@@ -1146,9 +1146,8 @@ func (loadedModel *Model) RemoteMethod(handler func(context *EventContext) error
 	}
 
 	pathParams := regexp.MustCompile(`:(\w+)`).FindAllString(path, -1)
-	pathParamsLen := len(pathParams)
 
-	params := make([]wst.M, pathParamsLen+len(options.Accepts))
+	params := make([]wst.M, len(pathParams))
 
 	for idx, param := range pathParams {
 		params[idx] = wst.M{
@@ -1182,14 +1181,17 @@ func (loadedModel *Model) RemoteMethod(handler func(context *EventContext) error
 		}
 	} else {
 
-		for idx, param := range options.Accepts {
+		for _, param := range options.Accepts {
 			paramType := param.Type
+			if paramType == "" {
+				panic(fmt.Sprintf("Argument '%v' in the remote method '%v' has an invalid 'type' value: '%v'", param.Arg, options.Name, paramType))
+			}
 			paramDescription := param.Description
 			if paramType == "date" {
 				paramType = "string"
 				paramDescription += " (format: ISO8601)"
 			}
-			params[pathParamsLen+idx] = wst.M{
+			params = append(params, wst.M{
 				"name":        param.Arg,
 				"in":          param.Http.Source,
 				"description": paramDescription,
@@ -1197,11 +1199,14 @@ func (loadedModel *Model) RemoteMethod(handler func(context *EventContext) error
 				"schema": wst.M{
 					"type": paramType,
 				},
-			}
+			})
 		}
 
 	}
-	pathDef["parameters"] = params
+
+	if len(params) > 0 {
+		pathDef["parameters"] = params
+	}
 
 	(*loadedModel.App.SwaggerPaths())[fullPath][verb] = pathDef
 
