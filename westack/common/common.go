@@ -2,12 +2,14 @@ package wst
 
 import (
 	"encoding/json"
+	"errors"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"io/ioutil"
 	"log"
 	"regexp"
 	"strings"
+	"time"
 )
 
 type M map[string]interface{}
@@ -37,6 +39,8 @@ func (m M) GetString(key string) string {
 }
 
 type A []M
+
+var ErrInvalidDate = errors.New("invalid date")
 
 func AFromGenericSlice(in *[]interface{}) *A {
 
@@ -154,4 +158,46 @@ func Transform(in interface{}, out interface{}) error {
 		return err2
 	}
 	return nil
+}
+
+func ParseDate(data interface{}) (interface{}, error) {
+	var newValue interface{}
+	var err error
+	if IsDate1(data) {
+		layout := "2006-01-02T15:04:05-0700"
+		newValue, err = time.Parse(layout, regexp.MustCompile("([+\\-]\\d{2}):(\\d{2})$").ReplaceAllString(data.(string), "$1$2"))
+	} else if IsDate2(data) {
+		layout := "2006-01-02T15:04:05.000-0700"
+		newValue, err = time.Parse(layout, regexp.MustCompile("([+\\-]\\d{2}):(\\d{2})$").ReplaceAllString(data.(string), "$1$2"))
+	} else if IsDate3(data) {
+		layout := "2006-01-02T15:04:05Z"
+		newValue, err = time.Parse(layout, data.(string))
+	} else if IsDate4(data) {
+		layout := "2006-01-02T15:04:05.000Z"
+		newValue, err = time.Parse(layout, data.(string))
+	}
+	if newValue == nil {
+		return nil, ErrInvalidDate
+	}
+	return newValue, err
+}
+
+func IsAnyDate(data interface{}) bool {
+	return IsDate1(data) || IsDate2(data) || IsDate3(data) || IsDate4(data)
+}
+
+func IsDate4(data interface{}) bool {
+	return regexp.MustCompile("^(\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3})([Z]+)?$").MatchString(data.(string))
+}
+
+func IsDate3(data interface{}) bool {
+	return regexp.MustCompile("^(\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2})([Z]+)?$").MatchString(data.(string))
+}
+
+func IsDate2(data interface{}) bool {
+	return regexp.MustCompile("^(\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3})([+\\-:0-9]+)$").MatchString(data.(string))
+}
+
+func IsDate1(data interface{}) bool {
+	return regexp.MustCompile("^(\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2})([+\\-:0-9]+)$").MatchString(data.(string))
 }
