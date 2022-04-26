@@ -17,6 +17,7 @@ import (
 	"log"
 	"regexp"
 	"runtime/debug"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -992,9 +993,27 @@ func (modelInstance *Instance) GetInt(key string) int64 {
 	return 0
 }
 
+func (modelInstance *Instance) GetObjectId(key string) primitive.ObjectID {
+	if modelInstance.data[key] != nil {
+		return modelInstance.data[key].(primitive.ObjectID)
+	}
+	return primitive.ObjectID{}
+}
+
+type RemoteMethodOptionsHttpArg struct {
+	Name        string
+	Type        string
+	Description string
+	In          string
+	Required    bool
+}
+
+type RemoteMethodOptionsHttpArgs []RemoteMethodOptionsHttpArg
+
 type RemoteMethodOptionsHttp struct {
 	Path string
 	Verb string
+	Args RemoteMethodOptionsHttpArgs
 }
 
 type RemoteMethodOptions struct {
@@ -1020,15 +1039,25 @@ func (loadedModel *Model) RemoteMethod(handler func(context *EventContext) error
 		panic(fmt.Sprintf("Already registered a remote method with name '%v'", options.Name))
 	}
 
-	_, err := loadedModel.Enforcer.AddRoleForUser(options.Name, "*")
-	if err != nil {
-		panic(err)
-	}
-
 	var http = options.Http
 	path := strings.ToLower(http.Path)
 	verb := strings.ToLower(http.Verb)
 	description := options.Description
+
+	for _, arg := range options.Http.Args {
+		arg.Name = strings.TrimSpace(arg.Name)
+		if arg.Name == "" {
+			panic(fmt.Sprintf("Argument name cannot be empty in the remote method '%v'", options.Name))
+		}
+		if arg.In != "query" && arg.In != "body" {
+			panic(fmt.Sprintf("Argument '%v' in the remote method '%v' has an invalid 'in' value: '%v'", arg.Name, options.Name, arg.In))
+		}
+	}
+
+	_, err := loadedModel.Enforcer.AddRoleForUser(options.Name, "*")
+	if err != nil {
+		panic(err)
+	}
 
 	var toInvoke func(string, ...fiber.Handler) fiber.Router
 	operation := ""
@@ -1059,6 +1088,7 @@ func (loadedModel *Model) RemoteMethod(handler func(context *EventContext) error
 
 	fullPath := loadedModel.BaseUrl + "/" + path
 	fullPath = regexp.MustCompile("//+").ReplaceAllString(fullPath, "/")
+	fullPath = regexp.MustCompile(`:(\w+)`).ReplaceAllString(fullPath, "{$1}")
 
 	if (*loadedModel.App.SwaggerPaths())[fullPath] == nil {
 		(*loadedModel.App.SwaggerPaths())[fullPath] = wst.M{}
@@ -1103,6 +1133,24 @@ func (loadedModel *Model) RemoteMethod(handler func(context *EventContext) error
 		},
 	}
 
+	pathParams := regexp.MustCompile(`:(\w+)`).FindAllString(path, -1)
+	pathParamsLen := len(pathParams)
+
+	params := make([]wst.M, pathParamsLen+len(http.Args))
+
+	for idx, param := range pathParams {
+		params[idx] = wst.M{
+			"name":     strings.TrimPrefix(param, ":"),
+			"in":       "path",
+			"required": true,
+			"schema": wst.M{
+				"type": "string",
+			},
+		}
+	}
+
+	(*loadedModel.App.SwaggerPaths())[fullPath][verb] = pathDef
+
 	if verb == "post" || verb == "put" || verb == "patch" {
 		pathDef["requestBody"] = wst.M{
 			"description": "data",
@@ -1121,19 +1169,27 @@ func (loadedModel *Model) RemoteMethod(handler func(context *EventContext) error
 			},
 		}
 	} else {
-		//requestBody = wst.M{}
-		pathDef["parameters"] = []wst.M{
-			{
-				"name":        "filter",
-				"in":          "query",
-				"description": "JSON Filter",
-				"required":    false,
+
+		for idx, param := range http.Args {
+			paramType := param.Type
+			paramDescription := param.Description
+			if paramType == "date" {
+				paramType = "string"
+				paramDescription += " (format: ISO8601)"
+			}
+			params[pathParamsLen+idx] = wst.M{
+				"name":        param.Name,
+				"in":          param.In,
+				"description": paramDescription,
+				"required":    param.Required,
 				"schema": wst.M{
-					"type": "string",
+					"type": paramType,
 				},
-			},
+			}
 		}
+
 	}
+	pathDef["parameters"] = params
 
 	(*loadedModel.App.SwaggerPaths())[fullPath][verb] = pathDef
 
@@ -1184,6 +1240,7 @@ type EventContext struct {
 	Remote                 *RemoteMethodOptions
 	Filter                 *wst.Filter
 	Data                   *wst.M
+	Query                  *wst.M
 	Instance               *Instance
 	Ctx                    *fiber.Ctx
 	Ephemeral              *EphemeralData
@@ -1373,6 +1430,70 @@ func (loadedModel *Model) HandleRemoteMethod(name string, eventContext *EventCon
 	}
 
 	eventContext.Bearer = token
+
+	eventContext.Data = &wst.M{}
+
+	if strings.ToLower(options.Http.Verb) == "post" || strings.ToLower(options.Http.Verb) == "put" || strings.ToLower(options.Http.Verb) == "patch" {
+		var data *wst.M
+		err := json.Unmarshal(eventContext.Ctx.Body(), &data)
+		if err != nil {
+			return eventContext.NewError(fiber.ErrBadRequest, "INVALID_BODY", fiber.Map{"message": err.Error()})
+		}
+		eventContext.Data = data
+	}
+
+	for _, paramDef := range options.Http.Args {
+		key := paramDef.Name
+		if paramDef.In == "body" {
+
+			// Already parsed. Only used for OpenAPI Description
+
+		} else if paramDef.In == "query" {
+
+			if eventContext.Query == nil {
+				eventContext.Query = &wst.M{}
+			}
+
+			var param interface{}
+			paramSt := c.Query(key, "")
+			switch paramDef.Type {
+			case "string":
+				param = paramSt
+				break
+			case "date":
+				param, err = wst.ParseDate(paramSt)
+				if err != nil {
+					return eventContext.NewError(fiber.ErrBadRequest, "INVALID_DATE", fiber.Map{"message": err.Error()})
+				}
+				break
+			case "number":
+				param, err = strconv.ParseFloat(paramSt, 64)
+				if err != nil {
+					return eventContext.NewError(fiber.ErrBadRequest, "INVALID_NUMBER", fiber.Map{"message": err.Error()})
+				}
+
+				asInt := int64(param.(float64))
+				if param == asInt {
+					param = asInt
+				}
+				break
+			}
+			(*eventContext.Query)[key] = param
+
+			if paramDef.Name == "filter" {
+				filterSt := (*eventContext.Query)[key].(string)
+				filterMap := ParseFilter(filterSt)
+
+				eventContext.Filter = filterMap
+				continue
+			}
+
+		}
+	}
+	eventContext.Data = datasource.ReplaceObjectIds(eventContext.Data).(*wst.M)
+	if eventContext.Query != nil {
+		eventContext.Query = datasource.ReplaceObjectIds(eventContext.Query).(*wst.M)
+	}
 
 	return handler(eventContext)
 }

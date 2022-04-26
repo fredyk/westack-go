@@ -406,18 +406,8 @@ func ReplaceObjectIds(data interface{}) interface{} {
 		var err error
 		if regexp.MustCompile("^([0-9a-f]{24})$").MatchString(data.(string)) {
 			newValue, err = primitive.ObjectIDFromHex(data.(string))
-		} else if regexp.MustCompile("^(\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2})([+\\-:0-9]+)$").MatchString(data.(string)) {
-			layout := "2006-01-02T15:04:05-0700"
-			newValue, err = time.Parse(layout, regexp.MustCompile("([+\\-]\\d{2}):(\\d{2})$").ReplaceAllString(data.(string), "$1$2"))
-		} else if regexp.MustCompile("^(\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3})([+\\-:0-9]+)$").MatchString(data.(string)) {
-			layout := "2006-01-02T15:04:05.000-0700"
-			newValue, err = time.Parse(layout, regexp.MustCompile("([+\\-]\\d{2}):(\\d{2})$").ReplaceAllString(data.(string), "$1$2"))
-		} else if regexp.MustCompile("^(\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2})([Z]+)?$").MatchString(data.(string)) {
-			layout := "2006-01-02T15:04:05Z"
-			newValue, err = time.Parse(layout, data.(string))
-		} else if regexp.MustCompile("^(\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3})([Z]+)?$").MatchString(data.(string)) {
-			layout := "2006-01-02T15:04:05.000Z"
-			newValue, err = time.Parse(layout, data.(string))
+		} else if wst.IsAnyDate(data) {
+			newValue, err = wst.ParseDate(data)
 		}
 		if err != nil {
 			log.Println("WARNING: ", err)

@@ -2,7 +2,6 @@ package westack
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/casbin/casbin/v2"
@@ -166,18 +165,7 @@ func (app *WeStack) setupModel(loadedModel *model.Model, dataSource *datasource.
 	if config.Base == "User" {
 
 		loadedModel.On("login", func(ctx *model.EventContext) error {
-			var loginBody *LoginBody
-			var data *wst.M
-			// TODO: move marshal and unmarshal to easyjson
-			err := json.Unmarshal(ctx.Ctx.Body(), &loginBody)
-			err = json.Unmarshal(ctx.Ctx.Body(), &data)
-			if err != nil {
-				ctx.StatusCode = fiber.StatusBadRequest
-				ctx.Result = fiber.Map{"error": err}
-				return err
-			}
-			ctx.Data = data
-
+			data := ctx.Data
 			if (*data)["email"] == nil || strings.TrimSpace((*data)["email"].(string)) == "" {
 				return ctx.NewError(fiber.ErrBadRequest, "USERNAME_EMAIL_REQUIRED", fiber.Map{"message": "username or email is required"})
 			}
@@ -186,7 +174,7 @@ func (app *WeStack) setupModel(loadedModel *model.Model, dataSource *datasource.
 				return ctx.NewError(fiber.ErrUnauthorized, "LOGIN_FAILED", fiber.Map{"message": "login failed"})
 			}
 
-			email := loginBody.Email
+			email := (*data)["email"].(string)
 			users, err := loadedModel.FindMany(&wst.Filter{
 				Where: &wst.Where{
 					"email": email,
@@ -200,7 +188,7 @@ func (app *WeStack) setupModel(loadedModel *model.Model, dataSource *datasource.
 
 			firstUserData := firstUser.ToJSON()
 			savedPassword := firstUserData["password"]
-			err = bcrypt.CompareHashAndPassword([]byte(savedPassword.(string)), []byte(loginBody.Password))
+			err = bcrypt.CompareHashAndPassword([]byte(savedPassword.(string)), []byte((*data)["password"].(string)))
 			if err != nil {
 				return ctx.NewError(fiber.ErrUnauthorized, "LOGIN_FAILED", fiber.Map{"message": "login failed"})
 			}
@@ -879,14 +867,19 @@ func (app *WeStack) loadModelsFixedRoutes() {
 			log.Println("Mount GET " + loadedModel.BaseUrl)
 		}
 		loadedModel.RemoteMethod(func(eventContext *model.EventContext) error {
-			filterSt := eventContext.Ctx.Query("filter")
-			filterMap := model.ParseFilter(filterSt)
-
-			eventContext.Filter = filterMap
 			return handleEvent(eventContext, loadedModel, "findMany")
 		}, model.RemoteMethodOptions{
 			Name: "findMany",
 			Http: model.RemoteMethodOptionsHttp{
+				Args: model.RemoteMethodOptionsHttpArgs{
+					{
+						Name:        "filter",
+						Type:        "string",
+						Description: "",
+						In:          "query",
+						Required:    false,
+					},
+				},
 				Path: "/",
 				Verb: "get",
 			},
@@ -896,16 +889,25 @@ func (app *WeStack) loadModelsFixedRoutes() {
 			log.Println("Mount POST " + loadedModel.BaseUrl)
 		}
 		loadedModel.RemoteMethod(func(eventContext *model.EventContext) error {
-			var data *wst.M
-			err := json.Unmarshal(eventContext.Ctx.Body(), &data)
-			if err != nil {
-				return err
-			}
-			eventContext.Data = data
+			//var data *wst.M
+			//err := json.Unmarshal(eventContext.Ctx.Body(), &data)
+			//if err != nil {
+			//	return err
+			//}
+			//eventContext.Data = data
 			return handleEvent(eventContext, loadedModel, "create")
 		}, model.RemoteMethodOptions{
 			Name: "create",
 			Http: model.RemoteMethodOptionsHttp{
+				Args: model.RemoteMethodOptionsHttpArgs{
+					{
+						Name:        "body",
+						Type:        "object",
+						Description: "",
+						In:          "body",
+						Required:    true,
+					},
+				},
 				Path: "/",
 				Verb: "post",
 			},
@@ -919,6 +921,15 @@ func (app *WeStack) loadModelsFixedRoutes() {
 				Name:        "login",
 				Description: "Logins a user",
 				Http: model.RemoteMethodOptionsHttp{
+					Args: model.RemoteMethodOptionsHttpArgs{
+						{
+							Name:        "data",
+							Type:        "object",
+							Description: "",
+							In:          "body",
+							Required:    false,
+						},
+					},
 					Path: "/login",
 					Verb: "post",
 				},
@@ -938,6 +949,15 @@ func (app *WeStack) loadModelsFixedRoutes() {
 				Name:        "findSelf",
 				Description: "Find user with their bearer",
 				Http: model.RemoteMethodOptionsHttp{
+					Args: model.RemoteMethodOptionsHttpArgs{
+						{
+							Name:        "filter",
+							Type:        "string",
+							Description: "",
+							In:          "query",
+							Required:    false,
+						},
+					},
 					Path: "/me",
 					Verb: "get",
 				},
@@ -971,15 +991,20 @@ func (app *WeStack) loadModelsDynamicRoutes() {
 				eventContext.ModelID = id
 			}
 
-			filterSt := eventContext.Ctx.Query("filter")
-			filterMap := model.ParseFilter(filterSt)
-
-			eventContext.Filter = filterMap
 			return handleEvent(eventContext, loadedModel, "findById")
 
 		}, model.RemoteMethodOptions{
 			Name: "findById",
 			Http: model.RemoteMethodOptionsHttp{
+				Args: model.RemoteMethodOptionsHttpArgs{
+					{
+						Name:        "filter",
+						Type:        "string",
+						Description: "",
+						In:          "query",
+						Required:    false,
+					},
+				},
 				Path: "/:id",
 				Verb: "get",
 			},
@@ -993,17 +1018,26 @@ func (app *WeStack) loadModelsDynamicRoutes() {
 			if err != nil {
 				return err
 			}
-			var data *wst.M
-			err = json.Unmarshal(eventContext.Ctx.Body(), &data)
-			if err != nil {
-				return err
-			}
+			//var data *wst.M
+			//err = json.Unmarshal(eventContext.Ctx.Body(), &data)
+			//if err != nil {
+			//	return err
+			//}
 			eventContext.ModelID = &id
-			eventContext.Data = data
+			//eventContext.Data = data
 			return handleEvent(eventContext, loadedModel, "instance_updateAttributes")
 		}, model.RemoteMethodOptions{
 			Name: "instance_updateAttributes",
 			Http: model.RemoteMethodOptionsHttp{
+				Args: model.RemoteMethodOptionsHttpArgs{
+					{
+						Name:        "data",
+						Type:        "object",
+						Description: "",
+						In:          "body",
+						Required:    true,
+					},
+				},
 				Path: "/:id",
 				Verb: "patch",
 			},
