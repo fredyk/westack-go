@@ -981,6 +981,17 @@ func (modelInstance *Instance) GetFloat64(key string) float64 {
 	return 0.0
 }
 
+func (modelInstance *Instance) GetInt(key string) int64 {
+	if modelInstance.data[key] != nil {
+		if v, ok := modelInstance.data[key].(float32); ok {
+			return int64(v)
+		} else {
+			return modelInstance.data[key].(int64)
+		}
+	}
+	return 0
+}
+
 type RemoteMethodOptionsHttp struct {
 	Path string
 	Verb string
