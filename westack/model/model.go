@@ -1052,7 +1052,7 @@ func (loadedModel *Model) RemoteMethod(handler func(context *EventContext) error
 	}
 
 	var http = options.Http
-	path := strings.ToLower(http.Path)
+	path := http.Path
 	verb := strings.ToLower(http.Verb)
 	description := options.Description
 
