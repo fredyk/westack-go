@@ -1000,25 +1000,29 @@ func (modelInstance *Instance) GetObjectId(key string) primitive.ObjectID {
 	return primitive.ObjectID{}
 }
 
+type RemoteMethodOptionsHttp struct {
+	Path string
+	Verb string
+}
+
+type ArgHttp struct {
+	Source string
+}
+
 type RemoteMethodOptionsHttpArg struct {
-	Name        string
+	Arg         string
 	Type        string
 	Description string
-	In          string
+	Http        ArgHttp
 	Required    bool
 }
 
 type RemoteMethodOptionsHttpArgs []RemoteMethodOptionsHttpArg
 
-type RemoteMethodOptionsHttp struct {
-	Path string
-	Verb string
-	Args RemoteMethodOptionsHttpArgs
-}
-
 type RemoteMethodOptions struct {
 	Name        string
 	Description string
+	Accepts     RemoteMethodOptionsHttpArgs
 	Http        RemoteMethodOptionsHttp
 }
 
@@ -1044,13 +1048,13 @@ func (loadedModel *Model) RemoteMethod(handler func(context *EventContext) error
 	verb := strings.ToLower(http.Verb)
 	description := options.Description
 
-	for _, arg := range options.Http.Args {
-		arg.Name = strings.TrimSpace(arg.Name)
-		if arg.Name == "" {
+	for _, arg := range options.Accepts {
+		arg.Arg = strings.TrimSpace(arg.Arg)
+		if arg.Arg == "" {
 			panic(fmt.Sprintf("Argument name cannot be empty in the remote method '%v'", options.Name))
 		}
-		if arg.In != "query" && arg.In != "body" {
-			panic(fmt.Sprintf("Argument '%v' in the remote method '%v' has an invalid 'in' value: '%v'", arg.Name, options.Name, arg.In))
+		if arg.Http.Source != "query" && arg.Http.Source != "body" {
+			panic(fmt.Sprintf("Argument '%v' in the remote method '%v' has an invalid 'in' value: '%v'", arg.Arg, options.Name, arg.Http.Source))
 		}
 	}
 
@@ -1136,7 +1140,7 @@ func (loadedModel *Model) RemoteMethod(handler func(context *EventContext) error
 	pathParams := regexp.MustCompile(`:(\w+)`).FindAllString(path, -1)
 	pathParamsLen := len(pathParams)
 
-	params := make([]wst.M, pathParamsLen+len(http.Args))
+	params := make([]wst.M, pathParamsLen+len(options.Accepts))
 
 	for idx, param := range pathParams {
 		params[idx] = wst.M{
@@ -1170,7 +1174,7 @@ func (loadedModel *Model) RemoteMethod(handler func(context *EventContext) error
 		}
 	} else {
 
-		for idx, param := range http.Args {
+		for idx, param := range options.Accepts {
 			paramType := param.Type
 			paramDescription := param.Description
 			if paramType == "date" {
@@ -1178,8 +1182,8 @@ func (loadedModel *Model) RemoteMethod(handler func(context *EventContext) error
 				paramDescription += " (format: ISO8601)"
 			}
 			params[pathParamsLen+idx] = wst.M{
-				"name":        param.Name,
-				"in":          param.In,
+				"name":        param.Arg,
+				"in":          param.Http.Source,
 				"description": paramDescription,
 				"required":    param.Required,
 				"schema": wst.M{
@@ -1442,13 +1446,13 @@ func (loadedModel *Model) HandleRemoteMethod(name string, eventContext *EventCon
 		eventContext.Data = data
 	}
 
-	for _, paramDef := range options.Http.Args {
-		key := paramDef.Name
-		if paramDef.In == "body" {
+	for _, paramDef := range options.Accepts {
+		key := paramDef.Arg
+		if paramDef.Http.Source == "body" {
 
 			// Already parsed. Only used for OpenAPI Description
 
-		} else if paramDef.In == "query" {
+		} else if paramDef.Http.Source == "query" {
 
 			if eventContext.Query == nil {
 				eventContext.Query = &wst.M{}
@@ -1480,7 +1484,7 @@ func (loadedModel *Model) HandleRemoteMethod(name string, eventContext *EventCon
 			}
 			(*eventContext.Query)[key] = param
 
-			if paramDef.Name == "filter" {
+			if paramDef.Arg == "filter" {
 				filterSt := (*eventContext.Query)[key].(string)
 				filterMap := ParseFilter(filterSt)
 
