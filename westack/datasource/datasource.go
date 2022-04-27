@@ -14,7 +14,6 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"go.mongodb.org/mongo-driver/mongo/readpref"
 	"log"
-	"regexp"
 	"time"
 )
 
@@ -404,10 +403,11 @@ func ReplaceObjectIds(data interface{}) interface{} {
 	case string:
 		var newValue interface{}
 		var err error
-		if regexp.MustCompile("^([0-9a-f]{24})$").MatchString(data.(string)) {
-			newValue, err = primitive.ObjectIDFromHex(data.(string))
-		} else if wst.IsAnyDate(data) {
-			newValue, err = wst.ParseDate(data)
+		dataSt := data.(string)
+		if wst.RegexpIdEntire.MatchString(dataSt) {
+			newValue, err = primitive.ObjectIDFromHex(dataSt)
+		} else if wst.IsAnyDate(dataSt) {
+			newValue, err = wst.ParseDate(dataSt)
 		}
 		if err != nil {
 			log.Println("WARNING: ", err)

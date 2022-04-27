@@ -589,7 +589,7 @@ func (app *WeStack) Boot(customRoutesCallback func(app *WeStack)) {
 
 		matchedProtocol := "https"
 
-		if strings.Contains(hostname, "localhost") || regexp.MustCompile("^[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}").MatchString(hostname) {
+		if strings.Contains(hostname, "localhost") || wst.RegexpIpStart.MatchString(hostname) {
 			matchedProtocol = "http"
 		}
 
