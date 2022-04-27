@@ -160,15 +160,17 @@ func Transform(in interface{}, out interface{}) error {
 	return nil
 }
 
+var regexpTimeZoneReplacing = regexp.MustCompile("([+\\-]\\d{2}):(\\d{2})$")
+
 func ParseDate(data interface{}) (interface{}, error) {
 	var newValue interface{}
 	var err error
 	if IsDate1(data) {
 		layout := "2006-01-02T15:04:05-0700"
-		newValue, err = time.Parse(layout, regexp.MustCompile("([+\\-]\\d{2}):(\\d{2})$").ReplaceAllString(data.(string), "$1$2"))
+		newValue, err = time.Parse(layout, regexpTimeZoneReplacing.ReplaceAllString(data.(string), "$1$2"))
 	} else if IsDate2(data) {
 		layout := "2006-01-02T15:04:05.000-0700"
-		newValue, err = time.Parse(layout, regexp.MustCompile("([+\\-]\\d{2}):(\\d{2})$").ReplaceAllString(data.(string), "$1$2"))
+		newValue, err = time.Parse(layout, regexpTimeZoneReplacing.ReplaceAllString(data.(string), "$1$2"))
 	} else if IsDate3(data) {
 		layout := "2006-01-02T15:04:05Z"
 		newValue, err = time.Parse(layout, data.(string))
@@ -186,18 +188,26 @@ func IsAnyDate(data interface{}) bool {
 	return IsDate1(data) || IsDate2(data) || IsDate3(data) || IsDate4(data)
 }
 
-func IsDate4(data interface{}) bool {
-	return regexp.MustCompile("^(\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3})([Z]+)?$").MatchString(data.(string))
-}
-
-func IsDate3(data interface{}) bool {
-	return regexp.MustCompile("^(\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2})([Z]+)?$").MatchString(data.(string))
-}
-
-func IsDate2(data interface{}) bool {
-	return regexp.MustCompile("^(\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3})([+\\-:0-9]+)$").MatchString(data.(string))
-}
+var regexpDate1 = regexp.MustCompile("^(\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2})([+\\-:0-9]+)$")
 
 func IsDate1(data interface{}) bool {
-	return regexp.MustCompile("^(\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2})([+\\-:0-9]+)$").MatchString(data.(string))
+	return regexpDate1.MatchString(data.(string))
+}
+
+var regexpDate2 = regexp.MustCompile("^(\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3})([+\\-:0-9]+)$")
+
+func IsDate2(data interface{}) bool {
+	return regexpDate2.MatchString(data.(string))
+}
+
+var regexpDate3 = regexp.MustCompile("^(\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2})([Z]+)?$")
+
+func IsDate3(data interface{}) bool {
+	return regexpDate3.MatchString(data.(string))
+}
+
+var regexpDate4 = regexp.MustCompile("^(\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3})([Z]+)?$")
+
+func IsDate4(data interface{}) bool {
+	return regexpDate4.MatchString(data.(string))
 }
