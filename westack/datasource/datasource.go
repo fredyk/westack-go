@@ -9,7 +9,9 @@ import (
 	"github.com/google/uuid"
 	"github.com/spf13/viper"
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/bsoncodec"
 	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/event"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"go.mongodb.org/mongo-driver/mongo/readpref"
@@ -20,6 +22,15 @@ import (
 type OperationError struct {
 	Code    int
 	Message string
+}
+
+type MonoDBDatasourceOptions struct {
+	Registry *bsoncodec.Registry
+	Monitor  *event.CommandMonitor
+}
+
+type Options struct {
+	MongoDB *MonoDBDatasourceOptions
 }
 
 func (e *OperationError) Error() string {
@@ -34,12 +45,13 @@ func NewError(code int, message string) *OperationError {
 }
 
 type Datasource struct {
-	Name  string
-	Db    interface{}
-	Viper *viper.Viper
+	Name    string
+	Db      interface{}
+	Viper   *viper.Viper
+	Key     string
+	Context context.Context
+	Options *Options
 
-	Key         string
-	Context     context.Context
 	ctxCancelFn context.CancelFunc
 }
 
@@ -75,6 +87,14 @@ func (ds *Datasource) Initialize() error {
 		}
 
 		clientOpts = clientOpts.SetSocketTimeout(time.Second * 30).SetConnectTimeout(time.Second * 30).SetServerSelectionTimeout(time.Second * 30).SetMinPoolSize(1).SetMaxPoolSize(5)
+
+		if ds.Options != nil && ds.Options.MongoDB != nil && ds.Options.MongoDB.Registry != nil {
+			clientOpts = clientOpts.SetRegistry(ds.Options.MongoDB.Registry)
+		}
+
+		if ds.Options != nil && ds.Options.MongoDB != nil && ds.Options.MongoDB.Monitor != nil {
+			clientOpts = clientOpts.SetMonitor(ds.Options.MongoDB.Monitor)
+		}
 
 		db, err := mongo.Connect(mongoCtx, clientOpts)
 		if err != nil {
