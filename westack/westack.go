@@ -32,14 +32,15 @@ type LoginBody struct {
 }
 
 type WeStack struct {
-	ModelRegistry    *map[string]*model.Model
-	Datasources      *map[string]*datasource.Datasource
-	Server           *fiber.App
-	Debug            bool
-	RestApiRoot      string
-	Port             int32
-	RoleModel        *model.Model
-	RoleMappingModel *model.Model
+	ModelRegistry     *map[string]*model.Model
+	Datasources       *map[string]*datasource.Datasource
+	Server            *fiber.App
+	Debug             bool
+	RestApiRoot       string
+	Port              int32
+	RoleModel         *model.Model
+	RoleMappingModel  *model.Model
+	DataSourceOptions *map[string]*datasource.Options
 
 	_swaggerPaths map[string]wst.M
 	init          time.Time
@@ -555,6 +556,11 @@ func (app *WeStack) loadDataSources() {
 		connector := dsViper.GetString(key + ".connector")
 		if connector == "mongodb" /* || connector == "memory"*/ || connector == "redis" {
 			ds := datasource.New(key, dsViper, ctx)
+
+			if app.DataSourceOptions != nil {
+				ds.Options = (*app.DataSourceOptions)[dsName]
+			}
+
 			err := ds.Initialize()
 			if err != nil {
 				panic(err)
@@ -788,6 +794,8 @@ func (app *WeStack) loadModelsFixedRoutes() {
 
 							break
 
+						} else {
+							//log.Printf("Invalid foreign key in relation %v.%v (%v.%v --> %v.%v)\n", loadedModel.Name, key, loadedModel.Name, r.ForeignKey, r.Model, r.PrimaryKey)
 						}
 
 					}
@@ -1080,10 +1088,12 @@ func (app WeStack) Start(addr string) interface{} {
 }
 
 type Options struct {
-	debug        bool
-	RestApiRoot  string
-	Port         int32
-	jwtSecretKey []byte
+	RestApiRoot string
+	Port        int32
+
+	debug             bool
+	jwtSecretKey      []byte
+	DatasourceOptions *map[string]*datasource.Options
 }
 
 func New(options Options) *WeStack {
@@ -1102,13 +1112,14 @@ func New(options Options) *WeStack {
 	}
 
 	app := WeStack{
-		ModelRegistry: &modelRegistry,
-		Server:        server,
-		Datasources:   &datasources,
-		Debug:         _debug,
-		RestApiRoot:   options.RestApiRoot,
-		Port:          options.Port,
-		JwtSecretKey:  []byte(jwtSecretKey),
+		ModelRegistry:     &modelRegistry,
+		Server:            server,
+		Datasources:       &datasources,
+		Debug:             _debug,
+		RestApiRoot:       options.RestApiRoot,
+		Port:              options.Port,
+		JwtSecretKey:      []byte(jwtSecretKey),
+		DataSourceOptions: options.DatasourceOptions,
 
 		init: time.Now(),
 	}
