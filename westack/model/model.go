@@ -1449,16 +1449,23 @@ func (loadedModel *Model) HandleRemoteMethod(name string, eventContext *EventCon
 	eventContext.Bearer = token
 
 	eventContext.Data = &wst.M{}
+	eventContext.Query = &wst.M{}
 
 	if strings.ToLower(options.Http.Verb) == "post" || strings.ToLower(options.Http.Verb) == "put" || strings.ToLower(options.Http.Verb) == "patch" {
 		var data *wst.M
-		err := json.Unmarshal(eventContext.Ctx.Body(), &data)
-		if err != nil {
-			return eventContext.NewError(fiber.ErrBadRequest, "INVALID_BODY", fiber.Map{"message": err.Error()})
+		bytes := eventContext.Ctx.Body()
+		if len(bytes) > 0 {
+			err := json.Unmarshal(bytes, &data)
+			if err != nil {
+				return eventContext.NewError(fiber.ErrBadRequest, "INVALID_BODY", fiber.Map{"message": err.Error()})
+			}
+			eventContext.Data = data
+		} else {
+			// Empty body is allowed
 		}
-		eventContext.Data = data
 	}
 
+	foundSomeQuery := false
 	for _, paramDef := range options.Accepts {
 		key := paramDef.Arg
 		if paramDef.Http.Source == "body" {
@@ -1466,10 +1473,6 @@ func (loadedModel *Model) HandleRemoteMethod(name string, eventContext *EventCon
 			// Already parsed. Only used for OpenAPI Description
 
 		} else if paramDef.Http.Source == "query" {
-
-			if eventContext.Query == nil {
-				eventContext.Query = &wst.M{}
-			}
 
 			var param interface{}
 			paramSt := c.Query(key, "")
@@ -1505,10 +1508,12 @@ func (loadedModel *Model) HandleRemoteMethod(name string, eventContext *EventCon
 				continue
 			}
 
+			foundSomeQuery = true
+
 		}
 	}
 	eventContext.Data = datasource.ReplaceObjectIds(eventContext.Data).(*wst.M)
-	if eventContext.Query != nil {
+	if foundSomeQuery {
 		eventContext.Query = datasource.ReplaceObjectIds(eventContext.Query).(*wst.M)
 	}
 
