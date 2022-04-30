@@ -1105,9 +1105,6 @@ func (app WeStack) Start(addr string) interface{} {
 }
 
 type Options struct {
-	RestApiRoot string
-	Port        int32
-
 	debug             bool
 	jwtSecretKey      []byte
 	DatasourceOptions *map[string]*datasource.Options
@@ -1163,8 +1160,8 @@ func New(options Options) *WeStack {
 		Server:            server,
 		Datasources:       &datasources,
 		Debug:             _debug,
-		RestApiRoot:       options.RestApiRoot,
-		Port:              options.Port,
+		RestApiRoot:       appViper.GetString("restApiRoot"),
+		Port:              appViper.GetInt32("port"),
 		JwtSecretKey:      []byte(jwtSecretKey),
 		DataSourceOptions: options.DatasourceOptions,
 

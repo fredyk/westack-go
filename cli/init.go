@@ -68,12 +68,16 @@ type AppConfig struct {
 	Version     string          `json:"version,omitempty"`
 	Description string          `json:"description,omitempty"`
 	Casbin      AppCasbinConfig `json:"casbin"`
+	RestApiRoot string          `json:"restApiRoot"`
+	Port        int             `json:"port"`
 }
 
 var DefaultConfig = AppConfig{
 	Name:        "example-app",
 	Version:     "0.0.1",
 	Description: "Example app",
+	RestApiRoot: "/api/v1",
+	Port:        8023,
 	Casbin: AppCasbinConfig{
 		DumpModels: false,
 		Policies: AppCasbinConfigPolicies{
