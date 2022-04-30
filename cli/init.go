@@ -54,6 +54,34 @@ var DefaultDatasources = map[string]model.DataSourceConfig{
 	},
 }
 
+type AppCasbinConfigPolicies struct {
+	OutputDirectory string `json:"outputDirectory"`
+}
+
+type AppCasbinConfig struct {
+	DumpModels bool                    `json:"dumpModels"`
+	Policies   AppCasbinConfigPolicies `json:"policies"`
+}
+
+type AppConfig struct {
+	Name        string          `json:"name,omitempty"`
+	Version     string          `json:"version,omitempty"`
+	Description string          `json:"description,omitempty"`
+	Casbin      AppCasbinConfig `json:"casbin"`
+}
+
+var DefaultConfig = AppConfig{
+	Name:        "example-app",
+	Version:     "0.0.1",
+	Description: "Example app",
+	Casbin: AppCasbinConfig{
+		DumpModels: false,
+		Policies: AppCasbinConfigPolicies{
+			OutputDirectory: "./common/models",
+		},
+	},
+}
+
 func initProject(cwd string) error {
 	err := os.Chdir(cwd)
 	if err != nil {
@@ -152,6 +180,15 @@ func initProject(cwd string) error {
 		err2 := addModel(DefaulRole, "db")
 		if err2 != nil {
 			return err2
+		}
+	}
+
+	if _, err := os.Stat("server/config.json"); os.IsNotExist(err) {
+		DefaultConfig.Name = projectName
+		bytes, err := json.MarshalIndent(DefaultConfig, "", "  ")
+		err = os.WriteFile("server/config.json", bytes, 0644)
+		if err != nil {
+			return err
 		}
 	}
 
