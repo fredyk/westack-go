@@ -10,7 +10,7 @@ import (
 )
 
 var DefaulUser = model.Config{
-	Name:   "user",
+	Name:   "User",
 	Plural: "users",
 	Base:   "User",
 	Public: true,
@@ -29,7 +29,7 @@ var DefaulUser = model.Config{
 }
 
 var DefaulRole = model.Config{
-	Name:   "role",
+	Name:   "Role",
 	Plural: "roles",
 	Base:   "Role",
 	Public: false,
