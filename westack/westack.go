@@ -45,6 +45,7 @@ type WeStack struct {
 	_swaggerPaths map[string]wst.M
 	init          time.Time
 	JwtSecretKey  []byte
+	viper         *viper.Viper
 }
 
 func (app WeStack) SwaggerPaths() *map[string]wst.M {
@@ -254,7 +255,20 @@ func (app *WeStack) setupModel(loadedModel *model.Model, dataSource *datasource.
 
 	casbModel := casbinmodel.NewModel()
 
-	f, err := os.OpenFile(fmt.Sprintf("common/models/%v.policies.csv", loadedModel.Name), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	basePoliciesDirectory := app.viper.GetString("casbin.policies.outputDirectory")
+	_, err := os.Stat(basePoliciesDirectory)
+	if err != nil {
+		if os.IsNotExist(err) {
+			err = os.MkdirAll(basePoliciesDirectory, os.ModePerm)
+			if err != nil {
+				panic(err)
+			}
+		} else {
+			panic(err)
+		}
+	}
+
+	f, err := os.OpenFile(fmt.Sprintf("%v/%v.policies.csv", basePoliciesDirectory, loadedModel.Name), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		panic(err)
 	}
@@ -263,7 +277,7 @@ func (app *WeStack) setupModel(loadedModel *model.Model, dataSource *datasource.
 		panic(err)
 	}
 
-	adapter := fileadapter.NewAdapter(fmt.Sprintf("common/models/%v.policies.csv", loadedModel.Name))
+	adapter := fileadapter.NewAdapter(fmt.Sprintf("%v/%v.policies.csv", basePoliciesDirectory, loadedModel.Name))
 
 	requestDefinition := "sub, obj, act"
 	policyDefinition := "sub, obj, act, eft"
@@ -859,11 +873,14 @@ func (app *WeStack) loadModelsFixedRoutes() {
 			loadedModel.CasbinModel.PrintModel()
 		}
 
-		text := loadedModel.CasbinModel.ToText()
-		err = os.WriteFile(fmt.Sprintf("common/models/%v.casbin.dump.conf", loadedModel.Name), []byte(text), os.ModePerm)
-		if err != nil {
-			panic(err)
+		if app.viper.GetBool("casbin.dumpModels") {
+			text := loadedModel.CasbinModel.ToText()
+			err = os.WriteFile(fmt.Sprintf("common/models/%v.casbin.dump.conf", loadedModel.Name), []byte(text), os.ModePerm)
+			if err != nil {
+				panic(err)
+			}
 		}
+
 		if !loadedModel.Config.Public {
 			if app.Debug {
 				log.Println("WARNING: Model", loadedModel.Name, "is not public")
@@ -1111,6 +1128,36 @@ func New(options Options) *WeStack {
 		_debug = true
 	}
 
+	appViper := viper.New()
+
+	fileToLoad := ""
+
+	if env, present := os.LookupEnv("GO_ENV"); present {
+		fileToLoad = "config." + env
+		appViper.SetConfigName(fileToLoad) // name of config file (without extension)
+	} else {
+		appViper.SetConfigName("config") // name of config file (without extension)
+	}
+	appViper.SetConfigType("json") // REQUIRED if the config file does not have the extension in the name
+
+	appViper.AddConfigPath("./server") // call multiple times to add many search paths
+
+	err := appViper.ReadInConfig() // Find and read the config file
+	if err != nil {                // Handle errors reading the config file
+		switch err.(type) {
+		case viper.ConfigFileNotFoundError:
+			log.Println(fmt.Sprintf("WARNING: %v.json not found, fallback to config.json", fileToLoad))
+			appViper.SetConfigName("config") // name of config file (without extension)
+			err := appViper.ReadInConfig()   // Find and read the config file
+			if err != nil {
+				panic(fmt.Errorf("fatal error config file: %w", err))
+			}
+			break
+		default:
+			panic(fmt.Errorf("fatal error config file: %w", err))
+		}
+	}
+
 	app := WeStack{
 		ModelRegistry:     &modelRegistry,
 		Server:            server,
@@ -1121,7 +1168,8 @@ func New(options Options) *WeStack {
 		JwtSecretKey:      []byte(jwtSecretKey),
 		DataSourceOptions: options.DatasourceOptions,
 
-		init: time.Now(),
+		init:  time.Now(),
+		viper: appViper,
 	}
 
 	server.Use(recover.New(recover.Config{
