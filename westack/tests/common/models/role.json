@@ -1,0 +1,28 @@
+{
+  "name": "role",
+  "plural": "roles",
+  "base": "Role",
+  "public": false,
+  "properties": {
+    "name": {
+      "type": "string",
+      "required": true,
+      "default": null
+    }
+  },
+  "relations": {},
+  "hidden": null,
+  "casbin": {
+    "requestDefinition": "",
+    "policyDefinition": "",
+    "roleDefinition": "",
+    "policyEffect": "",
+    "matchersDefinition": "",
+    "policies": null
+  },
+  "cache": {
+    "datasource": "",
+    "ttl": 0,
+    "keys": null
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "name": "tests",
+  "version": "0.0.1",
+  "description": "Example app",
+  "casbin": {
+    "dumpModels": false,
+    "policies": {
+      "outputDirectory": "./common/models"
+    }
+  },
+  "restApiRoot": "/api/v1",
+  "port": 8021
+}

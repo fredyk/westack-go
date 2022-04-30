@@ -1,6 +1,8 @@
 {
+  "role": {
+    "dataSource": "db"
+  },
   "user": {
-    "dataSource": "db",
-    "public": true
+    "dataSource": "db"
   }
 }
