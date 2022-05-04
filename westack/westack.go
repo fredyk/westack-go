@@ -1105,20 +1105,28 @@ func (app WeStack) Start(addr string) interface{} {
 }
 
 type Options struct {
-	debug             bool
-	jwtSecretKey      []byte
+	RestApiRoot       string
+	Port              int32
+	JwtSecretKey      string
 	DatasourceOptions *map[string]*datasource.Options
+
+	debug bool
 }
 
-func New(options Options) *WeStack {
+func New(options ...Options) *WeStack {
 	server := fiber.New()
 
 	modelRegistry := make(map[string]*model.Model)
 	datasources := make(map[string]*datasource.Datasource)
 
-	jwtSecretKey := ""
-	if s, present := os.LookupEnv("JWT_SECRET"); present {
-		jwtSecretKey = s
+	var finalOptions Options
+	if len(options) > 0 {
+		finalOptions = options[0]
+	}
+	if finalOptions.JwtSecretKey == "" {
+		if s, present := os.LookupEnv("JWT_SECRET"); present {
+			finalOptions.JwtSecretKey = s
+		}
 	}
 	_debug := false
 	if envDebug, _ := os.LookupEnv("DEBUG"); envDebug == "true" {
@@ -1155,15 +1163,21 @@ func New(options Options) *WeStack {
 		}
 	}
 
+	if finalOptions.RestApiRoot == "" {
+		finalOptions.RestApiRoot = appViper.GetString("restApiRoot")
+	}
+	if finalOptions.Port == 0 {
+		finalOptions.Port = appViper.GetInt32("port")
+	}
 	app := WeStack{
 		ModelRegistry:     &modelRegistry,
 		Server:            server,
 		Datasources:       &datasources,
 		Debug:             _debug,
-		RestApiRoot:       appViper.GetString("restApiRoot"),
-		Port:              appViper.GetInt32("port"),
-		JwtSecretKey:      []byte(jwtSecretKey),
-		DataSourceOptions: options.DatasourceOptions,
+		RestApiRoot:       finalOptions.RestApiRoot,
+		Port:              finalOptions.Port,
+		JwtSecretKey:      []byte(finalOptions.JwtSecretKey),
+		DataSourceOptions: finalOptions.DatasourceOptions,
 
 		init:  time.Now(),
 		viper: appViper,
