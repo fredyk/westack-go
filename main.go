@@ -8,10 +8,7 @@ import (
 )
 
 func main() {
-	app := westack.New(westack.Options{
-		RestApiRoot: "/api/v1",
-		Port:        8023,
-	})
+	app := westack.New()
 
 	app.Boot(func(app *westack.WeStack) {
 
