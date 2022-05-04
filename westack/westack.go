@@ -589,15 +589,15 @@ func (app *WeStack) loadDataSources() {
 	}
 }
 
-func (app *WeStack) Boot(customRoutesCallback func(app *WeStack)) {
+func (app *WeStack) Boot(customRoutesCallbacks ...func(app *WeStack)) {
 
 	app.loadDataSources()
 
 	app.loadModels()
 	app.loadModelsFixedRoutes()
 
-	if customRoutesCallback != nil {
-		(customRoutesCallback)(app)
+	for _, cb := range customRoutesCallbacks {
+		cb(app)
 	}
 
 	app.loadModelsDynamicRoutes()

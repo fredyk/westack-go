@@ -10,9 +10,7 @@ import (
 func main() {
 	app := westack.New()
 
-	app.Boot(func(app *westack.WeStack) {
-
-	})
+	app.Boot()
 
 	app.Server.Get("/*", func(c *fiber.Ctx) error {
 		log.Println("GET: " + c.Path())
