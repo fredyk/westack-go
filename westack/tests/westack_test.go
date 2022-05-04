@@ -24,7 +24,7 @@ func init() {
 	app.Boot(func(app *westack.WeStack) {
 
 	})
-	go app.Start(fmt.Sprintf("localhost:%v", app.Port))
+	go app.Start()
 	time.Sleep(300 * time.Millisecond)
 }
 
