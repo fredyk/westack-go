@@ -671,6 +671,15 @@ func (app *WeStack) Boot(customRoutesCallbacks ...func(app *WeStack)) {
 		return ctx.Type("html", "utf-8").Send(lib.SwaggerUIStatic)
 	}) // default
 
+	app.Server.Get("/*", func(c *fiber.Ctx) error {
+		log.Println("GET: " + c.Path())
+		return c.Status(404).JSON(fiber.Map{"error": fiber.Map{"status": 404, "message": fmt.Sprintf("Unknown method %v %v", c.Method(), c.Path())}})
+	})
+	app.Server.Post("/*", func(c *fiber.Ctx) error {
+		log.Println("POST: " + c.Path())
+		return c.Status(404).JSON(fiber.Map{"error": fiber.Map{"status": 404, "message": fmt.Sprintf("Unknown method %v %v", c.Method(), c.Path())}})
+	})
+
 }
 
 func (app *WeStack) loadNotFoundRoutes() {
@@ -1092,16 +1101,13 @@ func (app *WeStack) loadModelsDynamicRoutes() {
 	}
 }
 
-// Listen is an alias for Start()
-//
-// Deprecated: Start() should be used instead
-func (app WeStack) Listen(addr string) interface{} {
-	return app.Start(addr)
+func (app WeStack) Start() interface{} {
+	log.Printf("DEBUG Server took %v ms to start\n", time.Now().UnixMilli()-app.init.UnixMilli())
+	return app.Server.Listen(fmt.Sprintf("0.0.0.0:%v", app.Port))
 }
 
-func (app WeStack) Start(addr string) interface{} {
-	log.Printf("DEBUG Server took %v ms to start\n", time.Now().UnixMilli()-app.init.UnixMilli())
-	return app.Server.Listen(addr)
+func (app WeStack) Middleware(handler fiber.Handler) {
+	app.Server.Use(handler)
 }
 
 type Options struct {
@@ -1192,4 +1198,12 @@ func New(options ...Options) *WeStack {
 	}))
 
 	return &app
+}
+
+func InitAndServe() {
+	app := New()
+
+	app.Boot()
+
+	log.Fatal(app.Start())
 }
