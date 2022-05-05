@@ -993,6 +993,13 @@ func (modelInstance *Instance) GetInt(key string) int64 {
 	return 0
 }
 
+func (modelInstance *Instance) GetBoolean(key string, defaultValue bool) bool {
+	if modelInstance.data[key] != nil {
+		return modelInstance.data[key].(bool)
+	}
+	return defaultValue
+}
+
 func (modelInstance *Instance) GetObjectId(key string) primitive.ObjectID {
 	if modelInstance.data[key] != nil {
 		return modelInstance.data[key].(primitive.ObjectID)
