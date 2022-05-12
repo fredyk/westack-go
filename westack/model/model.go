@@ -984,7 +984,13 @@ func (modelInstance *Instance) GetFloat64(key string) float64 {
 
 func (modelInstance *Instance) GetInt(key string) int64 {
 	if modelInstance.data[key] != nil {
-		if v, ok := modelInstance.data[key].(float32); ok {
+		if v, ok := modelInstance.data[key].(int64); ok {
+			return v
+		} else if v, ok := modelInstance.data[key].(int32); ok {
+			return int64(v)
+		} else if v, ok := modelInstance.data[key].(float64); ok {
+			return int64(v)
+		} else if v, ok := modelInstance.data[key].(float32); ok {
 			return int64(v)
 		} else {
 			return modelInstance.data[key].(int64)
@@ -1000,11 +1006,11 @@ func (modelInstance *Instance) GetBoolean(key string, defaultValue bool) bool {
 	return defaultValue
 }
 
-func (modelInstance *Instance) GetObjectId(key string) primitive.ObjectID {
+func (modelInstance *Instance) GetObjectId(key string) (result primitive.ObjectID) {
 	if modelInstance.data[key] != nil {
-		return modelInstance.data[key].(primitive.ObjectID)
+		result = modelInstance.data[key].(primitive.ObjectID)
 	}
-	return primitive.ObjectID{}
+	return result
 }
 
 func (modelInstance *Instance) GetM(key string) *wst.M {
