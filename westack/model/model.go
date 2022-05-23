@@ -1021,6 +1021,17 @@ func (modelInstance *Instance) GetM(key string) *wst.M {
 	return nil
 }
 
+func (modelInstance *Instance) GetA(key string) *wst.A {
+	if modelInstance.data[key] != nil {
+		if asA, asAOk := modelInstance.data[key].(*wst.A); asAOk {
+			return asA
+		} else {
+			log.Printf("WARNING: GetA: %v <%s> is not an array\n", key, modelInstance.data[key])
+		}
+	}
+	return nil
+}
+
 type RemoteMethodOptionsHttp struct {
 	Path string
 	Verb string
