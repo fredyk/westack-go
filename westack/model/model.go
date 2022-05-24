@@ -12,6 +12,7 @@ import (
 	"github.com/go-redis/redis/v8"
 	"github.com/gofiber/fiber/v2"
 	"github.com/golang-jwt/jwt"
+	"github.com/oliveagle/jsonpath"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"log"
@@ -977,72 +978,183 @@ func (modelInstance *Instance) Reload(eventContext *EventContext) error {
 	return nil
 }
 
-func (modelInstance *Instance) GetString(key string) string {
-	if modelInstance.data[key] != nil {
-		return modelInstance.data[key].(string)
+func (modelInstance *Instance) GetString(path string) string {
+	res, err := jsonpath.JsonPathLookup(modelInstance.data, fmt.Sprintf("$.%v", path))
+	if err != nil {
+		return ""
 	}
-	return ""
+	switch res.(type) {
+	case string:
+		return res.(string)
+	case float64:
+		return strconv.FormatFloat(res.(float64), 'f', -1, 64)
+	case int:
+		return strconv.Itoa(res.(int))
+	case int64:
+		return strconv.FormatInt(res.(int64), 10)
+	case bool:
+		return strconv.FormatBool(res.(bool))
+	default:
+		return ""
+	}
 }
 
-func (modelInstance *Instance) GetFloat64(key string) float64 {
-	if modelInstance.data[key] != nil {
-		if v, ok := modelInstance.data[key].(float32); ok {
-			return float64(v)
-		} else {
-			return modelInstance.data[key].(float64)
+func (modelInstance *Instance) GetFloat64(path string) float64 {
+	res, err := jsonpath.JsonPathLookup(modelInstance.data, fmt.Sprintf("$.%v", path))
+	if err != nil {
+		return 0
+	}
+	switch res.(type) {
+	case string:
+		aux, err := strconv.ParseFloat(res.(string), 64)
+		if err != nil {
+			return 0
 		}
-	}
-	return 0.0
-}
-
-func (modelInstance *Instance) GetInt(key string) int64 {
-	if modelInstance.data[key] != nil {
-		if v, ok := modelInstance.data[key].(int64); ok {
-			return v
-		} else if v, ok := modelInstance.data[key].(int32); ok {
-			return int64(v)
-		} else if v, ok := modelInstance.data[key].(float64); ok {
-			return int64(v)
-		} else if v, ok := modelInstance.data[key].(float32); ok {
-			return int64(v)
+		return aux
+	case float64:
+		return res.(float64)
+	case int:
+		return float64(res.(int))
+	case int64:
+		return float64(res.(int64))
+	case bool:
+		if res.(bool) {
+			return 1
 		} else {
-			return modelInstance.data[key].(int64)
+			return 0
 		}
+	default:
+		return 0
 	}
-	return 0
 }
 
-func (modelInstance *Instance) GetBoolean(key string, defaultValue bool) bool {
-	if modelInstance.data[key] != nil {
-		return modelInstance.data[key].(bool)
+func (modelInstance *Instance) GetInt(path string) int64 {
+
+	res, err := jsonpath.JsonPathLookup(modelInstance.data, fmt.Sprintf("$.%v", path))
+	if err != nil {
+		return 0
 	}
-	return defaultValue
+	switch res.(type) {
+	case float64:
+		return int64(res.(float64))
+	case int64:
+		return res.(int64)
+	case int32:
+		return int64(res.(int32))
+	case int:
+		return int64(res.(int))
+	case float32:
+		return int64(res.(float32))
+	default:
+		return 0
+	}
 }
 
-func (modelInstance *Instance) GetObjectId(key string) (result primitive.ObjectID) {
-	if modelInstance.data[key] != nil {
-		result = modelInstance.data[key].(primitive.ObjectID)
+func (modelInstance *Instance) GetBoolean(path string, defaultValue bool) bool {
+	res, err := jsonpath.JsonPathLookup(modelInstance.data, fmt.Sprintf("$.%v", path))
+	if err != nil {
+		return defaultValue
+	}
+	switch res.(type) {
+	case bool:
+		return res.(bool)
+	default:
+		return defaultValue
+	}
+}
+
+func (modelInstance *Instance) GetObjectId(path string) (result primitive.ObjectID) {
+	res, err := jsonpath.JsonPathLookup(modelInstance.data, fmt.Sprintf("$.%v", path))
+	result = primitive.NilObjectID
+	if err == nil {
+		switch res.(type) {
+		case string:
+			_id, err := primitive.ObjectIDFromHex(res.(string))
+			if err == nil {
+				result = _id
+			}
+			break
+		case primitive.ObjectID:
+			result = res.(primitive.ObjectID)
+			break
+		}
 	}
 	return result
 }
 
-func (modelInstance *Instance) GetM(key string) *wst.M {
-	if modelInstance.data[key] != nil {
-		v := modelInstance.data[key].(wst.M)
-		return &v
+func (modelInstance *Instance) GetM(path string) *wst.M {
+	res, err := jsonpath.JsonPathLookup(modelInstance.data, fmt.Sprintf("$.%v", path))
+	if err != nil {
+		return nil
 	}
-	return nil
+	switch res.(type) {
+	case wst.M:
+		v := res.(wst.M)
+		return &v
+	case primitive.M:
+		out := &wst.M{}
+		for k, v := range res.(primitive.M) {
+			(*out)[k] = v
+		}
+		return out
+	case map[string]interface{}:
+		out := &wst.M{}
+		for k, v := range res.(map[string]interface{}) {
+			(*out)[k] = v
+		}
+		return out
+	default:
+		return nil
+	}
 }
 
-func (modelInstance *Instance) GetA(key string) *wst.A {
-	if modelInstance.data[key] != nil {
-		if asA, asAOk := modelInstance.data[key].(*wst.A); asAOk {
-			return asA
-		} else {
-			log.Printf("WARNING: GetA: %v <%s> is not an array\n", key, modelInstance.data[key])
-		}
+func (modelInstance *Instance) GetA(path string) *wst.A {
+	res, err := jsonpath.JsonPathLookup(modelInstance.data, fmt.Sprintf("$.%v", path))
+	if err != nil {
+		return nil
 	}
-	return nil
+	switch res.(type) {
+	case wst.A:
+		v := res.(wst.A)
+		return &v
+	case primitive.A:
+		out := &wst.A{}
+		for idx, v := range res.(primitive.A) {
+			*out = append(*out, wst.M{})
+			for k, v := range v.(primitive.M) {
+				(*out)[idx][k] = v
+			}
+		}
+		return out
+	case []interface{}:
+		out := &wst.A{}
+		for idx, v := range res.([]interface{}) {
+			*out = append(*out, wst.M{})
+			switch v.(type) {
+			case wst.M:
+				for k, v := range v.(wst.M) {
+					(*out)[idx][k] = v
+				}
+			case primitive.M:
+				for k, v := range v.(primitive.M) {
+					(*out)[idx][k] = v
+				}
+			}
+		}
+		return out
+	case []map[string]interface{}:
+		out := &wst.A{}
+		for idx, v := range res.([]map[string]interface{}) {
+			*out = append(*out, wst.M{})
+			for k, v := range v {
+				(*out)[idx][k] = v
+			}
+		}
+		return out
+	default:
+		log.Printf("WARNING: GetA: %v <%s> is not an array\n", path, modelInstance.data[path])
+		return nil
+	}
 }
 
 type RemoteMethodOptionsHttp struct {
