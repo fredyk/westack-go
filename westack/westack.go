@@ -671,13 +671,24 @@ func (app *WeStack) Boot(customRoutesCallbacks ...func(app *WeStack)) {
 		return ctx.Type("html", "utf-8").Send(lib.SwaggerUIStatic)
 	}) // default
 
-	app.Server.Get("/*", func(c *fiber.Ctx) error {
-		log.Println("GET: " + c.Path())
-		return c.Status(404).JSON(fiber.Map{"error": fiber.Map{"status": 404, "message": fmt.Sprintf("Unknown method %v %v", c.Method(), c.Path())}})
-	})
-	app.Server.Post("/*", func(c *fiber.Ctx) error {
-		log.Println("POST: " + c.Path())
-		return c.Status(404).JSON(fiber.Map{"error": fiber.Map{"status": 404, "message": fmt.Sprintf("Unknown method %v %v", c.Method(), c.Path())}})
+	app.Server.Use("/*", func(c *fiber.Ctx) error {
+		method := c.Method()
+		err := c.Next()
+		if err != nil {
+			log.Println("Error:", err)
+			log.Printf("%v: %v\n", method, c.OriginalURL())
+			switch err.(type) {
+			case *fiber.Error:
+				if err.(*fiber.Error).Code == fiber.StatusNotFound {
+					return c.Status(err.(*fiber.Error).Code).JSON(fiber.Map{"error": fiber.Map{"status": err.(*fiber.Error).Code, "message": fmt.Sprintf("Unknown method %v %v", method, c.Path())}})
+				} else {
+					return c.Status(err.(*fiber.Error).Code).JSON(fiber.Map{"error": fiber.Map{"status": err.(*fiber.Error).Code, "message": err.(*fiber.Error).Message}})
+				}
+			default:
+				return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": fiber.Map{"status": fiber.StatusInternalServerError, "message": err.Error()}})
+			}
+		}
+		return nil
 	})
 
 }
