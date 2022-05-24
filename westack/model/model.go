@@ -62,6 +62,11 @@ type CacheConfig struct {
 	Keys       [][]string `json:"keys"`
 }
 
+type MongoConfig struct {
+	//Database string `json:"database"`
+	Collection string `json:"collection"`
+}
+
 type Config struct {
 	Name       string                `json:"name"`
 	Plural     string                `json:"plural"`
@@ -72,6 +77,7 @@ type Config struct {
 	Hidden     []string              `json:"hidden"`
 	Casbin     CasbinConfig          `json:"casbin"`
 	Cache      CacheConfig           `json:"cache"`
+	Mongo      MongoConfig           `json:"mongo"`
 }
 
 type SimplifiedConfig struct {
@@ -90,6 +96,7 @@ type DataSourceConfig struct {
 
 type Model struct {
 	Name             string                 `json:"name"`
+	CollectionName   string                 `json:"-"`
 	Config           *Config                `json:"-"`
 	Datasource       *datasource.Datasource `json:"-"`
 	Router           *fiber.Router          `json:"-"`
@@ -139,8 +146,14 @@ func (loadedModel *Model) SendError(ctx *fiber.Ctx, err error) error {
 }
 
 func New(config *Config, modelRegistry *map[string]*Model) *Model {
+	name := config.Name
+	collectionName := config.Mongo.Collection
+	if collectionName == "" {
+		collectionName = name
+	}
 	loadedModel := &Model{
-		Name:             config.Name,
+		Name:             name,
+		CollectionName:   collectionName,
 		Config:           config,
 		DisabledHandlers: map[string]bool{},
 
@@ -150,7 +163,7 @@ func New(config *Config, modelRegistry *map[string]*Model) *Model {
 		authCache:        map[string]map[string]map[string]bool{},
 	}
 
-	(*modelRegistry)[config.Name] = loadedModel
+	(*modelRegistry)[name] = loadedModel
 
 	return loadedModel
 }
@@ -361,7 +374,7 @@ func (loadedModel *Model) FindMany(filterMap *wst.Filter, baseContext *EventCont
 
 	lookups := loadedModel.ExtractLookupsFromFilter(filterMap, baseContext.DisableTypeConversions)
 
-	documents, err := loadedModel.Datasource.FindMany(loadedModel.Name, lookups)
+	documents, err := loadedModel.Datasource.FindMany(loadedModel.CollectionName, lookups)
 	if err != nil {
 		return nil, err
 	}
@@ -433,7 +446,7 @@ func (loadedModel *Model) FindMany(filterMap *wst.Filter, baseContext *EventCont
 					canonicalId = fmt.Sprintf("%v%v:%v", canonicalId, key, v)
 				}
 				toCache["_redId"] = canonicalId
-				_, err := safeCacheDs.Create(loadedModel.Config.Name, &toCache)
+				_, err := safeCacheDs.Create(loadedModel.CollectionName, &toCache)
 				if err != nil {
 					return nil, err
 				}
@@ -442,7 +455,7 @@ func (loadedModel *Model) FindMany(filterMap *wst.Filter, baseContext *EventCont
 			connectorName := safeCacheDs.Key + ".connector"
 			switch safeCacheDs.Viper.GetString(connectorName) {
 			case "redis":
-				baseKey := fmt.Sprintf("%v:%v", safeCacheDs.Viper.GetString(safeCacheDs.Key+".database"), loadedModel.Config.Name)
+				baseKey := fmt.Sprintf("%v:%v", safeCacheDs.Viper.GetString(safeCacheDs.Key+".database"), loadedModel.CollectionName)
 				for _, keyGroup := range loadedModel.Config.Cache.Keys {
 					keyToExpire := baseKey
 					for _, key := range keyGroup {
@@ -627,7 +640,7 @@ func (loadedModel *Model) ExtractLookupsFromFilter(filterMap *wst.Filter, disabl
 
 					*lookups = append(*lookups, wst.M{
 						"$lookup": wst.M{
-							"from":     relatedLoadedModel.Name,
+							"from":     relatedLoadedModel.CollectionName,
 							"let":      lookupLet,
 							"pipeline": pipeline,
 							"as":       relationName,
@@ -773,7 +786,7 @@ func (loadedModel *Model) Create(data interface{}, baseContext *EventContext) (*
 	for key := range *loadedModel.Config.Relations {
 		delete(finalData, key)
 	}
-	document, err := loadedModel.Datasource.Create(loadedModel.Name, &finalData)
+	document, err := loadedModel.Datasource.Create(loadedModel.CollectionName, &finalData)
 
 	if err != nil {
 		return nil, err
@@ -861,7 +874,7 @@ func (modelInstance *Instance) UpdateAttributes(data interface{}, baseContext *E
 	for key := range *modelInstance.Model.Config.Relations {
 		delete(finalData, key)
 	}
-	document, err := modelInstance.Model.Datasource.UpdateById(modelInstance.Model.Name, modelInstance.Id, &finalData)
+	document, err := modelInstance.Model.Datasource.UpdateById(modelInstance.Model.CollectionName, modelInstance.Id, &finalData)
 
 	if err != nil {
 		return nil, err
@@ -909,7 +922,7 @@ func (loadedModel *Model) DeleteById(id interface{}) (int64, error) {
 		}
 	}
 	//TODO: Invoke hook for __operation__before_delete and __operation__after_delete
-	deletedCount := loadedModel.Datasource.DeleteById(loadedModel.Name, finalId)
+	deletedCount := loadedModel.Datasource.DeleteById(loadedModel.CollectionName, finalId)
 	if deletedCount > 0 {
 		return deletedCount, nil
 	} else {
@@ -1143,7 +1156,7 @@ func (loadedModel *Model) RemoteMethod(handler func(context *EventContext) error
 		//	"application/json",
 		//},
 		"tags": []string{
-			loadedModel.Config.Name,
+			loadedModel.Name,
 		},
 		//"requestBody": requestBody,
 		"summary": description,
@@ -1733,7 +1746,7 @@ func (loadedModel *Model) mergeRelated(relationDeepLevel byte, documents *wst.A,
 								var cachedDocs *wst.A
 
 								cacheLookups := &wst.A{wst.M{"$match": wst.M{keyFrom: cacheKeyTo}}}
-								cachedDocs, err = safeCacheDs.FindMany(relatedLoadedModel.Config.Name, cacheLookups)
+								cachedDocs, err = safeCacheDs.FindMany(relatedLoadedModel.CollectionName, cacheLookups)
 								if err != nil {
 									return err
 								}
