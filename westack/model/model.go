@@ -1640,11 +1640,6 @@ func (loadedModel *Model) HandleRemoteMethod(name string, eventContext *EventCon
 				if err != nil {
 					return eventContext.NewError(fiber.ErrBadRequest, "INVALID_NUMBER", fiber.Map{"message": err.Error()})
 				}
-
-				asInt := int64(param.(float64))
-				if param == asInt {
-					param = asInt
-				}
 				break
 			}
 			(*eventContext.Query)[key] = param
