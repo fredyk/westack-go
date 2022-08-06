@@ -2,13 +2,16 @@ package wst
 
 import (
 	"encoding/json"
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/bson/primitive"
+	"fmt"
 	"io/ioutil"
 	"log"
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/gofiber/fiber/v2"
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 type M map[string]interface{}
@@ -121,6 +124,27 @@ var regexpDate2 = regexp.MustCompile("^(\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2
 var regexpDate3 = regexp.MustCompile("^(\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2})([Z]+)?$")
 var regexpDate4 = regexp.MustCompile("^(\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3})([Z]+)?$")
 
+type WeStackError struct {
+	FiberError *fiber.Error
+	Code       string
+	Details    fiber.Map
+	detailsSt  *string
+}
+
+func (err *WeStackError) Error() string {
+	if err.detailsSt == nil {
+		bytes, err2 := json.Marshal(err.Details)
+		st := ""
+		if err2 != nil {
+			st = fmt.Sprintf("%v", err.Details)
+		} else {
+			st = string(bytes)
+		}
+		err.detailsSt = &st
+	}
+	return fmt.Sprintf("%v %v: %v", err.FiberError.Code, err.FiberError.Error(), *err.detailsSt)
+}
+
 func LoadFile(filePath string, out interface{}) error {
 	jsonFile, err := ioutil.ReadFile(filePath)
 	if err != nil {
@@ -206,4 +230,12 @@ func IsDate3(data string) bool {
 
 func IsDate4(data string) bool {
 	return regexpDate4.MatchString(data)
+}
+
+func CreateError(fiberError *fiber.Error, code string, details fiber.Map) *WeStackError {
+	return &WeStackError{
+		FiberError: fiberError,
+		Code:       code,
+		Details:    details,
+	}
 }

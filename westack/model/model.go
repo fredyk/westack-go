@@ -4,23 +4,25 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/casbin/casbin/v2"
-	casbinmodel "github.com/casbin/casbin/v2/model"
-	fileadapter "github.com/casbin/casbin/v2/persist/file-adapter"
-	"github.com/fredyk/westack-go/westack/common"
-	"github.com/fredyk/westack-go/westack/datasource"
-	"github.com/go-redis/redis/v8"
-	"github.com/gofiber/fiber/v2"
-	"github.com/golang-jwt/jwt"
-	"github.com/oliveagle/jsonpath"
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/bson/primitive"
 	"log"
 	"regexp"
 	"runtime/debug"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/casbin/casbin/v2"
+	casbinmodel "github.com/casbin/casbin/v2/model"
+	fileadapter "github.com/casbin/casbin/v2/persist/file-adapter"
+	"github.com/go-redis/redis/v8"
+	"github.com/gofiber/fiber/v2"
+	"github.com/golang-jwt/jwt"
+	"github.com/oliveagle/jsonpath"
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
+
+	"github.com/fredyk/westack-go/westack/common"
+	"github.com/fredyk/westack-go/westack/datasource"
 )
 
 type Property struct {
@@ -122,15 +124,15 @@ func (loadedModel *Model) GetModelRegistry() *map[string]*Model {
 
 func (loadedModel *Model) SendError(ctx *fiber.Ctx, err error) error {
 	switch err.(type) {
-	case *WeStackError:
-		return ctx.Status((err).(*WeStackError).FiberError.Code).JSON(fiber.Map{
+	case *wst.WeStackError:
+		return ctx.Status((err).(*wst.WeStackError).FiberError.Code).JSON(fiber.Map{
 			"error": fiber.Map{
-				"statusCode": (err).(*WeStackError).FiberError.Code,
+				"statusCode": (err).(*wst.WeStackError).FiberError.Code,
 				"name":       "Error",
-				"code":       err.(*WeStackError).Code,
-				"error":      err.(*WeStackError).FiberError.Error(),
-				"message":    (err.(*WeStackError).Details)["message"],
-				"details":    err.(*WeStackError).Details,
+				"code":       err.(*wst.WeStackError).Code,
+				"error":      err.(*wst.WeStackError).FiberError.Error(),
+				"message":    (err.(*wst.WeStackError).Details)["message"],
+				"details":    err.(*wst.WeStackError).Details,
 			},
 		})
 	default:
@@ -1417,14 +1419,6 @@ type EventContext struct {
 	DisableTypeConversions bool
 }
 
-type WeStackError struct {
-	FiberError *fiber.Error
-	Code       string
-	Details    fiber.Map
-	Ctx        *EventContext
-	detailsSt  *string
-}
-
 func (eventContext *EventContext) UpdateEphemeral(newData *wst.M) {
 	if eventContext != nil && newData != nil {
 		if eventContext.Ephemeral == nil {
@@ -1436,28 +1430,9 @@ func (eventContext *EventContext) UpdateEphemeral(newData *wst.M) {
 	}
 }
 
-func (err *WeStackError) Error() string {
-	if err.detailsSt == nil {
-		bytes, err2 := json.Marshal(err.Details)
-		st := ""
-		if err2 != nil {
-			st = fmt.Sprintf("%v", err.Details)
-		} else {
-			st = string(bytes)
-		}
-		err.detailsSt = &st
-	}
-	return fmt.Sprintf("%v %v: %v", err.FiberError.Code, err.FiberError.Error(), *err.detailsSt)
-}
-
 func (eventContext *EventContext) NewError(fiberError *fiber.Error, code string, details fiber.Map) error {
 	eventContext.Result = details
-	return &WeStackError{
-		FiberError: fiberError,
-		Code:       code,
-		Details:    details,
-		Ctx:        eventContext,
-	}
+	return wst.CreateError(fiberError, code, details)
 }
 
 func (eventContext *EventContext) GetBearer(loadedModel *Model) (error, *BearerToken) {
