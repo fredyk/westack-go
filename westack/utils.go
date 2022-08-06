@@ -15,9 +15,9 @@ import (
 	wst "github.com/fredyk/westack-go/westack/common"
 )
 
-func GRPCCallWithQueryParams[InputT any, ClientT interface{}, OutputT proto.Message](serviceUrl string, clientFn func(cc grpc.ClientConnInterface) ClientT, fn func(ClientT, context.Context, *InputT, ...grpc.CallOption) (OutputT, error)) func(ctx *fiber.Ctx) error {
+func GRPCCallWithQueryParams[InputT any, ClientT interface{}, OutputT proto.Message](serviceUrl string, clientConstructor func(cc grpc.ClientConnInterface) ClientT, clientMethod func(ClientT, context.Context, *InputT, ...grpc.CallOption) (OutputT, error)) func(ctx *fiber.Ctx) error {
 	return func(ctx *fiber.Ctx) error {
-		fmt.Printf("%s %T \n", serviceUrl, fn)
+		fmt.Printf("%s %T \n", serviceUrl, clientMethod)
 		var rawParamsQuery InputT
 		if err := ctx.QueryParser(&rawParamsQuery); err != nil {
 			fmt.Printf("GRPCCallWithQueryParams Query Parse Error: %s\n", err)
@@ -34,9 +34,9 @@ func GRPCCallWithQueryParams[InputT any, ClientT interface{}, OutputT proto.Mess
 				fmt.Printf("GRPCCallWithQueryParams Disconnect Error: %s\n", err)
 			}
 		}(conn)
-		client := clientFn(conn)
+		client := clientConstructor(conn)
 
-		res, err := fn(client, ctx.Context(), &rawParamsQuery)
+		res, err := clientMethod(client, ctx.Context(), &rawParamsQuery)
 		if err != nil {
 			fmt.Printf("GRPCCallWithQueryParams Call Error: %s\n", err)
 			return SendError(ctx, err)
@@ -52,9 +52,9 @@ func GRPCCallWithQueryParams[InputT any, ClientT interface{}, OutputT proto.Mess
 	}
 }
 
-func GRPCCallWithBody[InputT any, ClientT interface{}, OutputT proto.Message](serviceUrl string, clientFn func(cc grpc.ClientConnInterface) ClientT, fn func(ClientT, context.Context, *InputT, ...grpc.CallOption) (OutputT, error)) func(ctx *fiber.Ctx) error {
+func GRPCCallWithBody[InputT any, ClientT interface{}, OutputT proto.Message](serviceUrl string, clientConstructor func(cc grpc.ClientConnInterface) ClientT, clientMethod func(ClientT, context.Context, *InputT, ...grpc.CallOption) (OutputT, error)) func(ctx *fiber.Ctx) error {
 	return func(ctx *fiber.Ctx) error {
-		fmt.Printf("%s %T \n", serviceUrl, fn)
+		fmt.Printf("%s %T \n", serviceUrl, clientMethod)
 		var rawParamsInput InputT
 		if err := ctx.BodyParser(&rawParamsInput); err != nil {
 			fmt.Printf("GRPCCallWithBody Body Parse Error: %s\n", err)
@@ -71,9 +71,9 @@ func GRPCCallWithBody[InputT any, ClientT interface{}, OutputT proto.Message](se
 				fmt.Printf("GRPCCallWithBody Disconnect Error: %s\n", err)
 			}
 		}(conn)
-		client := clientFn(conn)
+		client := clientConstructor(conn)
 
-		res, err := fn(client, ctx.Context(), &rawParamsInput)
+		res, err := clientMethod(client, ctx.Context(), &rawParamsInput)
 		if err != nil {
 			fmt.Printf("GRPCCallWithBody Call Error: %s\n", err)
 			return SendError(ctx, err)
