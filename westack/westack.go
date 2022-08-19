@@ -4,19 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/casbin/casbin/v2"
-	casbinmodel "github.com/casbin/casbin/v2/model"
-	fileadapter "github.com/casbin/casbin/v2/persist/file-adapter"
-	"github.com/fredyk/westack-go/westack/common"
-	"github.com/fredyk/westack-go/westack/datasource"
-	"github.com/fredyk/westack-go/westack/lib"
-	"github.com/fredyk/westack-go/westack/model"
-	"github.com/gofiber/fiber/v2"
-	"github.com/gofiber/fiber/v2/middleware/recover"
-	"github.com/golang-jwt/jwt"
-	"github.com/spf13/viper"
-	"go.mongodb.org/mongo-driver/bson/primitive"
-	"golang.org/x/crypto/bcrypt"
 	"io/ioutil"
 	"log"
 	"os"
@@ -24,6 +11,21 @@ import (
 	"runtime/debug"
 	"strings"
 	"time"
+
+	"github.com/casbin/casbin/v2"
+	casbinmodel "github.com/casbin/casbin/v2/model"
+	fileadapter "github.com/casbin/casbin/v2/persist/file-adapter"
+	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/middleware/recover"
+	"github.com/golang-jwt/jwt"
+	"github.com/spf13/viper"
+	"go.mongodb.org/mongo-driver/bson/primitive"
+	"golang.org/x/crypto/bcrypt"
+
+	"github.com/fredyk/westack-go/westack/common"
+	"github.com/fredyk/westack-go/westack/datasource"
+	"github.com/fredyk/westack-go/westack/lib"
+	"github.com/fredyk/westack-go/westack/model"
 )
 
 type LoginBody struct {
@@ -395,6 +397,16 @@ func (app *WeStack) setupModel(loadedModel *model.Model, dataSource *datasource.
 					}
 					if existent != nil {
 						return ctx.NewError(fiber.ErrConflict, "EMAIL_UNIQUENESS", fiber.Map{"message": "User exists"})
+					}
+					if (*data)["username"] != nil && strings.TrimSpace((*data)["username"].(string)) != "" {
+						filter = wst.Filter{Where: &wst.Where{"username": (*data)["username"]}}
+						existent, err2 = loadedModel.FindOne(&filter, ctx)
+						if err2 != nil {
+							return err2
+						}
+						if existent != nil {
+							return ctx.NewError(fiber.ErrConflict, "USERNAME_UNIQUENESS", fiber.Map{"message": "User exists"})
+						}
 					}
 
 					if (*data)["password"] == nil || strings.TrimSpace((*data)["password"].(string)) == "" {
