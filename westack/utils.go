@@ -99,13 +99,13 @@ func disconnect(conn *gogrpc.ClientConn) error {
 }
 
 func SendError(ctx *fiber.Ctx, err error) error {
-	newErr := wst.CreateError(fiber.ErrInternalServerError, "ERR_INTERNAL", fiber.Map{"message": err.Error()})
+	newErr := wst.CreateError(fiber.ErrInternalServerError, "ERR_INTERNAL", fiber.Map{"message": err.Error()}, "Error")
 	ctx.Response().Header.SetStatusCode(newErr.FiberError.Code)
 	ctx.Response().Header.SetStatusMessage([]byte(newErr.FiberError.Message))
 	return ctx.JSON(fiber.Map{
 		"error": fiber.Map{
 			"statusCode": newErr.FiberError.Code,
-			"name":       "Error",
+			"name":       newErr.Name,
 			"code":       newErr.Code,
 			"error":      newErr.FiberError.Error(),
 			"message":    (newErr.Details)["message"],
