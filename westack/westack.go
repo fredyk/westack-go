@@ -171,11 +171,11 @@ func (app *WeStack) setupModel(loadedModel *model.Model, dataSource *datasource.
 		loadedModel.On("login", func(ctx *model.EventContext) error {
 			data := ctx.Data
 			if (*data)["email"] == nil || strings.TrimSpace((*data)["email"].(string)) == "" {
-				return ctx.NewError(fiber.ErrBadRequest, "USERNAME_EMAIL_REQUIRED", fiber.Map{"message": "username or email is required"})
+				return wst.CreateError(fiber.ErrBadRequest, "USERNAME_EMAIL_REQUIRED", fiber.Map{"message": "username or email is required"}, "ValidationError")
 			}
 
 			if (*data)["password"] == nil || strings.TrimSpace((*data)["password"].(string)) == "" {
-				return ctx.NewError(fiber.ErrUnauthorized, "LOGIN_FAILED", fiber.Map{"message": "login failed"})
+				return wst.CreateError(fiber.ErrUnauthorized, "LOGIN_FAILED", fiber.Map{"message": "login failed"}, "Error")
 			}
 
 			email := (*data)["email"].(string)
@@ -185,7 +185,7 @@ func (app *WeStack) setupModel(loadedModel *model.Model, dataSource *datasource.
 				},
 			}, ctx)
 			if len(users) == 0 {
-				return ctx.NewError(fiber.ErrUnauthorized, "LOGIN_FAILED", fiber.Map{"message": "login failed"})
+				return wst.CreateError(fiber.ErrUnauthorized, "LOGIN_FAILED", fiber.Map{"message": "login failed"}, "Error")
 			}
 			firstUser := users[0]
 			ctx.Instance = &firstUser
@@ -194,7 +194,7 @@ func (app *WeStack) setupModel(loadedModel *model.Model, dataSource *datasource.
 			savedPassword := firstUserData["password"]
 			err = bcrypt.CompareHashAndPassword([]byte(savedPassword.(string)), []byte((*data)["password"].(string)))
 			if err != nil {
-				return ctx.NewError(fiber.ErrUnauthorized, "LOGIN_FAILED", fiber.Map{"message": "login failed"})
+				return wst.CreateError(fiber.ErrUnauthorized, "LOGIN_FAILED", fiber.Map{"message": "login failed"}, "Error")
 			}
 
 			userIdHex := firstUser.Id.(primitive.ObjectID).Hex()
@@ -386,31 +386,33 @@ func (app *WeStack) setupModel(loadedModel *model.Model, dataSource *datasource.
 				}
 
 				if config.Base == "User" {
-					if (*data)["email"] == nil || strings.TrimSpace((*data)["email"].(string)) == "" {
+					email := (*data)["email"]
+					if email == nil || strings.TrimSpace(email.(string)) == "" {
 						// TODO: Validate email
-						return ctx.NewError(fiber.ErrBadRequest, "EMAIL_PRESENCE", fiber.Map{"message": "Invalid email"})
+						return wst.CreateError(fiber.ErrBadRequest, "EMAIL_PRESENCE", fiber.Map{"message": "Invalid email", "codes": wst.M{"email": []string{"presence"}}}, "ValidationError")
 					}
-					filter := wst.Filter{Where: &wst.Where{"email": (*data)["email"]}}
+					filter := wst.Filter{Where: &wst.Where{"email": email}}
 					existent, err2 := loadedModel.FindOne(&filter, ctx)
 					if err2 != nil {
 						return err2
 					}
 					if existent != nil {
-						return ctx.NewError(fiber.ErrConflict, "EMAIL_UNIQUENESS", fiber.Map{"message": "User exists"})
+						return wst.CreateError(fiber.ErrConflict, "EMAIL_UNIQUENESS", fiber.Map{"message": fmt.Sprintf("The `user` instance is not valid. Details: `email` Email already exists (value: \"%v\").", email), "codes": wst.M{"email": []string{"uniqueness"}}}, "ValidationError")
 					}
-					if (*data)["username"] != nil && strings.TrimSpace((*data)["username"].(string)) != "" {
-						filter = wst.Filter{Where: &wst.Where{"username": (*data)["username"]}}
+					username := (*data)["username"]
+					if username != nil && strings.TrimSpace(username.(string)) != "" {
+						filter = wst.Filter{Where: &wst.Where{"username": username}}
 						existent, err2 = loadedModel.FindOne(&filter, ctx)
 						if err2 != nil {
 							return err2
 						}
 						if existent != nil {
-							return ctx.NewError(fiber.ErrConflict, "USERNAME_UNIQUENESS", fiber.Map{"message": "User exists"})
+							return wst.CreateError(fiber.ErrConflict, "USERNAME_UNIQUENESS", fiber.Map{"message": fmt.Sprintf("The `user` instance is not valid. Details: `username` User already exists (value: \"%v\").", username), "codes": wst.M{"username": []string{"uniqueness"}}}, "ValidationError")
 						}
 					}
 
 					if (*data)["password"] == nil || strings.TrimSpace((*data)["password"].(string)) == "" {
-						return ctx.NewError(fiber.ErrBadRequest, "PASSWORD_BLANK", fiber.Map{"message": "Invalid password"})
+						return wst.CreateError(fiber.ErrBadRequest, "PASSWORD_BLANK", fiber.Map{"message": "Invalid password"}, "ValidationError")
 					}
 					hashed, err := bcrypt.GenerateFromPassword([]byte((*data)["password"].(string)), 10)
 					if err != nil {
@@ -470,7 +472,7 @@ func (app *WeStack) setupModel(loadedModel *model.Model, dataSource *datasource.
 				return err
 			}
 			if deletedCount != 1 {
-				return ctx.NewError(fiber.ErrBadRequest, "BAD_REQUEST", fiber.Map{"message": fmt.Sprintf("Deleted %v instances for %v", deletedCount, ctx.ModelID)})
+				return wst.CreateError(fiber.ErrBadRequest, "BAD_REQUEST", fiber.Map{"message": fmt.Sprintf("Deleted %v instances for %v", deletedCount, ctx.ModelID)}, "Error")
 			}
 			ctx.StatusCode = fiber.StatusNoContent
 			ctx.Result = ""

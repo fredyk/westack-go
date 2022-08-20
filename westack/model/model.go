@@ -125,10 +125,14 @@ func (loadedModel *Model) GetModelRegistry() *map[string]*Model {
 func (loadedModel *Model) SendError(ctx *fiber.Ctx, err error) error {
 	switch err.(type) {
 	case *wst.WeStackError:
+		errorName := err.(*wst.WeStackError).Name
+		if errorName == "" {
+			errorName = "Error"
+		}
 		return ctx.Status((err).(*wst.WeStackError).FiberError.Code).JSON(fiber.Map{
 			"error": fiber.Map{
 				"statusCode": (err).(*wst.WeStackError).FiberError.Code,
-				"name":       "Error",
+				"name":       errorName,
 				"code":       err.(*wst.WeStackError).Code,
 				"error":      err.(*wst.WeStackError).FiberError.Error(),
 				"message":    (err.(*wst.WeStackError).Details)["message"],
@@ -1375,7 +1379,7 @@ func (loadedModel *Model) RemoteMethod(handler func(context *EventContext) error
 		if err2 != nil {
 
 			if err2 == fiber.ErrUnauthorized {
-				err2 = eventContext.NewError(fiber.ErrUnauthorized, "UNAUTHORIZED", fiber.Map{"message": "Unauthorized"})
+				err2 = wst.CreateError(fiber.ErrUnauthorized, "UNAUTHORIZED", fiber.Map{"message": "Unauthorized"}, "Error")
 			}
 
 			log.Printf("Error in remote method %v.%v (%v %v%v): %v\n", loadedModel.Name, options.Name, strings.ToUpper(verb), loadedModel.BaseUrl, path, err2.Error())
@@ -1428,11 +1432,6 @@ func (eventContext *EventContext) UpdateEphemeral(newData *wst.M) {
 			(*eventContext.Ephemeral)[k] = v
 		}
 	}
-}
-
-func (eventContext *EventContext) NewError(fiberError *fiber.Error, code string, details fiber.Map) error {
-	eventContext.Result = details
-	return wst.CreateError(fiberError, code, details)
 }
 
 func (eventContext *EventContext) GetBearer(loadedModel *Model) (error, *BearerToken) {
@@ -1581,7 +1580,7 @@ func (loadedModel *Model) HandleRemoteMethod(name string, eventContext *EventCon
 		if len(bytes) > 0 {
 			err := json.Unmarshal(bytes, &data)
 			if err != nil {
-				return eventContext.NewError(fiber.ErrBadRequest, "INVALID_BODY", fiber.Map{"message": err.Error()})
+				return wst.CreateError(fiber.ErrBadRequest, "INVALID_BODY", fiber.Map{"message": err.Error()}, "ValidationError")
 			}
 			eventContext.Data = data
 		} else {
@@ -1607,13 +1606,13 @@ func (loadedModel *Model) HandleRemoteMethod(name string, eventContext *EventCon
 			case "date":
 				param, err = wst.ParseDate(paramSt)
 				if err != nil {
-					return eventContext.NewError(fiber.ErrBadRequest, "INVALID_DATE", fiber.Map{"message": err.Error()})
+					return wst.CreateError(fiber.ErrBadRequest, "INVALID_DATE", fiber.Map{"message": err.Error()}, "ValidationError")
 				}
 				break
 			case "number":
 				param, err = strconv.ParseFloat(paramSt, 64)
 				if err != nil {
-					return eventContext.NewError(fiber.ErrBadRequest, "INVALID_NUMBER", fiber.Map{"message": err.Error()})
+					return wst.CreateError(fiber.ErrBadRequest, "INVALID_NUMBER", fiber.Map{"message": err.Error()}, "ValidationError")
 				}
 				break
 			}

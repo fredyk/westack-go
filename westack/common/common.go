@@ -128,6 +128,7 @@ type WeStackError struct {
 	FiberError *fiber.Error
 	Code       string
 	Details    fiber.Map
+	Name       string
 	detailsSt  *string
 }
 
@@ -232,10 +233,11 @@ func IsDate4(data string) bool {
 	return regexpDate4.MatchString(data)
 }
 
-func CreateError(fiberError *fiber.Error, code string, details fiber.Map) *WeStackError {
+func CreateError(fiberError *fiber.Error, code string, details fiber.Map, name string) *WeStackError {
 	return &WeStackError{
 		FiberError: fiberError,
 		Code:       code,
 		Details:    details,
+		Name:       name,
 	}
 }
