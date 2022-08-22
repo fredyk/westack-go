@@ -8,7 +8,6 @@ import (
 	"github.com/golang/protobuf/jsonpb"
 	"github.com/golang/protobuf/proto"
 	"go.elastic.co/apm/module/apmgrpc"
-	"google.golang.org/grpc"
 	gogrpc "google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
@@ -17,7 +16,7 @@ import (
 
 func GRPCCallWithQueryParams[InputT any, ClientT interface{}, OutputT proto.Message](serviceUrl string, clientConstructor func(cc grpc.ClientConnInterface) ClientT, clientMethod func(ClientT, context.Context, *InputT, ...grpc.CallOption) (OutputT, error)) func(ctx *fiber.Ctx) error {
 	return func(ctx *fiber.Ctx) error {
-		fmt.Printf("%s %T \n", serviceUrl, clientMethod)
+		//fmt.Printf("%s %T \n", serviceUrl, clientMethod)
 		var rawParamsQuery InputT
 		if err := ctx.QueryParser(&rawParamsQuery); err != nil {
 			fmt.Printf("GRPCCallWithQueryParams Query Parse Error: %s\n", err)
@@ -54,7 +53,7 @@ func GRPCCallWithQueryParams[InputT any, ClientT interface{}, OutputT proto.Mess
 
 func GRPCCallWithBody[InputT any, ClientT interface{}, OutputT proto.Message](serviceUrl string, clientConstructor func(cc grpc.ClientConnInterface) ClientT, clientMethod func(ClientT, context.Context, *InputT, ...grpc.CallOption) (OutputT, error)) func(ctx *fiber.Ctx) error {
 	return func(ctx *fiber.Ctx) error {
-		fmt.Printf("%s %T \n", serviceUrl, clientMethod)
+		//fmt.Printf("%s %T \n", serviceUrl, clientMethod)
 		var rawParamsInput InputT
 		if err := ctx.BodyParser(&rawParamsInput); err != nil {
 			fmt.Printf("GRPCCallWithBody Body Parse Error: %s\n", err)
