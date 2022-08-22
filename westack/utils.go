@@ -14,7 +14,7 @@ import (
 	wst "github.com/fredyk/westack-go/westack/common"
 )
 
-func GRPCCallWithQueryParams[InputT any, ClientT interface{}, OutputT proto.Message](serviceUrl string, clientConstructor func(cc grpc.ClientConnInterface) ClientT, clientMethod func(ClientT, context.Context, *InputT, ...grpc.CallOption) (OutputT, error)) func(ctx *fiber.Ctx) error {
+func GRPCCallWithQueryParams[InputT any, ClientT interface{}, OutputT proto.Message](serviceUrl string, clientConstructor func(cc gogrpc.ClientConnInterface) ClientT, clientMethod func(ClientT, context.Context, *InputT, ...gogrpc.CallOption) (OutputT, error)) func(ctx *fiber.Ctx) error {
 	return func(ctx *fiber.Ctx) error {
 		//fmt.Printf("%s %T \n", serviceUrl, clientMethod)
 		var rawParamsQuery InputT
@@ -51,7 +51,7 @@ func GRPCCallWithQueryParams[InputT any, ClientT interface{}, OutputT proto.Mess
 	}
 }
 
-func GRPCCallWithBody[InputT any, ClientT interface{}, OutputT proto.Message](serviceUrl string, clientConstructor func(cc grpc.ClientConnInterface) ClientT, clientMethod func(ClientT, context.Context, *InputT, ...grpc.CallOption) (OutputT, error)) func(ctx *fiber.Ctx) error {
+func GRPCCallWithBody[InputT any, ClientT interface{}, OutputT proto.Message](serviceUrl string, clientConstructor func(cc gogrpc.ClientConnInterface) ClientT, clientMethod func(ClientT, context.Context, *InputT, ...gogrpc.CallOption) (OutputT, error)) func(ctx *fiber.Ctx) error {
 	return func(ctx *fiber.Ctx) error {
 		//fmt.Printf("%s %T \n", serviceUrl, clientMethod)
 		var rawParamsInput InputT
