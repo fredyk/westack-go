@@ -1055,12 +1055,8 @@ func (app *WeStack) loadModelsFixedRoutes() {
 				eventContext.Bearer.Claims["created"] = time.Now().Unix()
 				eventContext.Bearer.Claims["ttl"] = 86400 * 2 * 1000
 				eventContext.Bearer.Claims["allowsEmailVerification"] = true
-				newJwtClaims := jwt.MapClaims{}
-				for k, v := range eventContext.Bearer.Claims {
-					newJwtClaims[k] = v
-				}
 
-				token := jwt.NewWithClaims(jwt.SigningMethodHS256, newJwtClaims)
+				token := jwt.NewWithClaims(jwt.SigningMethodHS256, eventContext.Bearer.Claims)
 
 				tokenString, err := token.SignedString(loadedModel.App.JwtSecretKey)
 				if err != nil {

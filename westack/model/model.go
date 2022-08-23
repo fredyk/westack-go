@@ -1403,7 +1403,7 @@ type BearerToken struct {
 	User   *BearerUser
 	Roles  []BearerRole
 	Raw    string
-	Claims wst.M
+	Claims jwt.MapClaims
 }
 
 type EphemeralData wst.M
@@ -1455,7 +1455,7 @@ func (eventContext *EventContext) GetBearer(loadedModel *Model) (error, *BearerT
 
 	var user *BearerUser
 	roles := make([]BearerRole, 0)
-	bearerClaims := wst.M{}
+	bearerClaims := jwt.MapClaims{}
 	rawToken := ""
 	if len(authBearerPair) == 2 {
 
@@ -1472,9 +1472,7 @@ func (eventContext *EventContext) GetBearer(loadedModel *Model) (error, *BearerT
 
 		if token != nil {
 			if claims, ok := token.Claims.(jwt.MapClaims); ok && token.Valid {
-				for k, v := range claims {
-					bearerClaims[k] = v
-				}
+				bearerClaims = claims
 				claimRoles := claims["roles"]
 				userId := claims["userId"]
 				user = &BearerUser{
