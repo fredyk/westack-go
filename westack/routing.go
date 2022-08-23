@@ -18,10 +18,10 @@ import (
 )
 
 func (app *WeStack) loadNotFoundRoutes() {
-	for _, entry := range *app.ModelRegistry {
+	for _, entry := range *app.modelRegistry {
 		loadedModel := entry
 		if !loadedModel.Config.Public {
-			if app.Debug {
+			if app.debug {
 				log.Println("WARNING: Model", loadedModel.Name, "is not public")
 			}
 			continue
@@ -34,7 +34,7 @@ func (app *WeStack) loadNotFoundRoutes() {
 }
 
 func (app *WeStack) loadModelsFixedRoutes() {
-	for _, entry := range *app.ModelRegistry {
+	for _, entry := range *app.modelRegistry {
 		loadedModel := entry
 
 		e, err := casbin.NewEnforcer(*loadedModel.CasbinModel, *loadedModel.CasbinAdapter, true)
@@ -197,7 +197,7 @@ func (app *WeStack) loadModelsFixedRoutes() {
 			panic(err)
 		}
 
-		if app.Debug {
+		if app.debug {
 			loadedModel.CasbinModel.PrintModel()
 		}
 
@@ -210,13 +210,13 @@ func (app *WeStack) loadModelsFixedRoutes() {
 		}
 
 		if !loadedModel.Config.Public {
-			if app.Debug {
+			if app.debug {
 				log.Println("WARNING: Model", loadedModel.Name, "is not public")
 			}
 			continue
 		}
 
-		if app.Debug {
+		if app.debug {
 			log.Println("Mount GET " + loadedModel.BaseUrl)
 		}
 		loadedModel.RemoteMethod(func(eventContext *model.EventContext) error {
@@ -240,7 +240,7 @@ func (app *WeStack) loadModelsFixedRoutes() {
 			},
 		})
 
-		if app.Debug {
+		if app.debug {
 			log.Println("Mount POST " + loadedModel.BaseUrl)
 		}
 		loadedModel.RemoteMethod(func(eventContext *model.EventContext) error {
@@ -321,7 +321,7 @@ func (app *WeStack) loadModelsFixedRoutes() {
 			},
 			)
 
-			if app.Debug {
+			if app.debug {
 				log.Println("Mount POST " + loadedModel.BaseUrl + "/reset-password")
 			}
 			loadedModel.RemoteMethod(func(eventContext *model.EventContext) error {
@@ -394,7 +394,7 @@ func (app *WeStack) loadModelsFixedRoutes() {
 					if err != nil {
 						return err
 					}
-					if app.Debug {
+					if app.debug {
 						log.Println("Updated user ", updated)
 					}
 					redirectToUrl := eventContext.Ctx.Query("redirect_uri")
@@ -424,16 +424,16 @@ func (app *WeStack) loadModelsFixedRoutes() {
 }
 
 func (app *WeStack) loadModelsDynamicRoutes() {
-	for _, entry := range *app.ModelRegistry {
+	for _, entry := range *app.modelRegistry {
 		loadedModel := entry
 		if !loadedModel.Config.Public {
-			if app.Debug {
+			if app.debug {
 				log.Println("WARNING: Model", loadedModel.Name, "is not public")
 			}
 			continue
 		}
 
-		if app.Debug {
+		if app.debug {
 			log.Println("Mount GET " + loadedModel.BaseUrl + "/:id")
 		}
 		loadedModel.RemoteMethod(func(eventContext *model.EventContext) error {
@@ -464,7 +464,7 @@ func (app *WeStack) loadModelsDynamicRoutes() {
 			},
 		})
 
-		if app.Debug {
+		if app.debug {
 			log.Println("Mount PATCH " + loadedModel.BaseUrl + "/:id")
 		}
 		loadedModel.RemoteMethod(func(eventContext *model.EventContext) error {
@@ -497,7 +497,7 @@ func (app *WeStack) loadModelsDynamicRoutes() {
 			},
 		})
 
-		if app.Debug {
+		if app.debug {
 			log.Println("Mount DELETE " + loadedModel.BaseUrl + "/:id")
 		}
 		loadedModel.RemoteMethod(func(eventContext *model.EventContext) error {
