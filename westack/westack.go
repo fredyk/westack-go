@@ -22,7 +22,7 @@ import (
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"golang.org/x/crypto/bcrypt"
 
-	"github.com/fredyk/westack-go/westack/common"
+	wst "github.com/fredyk/westack-go/westack/common"
 	"github.com/fredyk/westack-go/westack/datasource"
 	"github.com/fredyk/westack-go/westack/lib"
 	"github.com/fredyk/westack-go/westack/model"
@@ -428,7 +428,7 @@ func (app *WeStack) setupModel(loadedModel *model.Model, dataSource *datasource.
 			} else {
 				if config.Base == "User" {
 					if (*data)["password"] != nil && (*data)["password"] != "" {
-						log.Println("Update User")
+						log.Println("Update User password")
 						hashed, err := bcrypt.GenerateFromPassword([]byte((*data)["password"].(string)), 10)
 						if err != nil {
 							return err
@@ -1027,8 +1027,109 @@ func (app *WeStack) loadModelsFixedRoutes() {
 			},
 			)
 
-		}
+			if app.Debug {
+				log.Println("Mount POST " + loadedModel.BaseUrl + "/reset-password")
+			}
+			loadedModel.RemoteMethod(func(eventContext *model.EventContext) error {
+				// Developer must implement this event
+				return handleEvent(eventContext, loadedModel, "sendResetPasswordEmail")
+			}, model.RemoteMethodOptions{
+				Name: "resetPassword",
+				Accepts: model.RemoteMethodOptionsHttpArgs{
+					{
+						Arg:         "data",
+						Type:        "object",
+						Description: "",
+						Http:        model.ArgHttp{Source: "body"},
+						Required:    false,
+					},
+				},
+				Http: model.RemoteMethodOptionsHttp{
+					Path: "/reset-password",
+					Verb: "post",
+				},
+			})
 
+			loadedModel.RemoteMethod(func(eventContext *model.EventContext) error {
+				fmt.Println("verify user ", eventContext.Bearer.User.Id)
+				eventContext.Bearer.Claims["created"] = time.Now().Unix()
+				eventContext.Bearer.Claims["ttl"] = 86400 * 2 * 1000
+				eventContext.Bearer.Claims["allowsEmailVerification"] = true
+				newJwtClaims := jwt.MapClaims{}
+				for k, v := range eventContext.Bearer.Claims {
+					newJwtClaims[k] = v
+				}
+
+				token := jwt.NewWithClaims(jwt.SigningMethodHS256, newJwtClaims)
+
+				tokenString, err := token.SignedString(loadedModel.App.JwtSecretKey)
+				if err != nil {
+					return err
+				}
+				eventContext.Bearer.Raw = tokenString
+
+				return handleEvent(eventContext, loadedModel, "sendVerificationEmail")
+			}, model.RemoteMethodOptions{
+				Name: "sendVerificationEmail",
+				Accepts: model.RemoteMethodOptionsHttpArgs{
+					{
+						Arg:         "data",
+						Type:        "object",
+						Description: "",
+						Http:        model.ArgHttp{Source: "body"},
+						Required:    false,
+					},
+				},
+				Http: model.RemoteMethodOptionsHttp{
+					Path: "/verify-mail",
+					Verb: "post",
+				},
+			})
+
+			loadedModel.RemoteMethod(func(eventContext *model.EventContext) error {
+				// Developer must implement this event
+				userId := eventContext.Bearer.User.Id
+				if userId == "" {
+					return errors.New("no user id found in bearer")
+				}
+				if eventContext.Bearer.Claims["allowsEmailVerification"] == true {
+					user, err := loadedModel.FindById(userId, nil, eventContext)
+					if err != nil {
+						return err
+					}
+					eventContext.SkipFieldProtection = true
+					updated, err := user.UpdateAttributes(wst.M{
+						"emailVerified": true,
+					}, eventContext)
+					if err != nil {
+						return err
+					}
+					if app.Debug {
+						log.Println("Updated user ", updated)
+					}
+					redirectToUrl := eventContext.Ctx.Query("redirect_uri")
+					return eventContext.Ctx.Redirect(redirectToUrl)
+				}
+
+				return handleEvent(eventContext, loadedModel, "performEmailVerification")
+			}, model.RemoteMethodOptions{
+				Name: "performEmailVerification",
+				Accepts: model.RemoteMethodOptionsHttpArgs{
+					{
+						Arg:         "access_token",
+						Type:        "string",
+						Description: "",
+						Http:        model.ArgHttp{Source: "query"},
+						Required:    true,
+					},
+				},
+				Http: model.RemoteMethodOptionsHttp{
+					Path: "/verify-mail",
+					Verb: "get",
+				},
+			})
+
+		}
 	}
 }
 

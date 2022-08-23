@@ -21,7 +21,7 @@ import (
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 
-	"github.com/fredyk/westack-go/westack/common"
+	wst "github.com/fredyk/westack-go/westack/common"
 	"github.com/fredyk/westack-go/westack/datasource"
 )
 
@@ -1400,8 +1400,10 @@ type BearerRole struct {
 }
 
 type BearerToken struct {
-	User  *BearerUser
-	Roles []BearerRole
+	User   *BearerUser
+	Roles  []BearerRole
+	Raw    string
+	Claims wst.M
 }
 
 type EphemeralData wst.M
@@ -1421,6 +1423,7 @@ type EventContext struct {
 	ModelID                interface{}
 	StatusCode             int
 	DisableTypeConversions bool
+	SkipFieldProtection    bool
 }
 
 func (eventContext *EventContext) UpdateEphemeral(newData *wst.M) {
@@ -1441,14 +1444,24 @@ func (eventContext *EventContext) GetBearer(loadedModel *Model) (error, *BearerT
 	}
 	c := eventContext.Ctx
 	authBytes := c.Request().Header.Peek("Authorization")
-
-	authBearerPair := strings.Split(strings.TrimSpace(string(authBytes)), "Bearer ")
+	authSt := string(authBytes)
+	if authSt == "" {
+		authSt = eventContext.Ctx.Query("access_token")
+		if authSt != "" {
+			authSt = "Bearer " + authSt
+		}
+	}
+	authBearerPair := strings.Split(strings.TrimSpace(authSt), "Bearer ")
 
 	var user *BearerUser
 	roles := make([]BearerRole, 0)
+	bearerClaims := wst.M{}
+	rawToken := ""
 	if len(authBearerPair) == 2 {
 
-		token, err := jwt.Parse(authBearerPair[1], func(token *jwt.Token) (interface{}, error) {
+		rawToken = authBearerPair[1]
+
+		token, err := jwt.Parse(rawToken, func(token *jwt.Token) (interface{}, error) {
 
 			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 				return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
@@ -1459,6 +1472,9 @@ func (eventContext *EventContext) GetBearer(loadedModel *Model) (error, *BearerT
 
 		if token != nil {
 			if claims, ok := token.Claims.(jwt.MapClaims); ok && token.Valid {
+				for k, v := range claims {
+					bearerClaims[k] = v
+				}
 				claimRoles := claims["roles"]
 				userId := claims["userId"]
 				user = &BearerUser{
@@ -1479,8 +1495,10 @@ func (eventContext *EventContext) GetBearer(loadedModel *Model) (error, *BearerT
 
 	}
 	return nil, &BearerToken{
-		User:  user,
-		Roles: roles,
+		User:   user,
+		Roles:  roles,
+		Claims: bearerClaims,
+		Raw:    rawToken,
 	}
 
 }
