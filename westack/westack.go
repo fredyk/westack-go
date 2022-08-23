@@ -50,7 +50,7 @@ type WeStack struct {
 	viper         *viper.Viper
 }
 
-func (app WeStack) SwaggerPaths() *map[string]wst.M {
+func (app *WeStack) SwaggerPaths() *map[string]wst.M {
 	return &app._swaggerPaths
 }
 
@@ -62,7 +62,7 @@ func (app *WeStack) FindModel(modelName string) (*model.Model, error) {
 	return result, nil
 }
 
-func (app WeStack) FindDatasource(dsName string) (*datasource.Datasource, error) {
+func (app *WeStack) FindDatasource(dsName string) (*datasource.Datasource, error) {
 	result := (*app.Datasources)[dsName]
 
 	if result == nil {
@@ -1223,12 +1223,12 @@ func (app *WeStack) loadModelsDynamicRoutes() {
 	}
 }
 
-func (app WeStack) Start() interface{} {
+func (app *WeStack) Start() interface{} {
 	log.Printf("DEBUG Server took %v ms to start\n", time.Now().UnixMilli()-app.init.UnixMilli())
 	return app.Server.Listen(fmt.Sprintf("0.0.0.0:%v", app.Port))
 }
 
-func (app WeStack) Middleware(handler fiber.Handler) {
+func (app *WeStack) Middleware(handler fiber.Handler) {
 	app.Server.Use(handler)
 }
 
