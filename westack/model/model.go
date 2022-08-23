@@ -1446,7 +1446,7 @@ func (eventContext *EventContext) GetBearer(loadedModel *Model) (error, *BearerT
 	authBytes := c.Request().Header.Peek("Authorization")
 	authSt := string(authBytes)
 	if authSt == "" {
-		authSt = eventContext.Ctx.Query("access_token")
+		authSt = c.Query("access_token")
 		if authSt != "" {
 			authSt = "Bearer " + authSt
 		}
