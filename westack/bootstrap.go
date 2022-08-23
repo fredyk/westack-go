@@ -134,7 +134,7 @@ func (app *WeStack) loadDataSources() {
 
 func (app *WeStack) setupModel(loadedModel *model.Model, dataSource *datasource.Datasource) {
 
-	loadedModel.App = app.AsInterface()
+	loadedModel.App = app.asInterface()
 	loadedModel.Datasource = dataSource
 
 	config := loadedModel.Config
@@ -169,7 +169,7 @@ func (app *WeStack) setupModel(loadedModel *model.Model, dataSource *datasource.
 				},
 			},
 		}, app.modelRegistry)
-		roleMappingModel.App = app.AsInterface()
+		roleMappingModel.App = app.asInterface()
 		roleMappingModel.Datasource = dataSource
 
 		app.roleMappingModel = roleMappingModel
@@ -490,6 +490,22 @@ func (app *WeStack) setupModel(loadedModel *model.Model, dataSource *datasource.
 		}
 		loadedModel.On("instance_delete", deleteByIdHandler)
 
+	}
+}
+
+func (app *WeStack) asInterface() *wst.IApp {
+	return &wst.IApp{
+		Debug:        app.debug,
+		JwtSecretKey: app.jwtSecretKey,
+		FindModel: func(modelName string) (interface{}, error) {
+			return app.FindModel(modelName)
+		},
+		FindDatasource: func(datasource string) (interface{}, error) {
+			return app.FindDatasource(datasource)
+		},
+		SwaggerPaths: func() *map[string]wst.M {
+			return app.SwaggerPaths()
+		},
 	}
 }
 

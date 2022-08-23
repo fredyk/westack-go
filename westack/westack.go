@@ -102,22 +102,6 @@ func (app *WeStack) Boot(customRoutesCallbacks ...func(app *WeStack)) {
 
 }
 
-func (app *WeStack) AsInterface() *wst.IApp {
-	return &wst.IApp{
-		Debug:        app.debug,
-		JwtSecretKey: app.jwtSecretKey,
-		FindModel: func(modelName string) (interface{}, error) {
-			return app.FindModel(modelName)
-		},
-		FindDatasource: func(datasource string) (interface{}, error) {
-			return app.FindDatasource(datasource)
-		},
-		SwaggerPaths: func() *map[string]wst.M {
-			return app.SwaggerPaths()
-		},
-	}
-}
-
 func (app *WeStack) Start() interface{} {
 	log.Printf("DEBUG Server took %v ms to start\n", time.Now().UnixMilli()-app.init.UnixMilli())
 	return app.Server.Listen(fmt.Sprintf("0.0.0.0:%v", app.port))
