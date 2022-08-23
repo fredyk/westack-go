@@ -1651,7 +1651,33 @@ func (loadedModel *Model) HandleRemoteMethod(name string, eventContext *EventCon
 		eventContext.Query = datasource.ReplaceObjectIds(eventContext.Query).(*wst.M)
 	}
 
-	return handler(eventContext)
+	err = handler(eventContext)
+	if err != nil {
+		return err
+	}
+	if eventContext.Result != nil || eventContext.StatusCode != 0 {
+		if eventContext.StatusCode == 0 {
+			eventContext.StatusCode = fiber.StatusOK
+		} else if eventContext.StatusCode == fiber.StatusNoContent {
+			return eventContext.Ctx.Status(fiber.StatusNoContent).SendString("")
+		}
+		switch eventContext.Result.(type) {
+		case wst.M, *wst.M, map[string]interface{}, *map[string]interface{}, wst.A, *wst.A, []interface{}, *[]interface{}, int, int32, int64, float32, float64, bool:
+			return eventContext.Ctx.Status(eventContext.StatusCode).JSON(eventContext.Result)
+		case string:
+			return eventContext.Ctx.Status(eventContext.StatusCode).SendString(eventContext.Result.(string))
+		case []byte:
+			return eventContext.Ctx.Status(eventContext.StatusCode).Send(eventContext.Result.([]byte))
+		default:
+			fmt.Printf("Unknown type: %T after remote method %v\n", eventContext.Result, name)
+		}
+	}
+	resp := eventContext.Ctx.Response()
+	if resp.StatusCode() == 0 {
+		fmt.Printf("WARNING: No result found after remote method %v\n", name)
+		return eventContext.Ctx.Status(fiber.StatusNoContent).Type("application/json").Send([]byte("null"))
+	}
+	return nil
 }
 
 func (loadedModel *Model) EnforceEx(token *BearerToken, objId string, action string, eventContext *EventContext) (error, bool) {
