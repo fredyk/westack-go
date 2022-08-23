@@ -56,17 +56,17 @@ func (app *WeStack) loadModels() {
 			panic("ERROR: Missing model " + config.Name + " in model-config.json")
 		}
 
-		dataSource := (*app.Datasources)[configFromGlobal.Datasource]
+		dataSource := (*app.datasources)[configFromGlobal.Datasource]
 
 		if dataSource == nil {
 			panic(fmt.Sprintf("ERROR: Missing or invalid datasource file for %v", dataSource))
 		}
 
-		loadedModel := model.New(config, app.ModelRegistry)
+		loadedModel := model.New(config, app.modelRegistry)
 		app.setupModel(loadedModel, dataSource)
 	}
 
-	for _, loadedModel := range *app.ModelRegistry {
+	for _, loadedModel := range *app.modelRegistry {
 		fixRelations(loadedModel)
 	}
 }
@@ -114,16 +114,16 @@ func (app *WeStack) loadDataSources() {
 		if connector == "mongodb" /* || connector == "memory"*/ || connector == "redis" {
 			ds := datasource.New(key, dsViper, ctx)
 
-			if app.DataSourceOptions != nil {
-				ds.Options = (*app.DataSourceOptions)[dsName]
+			if app.dataSourceOptions != nil {
+				ds.Options = (*app.dataSourceOptions)[dsName]
 			}
 
 			err := ds.Initialize()
 			if err != nil {
 				panic(err)
 			}
-			(*app.Datasources)[dsName] = ds
-			if app.Debug {
+			(*app.datasources)[dsName] = ds
+			if app.debug {
 				log.Println("Connected to database", dsViper.GetString(key+".database"))
 			}
 		} else {
@@ -142,8 +142,6 @@ func (app *WeStack) setupModel(loadedModel *model.Model, dataSource *datasource.
 	loadedModel.Initialize()
 
 	if config.Base == "Role" {
-		app.RoleModel = loadedModel
-
 		roleMappingModel := model.New(&model.Config{
 			Name:   "RoleMapping",
 			Plural: "role-mappings",
@@ -170,11 +168,11 @@ func (app *WeStack) setupModel(loadedModel *model.Model, dataSource *datasource.
 					"$owner,*,__get__role,allow",
 				},
 			},
-		}, app.ModelRegistry)
+		}, app.modelRegistry)
 		roleMappingModel.App = app.AsInterface()
 		roleMappingModel.Datasource = dataSource
 
-		app.RoleMappingModel = roleMappingModel
+		app.roleMappingModel = roleMappingModel
 		app.setupModel(roleMappingModel, dataSource)
 	}
 
@@ -212,7 +210,7 @@ func (app *WeStack) setupModel(loadedModel *model.Model, dataSource *datasource.
 			userIdHex := firstUser.Id.(primitive.ObjectID).Hex()
 
 			roleNames := []string{"USER"}
-			if app.RoleMappingModel != nil {
+			if app.roleMappingModel != nil {
 				ctx.Bearer = &model.BearerToken{
 					User: &model.BearerUser{
 						System: true,
@@ -223,7 +221,7 @@ func (app *WeStack) setupModel(loadedModel *model.Model, dataSource *datasource.
 					BaseContext:            ctx,
 					DisableTypeConversions: true,
 				}
-				roleEntries, err := app.RoleMappingModel.FindMany(&wst.Filter{Where: &wst.Where{
+				roleEntries, err := app.roleMappingModel.FindMany(&wst.Filter{Where: &wst.Where{
 					"principalType": "USER",
 					"$or": []wst.M{
 						{
@@ -348,12 +346,12 @@ func (app *WeStack) setupModel(loadedModel *model.Model, dataSource *datasource.
 	}
 	if loadedModel.Config.Public {
 
-		modelRouter := app.Server.Group(app.RestApiRoot+"/"+plural, func(ctx *fiber.Ctx) error {
+		modelRouter := app.Server.Group(app.restApiRoot+"/"+plural, func(ctx *fiber.Ctx) error {
 			return ctx.Next()
 		})
 		loadedModel.Router = &modelRouter
 
-		loadedModel.BaseUrl = app.RestApiRoot + "/" + plural
+		loadedModel.BaseUrl = app.restApiRoot + "/" + plural
 
 		loadedModel.On("findMany", func(ctx *model.EventContext) error {
 			result, err := loadedModel.FindMany(ctx.Filter, ctx)
@@ -432,7 +430,7 @@ func (app *WeStack) setupModel(loadedModel *model.Model, dataSource *datasource.
 					}
 					(*data)["password"] = string(hashed)
 
-					if app.Debug {
+					if app.debug {
 						log.Println("Create User")
 					}
 				}

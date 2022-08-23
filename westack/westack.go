@@ -27,24 +27,23 @@ type LoginBody struct {
 }
 
 type WeStack struct {
-	ModelRegistry     *map[string]*model.Model
-	Datasources       *map[string]*datasource.Datasource
-	Server            *fiber.App
-	Debug             bool
-	RestApiRoot       string
-	Port              int32
-	RoleModel         *model.Model
-	RoleMappingModel  *model.Model
-	DataSourceOptions *map[string]*datasource.Options
+	Server *fiber.App
 
-	_swaggerPaths map[string]wst.M
-	init          time.Time
-	JwtSecretKey  []byte
-	viper         *viper.Viper
+	port              int32
+	datasources       *map[string]*datasource.Datasource
+	modelRegistry     *map[string]*model.Model
+	debug             bool
+	restApiRoot       string
+	roleMappingModel  *model.Model
+	dataSourceOptions *map[string]*datasource.Options
+	_swaggerPaths     map[string]wst.M
+	init              time.Time
+	jwtSecretKey      []byte
+	viper             *viper.Viper
 }
 
 func (app *WeStack) FindModel(modelName string) (*model.Model, error) {
-	result := (*app.ModelRegistry)[modelName]
+	result := (*app.modelRegistry)[modelName]
 	if result == nil {
 		return nil, errors.New(fmt.Sprintf("Model %v not found", modelName))
 	}
@@ -52,7 +51,7 @@ func (app *WeStack) FindModel(modelName string) (*model.Model, error) {
 }
 
 func (app *WeStack) FindDatasource(dsName string) (*datasource.Datasource, error) {
-	result := (*app.Datasources)[dsName]
+	result := (*app.datasources)[dsName]
 
 	if result == nil {
 		return nil, errors.New(fmt.Sprintf("Datasource %v not found", dsName))
@@ -105,8 +104,8 @@ func (app *WeStack) Boot(customRoutesCallbacks ...func(app *WeStack)) {
 
 func (app *WeStack) AsInterface() *wst.IApp {
 	return &wst.IApp{
-		Debug:        app.Debug,
-		JwtSecretKey: app.JwtSecretKey,
+		Debug:        app.debug,
+		JwtSecretKey: app.jwtSecretKey,
 		FindModel: func(modelName string) (interface{}, error) {
 			return app.FindModel(modelName)
 		},
@@ -121,7 +120,7 @@ func (app *WeStack) AsInterface() *wst.IApp {
 
 func (app *WeStack) Start() interface{} {
 	log.Printf("DEBUG Server took %v ms to start\n", time.Now().UnixMilli()-app.init.UnixMilli())
-	return app.Server.Listen(fmt.Sprintf("0.0.0.0:%v", app.Port))
+	return app.Server.Listen(fmt.Sprintf("0.0.0.0:%v", app.port))
 }
 
 func (app *WeStack) Middleware(handler fiber.Handler) {
@@ -202,17 +201,17 @@ func New(options ...Options) *WeStack {
 		finalOptions.Port = appViper.GetInt32("port")
 	}
 	app := WeStack{
-		ModelRegistry:     &modelRegistry,
-		Server:            server,
-		Datasources:       &datasources,
-		Debug:             _debug,
-		RestApiRoot:       finalOptions.RestApiRoot,
-		Port:              finalOptions.Port,
-		JwtSecretKey:      []byte(finalOptions.JwtSecretKey),
-		DataSourceOptions: finalOptions.DatasourceOptions,
+		Server: server,
 
-		init:  time.Now(),
-		viper: appViper,
+		modelRegistry:     &modelRegistry,
+		datasources:       &datasources,
+		debug:             _debug,
+		restApiRoot:       finalOptions.RestApiRoot,
+		port:              finalOptions.Port,
+		jwtSecretKey:      []byte(finalOptions.JwtSecretKey),
+		dataSourceOptions: finalOptions.DatasourceOptions,
+		init:              time.Now(),
+		viper:             appViper,
 	}
 
 	server.Use(recover.New(recover.Config{

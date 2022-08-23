@@ -62,7 +62,7 @@ func swaggerDocsHandler(app *WeStack) func(ctx *fiber.Ctx) error {
 					"url": fmt.Sprintf("%v://%v", matchedProtocol, hostname),
 				},
 				{
-					"url": fmt.Sprintf("http://127.0.0.1:%v", app.Port),
+					"url": fmt.Sprintf("http://127.0.0.1:%v", app.port),
 				},
 			},
 			//"basePath": "/",
