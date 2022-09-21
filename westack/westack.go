@@ -170,6 +170,7 @@ func New(options ...Options) *WeStack {
 	appViper.SetConfigType("json") // REQUIRED if the config file does not have the extension in the name
 
 	appViper.AddConfigPath("./server") // call multiple times to add many search paths
+	appViper.AddConfigPath(".")           // for unit tests     
 
 	err := appViper.ReadInConfig() // Find and read the config file
 	if err != nil {                // Handle errors reading the config file
