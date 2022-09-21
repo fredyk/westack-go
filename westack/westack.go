@@ -198,6 +198,19 @@ func New(options ...Options) *WeStack {
 		viper:             appViper,
 	}
 
+	server.Use(func(c *fiber.Ctx) error {
+		err := c.Next()
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"error": wst.M{
+					"status":  fiber.StatusInternalServerError,
+					"message": err.Error(),
+				},
+			})
+		}
+		return nil
+	})
+
 	server.Use(recover.New(recover.Config{
 		EnableStackTrace: true,
 		StackTraceHandler: func(c *fiber.Ctx, e interface{}) {
