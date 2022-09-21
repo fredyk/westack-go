@@ -65,22 +65,8 @@ func (app *WeStack) Boot(customRoutesCallbacks ...func(app *WeStack)) {
 	app.loadDataSources()
 
 	app.loadModels()
-	app.loadModelsFixedRoutes()
 
-	for _, cb := range customRoutesCallbacks {
-		cb(app)
-	}
-
-	app.loadModelsDynamicRoutes()
-	app.loadNotFoundRoutes()
-
-	app.Server.Get("/swagger/doc.json", swaggerDocsHandler(app))
-
-	app.Server.Get("/swagger/*", func(ctx *fiber.Ctx) error {
-		return ctx.Type("html", "utf-8").Send(lib.SwaggerUIStatic)
-	})
-
-	app.Server.Use("/*", func(c *fiber.Ctx) error {
+	app.Middleware(func(c *fiber.Ctx) error {
 		method := c.Method()
 		err := c.Next()
 		if err != nil {
@@ -98,6 +84,29 @@ func (app *WeStack) Boot(customRoutesCallbacks ...func(app *WeStack)) {
 			}
 		}
 		return nil
+	})
+
+	app.Middleware(recover.New(recover.Config{
+		EnableStackTrace: true,
+		StackTraceHandler: func(c *fiber.Ctx, e interface{}) {
+			log.Println(e)
+			debug.PrintStack()
+		},
+	}))
+
+	app.loadModelsFixedRoutes()
+
+	for _, cb := range customRoutesCallbacks {
+		cb(app)
+	}
+
+	app.loadModelsDynamicRoutes()
+	app.loadNotFoundRoutes()
+
+	app.Server.Get("/swagger/doc.json", swaggerDocsHandler(app))
+
+	app.Server.Get("/swagger/*", func(ctx *fiber.Ctx) error {
+		return ctx.Type("html", "utf-8").Send(lib.SwaggerUIStatic)
 	})
 
 }
@@ -197,27 +206,6 @@ func New(options ...Options) *WeStack {
 		init:              time.Now(),
 		viper:             appViper,
 	}
-
-	server.Use(func(c *fiber.Ctx) error {
-		err := c.Next()
-		if err != nil {
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-				"error": wst.M{
-					"status":  fiber.StatusInternalServerError,
-					"message": err.Error(),
-				},
-			})
-		}
-		return nil
-	})
-
-	server.Use(recover.New(recover.Config{
-		EnableStackTrace: true,
-		StackTraceHandler: func(c *fiber.Ctx, e interface{}) {
-			log.Println(e)
-			debug.PrintStack()
-		},
-	}))
 
 	return &app
 }
