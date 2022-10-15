@@ -286,7 +286,7 @@ func (loadedModel *Model) HandleRemoteMethod(name string, eventContext *EventCon
 	eventContext.Query = &wst.M{}
 
 	if strings.ToLower(options.Http.Verb) == "post" || strings.ToLower(options.Http.Verb) == "put" || strings.ToLower(options.Http.Verb) == "patch" {
-		var data *wst.M
+		var data wst.M
 		//bytes := eventContext.Ctx.Body()
 		//if len(bytes) > 0 {
 		//err := json.Unmarshal(bytes, &data)
@@ -294,7 +294,7 @@ func (loadedModel *Model) HandleRemoteMethod(name string, eventContext *EventCon
 		if err != nil {
 			return wst.CreateError(fiber.ErrBadRequest, "INVALID_BODY", fiber.Map{"message": err.Error()}, "ValidationError")
 		}
-		eventContext.Data = data
+		eventContext.Data = &data
 		//} else {
 		//	// Empty body is allowed
 		//}
