@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/gofiber/fiber/v2"
+	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 
 	wst "github.com/fredyk/westack-go/westack/common"
@@ -57,15 +58,17 @@ func (loadedModel *Model) ExtractLookupsFromFilter(filterMap *wst.Filter, disabl
 	}
 
 	if targetOrder != nil && len(*targetOrder) > 0 {
-		orderMap := wst.M{}
+		orderMap := bson.D{}
 		for _, orderPair := range *targetOrder {
 			splt := strings.Split(orderPair, " ")
 			key := splt[0]
 			directionSt := splt[1]
 			if strings.ToLower(strings.TrimSpace(directionSt)) == "asc" {
-				orderMap[key] = 1
+				//orderMap[key] = 1
+				orderMap = append(orderMap, bson.E{Key: key, Value: 1})
 			} else if strings.ToLower(strings.TrimSpace(directionSt)) == "desc" {
-				orderMap[key] = -1
+				//orderMap[key] = -1
+				orderMap = append(orderMap, bson.E{Key: key, Value: -1})
 			} else {
 				panic(fmt.Sprintf("Invalid direction %v while trying to sort by %v", directionSt, key))
 			}
