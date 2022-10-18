@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	wst "github.com/fredyk/westack-go/westack/common"
+	"log"
+	"time"
+
 	"github.com/go-redis/redis/v8"
 	"github.com/google/uuid"
 	"github.com/spf13/viper"
@@ -15,8 +17,8 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"go.mongodb.org/mongo-driver/mongo/readpref"
-	"log"
-	"time"
+
+	wst "github.com/fredyk/westack-go/westack/common"
 )
 
 type OperationError struct {
@@ -477,66 +479,79 @@ func ReplaceObjectIds(data interface{}) interface{} {
 		}
 		var err error
 		var newValue interface{}
-		switch value.(type) {
-		case string, wst.Where, *wst.Where, wst.M, *wst.M, int, int32, int64, float32, float64, bool, primitive.ObjectID, *primitive.ObjectID, time.Time, primitive.DateTime:
-			newValue = ReplaceObjectIds(value)
-			break
-		default:
-			asMap, asMapOk := value.(wst.M)
-			if asMapOk {
-				newValue = ReplaceObjectIds(asMap)
-			} else {
-				asList, asListOk := value.([]interface{})
-				if asListOk {
-					for i, asListItem := range asList {
-						asList[i] = ReplaceObjectIds(asListItem)
-					}
+		if key == "$eq" || key == "$ne" || key == "$gt" || key == "$gte" || key == "$lt" || key == "$lte" {
+			if value == "$now" {
+				newValue = time.Now()
+			} else if value == "$today" {
+				newValue = time.Now().Truncate(24 * time.Hour)
+			} else if value == "$yesterday" {
+				newValue = time.Now().Truncate(24 * time.Hour).Add(-24 * time.Hour)
+			} else if value == "$tomorrow" {
+				newValue = time.Now().Truncate(24 * time.Hour).Add(24 * time.Hour)
+			}
+		}
+		if newValue == nil {
+			switch value.(type) {
+			case string, wst.Where, *wst.Where, wst.M, *wst.M, int, int32, int64, float32, float64, bool, primitive.ObjectID, *primitive.ObjectID, time.Time, primitive.DateTime:
+				newValue = ReplaceObjectIds(value)
+				break
+			default:
+				asMap, asMapOk := value.(wst.M)
+				if asMapOk {
+					newValue = ReplaceObjectIds(asMap)
 				} else {
-					_, asStringListOk := value.([]string)
-					if !asStringListOk {
-						asMap, asMapOk := value.(map[string]interface{})
-						if asMapOk {
-							newValue = ReplaceObjectIds(asMap)
-						} else {
-							asList, asMListOk := value.([]wst.M)
-							if asMListOk {
-								for i, asListItem := range asList {
-									asList[i] = ReplaceObjectIds(asListItem).(wst.M)
-								}
+					asList, asListOk := value.([]interface{})
+					if asListOk {
+						for i, asListItem := range asList {
+							asList[i] = ReplaceObjectIds(asListItem)
+						}
+					} else {
+						_, asStringListOk := value.([]string)
+						if !asStringListOk {
+							asMap, asMapOk := value.(map[string]interface{})
+							if asMapOk {
+								newValue = ReplaceObjectIds(asMap)
 							} else {
-								log.Println(fmt.Sprintf("WARNING: What to do with %v (%s)?", value, value))
+								asList, asMListOk := value.([]wst.M)
+								if asMListOk {
+									for i, asListItem := range asList {
+										asList[i] = ReplaceObjectIds(asListItem).(wst.M)
+									}
+								} else {
+									log.Println(fmt.Sprintf("WARNING: What to do with %v (%s)?", value, value))
+								}
 							}
 						}
 					}
 				}
 			}
-		}
-		if err == nil && newValue != nil {
-			switch data.(type) {
-			case wst.Where:
-				data.(wst.Where)[key] = newValue
-				break
-			case *wst.Where:
-				(*data.(*wst.Where))[key] = newValue
-				break
-			case wst.M:
-				data.(wst.M)[key] = newValue
-				break
-			case *wst.M:
-				(*data.(*wst.M))[key] = newValue
-				break
-			case map[string]interface{}:
-				data.(map[string]interface{})[key] = newValue
-				break
-			case *map[string]interface{}:
-				(*data.(*map[string]interface{}))[key] = newValue
-				break
-			default:
-				log.Println(fmt.Sprintf("WARNING: invalid input ReplaceObjectIds() <- %s", data))
-				break
+			if err == nil && newValue != nil {
+				switch data.(type) {
+				case wst.Where:
+					data.(wst.Where)[key] = newValue
+					break
+				case *wst.Where:
+					(*data.(*wst.Where))[key] = newValue
+					break
+				case wst.M:
+					data.(wst.M)[key] = newValue
+					break
+				case *wst.M:
+					(*data.(*wst.M))[key] = newValue
+					break
+				case map[string]interface{}:
+					data.(map[string]interface{})[key] = newValue
+					break
+				case *map[string]interface{}:
+					(*data.(*map[string]interface{}))[key] = newValue
+					break
+				default:
+					log.Println(fmt.Sprintf("WARNING: invalid input ReplaceObjectIds() <- %s", data))
+					break
+				}
+			} else if err != nil {
+				log.Println("WARNING: ", err)
 			}
-		} else if err != nil {
-			log.Println("WARNING: ", err)
 		}
 	}
 	return data
