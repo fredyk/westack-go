@@ -498,43 +498,43 @@ func ReplaceObjectIds(data interface{}) interface{} {
 						if err != nil {
 							panic(err)
 						}
-						newValue = time.Now().Add(time.Duration(atoi) * 24 * time.Hour)
+						newValue = time.Now().Add(-time.Duration(atoi) * 24 * time.Hour)
 					} else if r := regexp.MustCompile(`^\$(\d+)wago$`).FindStringSubmatch(value.(string)); len(r) > 1 {
 						atoi, err := strconv.Atoi(r[1])
 						if err != nil {
 							panic(err)
 						}
-						newValue = time.Now().Add(time.Duration(atoi) * 7 * 24 * time.Hour)
+						newValue = time.Now().Add(-time.Duration(atoi) * 7 * 24 * time.Hour)
 					} else if r := regexp.MustCompile(`^\$(\d+)mago$`).FindStringSubmatch(value.(string)); len(r) > 1 {
 						atoi, err := strconv.Atoi(r[1])
 						if err != nil {
 							panic(err)
 						}
-						newValue = time.Now().Add(time.Duration(atoi) * 30 * 24 * time.Hour)
+						newValue = time.Now().Add(-time.Duration(atoi) * 30 * 24 * time.Hour)
 					} else if r := regexp.MustCompile(`^\$(\d+)yago$`).FindStringSubmatch(value.(string)); len(r) > 1 {
 						atoi, err := strconv.Atoi(r[1])
 						if err != nil {
 							panic(err)
 						}
-						newValue = time.Now().Add(time.Duration(atoi) * 365 * 24 * time.Hour)
+						newValue = time.Now().Add(-time.Duration(atoi) * 365 * 24 * time.Hour)
 					} else if r := regexp.MustCompile(`^\$(\d+)Sago$`).FindStringSubmatch(value.(string)); len(r) > 1 {
 						atoi, err := strconv.Atoi(r[1])
 						if err != nil {
 							panic(err)
 						}
-						newValue = time.Now().Add(time.Duration(atoi) * time.Second)
+						newValue = time.Now().Add(-time.Duration(atoi) * time.Second)
 					} else if r := regexp.MustCompile(`^\$(\d+)Mago$`).FindStringSubmatch(value.(string)); len(r) > 1 {
 						atoi, err := strconv.Atoi(r[1])
 						if err != nil {
 							panic(err)
 						}
-						newValue = time.Now().Add(time.Duration(atoi) * time.Minute)
+						newValue = time.Now().Add(-time.Duration(atoi) * time.Minute)
 					} else if r := regexp.MustCompile(`^\$(\d+)Hago$`).FindStringSubmatch(value.(string)); len(r) > 1 {
 						atoi, err := strconv.Atoi(r[1])
 						if err != nil {
 							panic(err)
 						}
-						newValue = time.Now().Add(time.Duration(atoi) * time.Hour)
+						newValue = time.Now().Add(-time.Duration(atoi) * time.Hour)
 					} else if r := regexp.MustCompile(`^\$(\d+)dfromnow$`).FindStringSubmatch(value.(string)); len(r) > 1 {
 						atoi, err := strconv.Atoi(r[1])
 						if err != nil {
