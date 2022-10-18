@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"regexp"
+	"strconv"
 	"time"
 
 	"github.com/go-redis/redis/v8"
@@ -488,6 +490,95 @@ func ReplaceObjectIds(data interface{}) interface{} {
 				newValue = time.Now().Truncate(24 * time.Hour).Add(-24 * time.Hour)
 			} else if value == "$tomorrow" {
 				newValue = time.Now().Truncate(24 * time.Hour).Add(24 * time.Hour)
+			} else {
+				switch value.(type) {
+				case string:
+					if r := regexp.MustCompile(`^\$(\d+)dago$`).FindAllString(value.(string), -1); len(r) > 0 {
+						atoi, err := strconv.Atoi(r[0])
+						if err != nil {
+							panic(err)
+						}
+						newValue = time.Now().Add(time.Duration(atoi) * 24 * time.Hour)
+					} else if r := regexp.MustCompile(`^\$(\d+)wago$`).FindAllString(value.(string), -1); len(r) > 0 {
+						atoi, err := strconv.Atoi(r[0])
+						if err != nil {
+							panic(err)
+						}
+						newValue = time.Now().Add(time.Duration(atoi) * 7 * 24 * time.Hour)
+					} else if r := regexp.MustCompile(`^\$(\d+)mago$`).FindAllString(value.(string), -1); len(r) > 0 {
+						atoi, err := strconv.Atoi(r[0])
+						if err != nil {
+							panic(err)
+						}
+						newValue = time.Now().Add(time.Duration(atoi) * 30 * 24 * time.Hour)
+					} else if r := regexp.MustCompile(`^\$(\d+)yago$`).FindAllString(value.(string), -1); len(r) > 0 {
+						atoi, err := strconv.Atoi(r[0])
+						if err != nil {
+							panic(err)
+						}
+						newValue = time.Now().Add(time.Duration(atoi) * 365 * 24 * time.Hour)
+					} else if r := regexp.MustCompile(`^\$(\d+)Sago$`).FindAllString(value.(string), -1); len(r) > 0 {
+						atoi, err := strconv.Atoi(r[0])
+						if err != nil {
+							panic(err)
+						}
+						newValue = time.Now().Add(time.Duration(atoi) * time.Second)
+					} else if r := regexp.MustCompile(`^\$(\d+)Mago$`).FindAllString(value.(string), -1); len(r) > 0 {
+						atoi, err := strconv.Atoi(r[0])
+						if err != nil {
+							panic(err)
+						}
+						newValue = time.Now().Add(time.Duration(atoi) * time.Minute)
+					} else if r := regexp.MustCompile(`^\$(\d+)Hago$`).FindAllString(value.(string), -1); len(r) > 0 {
+						atoi, err := strconv.Atoi(r[0])
+						if err != nil {
+							panic(err)
+						}
+						newValue = time.Now().Add(time.Duration(atoi) * time.Hour)
+					} else if r := regexp.MustCompile(`^\$(\d+)dfromnow$`).FindAllString(value.(string), -1); len(r) > 0 {
+						atoi, err := strconv.Atoi(r[0])
+						if err != nil {
+							panic(err)
+						}
+						newValue = time.Now().Add(time.Duration(atoi) * 24 * time.Hour)
+					} else if r := regexp.MustCompile(`^\$(\d+)wfromnow$`).FindAllString(value.(string), -1); len(r) > 0 {
+						atoi, err := strconv.Atoi(r[0])
+						if err != nil {
+							panic(err)
+						}
+						newValue = time.Now().Add(time.Duration(atoi) * 7 * 24 * time.Hour)
+					} else if r := regexp.MustCompile(`^\$(\d+)mfromnow$`).FindAllString(value.(string), -1); len(r) > 0 {
+						atoi, err := strconv.Atoi(r[0])
+						if err != nil {
+							panic(err)
+						}
+						newValue = time.Now().Add(time.Duration(atoi) * 30 * 24 * time.Hour)
+					} else if r := regexp.MustCompile(`^\$(\d+)yfromnow$`).FindAllString(value.(string), -1); len(r) > 0 {
+						atoi, err := strconv.Atoi(r[0])
+						if err != nil {
+							panic(err)
+						}
+						newValue = time.Now().Add(time.Duration(atoi) * 365 * 24 * time.Hour)
+					} else if r := regexp.MustCompile(`^\$(\d+)Sfromnow$`).FindAllString(value.(string), -1); len(r) > 0 {
+						atoi, err := strconv.Atoi(r[0])
+						if err != nil {
+							panic(err)
+						}
+						newValue = time.Now().Add(time.Duration(atoi) * time.Second)
+					} else if r := regexp.MustCompile(`^\$(\d+)Mfromnow$`).FindAllString(value.(string), -1); len(r) > 0 {
+						atoi, err := strconv.Atoi(r[0])
+						if err != nil {
+							panic(err)
+						}
+						newValue = time.Now().Add(time.Duration(atoi) * time.Minute)
+					} else if r := regexp.MustCompile(`^\$(\d+)Hfromnow$`).FindAllString(value.(string), -1); len(r) > 0 {
+						atoi, err := strconv.Atoi(r[0])
+						if err != nil {
+							panic(err)
+						}
+						newValue = time.Now().Add(time.Duration(atoi) * time.Hour)
+					}
+				}
 			}
 		}
 		if newValue == nil {
