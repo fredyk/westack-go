@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/middleware/compress"
 	"github.com/gofiber/fiber/v2/middleware/recover"
 	"github.com/golang/protobuf/proto"
 	"github.com/spf13/viper"
@@ -94,6 +95,8 @@ func (app *WeStack) Boot(customRoutesCallbacks ...func(app *WeStack)) {
 		},
 	}))
 
+	app.Middleware(compress.New())
+
 	app.loadModelsFixedRoutes()
 
 	for _, cb := range customRoutesCallbacks {
@@ -170,7 +173,7 @@ func New(options ...Options) *WeStack {
 	appViper.SetConfigType("json") // REQUIRED if the config file does not have the extension in the name
 
 	appViper.AddConfigPath("./server") // call multiple times to add many search paths
-	appViper.AddConfigPath(".")           // for unit tests     
+	appViper.AddConfigPath(".")        // for unit tests
 
 	err := appViper.ReadInConfig() // Find and read the config file
 	if err != nil {                // Handle errors reading the config file
