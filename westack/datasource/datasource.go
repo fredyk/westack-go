@@ -525,33 +525,33 @@ func ReplaceObjectIds(data interface{}) interface{} {
 					}
 				}
 			}
-			if err == nil && newValue != nil {
-				switch data.(type) {
-				case wst.Where:
-					data.(wst.Where)[key] = newValue
-					break
-				case *wst.Where:
-					(*data.(*wst.Where))[key] = newValue
-					break
-				case wst.M:
-					data.(wst.M)[key] = newValue
-					break
-				case *wst.M:
-					(*data.(*wst.M))[key] = newValue
-					break
-				case map[string]interface{}:
-					data.(map[string]interface{})[key] = newValue
-					break
-				case *map[string]interface{}:
-					(*data.(*map[string]interface{}))[key] = newValue
-					break
-				default:
-					log.Println(fmt.Sprintf("WARNING: invalid input ReplaceObjectIds() <- %s", data))
-					break
-				}
-			} else if err != nil {
-				log.Println("WARNING: ", err)
+		}
+		if err == nil && newValue != nil {
+			switch data.(type) {
+			case wst.Where:
+				data.(wst.Where)[key] = newValue
+				break
+			case *wst.Where:
+				(*data.(*wst.Where))[key] = newValue
+				break
+			case wst.M:
+				data.(wst.M)[key] = newValue
+				break
+			case *wst.M:
+				(*data.(*wst.M))[key] = newValue
+				break
+			case map[string]interface{}:
+				data.(map[string]interface{})[key] = newValue
+				break
+			case *map[string]interface{}:
+				(*data.(*map[string]interface{}))[key] = newValue
+				break
+			default:
+				log.Println(fmt.Sprintf("WARNING: invalid input ReplaceObjectIds() <- %s", data))
+				break
 			}
+		} else if err != nil {
+			log.Println("WARNING: ", err)
 		}
 	}
 	return data
