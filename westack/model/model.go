@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"reflect"
 	"runtime/debug"
 	"strings"
 	"time"
@@ -458,7 +459,19 @@ func (loadedModel *Model) Create(data interface{}, baseContext *EventContext) (*
 		finalData = data.(*Instance).ToJSON()
 		break
 	default:
-		log.Fatal(fmt.Sprintf("Invalid input for Model.Create() <- %s", data))
+		// check if data is a struct
+		if reflect.TypeOf(data).Kind() == reflect.Struct {
+			bytes, err := bson.Marshal(data)
+			if err != nil {
+				return nil, err
+			}
+			err = bson.Unmarshal(bytes, &finalData)
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			return nil, errors.New(fmt.Sprintf("Invalid input for Model.Create() <- %s", data))
+		}
 	}
 
 	if baseContext == nil {
