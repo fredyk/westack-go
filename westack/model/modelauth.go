@@ -3,6 +3,7 @@ package model
 import (
 	"fmt"
 	"log"
+	"time"
 
 	"github.com/gofiber/fiber/v2"
 )
@@ -34,6 +35,27 @@ func (loadedModel *Model) EnforceEx(token *BearerToken, objId string, action str
 
 		bearerUserIdSt = fmt.Sprintf("%v", token.User.Id)
 		targetObjId = objId
+
+		var created int64
+		var ttl int64
+		// try to cast
+		if v, ok := token.Claims["created"].(int64); ok {
+			created = v
+		} else {
+			created = int64(token.Claims["created"].(float64))
+		}
+		if v, ok := token.Claims["ttl"].(int64); ok {
+			ttl = v
+		} else {
+			ttl = int64(token.Claims["ttl"].(float64))
+		}
+		expiresAtTimestamp := created + ttl
+		if time.Now().Unix() > expiresAtTimestamp {
+			if loadedModel.App.Debug {
+				fmt.Println("Token expired for user", bearerUserIdSt)
+			}
+			return fiber.ErrUnauthorized, false
+		}
 
 		if result, isPresent := loadedModel.authCache[bearerUserIdSt][targetObjId][action]; isPresent {
 			if loadedModel.App.Debug || !result {
