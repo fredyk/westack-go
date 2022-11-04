@@ -1,8 +1,10 @@
 package model
 
 import (
+	"errors"
 	"fmt"
 	"log"
+	"reflect"
 	"strconv"
 
 	"github.com/oliveagle/jsonpath"
@@ -140,7 +142,19 @@ func (modelInstance *Instance) UpdateAttributes(data interface{}, baseContext *E
 		finalData = data.(*Instance).ToJSON()
 		break
 	default:
-		log.Fatal(fmt.Sprintf("Invalid input for Model.UpdateAttributes() <- %s", data))
+		// check if data is a struct
+		if reflect.TypeOf(data).Kind() == reflect.Struct {
+			bytes, err := bson.Marshal(data)
+			if err != nil {
+				return nil, err
+			}
+			err = bson.Unmarshal(bytes, &finalData)
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			return nil, errors.New(fmt.Sprintf("Invalid input for Model.UpdateAttributes() <- %s", data))
+		}
 	}
 
 	if baseContext == nil {
