@@ -45,7 +45,9 @@ func createUser(t *testing.T, b *bytes.Buffer) {
 }
 
 func login(t *testing.T, b *bytes.Buffer) (string, string) {
-	response, err := app.Server.Test(httptest.NewRequest("POST", "/api/v1/users/login", b))
+	request := httptest.NewRequest("POST", "/api/v1/users/login", b)
+	request.Header.Set("Content-Type", "application/json")
+	response, err := app.Server.Test(request)
 	if err != nil {
 		t.Error(err)
 		return "", ""
