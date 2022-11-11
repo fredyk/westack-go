@@ -358,7 +358,7 @@ func (loadedModel *Model) HandleRemoteMethod(name string, eventContext *EventCon
 			return eventContext.Ctx.Status(fiber.StatusNoContent).SendString("")
 		}
 		switch eventContext.Result.(type) {
-		case wst.M, *wst.M, map[string]interface{}, *map[string]interface{}, wst.A, *wst.A, []interface{}, *[]interface{}, int, int32, int64, float32, float64, bool:
+		case wst.M, *wst.M, wst.A, *wst.A, fiber.Map, *fiber.Map, map[string]interface{}, *map[string]interface{}, []interface{}, *[]interface{}, int, int32, int64, float32, float64, bool:
 			return eventContext.Ctx.Status(eventContext.StatusCode).JSON(eventContext.Result)
 		case string:
 			return eventContext.Ctx.Status(eventContext.StatusCode).SendString(eventContext.Result.(string))
