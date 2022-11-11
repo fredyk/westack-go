@@ -1,6 +1,6 @@
 module github.com/fredyk/westack-go
 
-go 1.18
+go 1.19
 
 require (
 	github.com/casbin/casbin/v2 v2.41.1
