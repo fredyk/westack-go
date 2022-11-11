@@ -371,7 +371,7 @@ func (loadedModel *Model) HandleRemoteMethod(name string, eventContext *EventCon
 	resp := eventContext.Ctx.Response()
 	if resp.StatusCode() == 0 {
 		fmt.Printf("WARNING: No result found after remote method %v\n", name)
-		return eventContext.Ctx.Status(fiber.StatusNoContent).Type("application/json").Send([]byte("null"))
+		return eventContext.Ctx.Status(fiber.StatusNoContent).SendString("")
 	}
 	return nil
 }
