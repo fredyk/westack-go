@@ -3,6 +3,7 @@ module github.com/fredyk/westack-go
 go 1.19
 
 require (
+	github.com/boltdb/bolt v1.3.1
 	github.com/casbin/casbin/v2 v2.41.1
 	github.com/go-redis/redis/v8 v8.11.5
 	github.com/gofiber/fiber/v2 v2.32.0

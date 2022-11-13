@@ -5,10 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"os"
 	"regexp"
 	"strconv"
 	"time"
 
+	"github.com/boltdb/bolt"
 	"github.com/go-redis/redis/v8"
 	"github.com/google/uuid"
 	"github.com/spf13/viper"
@@ -37,6 +39,10 @@ type Options struct {
 	MongoDB *MonoDBDatasourceOptions
 }
 
+type SimplifiedModelConfig struct {
+	Datasource string `json:"dataSource"`
+}
+
 func (e *OperationError) Error() string {
 	return fmt.Sprintf("%v %v", e.Code, e.Message)
 }
@@ -61,8 +67,51 @@ type Datasource struct {
 
 func (ds *Datasource) Initialize() error {
 	dsViper := ds.Viper
+	dbName := dsViper.GetString(ds.Key + ".database")
 	var connector = dsViper.GetString(ds.Key + ".connector")
 	switch connector {
+	case "dbbolt":
+		// Create ./data directory if not exists
+		if _, err := os.Stat("data/dbbolt"); os.IsNotExist(err) {
+			if _, err := os.Stat("data"); os.IsNotExist(err) {
+				err := os.Mkdir("data", os.FileMode(0700))
+				if err != nil {
+					return err
+				}
+			}
+			err := os.Mkdir("data/dbbolt", os.FileMode(0700))
+			if err != nil {
+				return err
+			}
+		}
+		// Create ./data/<dbName> directory if not exists
+		if _, err := os.Stat("data/dbbolt/" + dbName); os.IsNotExist(err) {
+			err := os.Mkdir("data/dbbolt/"+dbName, os.FileMode(0700))
+			if err != nil {
+				return err
+			}
+		}
+
+		var globalModelConfig *map[string]*SimplifiedModelConfig
+		if err := wst.LoadFile("./server/model-config.json", &globalModelConfig); err != nil {
+			return errors.New("failed to load model-config.json")
+		}
+
+		ds.Db = map[string]*bolt.DB{}
+		for modelName, modelConfig := range *globalModelConfig {
+			if modelConfig.Datasource == ds.Name {
+				// Open the my.db data file in your current directory.
+				// It will be created if it doesn't exist.
+				modelDb, err := bolt.Open("./data/dbbolt/"+dbName+"/"+modelName+".db", 0600, nil)
+				if err != nil {
+					return err
+				}
+				ds.Db.(map[string]*bolt.DB)[modelName] = modelDb
+			}
+		}
+
+		return nil
+
 	case "mongodb":
 		mongoCtx, cancelFn := context.WithCancel(ds.Context)
 
@@ -76,7 +125,7 @@ func (ds *Datasource) Initialize() error {
 			if dsViper.GetInt(ds.Key+".port") > 0 {
 				port = dsViper.GetInt(ds.Key + ".port")
 			}
-			url = fmt.Sprintf("mongodb://%v:%v/%v", dsViper.GetString(ds.Key+".host"), port, dsViper.GetString(ds.Key+".database"))
+			url = fmt.Sprintf("mongodb://%v:%v/%v", dsViper.GetString(ds.Key+".host"), port, dbName)
 			log.Printf("Using composed url %v\n", url)
 		}
 
@@ -163,6 +212,8 @@ func (ds *Datasource) Initialize() error {
 func (ds *Datasource) FindMany(collectionName string, lookups *wst.A) (*wst.A, error) {
 	var connector = ds.Viper.GetString(ds.Key + ".connector")
 	switch connector {
+	case "dbbolt":
+		return DbBoltFindMany(ds.Db.(map[string]*bolt.DB)[collectionName], lookups)
 	case "mongodb":
 		var db = ds.Db.(*mongo.Client)
 

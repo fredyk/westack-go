@@ -3,10 +3,11 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/fredyk/westack-go/westack/model"
 	"log"
 	"os"
 	"regexp"
+
+	"github.com/fredyk/westack-go/westack/model"
 )
 
 var DefaulUser = model.Config{
@@ -45,12 +46,12 @@ var DefaulRole = model.Config{
 var DefaultDatasources = map[string]model.DataSourceConfig{
 	"db": {
 		Name:      "db",
-		Connector: "mongodb",
-		Host:      "localhost",
-		Port:      27017,
-		Database:  "example_db",
-		User:      "",
-		Password:  "",
+		Connector: "dbbolt",
+		//Host:      "localhost",
+		//Port:      27017,
+		Database: "example_db",
+		User:     "",
+		Password: "",
 	},
 }
 

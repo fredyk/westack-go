@@ -111,7 +111,7 @@ func (app *WeStack) loadDataSources() {
 			dsName = key
 		}
 		connector := dsViper.GetString(key + ".connector")
-		if connector == "mongodb" /* || connector == "memory"*/ || connector == "redis" {
+		if connector == "mongodb" /* || connector == "memory"*/ || connector == "redis" || connector == "dbbolt" {
 			ds := datasource.New(key, dsViper, ctx)
 
 			if app.dataSourceOptions != nil {

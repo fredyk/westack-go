@@ -1,12 +1,10 @@
 {
   "db": {
-    "host": "127.0.0.1",
-    "port": 27017,
     "database": "example_db_1",
     "password": "",
     "name": "db",
     "username": "",
-    "connector": "mongodb",
+    "connector": "dbbolt",
     "useNewUrlParser": true,
     "allowExtendedOperators": true
   }
