@@ -107,12 +107,18 @@ type Filter struct {
 	Limit   int64    `json:"limit"`
 }
 
+type Stats struct {
+	BuildsByModel map[string]map[string]float64
+}
+
 type IApp struct {
 	Debug          bool
 	SwaggerPaths   func() *map[string]M
 	FindModel      func(modelName string) (interface{}, error)
 	FindDatasource func(datasource string) (interface{}, error)
 	JwtSecretKey   []byte
+
+	Stats *Stats
 }
 
 var RegexpIdEntire = regexp.MustCompile("^([0-9a-f]{24})$")

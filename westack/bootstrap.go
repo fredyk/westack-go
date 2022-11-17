@@ -506,6 +506,7 @@ func (app *WeStack) asInterface() *wst.IApp {
 		SwaggerPaths: func() *map[string]wst.M {
 			return app.SwaggerPaths()
 		},
+		Stats: app.stats,
 	}
 }
 
