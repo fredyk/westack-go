@@ -87,7 +87,7 @@ func (loadedModel *Model) EnforceEx(token *BearerToken, objId string, action str
 
 	allow, exp, err := loadedModel.Enforcer.EnforceEx(bearerUserIdSt, targetObjId, action)
 
-	if loadedModel.App.Debug {
+	if loadedModel.App.Debug || !allow {
 		log.Println("Explain", exp)
 	}
 	if err != nil {

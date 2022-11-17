@@ -37,7 +37,7 @@ func (app *WeStack) loadModelsFixedRoutes() {
 	for _, entry := range *app.modelRegistry {
 		loadedModel := entry
 
-		e, err := casbin.NewEnforcer(*loadedModel.CasbinModel, *loadedModel.CasbinAdapter, true)
+		e, err := casbin.NewEnforcer(*loadedModel.CasbinModel, *loadedModel.CasbinAdapter, app.debug)
 		if err != nil {
 			panic(err)
 		}
