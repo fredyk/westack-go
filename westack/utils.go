@@ -39,7 +39,7 @@ func gRPCCallWithQueryParams[InputT any, ClientT interface{}, OutputT proto.Mess
 
 		res, err := clientMethod(client, ctx.Context(), &rawParamsQuery)
 		if err != nil {
-			fmt.Printf("GRPCCallWithQueryParams Call Error: %s\n", err)
+			fmt.Printf("GRPCCallWithQueryParams Call Error: %v --> %s\n", ctx.Route().Name, err)
 			return SendError(ctx, err)
 		}
 		m := jsonpb.Marshaler{EmitDefaults: true}
@@ -76,7 +76,7 @@ func gRPCCallWithBody[InputT any, ClientT interface{}, OutputT proto.Message](se
 
 		res, err := clientMethod(client, ctx.Context(), &rawParamsInput)
 		if err != nil {
-			fmt.Printf("GRPCCallWithBody Call Error: %s\n", err)
+			fmt.Printf("GRPCCallWithBody Call Error: %v --> %s\n", ctx.Route().Name, err)
 			return SendError(ctx, err)
 		}
 		m := jsonpb.Marshaler{EmitDefaults: true}
