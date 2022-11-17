@@ -150,6 +150,14 @@ type RegistryEntry struct {
 
 func (loadedModel *Model) Build(data wst.M, baseContext *EventContext) Instance {
 
+	if loadedModel.App.Stats.BuildsByModel[loadedModel.Name] == nil {
+		loadedModel.App.Stats.BuildsByModel[loadedModel.Name] = map[string]float64{
+			"count": 0,
+			"time":  0,
+		}
+	}
+	init := time.Now().UnixMilli()
+
 	if data["id"] == nil {
 		data["id"] = data["_id"]
 		if data["id"] != nil {
@@ -229,6 +237,9 @@ func (loadedModel *Model) Build(data wst.M, baseContext *EventContext) Instance 
 			return Instance{}
 		}
 	}
+
+	loadedModel.App.Stats.BuildsByModel[loadedModel.Name]["count"]++
+	loadedModel.App.Stats.BuildsByModel[loadedModel.Name]["time"] += float64(time.Now().UnixMilli() - init)
 
 	return modelInstance
 }

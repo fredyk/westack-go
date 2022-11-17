@@ -203,7 +203,7 @@ func (loadedModel *Model) ExtractLookupsFromFilter(filterMap *wst.Filter, disabl
 
 /*
 params:
-	- relationDeepLevel: Starts at 1 (Root is 0)
+  - relationDeepLevel: Starts at 1 (Root is 0)
 */
 func (loadedModel *Model) mergeRelated(relationDeepLevel byte, documents *wst.A, includeItem wst.IncludeItem, baseContext *EventContext) error {
 
