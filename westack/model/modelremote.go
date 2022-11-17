@@ -236,7 +236,7 @@ func (loadedModel *Model) RemoteMethod(handler func(context *EventContext) error
 			return loadedModel.SendError(eventContext.Ctx, err2)
 		}
 		return nil
-	})
+	}).Name(loadedModel.Name + "." + options.Name)
 }
 
 func (loadedModel *Model) HandleRemoteMethod(name string, eventContext *EventContext) error {
