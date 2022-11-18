@@ -1,9 +1,10 @@
 package boot
 
 import (
+	"log"
+
 	"github.com/fredyk/westack-go/westack"
 	"github.com/fredyk/westack-go/westack/model"
-	"log"
 )
 
 func SetupRoles(app *westack.WeStack) {
@@ -13,7 +14,7 @@ func SetupRoles(app *westack.WeStack) {
 		log.Printf("ERROR: SetupRoles() --> %v\n", err)
 		return
 	}
-	RoleModel.Observe("loaded", func(eventContext *model.EventContext) error {
+	RoleModel.Observe("after load", func(eventContext *model.EventContext) error {
 		log.Println("loaded role ", eventContext.Data)
 		return nil
 	})

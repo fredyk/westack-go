@@ -230,8 +230,8 @@ func (loadedModel *Model) Build(data wst.M, baseContext *EventContext) Instance 
 	eventContext.Data = &data
 	eventContext.Instance = &modelInstance
 
-	if loadedModel.DisabledHandlers["__operation__loaded"] != true {
-		err := loadedModel.GetHandler("__operation__loaded")(eventContext)
+	if loadedModel.DisabledHandlers["__operation__after_load"] != true {
+		err := loadedModel.GetHandler("__operation__after_load")(eventContext)
 		if err != nil {
 			log.Println("Warning", err)
 			return Instance{}
@@ -269,6 +269,33 @@ func (loadedModel *Model) FindMany(filterMap *wst.Filter, baseContext *EventCont
 	}
 
 	lookups := loadedModel.ExtractLookupsFromFilter(filterMap, baseContext.DisableTypeConversions)
+
+	eventContext := &EventContext{
+		BaseContext: targetBaseContext,
+	}
+	if loadedModel.DisabledHandlers["__operation__before_load"] != true {
+		err := loadedModel.GetHandler("__operation__before_load")(eventContext)
+		if err != nil {
+			return nil, err
+		}
+		if eventContext.Result != nil {
+			switch eventContext.Result.(type) {
+			case InstanceA:
+				return eventContext.Result.(InstanceA), nil
+			case []wst.M:
+				result := make([]Instance, len(eventContext.Result.([]wst.M)))
+				for idx, v := range eventContext.Result.([]wst.M) {
+					result[idx] = loadedModel.Build(v, targetBaseContext)
+				}
+				return result, nil
+			default:
+				return nil, errors.New("invalid eventContext.Result type, expected InstanceA or []wst.M")
+			}
+		}
+	}
+	//for key := range *loadedModel.Config.Relations {
+	//	delete(finalData, key)
+	//}
 
 	documents, err := loadedModel.Datasource.FindMany(loadedModel.CollectionName, lookups)
 	if err != nil {
@@ -511,6 +538,20 @@ func (loadedModel *Model) Create(data interface{}, baseContext *EventContext) (*
 		err := loadedModel.GetHandler("__operation__before_save")(eventContext)
 		if err != nil {
 			return nil, err
+		}
+		if eventContext.Result != nil {
+			switch eventContext.Result.(type) {
+			case *Instance:
+				return eventContext.Result.(*Instance), nil
+			case Instance:
+				v := eventContext.Result.(Instance)
+				return &v, nil
+			case wst.M:
+				v := loadedModel.Build(eventContext.Result.(wst.M), targetBaseContext)
+				return &v, nil
+			default:
+				return nil, errors.New("invalid eventContext.Result type, expected *Instance, Instance or wst.M")
+			}
 		}
 	}
 	for key := range *loadedModel.Config.Relations {
