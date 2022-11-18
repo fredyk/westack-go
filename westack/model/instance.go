@@ -186,6 +186,20 @@ func (modelInstance *Instance) UpdateAttributes(data interface{}, baseContext *E
 		if err != nil {
 			return nil, err
 		}
+		if eventContext.Result != nil {
+			switch eventContext.Result.(type) {
+			case *Instance:
+				return eventContext.Result.(*Instance), nil
+			case Instance:
+				v := eventContext.Result.(Instance)
+				return &v, nil
+			case wst.M:
+				v := modelInstance.Model.Build(eventContext.Result.(wst.M), targetBaseContext)
+				return &v, nil
+			default:
+				return nil, errors.New("invalid eventContext.Result type, expected *Instance, Instance or wst.M")
+			}
+		}
 	}
 
 	for key := range *modelInstance.Model.Config.Relations {
