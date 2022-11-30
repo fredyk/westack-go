@@ -91,6 +91,12 @@ func (loadedModel *Model) EnforceEx(token *BearerToken, objId string, action str
 		log.Println("Explain", exp)
 	}
 	if err != nil {
+		if loadedModel.authCache[bearerUserIdSt] == nil {
+			loadedModel.authCache[bearerUserIdSt] = make(map[string]map[string]bool)
+		}
+		if loadedModel.authCache[bearerUserIdSt][targetObjId] == nil {
+			loadedModel.authCache[bearerUserIdSt][targetObjId] = make(map[string]bool)
+		}
 		loadedModel.authCache[bearerUserIdSt][targetObjId][action] = false
 		return err, false
 	}
