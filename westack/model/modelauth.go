@@ -3,6 +3,7 @@ package model
 import (
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -93,7 +94,7 @@ func (loadedModel *Model) EnforceEx(token *BearerToken, objId string, action str
 		}
 		fmt.Printf("DEBUG: EnforceEx for %v.%v (subj=%v,obj=%v) ---> %v\n", loadedModel.Name, action, bearerUserIdSt, targetObjId, allow)
 		if eventContext.Remote != nil && eventContext.Remote.Name != "" {
-			fmt.Printf("DEBUG: ... at remote method %v %v%v\n", eventContext.Remote.Http.Verb, loadedModel.BaseUrl, eventContext.Remote.Http.Path)
+			fmt.Printf("DEBUG: ... at remote method %v %v%v\n", strings.ToUpper(eventContext.Remote.Http.Verb), loadedModel.BaseUrl, eventContext.Remote.Http.Path)
 		}
 	}
 	if err != nil {
