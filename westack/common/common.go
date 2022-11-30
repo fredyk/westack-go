@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/spf13/viper"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
@@ -113,6 +114,7 @@ type IApp struct {
 	FindModel      func(modelName string) (interface{}, error)
 	FindDatasource func(datasource string) (interface{}, error)
 	JwtSecretKey   []byte
+	Viper          *viper.Viper
 }
 
 var RegexpIdEntire = regexp.MustCompile("^([0-9a-f]{24})$")

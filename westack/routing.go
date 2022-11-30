@@ -201,7 +201,7 @@ func (app *WeStack) loadModelsFixedRoutes() {
 			loadedModel.CasbinModel.PrintModel()
 		}
 
-		if app.viper.GetBool("casbin.dumpModels") {
+		if app.Viper.GetBool("casbin.dumpModels") {
 			text := loadedModel.CasbinModel.ToText()
 			err = os.WriteFile(fmt.Sprintf("common/models/%v.casbin.dump.conf", loadedModel.Name), []byte(text), os.ModePerm)
 			if err != nil {
