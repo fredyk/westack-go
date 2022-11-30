@@ -267,7 +267,7 @@ func (app *WeStack) setupModel(loadedModel *model.Model, dataSource *datasource.
 
 	casbModel := casbinmodel.NewModel()
 
-	basePoliciesDirectory := app.viper.GetString("casbin.policies.outputDirectory")
+	basePoliciesDirectory := app.Viper.GetString("casbin.policies.outputDirectory")
 	_, err := os.Stat(basePoliciesDirectory)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -497,6 +497,7 @@ func (app *WeStack) asInterface() *wst.IApp {
 	return &wst.IApp{
 		Debug:        app.debug,
 		JwtSecretKey: app.jwtSecretKey,
+		Viper:        app.Viper,
 		FindModel: func(modelName string) (interface{}, error) {
 			return app.FindModel(modelName)
 		},

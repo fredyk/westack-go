@@ -29,6 +29,7 @@ type LoginBody struct {
 
 type WeStack struct {
 	Server *fiber.App
+	Viper  *viper.Viper
 
 	port              int32
 	datasources       *map[string]*datasource.Datasource
@@ -40,7 +41,6 @@ type WeStack struct {
 	_swaggerPaths     map[string]wst.M
 	init              time.Time
 	jwtSecretKey      []byte
-	viper             *viper.Viper
 }
 
 func (app *WeStack) FindModel(modelName string) (*model.Model, error) {
@@ -199,6 +199,7 @@ func New(options ...Options) *WeStack {
 	}
 	app := WeStack{
 		Server: server,
+		Viper:  appViper,
 
 		modelRegistry:     &modelRegistry,
 		datasources:       &datasources,
@@ -208,7 +209,6 @@ func New(options ...Options) *WeStack {
 		jwtSecretKey:      []byte(finalOptions.JwtSecretKey),
 		dataSourceOptions: finalOptions.DatasourceOptions,
 		init:              time.Now(),
-		viper:             appViper,
 	}
 
 	return &app
