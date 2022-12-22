@@ -24,6 +24,12 @@ func (m M) GetM(key string) M {
 	if v, ok := m[key]; ok {
 		if vv, ok := v.(M); ok {
 			return vv
+		} else if vv, ok := v.(map[string]interface{}); ok {
+			var out M = make(M, len(vv))
+			for k, v := range vv {
+				out[k] = v
+			}
+			return out
 		}
 	}
 	return nil
