@@ -145,8 +145,8 @@ func (ds *Datasource) Initialize() error {
 		// Create redis client
 		var rClient *redis.Client = redis.NewClient(&redis.Options{
 			Addr:     dsViper.GetString(ds.Key + ".url"),
-			Password: dsViper.GetString(ds.Key + ".password"), // no password set
-			DB:       dsViper.GetInt(ds.Key + ".database"),    // use default DB
+			Password: dsViper.GetString(ds.Key + ".password"),   // no password set
+			DB:       dsViper.GetInt(ds.Key + ".databaseIndex"), // use default DB
 		})
 		ds.Db = rClient
 

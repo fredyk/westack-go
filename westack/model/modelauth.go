@@ -3,6 +3,7 @@ package model
 import (
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -88,9 +89,21 @@ func (loadedModel *Model) EnforceEx(token *BearerToken, objId string, action str
 	allow, exp, err := loadedModel.Enforcer.EnforceEx(bearerUserIdSt, targetObjId, action)
 
 	if loadedModel.App.Debug || !allow {
-		log.Println("Explain", exp)
+		if len(exp) > 0 {
+			log.Println("Explain", exp)
+		}
+		fmt.Printf("DEBUG: EnforceEx for %v.%v (subj=%v,obj=%v) ---> %v\n", loadedModel.Name, action, bearerUserIdSt, targetObjId, allow)
+		if eventContext.Remote != nil && eventContext.Remote.Name != "" {
+			fmt.Printf("DEBUG: ... at remote method %v %v%v\n", strings.ToUpper(eventContext.Remote.Http.Verb), loadedModel.BaseUrl, eventContext.Remote.Http.Path)
+		}
 	}
 	if err != nil {
+		if loadedModel.authCache[bearerUserIdSt] == nil {
+			loadedModel.authCache[bearerUserIdSt] = make(map[string]map[string]bool)
+		}
+		if loadedModel.authCache[bearerUserIdSt][targetObjId] == nil {
+			loadedModel.authCache[bearerUserIdSt][targetObjId] = make(map[string]bool)
+		}
 		loadedModel.authCache[bearerUserIdSt][targetObjId][action] = false
 		return err, false
 	}
