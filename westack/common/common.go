@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gofiber/fiber/v2"
+	fiber "github.com/gofiber/fiber/v2"
 	"github.com/spf13/viper"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -48,6 +48,17 @@ func (m M) GetString(key string) string {
 }
 
 type A []M
+
+type OperationName string
+
+const (
+	OperationNameFindById         OperationName = "findById"
+	OperationNameFindMany         OperationName = "findMany"
+	OperationNameCreate           OperationName = "create"
+	OperationNameUpdateAttributes OperationName = "updateAttributes"
+)
+
+var NilMap M = M{"<wst.NilMap>": 1}
 
 func AFromGenericSlice(in *[]interface{}) *A {
 

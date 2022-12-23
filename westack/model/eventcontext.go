@@ -5,7 +5,7 @@ import (
 	"log"
 	"strings"
 
-	"github.com/gofiber/fiber/v2"
+	fiber "github.com/gofiber/fiber/v2"
 	"github.com/golang-jwt/jwt"
 
 	wst "github.com/fredyk/westack-go/westack/common"
@@ -23,10 +23,12 @@ type EventContext struct {
 	Ephemeral              *EphemeralData
 	IsNewInstance          bool
 	Result                 interface{}
+	Model                  *Model
 	ModelID                interface{}
 	StatusCode             int
 	DisableTypeConversions bool
 	SkipFieldProtection    bool
+	OperationName          wst.OperationName
 }
 
 func (eventContext *EventContext) UpdateEphemeral(newData *wst.M) {

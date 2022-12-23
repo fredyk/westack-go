@@ -9,7 +9,7 @@ import (
 	"runtime/debug"
 	"time"
 
-	"github.com/gofiber/fiber/v2"
+	fiber "github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/compress"
 	"github.com/gofiber/fiber/v2/middleware/recover"
 	"github.com/golang/protobuf/proto"
@@ -96,21 +96,6 @@ func (app *WeStack) Boot(customRoutesCallbacks ...func(app *WeStack)) {
 	}))
 
 	app.Middleware(compress.New())
-
-	start := time.Now()
-	dockerReplicaSlot := os.Getenv("DOCKER_REPLICA_SLOT")
-	app.Server.Get("/api/westack/stats", func(c *fiber.Ctx) error {
-		stats := app.stats
-		// Calculate all average times
-		for _, v := range stats.BuildsByModel {
-			v["avgMillis"] = v["time"] / v["count"]
-		}
-		return c.JSON(wst.M{
-			"uptimeSeconds": time.Now().Unix() - start.Unix(),
-			"buildStats":    stats,
-			"replicaSlot":   dockerReplicaSlot,
-		})
-	}).Name("GetStats")
 
 	app.loadModelsFixedRoutes()
 

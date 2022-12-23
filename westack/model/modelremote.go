@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/gofiber/fiber/v2"
+	fiber "github.com/gofiber/fiber/v2"
 
 	wst "github.com/fredyk/westack-go/westack/common"
 	"github.com/fredyk/westack-go/westack/datasource"
@@ -225,6 +225,7 @@ func (loadedModel *Model) RemoteMethod(handler func(context *EventContext) error
 			Ctx:    ctx,
 			Remote: &options,
 		}
+		eventContext.Model = loadedModel
 		err2 := loadedModel.HandleRemoteMethod(options.Name, eventContext)
 		if err2 != nil {
 
@@ -358,7 +359,13 @@ func (loadedModel *Model) HandleRemoteMethod(name string, eventContext *EventCon
 			return eventContext.Ctx.Status(fiber.StatusNoContent).SendString("")
 		}
 		switch eventContext.Result.(type) {
-		case wst.M, *wst.M, wst.A, *wst.A, fiber.Map, *fiber.Map, map[string]interface{}, *map[string]interface{}, []interface{}, *[]interface{}, int, int32, int64, float32, float64, bool:
+		case wst.M:
+			if eventContext.Result.(wst.M)["<wst.NilMap>"] == 1 {
+				eventContext.Ctx.Set("Content-Type", "application/json")
+				return eventContext.Ctx.Status(eventContext.StatusCode).Send([]byte{'n', 'u', 'l', 'l'})
+			}
+			return eventContext.Ctx.Status(eventContext.StatusCode).JSON(eventContext.Result)
+		case *wst.M, wst.A, *wst.A, fiber.Map, *fiber.Map, map[string]interface{}, *map[string]interface{}, []interface{}, *[]interface{}, int, int32, int64, float32, float64, bool:
 			return eventContext.Ctx.Status(eventContext.StatusCode).JSON(eventContext.Result)
 		case string:
 			return eventContext.Ctx.Status(eventContext.StatusCode).SendString(eventContext.Result.(string))
