@@ -10,11 +10,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/casbin/casbin/v2"
+	casbin "github.com/casbin/casbin/v2"
 	casbinmodel "github.com/casbin/casbin/v2/model"
 	fileadapter "github.com/casbin/casbin/v2/persist/file-adapter"
-	"github.com/go-redis/redis/v8"
-	"github.com/gofiber/fiber/v2"
+	redis "github.com/go-redis/redis/v8"
+	fiber "github.com/gofiber/fiber/v2"
 	"github.com/golang-jwt/jwt"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -107,6 +107,7 @@ type Model struct {
 	CasbinAdapter    **fileadapter.Adapter
 	Enforcer         *casbin.Enforcer
 	DisabledHandlers map[string]bool
+	NilInstance      *Instance
 
 	eventHandlers    map[string]func(eventContext *EventContext) error
 	modelRegistry    *map[string]*Model
@@ -137,6 +138,12 @@ func New(config *Config, modelRegistry *map[string]*Model) *Model {
 		remoteMethodsMap: map[string]*OperationItem{},
 		authCache:        map[string]map[string]map[string]bool{},
 	}
+	loadedModel.NilInstance = &Instance{
+		Model: loadedModel,
+		Id:    primitive.NilObjectID,
+		data:  wst.NilMap,
+		bytes: EmptyBytes,
+	}
 
 	(*modelRegistry)[name] = loadedModel
 
@@ -147,6 +154,8 @@ type RegistryEntry struct {
 	Name  string
 	Model *Model
 }
+
+var EmptyBytes = make([]byte, 0)
 
 func (loadedModel *Model) Build(data wst.M, baseContext *EventContext) Instance {
 
@@ -273,6 +282,12 @@ func (loadedModel *Model) FindMany(filterMap *wst.Filter, baseContext *EventCont
 	eventContext := &EventContext{
 		BaseContext: targetBaseContext,
 	}
+	eventContext.Model = loadedModel
+	if baseContext.OperationName != "" {
+		eventContext.OperationName = baseContext.OperationName
+	} else {
+		eventContext.OperationName = wst.OperationNameFindMany
+	}
 	if loadedModel.DisabledHandlers["__operation__before_load"] != true {
 		err := loadedModel.GetHandler("__operation__before_load")(eventContext)
 		if err != nil {
@@ -280,16 +295,36 @@ func (loadedModel *Model) FindMany(filterMap *wst.Filter, baseContext *EventCont
 		}
 		if eventContext.Result != nil {
 			switch eventContext.Result.(type) {
+			case *InstanceA:
+				return *eventContext.Result.(*InstanceA), nil
 			case InstanceA:
 				return eventContext.Result.(InstanceA), nil
-			case []wst.M:
-				result := make([]Instance, len(eventContext.Result.([]wst.M)))
-				for idx, v := range eventContext.Result.([]wst.M) {
-					result[idx] = loadedModel.Build(v, targetBaseContext)
+			case []*Instance:
+				var result InstanceA = make([]Instance, len(eventContext.Result.([]*Instance)))
+				for idx, v := range eventContext.Result.([]*Instance) {
+					if v != nil {
+						result[idx] = *v
+					} else {
+						result[idx] = Instance{}
+					}
+				}
+				return result, nil
+			case wst.A, []wst.M:
+				var result []Instance
+				if v, castOk := eventContext.Result.(wst.A); castOk {
+					result = make([]Instance, len(v))
+					for idx, v := range v {
+						result[idx] = loadedModel.Build(v, targetBaseContext)
+					}
+				} else {
+					result = make([]Instance, len(v))
+					for idx, v := range v {
+						result[idx] = loadedModel.Build(v, targetBaseContext)
+					}
 				}
 				return result, nil
 			default:
-				return nil, errors.New("invalid eventContext.Result type, expected InstanceA or []wst.M")
+				return nil, fmt.Errorf("invalid eventContext.Result type, expected InstanceA or []wst.M; found %T", eventContext.Result)
 			}
 		}
 	}
@@ -455,6 +490,7 @@ func (loadedModel *Model) FindById(id interface{}, filterMap *wst.Filter, baseCo
 	(*filterMap.Where)["_id"] = _id
 	filterMap.Limit = 1
 
+	baseContext.OperationName = wst.OperationNameFindById
 	instances, err := loadedModel.FindMany(filterMap, baseContext)
 	if err != nil {
 		return nil, err
@@ -533,7 +569,9 @@ func (loadedModel *Model) Create(data interface{}, baseContext *EventContext) (*
 		BaseContext: targetBaseContext,
 	}
 	eventContext.Data = &finalData
+	eventContext.Model = loadedModel
 	eventContext.IsNewInstance = true
+	eventContext.OperationName = wst.OperationNameCreate
 	if loadedModel.DisabledHandlers["__operation__before_save"] != true {
 		err := loadedModel.GetHandler("__operation__before_save")(eventContext)
 		if err != nil {
@@ -550,7 +588,7 @@ func (loadedModel *Model) Create(data interface{}, baseContext *EventContext) (*
 				v := loadedModel.Build(eventContext.Result.(wst.M), targetBaseContext)
 				return &v, nil
 			default:
-				return nil, errors.New("invalid eventContext.Result type, expected *Instance, Instance or wst.M")
+				return nil, fmt.Errorf("invalid eventContext.Result type, expected *Instance, Instance or wst.M; found %T", eventContext.Result)
 			}
 		}
 	}

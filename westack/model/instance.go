@@ -31,6 +31,10 @@ func (modelInstance *Instance) ToJSON() wst.M {
 		return nil
 	}
 
+	if modelInstance == modelInstance.Model.NilInstance {
+		return wst.NilMap
+	}
+
 	var result wst.M
 	result = wst.CopyMap(modelInstance.data)
 	for relationName, relationConfig := range *modelInstance.Model.Config.Relations {
@@ -179,8 +183,10 @@ func (modelInstance *Instance) UpdateAttributes(data interface{}, baseContext *E
 	}
 	eventContext.Data = &finalData
 	eventContext.Instance = modelInstance
+	eventContext.Model = modelInstance.Model
 	eventContext.ModelID = modelInstance.Id
 	eventContext.IsNewInstance = false
+	eventContext.OperationName = wst.OperationNameUpdateAttributes
 	if modelInstance.Model.DisabledHandlers["__operation__before_save"] != true {
 		err := modelInstance.Model.GetHandler("__operation__before_save")(eventContext)
 		if err != nil {
@@ -197,7 +203,7 @@ func (modelInstance *Instance) UpdateAttributes(data interface{}, baseContext *E
 				v := modelInstance.Model.Build(eventContext.Result.(wst.M), targetBaseContext)
 				return &v, nil
 			default:
-				return nil, errors.New("invalid eventContext.Result type, expected *Instance, Instance or wst.M")
+				return nil, fmt.Errorf("invalid eventContext.Result type, expected *Instance, Instance or wst.M; found %T", eventContext.Result)
 			}
 		}
 	}

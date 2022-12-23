@@ -5,3 +5,4 @@
 /westack/tests/common/models/*.casbin.dump.conf
 /westack/tests/common/models/*.policies.csv
 /examples/basic-auth-example/basic_model.conf
+/westack-go.iml

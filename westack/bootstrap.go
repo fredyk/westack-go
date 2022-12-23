@@ -12,7 +12,7 @@ import (
 
 	casbinmodel "github.com/casbin/casbin/v2/model"
 	fileadapter "github.com/casbin/casbin/v2/persist/file-adapter"
-	"github.com/gofiber/fiber/v2"
+	fiber "github.com/gofiber/fiber/v2"
 	"github.com/golang-jwt/jwt"
 	"github.com/spf13/viper"
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -515,7 +515,6 @@ func (app *WeStack) asInterface() *wst.IApp {
 		SwaggerPaths: func() *map[string]wst.M {
 			return app.SwaggerPaths()
 		},
-		Stats: app.stats,
 	}
 }
 
