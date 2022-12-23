@@ -36,6 +36,7 @@ func (app *WeStack) loadModels() {
 	}
 
 	app._swaggerPaths = map[string]wst.M{}
+	var someUserModel *model.Model
 	for _, fileInfo := range fileInfos {
 
 		if strings.Split(fileInfo.Name(), ".")[1] != "json" {
@@ -64,6 +65,14 @@ func (app *WeStack) loadModels() {
 
 		loadedModel := model.New(config, app.modelRegistry)
 		app.setupModel(loadedModel, dataSource)
+		if loadedModel.Config.Base == "User" {
+			someUserModel = loadedModel
+		}
+	}
+
+	if app.roleMappingModel != nil {
+		(*app.roleMappingModel.Config.Relations)["user"].Model = someUserModel.Name
+		app.setupModel(app.roleMappingModel, app.roleMappingModel.Datasource)
 	}
 
 	for _, loadedModel := range *app.modelRegistry {
@@ -173,7 +182,6 @@ func (app *WeStack) setupModel(loadedModel *model.Model, dataSource *datasource.
 		roleMappingModel.Datasource = dataSource
 
 		app.roleMappingModel = roleMappingModel
-		app.setupModel(roleMappingModel, dataSource)
 	}
 
 	if config.Base == "User" {
@@ -267,7 +275,7 @@ func (app *WeStack) setupModel(loadedModel *model.Model, dataSource *datasource.
 
 	casbModel := casbinmodel.NewModel()
 
-	basePoliciesDirectory := app.viper.GetString("casbin.policies.outputDirectory")
+	basePoliciesDirectory := app.Viper.GetString("casbin.policies.outputDirectory")
 	_, err := os.Stat(basePoliciesDirectory)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -497,6 +505,7 @@ func (app *WeStack) asInterface() *wst.IApp {
 	return &wst.IApp{
 		Debug:        app.debug,
 		JwtSecretKey: app.jwtSecretKey,
+		Viper:        app.Viper,
 		FindModel: func(modelName string) (interface{}, error) {
 			return app.FindModel(modelName)
 		},

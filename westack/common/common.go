@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/spf13/viper"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
@@ -23,6 +24,12 @@ func (m M) GetM(key string) M {
 	if v, ok := m[key]; ok {
 		if vv, ok := v.(M); ok {
 			return vv
+		} else if vv, ok := v.(map[string]interface{}); ok {
+			var out M = make(M, len(vv))
+			for k, v := range vv {
+				out[k] = v
+			}
+			return out
 		}
 	}
 	return nil
@@ -117,8 +124,7 @@ type IApp struct {
 	FindModel      func(modelName string) (interface{}, error)
 	FindDatasource func(datasource string) (interface{}, error)
 	JwtSecretKey   []byte
-
-	Stats *Stats
+	Viper          *viper.Viper
 }
 
 var RegexpIdEntire = regexp.MustCompile("^([0-9a-f]{24})$")
