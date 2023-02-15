@@ -289,14 +289,11 @@ func (ds *Datasource) Count(collectionName string, lookups *wst.A) (int64, error
 		}
 		err = cursor.All(ds.Context, &documents)
 		if err != nil {
-			fmt.Printf("error %v\n", err)
 			return 0, err
 		}
 		if len(documents) == 0 {
-			fmt.Println("no documents")
 			return 0, nil
 		}
-		fmt.Printf("found %v documents\n", documents[0].Count)
 		return documents[0].Count, nil
 
 	}
