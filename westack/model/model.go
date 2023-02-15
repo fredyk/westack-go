@@ -448,6 +448,46 @@ func (loadedModel *Model) FindMany(filterMap *wst.Filter, baseContext *EventCont
 	return results, nil
 }
 
+func (loadedModel *Model) Count(filterMap *wst.Filter, baseContext *EventContext) (int64, error) {
+	if baseContext == nil {
+		baseContext = &EventContext{}
+	}
+	var targetBaseContext = baseContext
+	deepLevel := 0
+	for {
+		if targetBaseContext.BaseContext != nil {
+			targetBaseContext = targetBaseContext.BaseContext
+		} else {
+			break
+		}
+		deepLevel++
+	}
+
+	lookups := loadedModel.ExtractLookupsFromFilter(filterMap, baseContext.DisableTypeConversions)
+
+	eventContext := &EventContext{
+		BaseContext: targetBaseContext,
+	}
+	eventContext.Model = loadedModel
+	if baseContext.OperationName != "" {
+		eventContext.OperationName = baseContext.OperationName
+	} else {
+		eventContext.OperationName = wst.OperationNameCount
+	}
+
+	eventContext.DisableTypeConversions = baseContext.DisableTypeConversions
+
+	eventContext.Filter = filterMap
+
+	count, err := loadedModel.Datasource.Count(loadedModel.CollectionName, lookups)
+	if err != nil {
+		return 0, err
+	}
+
+	return count, nil
+
+}
+
 func (loadedModel *Model) FindOne(filterMap *wst.Filter, baseContext *EventContext) (*Instance, error) {
 
 	if filterMap == nil {
