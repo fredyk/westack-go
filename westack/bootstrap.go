@@ -376,6 +376,15 @@ func (app *WeStack) setupModel(loadedModel *model.Model, dataSource *datasource.
 			ctx.Result = out
 			return nil
 		})
+		loadedModel.On("count", func(ctx *model.EventContext) error {
+			result, err := loadedModel.Count(ctx.Filter, ctx)
+			if err != nil {
+				return err
+			}
+			ctx.StatusCode = fiber.StatusOK
+			ctx.Result = wst.M{"count": result}
+			return nil
+		})
 		loadedModel.On("findById", func(ctx *model.EventContext) error {
 			result, err := loadedModel.FindById(ctx.ModelID, ctx.Filter, ctx)
 			if result != nil {

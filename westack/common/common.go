@@ -54,6 +54,7 @@ type OperationName string
 const (
 	OperationNameFindById         OperationName = "findById"
 	OperationNameFindMany         OperationName = "findMany"
+	OperationNameCount            OperationName = "count"
 	OperationNameCreate           OperationName = "create"
 	OperationNameUpdateAttributes OperationName = "updateAttributes"
 )

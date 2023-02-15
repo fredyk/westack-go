@@ -164,6 +164,10 @@ func (app *WeStack) loadModelsFixedRoutes() {
 		if err != nil {
 			panic(err)
 		}
+		_, err = e.AddRoleForUser("count", replaceVarNames("read"))
+		if err != nil {
+			panic(err)
+		}
 
 		_, err = e.AddRoleForUser("create", replaceVarNames("write"))
 		if err != nil {
@@ -236,6 +240,30 @@ func (app *WeStack) loadModelsFixedRoutes() {
 			},
 			Http: model.RemoteMethodOptionsHttp{
 				Path: "/",
+				Verb: "get",
+			},
+		})
+
+		if app.debug {
+			log.Println("Mount GET " + loadedModel.BaseUrl + "/count")
+		}
+		loadedModel.RemoteMethod(func(eventContext *model.EventContext) error {
+			return handleEvent(eventContext, loadedModel, "count")
+		}, model.RemoteMethodOptions{
+			Name: "count",
+			Accepts: model.RemoteMethodOptionsHttpArgs{
+				{
+					Arg:         "filter",
+					Type:        "string",
+					Description: "",
+					Http: model.ArgHttp{
+						Source: "query",
+					},
+					Required: false,
+				},
+			},
+			Http: model.RemoteMethodOptionsHttp{
+				Path: "/count",
 				Verb: "get",
 			},
 		})
