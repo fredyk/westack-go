@@ -1,6 +1,4 @@
-ARG CLIENT_BRANCH=master
-
-FROM golang:alpine as builder
+FROM golang:1.19-alpine as builder
 
 # Prepare for app
 WORKDIR /usr/src/app
@@ -18,6 +16,9 @@ RUN go get -d -v ./server
 
 # Build the code
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-w -s" -o /go/bin/westack_basic_auth ./server/
+
+# Make binary executable
+RUN chmod +x /go/bin/westack_basic_auth
 
 FROM scratch
 
