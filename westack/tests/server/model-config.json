@@ -2,6 +2,9 @@
   "Note": {
     "dataSource": "db"
   },
+  "NoteEntry": {
+    "dataSource": "db"
+  },
   "role": {
     "dataSource": "db"
   },

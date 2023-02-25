@@ -1,19 +1,10 @@
 {
-  "name": "Note",
+  "name": "NoteEntry",
   "plural": "",
   "base": "PersistedModel",
   "public": true,
   "properties": {},
-  "relations": {
-    "user": {
-      "type": "belongsTo",
-      "model": "user"
-    },
-    "entries": {
-      "type": "hasMany",
-      "model": "NoteEntry"
-    }
-  },
+  "relations": {},
   "hidden": [],
   "casbin": {
     "requestDefinition": "",
