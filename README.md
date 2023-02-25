@@ -14,25 +14,35 @@ It is only compatible with [mongo](go.mongodb.org/mongo-driver).
 ### Authentication
 Define [RBAC](https://casbin.org/docs/en/rbac) policies in your `json` models to restrict access to data.
 
+### Installing westack
+
+```shell
+go install github.com/fredyk/westack-go
+```
+
+### Initialize a new project
+```shell
+mkdir my-new-project
+cd my-new-project
+westack-go init .
+```
+
+### Create a new model
+```shell
+# Usage: westack-go model add <model_name> <datasource_name>
+#   <datasource_name> defaults to "db" when you run `westack-go init .`
+ 
+westack-go model add Note db
+```
+
 ### Getting started
 
-Create your file structure like this:
-```
-- common
-  |- models
-  |  |- user.json
-  |  |- note.json
-  
-- server
-  |- main.go
-  |- datasource.json
-  |- model-config.json
-```
+#### (Optional) Customize your models and datasources
 
-`user.json`
+`User.json`
 ```json
 {
-  "name": "user",
+  "name": "User",
   "base": "User",
   "public": true,
   "hidden": [
@@ -57,10 +67,10 @@ Create your file structure like this:
 }
 ```
 
-`note.json`
+`Note.json`
 ```json
 {
-  "name": "note",
+  "name": "Note",
   "base": "PersistedModel",
   "public": true,
   "properties": {
@@ -76,7 +86,7 @@ Create your file structure like this:
   "relations": {
     "user": {
       "type": "belongsTo",
-      "model": "user"
+      "model": "User"
     }
   },
   "casbin": {
@@ -107,47 +117,22 @@ Create your file structure like this:
 `model-config.json`
 ```json
 {
-  "user": {
+  "User": {
     "dataSource": "db"
   },
-  "note": {
+  "Note": {
     "dataSource": "db"
   }
 }
 ```
 
-`main.go`
-```go
-package main
+### Run
 
-import (
-	"github.com/fredyk/westack-go/westack"
-	"github.com/gofiber/fiber/v2"
-)
-
-func main() {
-
-	app := westack.New(westack.WeStackOptions{
-		Debug:       false,
-		RestApiRoot: "/api/v1",
-		Port:        8023,
-	})
-
-	app.Boot(func(app * westack.WeStack) {
-
-		// Setup your custom routes here
-		app.Server.Get("/status", func(c * fiber.Ctx) error {
-			return c.JSON(fiber.Map{"status": "OK"})
-		})
-
-	})
-
-	app.Start(fmt.Sprintf(":%v", app.Port))
-
-}
+```shell
+westack-go server start
 ```
 
-Test it:
+### Test it:
 
 1. Create a user
 ```shell
@@ -192,18 +177,6 @@ Response body: {"title":"Note 1","body":"This is my first note","userId":"622f16
 $ curl -X PATCH http://localhost:8023/api/v1/notes/622f1643377ca3f1a39241f5 -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJjcmVhdGVkIjoxNjUwNDA2ODEzNDY3LCJyb2xlcyI6WyJVU0VSIl0sInR0bCI6MTIwOTYwMDAwMCwidXNlcklkIjoiNjI1ZjM1OTE0NzU5YWJiOGZhMmE1YzljIn0.hWeMlZrhTFAac4LXTSiSIQ7uy7VhAlg1L9DKG3QPTpg' -d '{"body":"I modified the note body"}'
 
 Response body: {"title":"Note 1","body":"I modified the note body","userId":"622f1643377ca3f1a39241f4","id":"622f1643377ca3f1a39241f5"}
-```
-
-### Initialize a new project
-```shell
-mkdir my-new-project
-cd my-new-project
-go run github.com/fredyk/westack-go/cli@latest init .
-```
-
-### Create a new model
-```shell
-go run github.com/fredyk/westack-go/cli@latest model add MyModel datasource_name
 ```
 
 ### Contribute
