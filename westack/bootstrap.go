@@ -94,6 +94,7 @@ func (app *WeStack) loadModels() error {
 func (app *WeStack) loadDataSources() {
 
 	dsViper := viper.New()
+	app.DsViper = dsViper
 
 	fileToLoad := ""
 

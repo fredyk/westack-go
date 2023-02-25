@@ -9,5 +9,15 @@
     "connector": "mongodb",
     "useNewUrlParser": true,
     "allowExtendedOperators": true
+  },
+  "redis": {
+    "name": "redis",
+    "url": "localhost:6306",
+    "database": "example_db",
+    "databaseIndex": 0,
+    "password": "",
+    "username": "",
+    "connector": "redis"
   }
+
 }
