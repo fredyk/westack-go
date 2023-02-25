@@ -157,3 +157,124 @@ func Test_Instance_UncheckedTransform_Panic(t *testing.T) {
 	}
 	instance.UncheckedTransform(new(UnsafeType))
 }
+
+func Test_UpdateAttributes(t *testing.T) {
+
+	createdNote, err := noteModel.Create(wst.M{
+		"title": "Old title",
+	}, systemContext)
+	assert.Nil(t, err)
+
+	updated, err := createdNote.UpdateAttributes(wst.M{
+		"title": "Title from wst.M",
+	}, systemContext)
+	assert.Nil(t, err)
+	assert.Equal(t, "Title from wst.M", updated.GetString("title"))
+
+	updated, err = createdNote.UpdateAttributes(&wst.M{
+		"title": "Title from *wst.M",
+	}, systemContext)
+	assert.Nil(t, err)
+	assert.Equal(t, "Title from *wst.M", updated.GetString("title"))
+
+	updated, err = createdNote.UpdateAttributes(map[string]interface{}{
+		"title": "Title from map[string]interface{}",
+	}, systemContext)
+	assert.Nil(t, err)
+	assert.Equal(t, "Title from map[string]interface{}", updated.GetString("title"))
+
+	updated, err = createdNote.UpdateAttributes(&map[string]interface{}{
+		"title": "Title from *map[string]interface{}",
+	}, systemContext)
+	assert.Nil(t, err)
+	assert.Equal(t, "Title from *map[string]interface{}", updated.GetString("title"))
+
+	secondNote, err := noteModel.Create(wst.M{
+		"title": "Second note",
+	}, systemContext)
+	assert.Nil(t, err)
+
+	updated, err = createdNote.UpdateAttributes(*secondNote, systemContext)
+	assert.Nil(t, err)
+	assert.Equal(t, "Second note", updated.GetString("title"))
+
+	_, err = secondNote.UpdateAttributes(wst.M{
+		"title": "Second note updated for *Instance",
+	}, systemContext)
+	assert.Nil(t, err)
+
+	updated, err = createdNote.UpdateAttributes(secondNote, systemContext)
+	assert.Nil(t, err)
+	assert.Equal(t, "Second note updated for *Instance", updated.GetString("title"))
+
+	updated, err = createdNote.UpdateAttributes(struct {
+		Title string `bson:"title"`
+	}{
+		Title: "Title from struct",
+	}, systemContext)
+	assert.Nil(t, err)
+	assert.Equal(t, "Title from struct", updated.GetString("title"))
+
+	updated, err = createdNote.UpdateAttributes(&struct {
+		Title chan string `bson:"title"`
+	}{
+		Title: make(chan string),
+	}, systemContext)
+	assert.NotNil(t, err)
+
+	updated, err = createdNote.UpdateAttributes("invalid type", systemContext)
+	assert.NotNil(t, err)
+
+	updated, err = createdNote.UpdateAttributes(wst.M{
+		"title": "Title from wst.M",
+	}, nil)
+	assert.Nil(t, err)
+	assert.Equal(t, "Title from wst.M", updated.GetString("title"))
+
+	updated, err = createdNote.UpdateAttributes(wst.M{
+		"title": "Title from wst.M 2",
+	}, &model.EventContext{BaseContext: systemContext})
+	assert.Nil(t, err)
+	assert.Equal(t, "Title from wst.M 2", updated.GetString("title"))
+
+	updated, err = createdNote.UpdateAttributes(wst.M{
+		"__forceError": true,
+	}, systemContext)
+	assert.NotNil(t, err)
+
+	updated, err = createdNote.UpdateAttributes(wst.M{
+		"__overwriteWith": wst.M{
+			"title": "Overwritten title",
+		},
+	}, systemContext)
+	assert.Nil(t, err)
+	assert.Equal(t, "Overwritten title", updated.GetString("title"))
+
+	_, err = secondNote.UpdateAttributes(wst.M{
+		"title": "Second note updated for overwrite with Instance",
+	}, systemContext)
+	assert.Nil(t, err)
+
+	updated, err = createdNote.UpdateAttributes(wst.M{
+		"__overwriteWith": *secondNote,
+	}, systemContext)
+	assert.Nil(t, err)
+	assert.Equal(t, "Second note updated for overwrite with Instance", updated.GetString("title"))
+
+	_, err = secondNote.UpdateAttributes(wst.M{
+		"title": "Second note updated for overwrite with *Instance",
+	}, systemContext)
+	assert.Nil(t, err)
+
+	updated, err = createdNote.UpdateAttributes(wst.M{
+		"__overwriteWith": secondNote,
+	}, systemContext)
+	assert.Nil(t, err)
+	assert.Equal(t, "Second note updated for overwrite with *Instance", updated.GetString("title"))
+
+	updated, err = createdNote.UpdateAttributes(wst.M{
+		"__overwriteWith": "invalid type",
+	}, systemContext)
+	assert.NotNil(t, err)
+
+}

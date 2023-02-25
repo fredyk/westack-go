@@ -2,6 +2,7 @@ package tests
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"log"
 	"net"
@@ -196,6 +197,26 @@ func TestMain(m *testing.M) {
 		//	pb.NewGrpcTestClient,
 		//	pb.FooClient.TestFoo,
 		//)).Name("Test_TestGrpcGetInvalid")
+
+		// Some hooks
+		noteModel, err = server.FindModel("Note")
+		if err != nil {
+			log.Fatal(err)
+		}
+		noteModel.Observe("before save", func(ctx *model.EventContext) error {
+			if ctx.IsNewInstance {
+				(*ctx.Data)["__test"] = true
+				(*ctx.Data)["__testDate"] = time.Now()
+			}
+			if (*ctx.Data)["__forceError"] == true {
+				return fmt.Errorf("forced error")
+			}
+			if (*ctx.Data)["__overwriteWith"] != nil {
+				ctx.Result = (*ctx.Data)["__overwriteWith"]
+			}
+			return nil
+		})
+
 	})
 
 	go func() {
@@ -206,11 +227,6 @@ func TestMain(m *testing.M) {
 	}()
 
 	time.Sleep(1 * time.Second)
-
-	noteModel, err = server.FindModel("Note")
-	if err != nil {
-		log.Fatal(err)
-	}
 
 	m.Run()
 
