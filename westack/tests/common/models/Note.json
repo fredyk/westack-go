@@ -12,6 +12,10 @@
     "entries": {
       "type": "hasMany",
       "model": "NoteEntry"
+    },
+    "invalidRelation1": {
+      "type": "belongsTo",
+      "model": "InvalidModel"
     }
   },
   "hidden": [],

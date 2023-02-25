@@ -277,7 +277,10 @@ func (loadedModel *Model) FindMany(filterMap *wst.Filter, baseContext *EventCont
 		deepLevel++
 	}
 
-	lookups := loadedModel.ExtractLookupsFromFilter(filterMap, baseContext.DisableTypeConversions)
+	lookups, err := loadedModel.ExtractLookupsFromFilter(filterMap, baseContext.DisableTypeConversions)
+	if err != nil {
+		return nil, err
+	}
 
 	eventContext := &EventContext{
 		BaseContext: targetBaseContext,
@@ -463,7 +466,10 @@ func (loadedModel *Model) Count(filterMap *wst.Filter, baseContext *EventContext
 		deepLevel++
 	}
 
-	lookups := loadedModel.ExtractLookupsFromFilter(filterMap, baseContext.DisableTypeConversions)
+	lookups, err := loadedModel.ExtractLookupsFromFilter(filterMap, baseContext.DisableTypeConversions)
+	if err != nil {
+		return 0, err
+	}
 
 	eventContext := &EventContext{
 		BaseContext: targetBaseContext,
