@@ -14,6 +14,7 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/fredyk/westack-go/westack"
+	"github.com/fredyk/westack-go/westack/model"
 
 	pb "github.com/fredyk/westack-go/westack/tests/proto"
 )
@@ -21,6 +22,8 @@ import (
 var server *westack.WeStack
 var userId primitive.ObjectID
 var noteId primitive.ObjectID
+var noteModel *model.Model
+var systemContext *model.EventContext
 
 func Test_GRPCCallWithQueryParamsOK(t *testing.T) {
 
@@ -168,6 +171,9 @@ func TestMain(m *testing.M) {
 	if err != nil {
 		log.Fatal(err)
 	}
+	systemContext = &model.EventContext{
+		Bearer: &model.BearerToken{User: &model.BearerUser{System: true}},
+	}
 
 	// start server
 	server = westack.New(westack.Options{
@@ -200,6 +206,11 @@ func TestMain(m *testing.M) {
 	}()
 
 	time.Sleep(1 * time.Second)
+
+	noteModel, err = server.FindModel("Note")
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	m.Run()
 
