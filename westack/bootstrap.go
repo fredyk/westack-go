@@ -3,7 +3,7 @@ package westack
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
+	"io/fs"
 	"log"
 	"os"
 	"regexp"
@@ -25,7 +25,11 @@ import (
 
 func (app *WeStack) loadModels() {
 
-	fileInfos, err := ioutil.ReadDir("./common/models")
+	// List directory common/models without using ioutil.ReadDir
+	// https://stackoverflow.com/questions/5884154/read-all-files-in-a-directory-in-go
+	//fileInfos, err := ioutil.ReadDir("./common/models")
+	fileInfos, err := fs.ReadDir(os.DirFS("./common/models"), ".")
+
 	if err != nil {
 		panic("Error while loading models: " + err.Error())
 	}
@@ -38,6 +42,10 @@ func (app *WeStack) loadModels() {
 	app._swaggerPaths = map[string]wst.M{}
 	var someUserModel *model.Model
 	for _, fileInfo := range fileInfos {
+
+		if fileInfo.IsDir() {
+			continue
+		}
 
 		if strings.Split(fileInfo.Name(), ".")[1] != "json" {
 			continue

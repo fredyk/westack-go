@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"strings"
 
-	fiber "github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2"
 
 	wst "github.com/fredyk/westack-go/westack/common"
 	"github.com/fredyk/westack-go/westack/datasource"
@@ -79,27 +79,28 @@ func (loadedModel *Model) RemoteMethod(handler func(context *EventContext) error
 	var toInvoke func(string, ...fiber.Handler) fiber.Router
 	operation := ""
 
+	router := *loadedModel.Router
 	switch verb {
 	case "get":
-		toInvoke = (*loadedModel.Router).Get
+		toInvoke = asFunction(router.Get)
 		operation = "Finds"
 	case "options":
-		toInvoke = (*loadedModel.Router).Options
+		toInvoke = asFunction(router.Options)
 		operation = "Gets options for"
 	case "head":
-		toInvoke = (*loadedModel.Router).Head
+		toInvoke = asFunction(router.Head)
 		operation = "Checks"
 	case "post":
-		toInvoke = (*loadedModel.Router).Post
+		toInvoke = asFunction(router.Post)
 		operation = "Creates"
 	case "put":
-		toInvoke = (*loadedModel.Router).Put
+		toInvoke = asFunction(router.Put)
 		operation = "Replaces"
 	case "patch":
-		toInvoke = (*loadedModel.Router).Patch
+		toInvoke = asFunction(router.Patch)
 		operation = "Updates attributes in"
 	case "delete":
-		toInvoke = (*loadedModel.Router).Delete
+		toInvoke = asFunction(router.Delete)
 		operation = "Deletes"
 	}
 
@@ -238,6 +239,12 @@ func (loadedModel *Model) RemoteMethod(handler func(context *EventContext) error
 		}
 		return nil
 	}).Name(loadedModel.Name + "." + options.Name)
+}
+
+func asFunction(method func(path string, handlers ...fiber.Handler) fiber.Router) func(string, ...fiber.Handler) fiber.Router {
+	return func(path string, handlers ...fiber.Handler) fiber.Router {
+		return method(path, handlers...)
+	}
 }
 
 func (loadedModel *Model) HandleRemoteMethod(name string, eventContext *EventContext) error {
