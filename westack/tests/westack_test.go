@@ -9,6 +9,7 @@ import (
 	"log"
 	"math/big"
 	"net/http/httptest"
+	"os"
 	"strconv"
 	"testing"
 	"time"
@@ -26,7 +27,13 @@ func init() {
 	app.Boot(func(app *westack.WeStack) {
 
 	})
-	go app.Start()
+	go func() {
+		err := app.Start()
+		if err != nil {
+			fmt.Printf("Error while starting server: %v", err)
+			os.Exit(1)
+		}
+	}()
 	time.Sleep(300 * time.Millisecond)
 }
 
@@ -144,3 +151,13 @@ func Test_WeStackDelete(t *testing.T) {
 	}
 
 }
+
+//// after all tests, stop the server
+//func TestMain(m *testing.M) {
+//	code := m.Run()
+//	err := app.Stop()
+//	if err != nil {
+//		log.Fatal(err)
+//	}
+//	os.Exit(code)
+//}

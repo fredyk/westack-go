@@ -114,13 +114,23 @@ func (app *WeStack) Boot(customRoutesCallbacks ...func(app *WeStack)) {
 
 }
 
-func (app *WeStack) Start() interface{} {
+func (app *WeStack) Start() error {
 	log.Printf("DEBUG Server took %v ms to start\n", time.Now().UnixMilli()-app.init.UnixMilli())
 	return app.Server.Listen(fmt.Sprintf("0.0.0.0:%v", app.port))
 }
 
 func (app *WeStack) Middleware(handler fiber.Handler) {
 	app.Server.Use(handler)
+}
+
+func (app *WeStack) Stop() error {
+	log.Println("Stopping server")
+	// TODO: close datasources
+	err := app.Server.Shutdown()
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func GRPCCallWithQueryParams[InputT any, ClientT interface{}, OutputT proto.Message](serviceUrl string, clientConstructor func(cc grpc.ClientConnInterface) ClientT, clientMethod func(ClientT, context.Context, *InputT, ...grpc.CallOption) (OutputT, error)) func(ctx *fiber.Ctx) error {
