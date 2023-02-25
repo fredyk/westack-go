@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"google.golang.org/grpc"
 
 	"github.com/fredyk/westack-go/westack"
@@ -17,38 +18,17 @@ import (
 	pb "github.com/fredyk/westack-go/westack/tests/proto"
 )
 
-func Test_GRPCCallWithQueryParams(t *testing.T) {
-	// setup
-	// start server
-	server := westack.New(westack.Options{
-		Port: 8020,
-	})
+var server *westack.WeStack
+var userId primitive.ObjectID
+var noteId primitive.ObjectID
 
-	// start a mock grpc server
-	go startMockGrpcServer()
-
-	server.Boot(func(app *westack.WeStack) {
-		app.Server.Get("/test-grpc-get", westack.GRPCCallWithQueryParams[pb.ReqGrpcTestMessage, pb.FooClient, *pb.ResGrpcTestMessage](
-			"localhost:7777",
-			pb.NewGrpcTestClient,
-			pb.FooClient.TestFoo,
-		)).Name("Test_TestGrpcGet")
-	})
-
-	go func() {
-		err := server.Start()
-		if err != nil {
-			t.Errorf("GRPCCallWithQueryParams Error: %s", err)
-		}
-	}()
-
-	time.Sleep(1 * time.Second)
+func Test_GRPCCallWithQueryParamsOK(t *testing.T) {
 
 	// start client
 	client := http.Client{}
 
 	// test for ok
-	res, err := client.Get("http://localhost:8020/test-grpc-get?foo=bar")
+	res, err := client.Get("http://localhost:8020/test-grpc-get?foo=1")
 	if err != nil {
 		t.Errorf("GRPCCallWithQueryParams Error: %s", err)
 	}
@@ -70,12 +50,19 @@ func Test_GRPCCallWithQueryParams(t *testing.T) {
 		t.Errorf("GRPCCallWithQueryParams Error: %s", err)
 	}
 
-	if out.Bar != "bar" {
+	if out.Bar != 1 {
 		t.Errorf("GRPCCallWithQueryParams Error: %s", err)
 	}
 
+}
+
+func Test_GRPCCallWithQueryParamsError(t *testing.T) {
+
+	// start client
+	client := http.Client{}
+
 	// test for error
-	res, err = client.Get("http://localhost:8020/test-grpc-get?foo=")
+	res, err := client.Get("http://localhost:8020/test-grpc-get?foo=")
 	if err != nil {
 		t.Errorf("GRPCCallWithQueryParams Error: %s", err)
 	}
@@ -84,13 +71,45 @@ func Test_GRPCCallWithQueryParams(t *testing.T) {
 		t.Errorf("GRPCCallWithQueryParams Error: %d", res.StatusCode)
 	}
 
-	// teardown
-	err = server.Stop()
+}
+
+func Test_GRPCCallWithQueryParams_WithBadQueryParams(t *testing.T) {
+
+	// start client
+	client := http.Client{}
+
+	// test for error
+	res, err := client.Get("http://localhost:8020/test-grpc-get?foo=abc")
 	if err != nil {
 		t.Errorf("GRPCCallWithQueryParams Error: %s", err)
 	}
 
+	if res.StatusCode != 500 {
+		t.Errorf("GRPCCallWithQueryParams Error: %d", res.StatusCode)
+	}
+
 }
+
+// todo: fix this test
+//func Test_GRPCCallWithQueryParams_WithInvalidConnection(t *testing.T) {
+//
+//	// start client
+//	client := http.Client{
+//		Timeout: time.Second * 5,
+//	}
+//
+//	// test for error
+//	res, err := client.Get("http://localhost:8020/test-grpc-get-invalid?foo=1")
+//	if err != nil {
+//		t.Errorf("GRPCCallWithQueryParams Error: %s", err)
+//		return
+//	}
+//
+//	if res.StatusCode != 500 {
+//		t.Errorf("GRPCCallWithQueryParams Error: %d", res.StatusCode)
+//	}
+//
+//}
 
 func startMockGrpcServer() {
 	// create a listener on TCP port 7777
@@ -113,10 +132,10 @@ func startMockGrpcServer() {
 
 func Test_ReqGrpcTestMessage(t *testing.T) {
 	in := pb.ReqGrpcTestMessage{
-		Foo: "bar",
+		Foo: 1,
 	}
 	compactedPb := in.String()
-	compactedJson := "foo:\"bar\" "
+	compactedJson := "foo:1 "
 	assert.Equal(t, compactedJson, compactedPb)
 
 	// just invoke the method to increase coverage
@@ -126,13 +145,70 @@ func Test_ReqGrpcTestMessage(t *testing.T) {
 
 func Test_ResGrpcTestMessage(t *testing.T) {
 	in := pb.ResGrpcTestMessage{
-		Bar: "bar",
+		Bar: 1,
 	}
 	compactedPb := in.String()
-	compactedJson := "bar:\"bar\" "
+	compactedJson := "bar:1 "
 	assert.Equal(t, compactedJson, compactedPb)
 
 	// just invoke the method to increase coverage
 	in.ProtoMessage()
+
+}
+
+// before all tests
+func TestMain(m *testing.M) {
+
+	var err error
+	userId, err = primitive.ObjectIDFromHex("5f9f1b5b9b9b9b9b9b9b9b9c")
+	if err != nil {
+		log.Fatal(err)
+	}
+	noteId, err = primitive.ObjectIDFromHex("5f9f1b5b9b9b9b9b9b9b9b9b")
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// start server
+	server = westack.New(westack.Options{
+		Port: 8020,
+	})
+
+	// start a mock grpc server
+	go startMockGrpcServer()
+
+	server.Boot(func(app *westack.WeStack) {
+		// for valid connections
+		app.Server.Get("/test-grpc-get", westack.GRPCCallWithQueryParams[pb.ReqGrpcTestMessage, pb.FooClient, *pb.ResGrpcTestMessage](
+			"localhost:7777",
+			pb.NewGrpcTestClient,
+			pb.FooClient.TestFoo,
+		)).Name("Test_TestGrpcGet")
+		//// for invalid connections
+		//app.Server.Get("/test-grpc-get-invalid", westack.GRPCCallWithQueryParams[pb.ReqGrpcTestMessage, pb.FooClient, *pb.ResGrpcTestMessage](
+		//	"localhost:8020",
+		//	pb.NewGrpcTestClient,
+		//	pb.FooClient.TestFoo,
+		//)).Name("Test_TestGrpcGetInvalid")
+	})
+
+	go func() {
+		err := server.Start()
+		if err != nil {
+			log.Fatalf("failed to start: %v", err)
+		}
+	}()
+
+	time.Sleep(1 * time.Second)
+
+	m.Run()
+
+	// after all tests
+
+	// teardown
+	err = server.Stop()
+	if err != nil {
+		log.Fatalf("failed to stop: %v", err)
+	}
 
 }

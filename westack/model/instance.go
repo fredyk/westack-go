@@ -39,10 +39,6 @@ func (modelInstance *Instance) ToJSON() wst.M {
 	result = wst.CopyMap(modelInstance.data)
 	for relationName, relationConfig := range *modelInstance.Model.Config.Relations {
 		if modelInstance.data[relationName] != nil {
-			if relationConfig.Type == "" {
-				// relation not found
-				continue
-			}
 			rawRelatedData := modelInstance.data[relationName]
 			relatedModel, err := modelInstance.Model.App.FindModel(relationConfig.Model)
 			if err != nil {

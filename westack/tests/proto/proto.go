@@ -10,7 +10,8 @@ import (
 
 // extends proto.Message
 type ReqGrpcTestMessage struct {
-	Foo string `protobuf:"bytes,1,opt,name=foo,proto3" json:"foo,omitempty"`
+	// int32 does not implement Marshal
+	Foo int32 `protobuf:"varint,1,opt,name=foo,proto3" json:"foo,omitempty"`
 }
 
 func (m *ReqGrpcTestMessage) Reset()         { *m = ReqGrpcTestMessage{} }
@@ -20,7 +21,7 @@ func (*ReqGrpcTestMessage) ProtoMessage()    {}
 // extends proto.Message
 
 type ResGrpcTestMessage struct {
-	Bar string `protobuf:"bytes,1,opt,name=bar,proto3" json:"bar,omitempty"`
+	Bar int32 `protobuf:"varint,1,opt,name=bar,proto3" json:"bar,omitempty"`
 }
 
 func (m *ResGrpcTestMessage) Reset()         { *m = ResGrpcTestMessage{} }
@@ -57,14 +58,14 @@ type FooServerImpl struct {
 }
 
 func (s *FooServerImpl) TestFoo(ctx context.Context, in *ReqGrpcTestMessage) (*ResGrpcTestMessage, error) {
-	if in.Foo == "bar" {
+	if in.Foo == 1 {
 		return &ResGrpcTestMessage{Bar: in.Foo}, nil
 	} else {
 		return nil, fmt.Errorf("invalid foo")
 	}
 }
 
-var _Foo_TestFoo_Handler = func(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func testFooHandler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ReqGrpcTestMessage)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -88,7 +89,7 @@ var fooServicedesc = grpc.ServiceDesc{
 	Methods: []grpc.MethodDesc{
 		{
 			MethodName: "TestFoo",
-			Handler:    _Foo_TestFoo_Handler,
+			Handler:    testFooHandler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
