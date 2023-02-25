@@ -24,6 +24,7 @@ var server *westack.WeStack
 var userId primitive.ObjectID
 var noteId primitive.ObjectID
 var noteModel *model.Model
+var userModel *model.Model
 var systemContext *model.EventContext
 
 func Test_GRPCCallWithQueryParamsOK(t *testing.T) {
@@ -201,7 +202,7 @@ func TestMain(m *testing.M) {
 		// Some hooks
 		noteModel, err = server.FindModel("Note")
 		if err != nil {
-			log.Fatal(err)
+			log.Fatalf("failed to find model: %v", err)
 		}
 		noteModel.Observe("before save", func(ctx *model.EventContext) error {
 			if ctx.IsNewInstance {
@@ -214,6 +215,15 @@ func TestMain(m *testing.M) {
 			if (*ctx.Data)["__overwriteWith"] != nil {
 				ctx.Result = (*ctx.Data)["__overwriteWith"]
 			}
+			return nil
+		})
+
+		userModel, err = server.FindModel("user")
+		if err != nil {
+			log.Fatalf("failed to find model: %v", err)
+		}
+		userModel.Observe("before save", func(ctx *model.EventContext) error {
+			fmt.Println("saving user")
 			return nil
 		})
 

@@ -106,4 +106,23 @@ func Test_ExtractLookups(t *testing.T) {
 	assert.Equal(t, "$user", (*lookups)[1]["$unwind"].(wst.M)["path"])
 	assert.Equal(t, true, (*lookups)[1]["$unwind"].(wst.M)["preserveNullAndEmptyArrays"])
 
+	// test include hasMany
+	lookups, err = userModel.ExtractLookupsFromFilter(&wst.Filter{
+		Include: &wst.Include{{Relation: "notes"}},
+	}, false)
+	assert.Nil(t, err)
+	assert.Equal(t, 1, len(*lookups))
+	assert.Contains(t, (*lookups)[0], "$lookup")
+	assert.Equal(t, "Note", (*lookups)[0]["$lookup"].(wst.M)["from"])
+	assert.Equal(t, "notes", (*lookups)[0]["$lookup"].(wst.M)["as"])
+	assert.Equal(t, "$_id", (*lookups)[0]["$lookup"].(wst.M)["let"].(wst.M)["userId"])
+	assert.Equal(t, "$userId", (*lookups)[0]["$lookup"].(wst.M)["pipeline"].(wst.A)[0]["$match"].(wst.M)["$expr"].(wst.M)["$and"].(wst.A)[0]["$eq"].([]string)[0])
+	assert.Equal(t, "$$userId", (*lookups)[0]["$lookup"].(wst.M)["pipeline"].(wst.A)[0]["$match"].(wst.M)["$expr"].(wst.M)["$and"].(wst.A)[0]["$eq"].([]string)[1])
+
+	// test invalid scope
+	lookups, err = noteModel.ExtractLookupsFromFilter(&wst.Filter{
+		Include: &wst.Include{{Relation: "user", Scope: &wst.Filter{Include: &wst.Include{{Relation: "invalid"}}}}},
+	}, false)
+	assert.NotNil(t, err)
+
 }

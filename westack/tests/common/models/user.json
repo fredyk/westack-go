@@ -9,6 +9,11 @@
       "required": true
     }
   },
-  "relations": {},
+  "relations": {
+    "notes": {
+      "type": "hasMany",
+      "model": "Note"
+    }
+  },
   "hidden": ["password"]
 }
