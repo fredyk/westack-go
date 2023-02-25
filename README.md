@@ -39,7 +39,9 @@ westack-go model add Note db
 
 #### (Optional) Customize your models and datasources
 
-`User.json`
+<details>
+  <summary>User.json</summary>
+
 ```json
 {
   "name": "User",
@@ -67,7 +69,11 @@ westack-go model add Note db
 }
 ```
 
-`Note.json`
+</details>
+
+<details>
+  <summary>Role.json</summary>
+
 ```json
 {
   "name": "Note",
@@ -99,7 +105,11 @@ westack-go model add Note db
 }
 ```
 
-`datasources.json`
+</details>
+
+<details>
+  <summary>datasources.json</summary>
+
 ```json
 {
   "db": {
@@ -114,7 +124,11 @@ westack-go model add Note db
 }
 ```
 
-`model-config.json`
+</details>
+
+<details>
+  <summary>model-config.json</summary>
+
 ```json
 {
   "User": {
@@ -125,6 +139,9 @@ westack-go model add Note db
   }
 }
 ```
+
+</details>
+
 
 ### Run
 
