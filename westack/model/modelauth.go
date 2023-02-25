@@ -4,12 +4,18 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
 )
 
+var AuthMutex = sync.Mutex{}
+
 func (loadedModel *Model) EnforceEx(token *BearerToken, objId string, action string, eventContext *EventContext) (error, bool) {
+
+	AuthMutex.Lock()
+	defer AuthMutex.Unlock()
 
 	if token != nil && token.User != nil && token.User.System == true {
 		return nil, true
