@@ -28,8 +28,9 @@ type LoginBody struct {
 }
 
 type WeStack struct {
-	Server *fiber.App
-	Viper  *viper.Viper
+	Server  *fiber.App
+	Viper   *viper.Viper
+	DsViper *viper.Viper
 
 	port              int32
 	datasources       *map[string]*datasource.Datasource

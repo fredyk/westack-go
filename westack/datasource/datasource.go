@@ -28,13 +28,15 @@ type OperationError struct {
 	Message string
 }
 
-type MonoDBDatasourceOptions struct {
-	Registry *bsoncodec.Registry
-	Monitor  *event.CommandMonitor
+type MongoDBDatasourceOptions struct {
+	Registry     *bsoncodec.Registry
+	Monitor      *event.CommandMonitor
+	Timeout      int
+	RetryOnError bool
 }
 
 type Options struct {
-	MongoDB *MonoDBDatasourceOptions
+	MongoDB *MongoDBDatasourceOptions
 }
 
 func (e *OperationError) Error() string {
@@ -65,20 +67,15 @@ func (ds *Datasource) Initialize() error {
 	switch connector {
 	case "mongodb":
 		mongoCtx, cancelFn := context.WithCancel(ds.Context)
+		if ds.Options != nil && ds.Options.MongoDB != nil {
+			if ds.Options.MongoDB.Timeout > 0 {
+				mongoCtx, cancelFn = context.WithTimeout(mongoCtx, time.Duration(ds.Options.MongoDB.Timeout)*time.Second)
+			}
+		}
 
 		var clientOpts *options.ClientOptions
 
-		url := ""
-		if dsViper.GetString(ds.Key+".url") != "" {
-			url = dsViper.GetString(ds.Key + ".url")
-		} else {
-			port := 0
-			if dsViper.GetInt(ds.Key+".port") > 0 {
-				port = dsViper.GetInt(ds.Key + ".port")
-			}
-			url = fmt.Sprintf("mongodb://%v:%v/%v", dsViper.GetString(ds.Key+".host"), port, dsViper.GetString(ds.Key+".database"))
-			log.Printf("Using composed url %v\n", url)
-		}
+		url := getDbUrl(dsViper, ds)
 
 		if dsViper.GetString(ds.Key+".username") != "" && dsViper.GetString(ds.Key+".password") != "" {
 			credential := options.Credential{
@@ -90,7 +87,11 @@ func (ds *Datasource) Initialize() error {
 			clientOpts = options.Client().ApplyURI(url)
 		}
 
-		clientOpts = clientOpts.SetSocketTimeout(time.Second * 30).SetConnectTimeout(time.Second * 30).SetServerSelectionTimeout(time.Second * 30).SetMinPoolSize(1).SetMaxPoolSize(5)
+		timeoutForOptions := time.Second * 30
+		if ds.Options != nil && ds.Options.MongoDB != nil && ds.Options.MongoDB.Timeout > 0 {
+			timeoutForOptions = time.Duration(ds.Options.MongoDB.Timeout) * time.Second
+		}
+		clientOpts = clientOpts.SetSocketTimeout(timeoutForOptions).SetConnectTimeout(timeoutForOptions).SetServerSelectionTimeout(timeoutForOptions).SetMinPoolSize(1).SetMaxPoolSize(5)
 
 		if ds.Options != nil && ds.Options.MongoDB != nil && ds.Options.MongoDB.Registry != nil {
 			clientOpts = clientOpts.SetRegistry(ds.Options.MongoDB.Registry)
@@ -100,6 +101,7 @@ func (ds *Datasource) Initialize() error {
 			clientOpts = clientOpts.SetMonitor(ds.Options.MongoDB.Monitor)
 		}
 
+		fmt.Printf("Connecting to datasource %v...\n", ds.Key)
 		db, err := mongo.Connect(mongoCtx, clientOpts)
 		if err != nil {
 			cancelFn()
@@ -107,10 +109,20 @@ func (ds *Datasource) Initialize() error {
 		}
 		ds.Db = db
 
+		if ds.Options != nil && ds.Options.MongoDB != nil {
+			if ds.Options.MongoDB.Timeout > 0 {
+				fmt.Printf("DEBUG: Setting timeout to %v seconds\n", ds.Options.MongoDB.Timeout)
+				mongoCtx, cancelFn = context.WithTimeout(context.Background(), time.Duration(ds.Options.MongoDB.Timeout)*time.Second)
+			}
+		}
+		fmt.Printf("Pinging datasource %v...\n", ds.Key)
 		err = ds.Db.(*mongo.Client).Ping(mongoCtx, readpref.SecondaryPreferred())
 		if err != nil {
+			fmt.Printf("Could not connect to datasource %v: %v\n", ds.Key, err)
 			cancelFn()
 			return err
+		} else {
+			fmt.Printf("DEBUG: Connected to datasource %v\n", ds.Key)
 		}
 
 		init := time.Now().UnixMilli()
@@ -119,21 +131,33 @@ func (ds *Datasource) Initialize() error {
 				time.Sleep(time.Second * 5)
 
 				mongoCtx, cancelFn = context.WithCancel(mongoCtx)
+				if ds.Options != nil && ds.Options.MongoDB != nil {
+					if ds.Options.MongoDB.Timeout > 0 {
+						mongoCtx, cancelFn = context.WithTimeout(mongoCtx, time.Duration(ds.Options.MongoDB.Timeout)*time.Second)
+					}
+				}
+
 				err := ds.Db.(*mongo.Client).Ping(mongoCtx, readpref.SecondaryPreferred())
 				if err != nil {
-					log.Printf("Reconnecting %v...\n", url)
+					url = getDbUrl(dsViper, ds)
+					log.Printf("Reconnecting datasource %v...\n", ds.Key)
 					db, err := mongo.Connect(mongoCtx, clientOpts)
 					if err != nil {
 						cancelFn()
-						log.Fatalf("Could not reconnect %v: %v\n", url, err)
+						if ds.Options == nil || ds.Options.MongoDB == nil || !ds.Options.MongoDB.RetryOnError {
+							log.Fatalf("Could not reconnect %v: %v\n", url, err)
+						}
 					} else {
 						err = ds.Db.(*mongo.Client).Ping(mongoCtx, readpref.SecondaryPreferred())
 						if err != nil {
 							cancelFn()
-							log.Fatalf("Mongo client disconnected after %vms: %v", time.Now().UnixMilli()-init, err)
+							if ds.Options == nil || ds.Options.MongoDB == nil || !ds.Options.MongoDB.RetryOnError {
+								log.Fatalf("Mongo client disconnected after %vms: %v", time.Now().UnixMilli()-init, err)
+							}
+						} else {
+							log.Printf("successfully reconnected to %v\n", url)
 						}
 
-						log.Printf("successfully reconnected to %v\n", url)
 					}
 					ds.Db = db
 				}
@@ -155,9 +179,24 @@ func (ds *Datasource) Initialize() error {
 	//	ds.Db = make(map[interface{}]interface{})
 	//	break
 	default:
-		return errors.New("Invalid connector " + connector)
+		return errors.New("invalid connector " + connector)
 	}
 	return nil
+}
+
+func getDbUrl(dsViper *viper.Viper, ds *Datasource) string {
+	url := ""
+	if dsViper.GetString(ds.Key+".url") != "" {
+		url = dsViper.GetString(ds.Key + ".url")
+	} else {
+		port := 0
+		if dsViper.GetInt(ds.Key+".port") > 0 {
+			port = dsViper.GetInt(ds.Key + ".port")
+		}
+		url = fmt.Sprintf("mongodb://%v:%v/%v", dsViper.GetString(ds.Key+".host"), port, dsViper.GetString(ds.Key+".database"))
+		log.Printf("Using composed url %v\n", url)
+	}
+	return url
 }
 
 func (ds *Datasource) FindMany(collectionName string, lookups *wst.A) (*wst.A, error) {
