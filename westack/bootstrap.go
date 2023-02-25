@@ -23,7 +23,7 @@ import (
 	"github.com/fredyk/westack-go/westack/model"
 )
 
-func (app *WeStack) loadModels() {
+func (app *WeStack) loadModels() error {
 
 	// List directory common/models without using ioutil.ReadDir
 	// https://stackoverflow.com/questions/5884154/read-all-files-in-a-directory-in-go
@@ -84,8 +84,12 @@ func (app *WeStack) loadModels() {
 	}
 
 	for _, loadedModel := range *app.modelRegistry {
-		fixRelations(loadedModel)
+		err := fixRelations(loadedModel)
+		if err != nil {
+			return err
+		}
 	}
+	return nil
 }
 func (app *WeStack) loadDataSources() {
 
@@ -535,8 +539,13 @@ func (app *WeStack) asInterface() *wst.IApp {
 	}
 }
 
-func fixRelations(loadedModel *model.Model) {
+func fixRelations(loadedModel *model.Model) error {
 	for relationName, relation := range *loadedModel.Config.Relations {
+
+		if relation.Type == "" {
+			return fmt.Errorf("relation %v.%v has no type", loadedModel.Name, relationName)
+		}
+
 		relatedModelName := relation.Model
 		relatedLoadedModel := (*loadedModel.GetModelRegistry())[relatedModelName]
 
@@ -567,4 +576,5 @@ func fixRelations(loadedModel *model.Model) {
 			}
 		}
 	}
+	return nil
 }

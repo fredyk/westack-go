@@ -1,0 +1,30 @@
+{
+  "name": "Note",
+  "plural": "",
+  "base": "PersistedModel",
+  "public": true,
+  "properties": {},
+  "relations": {
+    "user": {
+      "type": "belongsTo",
+      "model": "user"
+    }
+  },
+  "hidden": [],
+  "casbin": {
+    "requestDefinition": "",
+    "policyDefinition": "",
+    "roleDefinition": "",
+    "policyEffect": "",
+    "matchersDefinition": "",
+    "policies": null
+  },
+  "cache": {
+    "datasource": "",
+    "ttl": 0,
+    "keys": null
+  },
+  "mongo": {
+    "collection": ""
+  }
+}

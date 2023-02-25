@@ -1,4 +1,7 @@
 {
+  "Note": {
+    "dataSource": "db"
+  },
   "role": {
     "dataSource": "db"
   },

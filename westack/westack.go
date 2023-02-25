@@ -65,7 +65,10 @@ func (app *WeStack) Boot(customRoutesCallbacks ...func(app *WeStack)) {
 
 	app.loadDataSources()
 
-	app.loadModels()
+	err := app.loadModels()
+	if err != nil {
+		log.Fatalf("Error while loading models: %v", err)
+	}
 
 	app.Middleware(func(c *fiber.Ctx) error {
 		method := c.Method()
