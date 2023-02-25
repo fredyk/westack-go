@@ -1,9 +1,14 @@
 package main
 
 import (
-	"github.com/fredyk/westack-go/westack"
+	cliutils "github.com/fredyk/westack-go/cli-utils"
 )
 
 func main() {
-	westack.InitAndServe()
+
+	// Deprecated. Now should run as 'westack server start'
+	//westack.InitAndServe()
+
+	cliutils.RunCli()
+
 }

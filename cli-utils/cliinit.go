@@ -1,15 +1,16 @@
-package main
+package cliutils
 
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/fredyk/westack-go/westack/model"
 	"log"
 	"os"
 	"regexp"
+
+	"github.com/fredyk/westack-go/westack/model"
 )
 
-var DefaulUser = model.Config{
+var DefaultUser = model.Config{
 	Name:   "User",
 	Plural: "users",
 	Base:   "User",
@@ -174,7 +175,7 @@ func initProject(cwd string) error {
 	}
 
 	if !foundUserModel {
-		err2 := addModel(DefaulUser, "db")
+		err2 := addModel(DefaultUser, "db")
 		if err2 != nil {
 			return err2
 		}
