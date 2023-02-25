@@ -21,10 +21,10 @@ func isSingleRelation(relationType string) bool {
 	return relationType == "hasOne" || relationType == "belongsTo"
 }
 
-func (loadedModel *Model) ExtractLookupsFromFilter(filterMap *wst.Filter, disableTypeConversions bool) *wst.A {
+func (loadedModel *Model) ExtractLookupsFromFilter(filterMap *wst.Filter, disableTypeConversions bool) (*wst.A, error) {
 
 	if filterMap == nil {
-		return nil
+		return nil, nil
 	}
 
 	var targetWhere *wst.Where
@@ -70,7 +70,7 @@ func (loadedModel *Model) ExtractLookupsFromFilter(filterMap *wst.Filter, disabl
 				//orderMap[key] = -1
 				orderMap = append(orderMap, bson.E{Key: key, Value: -1})
 			} else {
-				panic(fmt.Sprintf("Invalid direction %v while trying to sort by %v", directionSt, key))
+				return nil, fmt.Errorf("invalid direction %v while trying to sort by %v", directionSt, key)
 			}
 		}
 		*lookups = append(*lookups, wst.M{
@@ -109,14 +109,15 @@ func (loadedModel *Model) ExtractLookupsFromFilter(filterMap *wst.Filter, disabl
 
 			relationName := includeItem.Relation
 			relation := (*loadedModel.Config.Relations)[relationName]
+			if relation == nil {
+				return nil, fmt.Errorf("warning: relation %v not found for model %v", relationName, loadedModel.Name)
+			}
+
 			relatedModelName := relation.Model
 			relatedLoadedModel := (*loadedModel.modelRegistry)[relatedModelName]
 
 			if relatedLoadedModel == nil {
-				log.Println()
-				log.Printf("WARNING: related model %v not found for relation %v.%v", relatedModelName, loadedModel.Name, relationName)
-				log.Println()
-				continue
+				return nil, fmt.Errorf("warning: related model %v not found for relation %v.%v", relatedModelName, loadedModel.Name, relationName)
 			}
 
 			if relatedLoadedModel.Datasource.Name == loadedModel.Datasource.Name {
@@ -142,7 +143,7 @@ func (loadedModel *Model) ExtractLookupsFromFilter(filterMap *wst.Filter, disabl
 						}
 						break
 					}
-					pipeline := []interface{}{
+					pipeline := wst.A{
 						wst.M{
 							"$match": wst.M{
 								"$expr": wst.M{
@@ -163,7 +164,10 @@ func (loadedModel *Model) ExtractLookupsFromFilter(filterMap *wst.Filter, disabl
 						})
 					}
 					if targetScope != nil {
-						nestedLoopkups := relatedLoadedModel.ExtractLookupsFromFilter(targetScope, disableTypeConversions)
+						nestedLoopkups, err := relatedLoadedModel.ExtractLookupsFromFilter(targetScope, disableTypeConversions)
+						if err != nil {
+							return nil, err
+						}
 						if nestedLoopkups != nil {
 							for _, v := range *nestedLoopkups {
 								pipeline = append(pipeline, v)
@@ -198,7 +202,7 @@ func (loadedModel *Model) ExtractLookupsFromFilter(filterMap *wst.Filter, disabl
 	} else {
 
 	}
-	return lookups
+	return lookups, nil
 }
 
 /*
