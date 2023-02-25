@@ -2,6 +2,7 @@ package proto
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/golang/protobuf/proto"
 	"google.golang.org/grpc"
@@ -22,9 +23,9 @@ type ResGrpcTestMessage struct {
 	Bar string `protobuf:"bytes,1,opt,name=bar,proto3" json:"bar,omitempty"`
 }
 
-func (m ResGrpcTestMessage) Reset()         { m = ResGrpcTestMessage{} }
-func (m ResGrpcTestMessage) String() string { return proto.CompactTextString(m) }
-func (ResGrpcTestMessage) ProtoMessage()    {}
+func (m *ResGrpcTestMessage) Reset()         { *m = ResGrpcTestMessage{} }
+func (m *ResGrpcTestMessage) String() string { return proto.CompactTextString(m) }
+func (*ResGrpcTestMessage) ProtoMessage()    {}
 
 type FooClient interface {
 	TestFoo(ctx context.Context, in *ReqGrpcTestMessage, opts ...grpc.CallOption) (*ResGrpcTestMessage, error)
@@ -56,11 +57,11 @@ type FooServerImpl struct {
 }
 
 func (s *FooServerImpl) TestFoo(ctx context.Context, in *ReqGrpcTestMessage) (*ResGrpcTestMessage, error) {
-	return &ResGrpcTestMessage{Bar: in.Foo}, nil
-}
-
-func NewFooServerImpl() *FooServerImpl {
-	return &FooServerImpl{}
+	if in.Foo == "bar" {
+		return &ResGrpcTestMessage{Bar: in.Foo}, nil
+	} else {
+		return nil, fmt.Errorf("invalid foo")
+	}
 }
 
 var _Foo_TestFoo_Handler = func(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
@@ -90,6 +91,8 @@ var fooServicedesc = grpc.ServiceDesc{
 			Handler:    _Foo_TestFoo_Handler,
 		},
 	},
+	Streams:  []grpc.StreamDesc{},
+	Metadata: "proto.proto",
 }
 
 func RegisterFooServer(s *grpc.Server, srv FooServer) {

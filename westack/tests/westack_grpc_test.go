@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"google.golang.org/grpc"
 
 	"github.com/fredyk/westack-go/westack"
@@ -46,7 +47,7 @@ func Test_GRPCCallWithQueryParams(t *testing.T) {
 	// start client
 	client := http.Client{}
 
-	// test
+	// test for ok
 	res, err := client.Get("http://localhost:8020/test-grpc-get?foo=bar")
 	if err != nil {
 		t.Errorf("GRPCCallWithQueryParams Error: %s", err)
@@ -71,6 +72,16 @@ func Test_GRPCCallWithQueryParams(t *testing.T) {
 
 	if out.Bar != "bar" {
 		t.Errorf("GRPCCallWithQueryParams Error: %s", err)
+	}
+
+	// test for error
+	res, err = client.Get("http://localhost:8020/test-grpc-get?foo=")
+	if err != nil {
+		t.Errorf("GRPCCallWithQueryParams Error: %s", err)
+	}
+
+	if res.StatusCode != 500 {
+		t.Errorf("GRPCCallWithQueryParams Error: %d", res.StatusCode)
 	}
 
 	// teardown
@@ -98,4 +109,30 @@ func startMockGrpcServer() {
 	if err := s.Serve(lis); err != nil {
 		log.Fatalf("failed to serve: %v", err)
 	}
+}
+
+func Test_ReqGrpcTestMessage(t *testing.T) {
+	in := pb.ReqGrpcTestMessage{
+		Foo: "bar",
+	}
+	compactedPb := in.String()
+	compactedJson := "foo:\"bar\" "
+	assert.Equal(t, compactedJson, compactedPb)
+
+	// just invoke the method to increase coverage
+	in.ProtoMessage()
+
+}
+
+func Test_ResGrpcTestMessage(t *testing.T) {
+	in := pb.ResGrpcTestMessage{
+		Bar: "bar",
+	}
+	compactedPb := in.String()
+	compactedJson := "bar:\"bar\" "
+	assert.Equal(t, compactedJson, compactedPb)
+
+	// just invoke the method to increase coverage
+	in.ProtoMessage()
+
 }
