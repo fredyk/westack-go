@@ -3,8 +3,8 @@ package wst
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"log"
+	"os"
 	"regexp"
 	"strings"
 	"time"
@@ -59,7 +59,10 @@ const (
 	OperationNameUpdateAttributes OperationName = "updateAttributes"
 )
 
-var NilMap M = M{"<wst.NilMap>": 1}
+var (
+	NilMap          M = M{"<wst.NilMap>": 1}
+	DashedCaseRegex   = regexp.MustCompile("([A-Z])")
+)
 
 // AFromGenericSlice converts a generic slice of M to a *A
 // This is used to convert the result of a query to a *A
@@ -177,7 +180,7 @@ func (err *WeStackError) Error() string {
 }
 
 func LoadFile(filePath string, out interface{}) error {
-	jsonFile, err := ioutil.ReadFile(filePath)
+	jsonFile, err := os.ReadFile(filePath)
 	if err != nil {
 		return err
 	}
@@ -189,12 +192,7 @@ func LoadFile(filePath string, out interface{}) error {
 }
 
 func DashedCase(st string) string {
-	var res = strings.ToLower(st[:1])
-	compile, err := regexp.Compile("([A-Z])")
-	if err != nil {
-		panic(err)
-	}
-	res += string(compile.ReplaceAllFunc([]byte(st[1:]), func(bytes []byte) []byte {
+	var res = strings.ToLower(st[:1]) + string(DashedCaseRegex.ReplaceAllFunc([]byte(st[1:]), func(bytes []byte) []byte {
 		return []byte("-" + strings.ToLower(string(bytes[0])))
 	}))
 	return res
@@ -208,6 +206,7 @@ func CopyMap(src M) M {
 	return targetMap
 }
 
+// High-cost operation...
 func Transform(in interface{}, out interface{}) error {
 	// TODO: move marshal and unmarshal to easyjson
 	bytes, err := bson.Marshal(in)
