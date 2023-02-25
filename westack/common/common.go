@@ -61,6 +61,9 @@ const (
 
 var NilMap M = M{"<wst.NilMap>": 1}
 
+// AFromGenericSlice converts a generic slice of M to a *A
+// This is used to convert the result of a query to a *A
+// Returns nil if in is nil
 func AFromGenericSlice(in *[]interface{}) *A {
 
 	if in == nil {
@@ -81,6 +84,9 @@ func AFromGenericSlice(in *[]interface{}) *A {
 	return &out
 }
 
+// AFromPrimitiveSlice converts a primitive slice of primivite.M or M to a *A
+// This is used to convert the result of a query to a *A
+// Returns nil if in is nil
 func AFromPrimitiveSlice(in *primitive.A) *A {
 
 	if in == nil {
