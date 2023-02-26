@@ -292,9 +292,10 @@ func (loadedModel *Model) mergeRelated(relationDeepLevel byte, documents *wst.A,
 			cachedRelatedDocs := make([]InstanceA, len(*documents))
 			localCache := map[string]InstanceA{}
 
+			disabledCache := loadedModel.App.Viper.GetBool("disableCache")
 			for documentIdx, document := range *documents {
 
-				if wasEmptyWhere && relatedLoadedModel.Config.Cache.Datasource != "" /* && keyFrom == relatedLoadedModel.Config.Cache.Keys*/ {
+				if !disabledCache && wasEmptyWhere && relatedLoadedModel.Config.Cache.Datasource != "" /* && keyFrom == relatedLoadedModel.Config.Cache.Keys*/ {
 
 					cacheDs, err := loadedModel.App.FindDatasource(relatedLoadedModel.Config.Cache.Datasource)
 					if err != nil {
