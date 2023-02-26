@@ -8,6 +8,7 @@ import (
 	"reflect"
 	"runtime/debug"
 	"strings"
+	"sync"
 	"time"
 
 	casbin "github.com/casbin/casbin/v2"
@@ -774,10 +775,14 @@ func (loadedModel *Model) Observe(operation string, handler func(eventContext *E
 	loadedModel.On(eventKey, handler)
 }
 
+var handlerMutex = sync.Mutex{}
+
 func (loadedModel *Model) GetHandler(event string) func(eventContext *EventContext) error {
 	res := loadedModel.eventHandlers[event]
 	if res == nil {
+		handlerMutex.Lock()
 		loadedModel.DisabledHandlers[event] = true
+		handlerMutex.Unlock()
 		res = func(eventContext *EventContext) error {
 			if loadedModel.App.Debug {
 				log.Println("no handler found for ", loadedModel.Name, ".", event)
