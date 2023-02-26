@@ -402,6 +402,9 @@ func (ds *Datasource) Create(collectionName string, data *wst.M) (*wst.M, error)
 
 		database := db.Database(ds.Viper.GetString(ds.Key + ".database"))
 		collection := database.Collection(collectionName)
+		if (*data)["_id"] == nil && (*data)["id"] != nil {
+			(*data)["_id"] = (*data)["id"]
+		}
 		insertOneResult, err := collection.InsertOne(ds.Context, data)
 		if err != nil {
 			return nil, err
