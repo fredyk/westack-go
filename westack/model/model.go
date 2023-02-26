@@ -370,10 +370,12 @@ func (loadedModel *Model) FindMany(filterMap *wst.Filter, baseContext *EventCont
 
 	var results = make([]Instance, len(*documents))
 
+	disabledCache := loadedModel.App.Viper.GetBool("disableCache")
 	for idx, document := range *documents {
 		results[idx] = loadedModel.Build(document, targetBaseContext)
 
-		if targetInclude == nil && loadedModel.Config.Cache.Datasource != "" {
+		if targetInclude == nil && loadedModel.Config.Cache.Datasource != "" && !disabledCache {
+
 			// Dont cache if include is set
 			cacheDs, err := loadedModel.App.FindDatasource(loadedModel.Config.Cache.Datasource)
 			if err != nil {
