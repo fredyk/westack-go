@@ -14,9 +14,6 @@ var AuthMutex = sync.Mutex{}
 
 func (loadedModel *Model) EnforceEx(token *BearerToken, objId string, action string, eventContext *EventContext) (error, bool) {
 
-	AuthMutex.Lock()
-	defer AuthMutex.Unlock()
-
 	if token != nil && token.User != nil && token.User.System == true {
 		return nil, true
 	}
@@ -91,6 +88,9 @@ func (loadedModel *Model) EnforceEx(token *BearerToken, objId string, action str
 		}
 
 	}
+
+	AuthMutex.Lock()
+	defer AuthMutex.Unlock()
 
 	allow, exp, err := loadedModel.Enforcer.EnforceEx(bearerUserIdSt, targetObjId, action)
 
