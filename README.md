@@ -17,7 +17,7 @@ Define [RBAC](https://casbin.org/docs/en/rbac) policies in your `json` models to
 ### Installing westack
 
 ```shell
-go install github.com/fredyk/westack-go
+go install github.com/fredyk/westack-go@v1.5.46
 ```
 
 ### Initialize a new project
