@@ -379,7 +379,7 @@ func (loadedModel *Model) HandleRemoteMethod(name string, eventContext *EventCon
 		case []byte:
 			return eventContext.Ctx.Status(eventContext.StatusCode).Send(eventContext.Result.([]byte))
 		default:
-			if resultAsGenerator, ok := eventContext.Result.(InstanceAChunkGenerator); ok {
+			if resultAsGenerator, ok := eventContext.Result.(*InstanceAChunkGenerator); ok {
 				//eventContext.Ctx.Status(eventContext.StatusCode)
 
 				finalContentType := resultAsGenerator.ContentType()

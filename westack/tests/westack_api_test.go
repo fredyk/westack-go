@@ -130,6 +130,10 @@ func Test_FindMany(t *testing.T) {
 		if err != nil {
 			if err == io.EOF {
 				break
+			} else if err == io.ErrUnexpectedEOF {
+				t.Errorf("Error: %v", err)
+				out = append(out, buf[:n]...)
+				break
 			}
 			t.Errorf("Error: %v", err)
 		}
