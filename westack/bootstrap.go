@@ -518,7 +518,7 @@ func handleFindMany(loadedModel *model.Model, ctx *model.EventContext) error {
 		return err
 	}
 
-	chunkGenerator := model.NewInstanceAChunkGenerator(result, "application/json")
+	chunkGenerator := model.NewInstanceAChunkGenerator(loadedModel, result, "application/json")
 
 	//out := make(wst.A, len(result))
 	//for idx, item := range result {

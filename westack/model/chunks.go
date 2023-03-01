@@ -29,6 +29,7 @@ type InstanceAChunkGenerator struct {
 	totalChunks  int
 	currentChunk int
 	contentType  string
+	debug        bool
 }
 
 func (chunkGenerator *InstanceAChunkGenerator) ContentType() string {
@@ -52,10 +53,6 @@ func (chunkGenerator *InstanceAChunkGenerator) NextChunk() (chunk Chunk, err err
 	}
 	chunkGenerator.currentChunk++
 	return chunk, nil
-}
-
-func (chunkGenerator *InstanceAChunkGenerator) Reset() {
-	chunkGenerator.currentChunk = 0
 }
 
 func (chunkGenerator *InstanceAChunkGenerator) GenerateNextChunk() bool {
@@ -97,6 +94,7 @@ func (chunkGenerator *InstanceAChunkGenerator) Reader(eventContext *EventContext
 	return &ChunkGeneratorReader{
 		chunkGenerator: chunkGenerator,
 		eventContext:   eventContext,
+		debug:          chunkGenerator.debug,
 	}
 
 }
@@ -107,6 +105,7 @@ type ChunkGeneratorReader struct {
 	currentChunk          Chunk
 	currentChunkReadIndex int
 	finished              bool
+	debug                 bool
 }
 
 func (reader *ChunkGeneratorReader) Read(p []byte) (n int, err error) {
@@ -120,15 +119,21 @@ func (reader *ChunkGeneratorReader) Read(p []byte) (n int, err error) {
 	if reader.finished {
 		return 0, io.EOF
 	}
-	fmt.Printf("DEBUG: ChunkGeneratorReader.Read() called with len(p)=%d\n", len(p))
+	if reader.debug {
+		fmt.Printf("DEBUG: ChunkGeneratorReader.Read() called with len(p)=%d\n", len(p))
+	}
 	for i := 0; i < len(p); i++ {
 		if reader.currentChunkReadIndex == reader.currentChunk.length {
-			fmt.Printf("DEBUG: ChunkGeneratorReader.Read() reached end of chunk (%d, %d, %d)\n", i, reader.currentChunkReadIndex, reader.currentChunk.length)
+			if reader.debug {
+				fmt.Printf("DEBUG: ChunkGeneratorReader.Read() reached end of chunk (%d, %d, %d)\n", i, reader.currentChunkReadIndex, reader.currentChunk.length)
+			}
 			// stop reading from this chunk
 			reader.currentChunk, err = reader.chunkGenerator.NextChunk()
 			if err != nil {
 				if err == io.EOF {
-					fmt.Printf("DEBUG: ChunkGeneratorReader.Read() reached EOF\n")
+					if reader.debug {
+						fmt.Printf("DEBUG: ChunkGeneratorReader.Read() reached EOF\n")
+					}
 					reader.finished = true
 					return n, nil
 				}
@@ -141,25 +146,21 @@ func (reader *ChunkGeneratorReader) Read(p []byte) (n int, err error) {
 		reader.currentChunkReadIndex++
 		n++
 	}
-	fmt.Printf("DEBUG: ChunkGeneratorReader.Read() returning %d bytes\n", n)
-
-	return n, nil
-}
-
-func writeToBuffer(out []byte, in []byte, n int) (int, error) {
-	for i := 0; i < n; i++ {
-		out[i] = in[i]
+	if reader.debug {
+		fmt.Printf("DEBUG: ChunkGeneratorReader.Read() returning %d bytes\n", n)
 	}
+
 	return n, nil
 }
 
-func NewInstanceAChunkGenerator(input InstanceA, contentType string) *InstanceAChunkGenerator {
+func NewInstanceAChunkGenerator(loadedModel *Model, input InstanceA, contentType string) *InstanceAChunkGenerator {
 	result := InstanceAChunkGenerator{
 		contentType:  contentType,
 		chunks:       []Chunk{},
 		currentChunk: 0,
 		totalChunks:  len(input),
 		input:        input,
+		debug:        loadedModel.App.Debug,
 	}
 	return &result
 }
