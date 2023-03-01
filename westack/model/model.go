@@ -143,7 +143,7 @@ func New(config *Config, modelRegistry *map[string]*Model) *Model {
 		Model: loadedModel,
 		Id:    primitive.NilObjectID,
 		data:  wst.NilMap,
-		bytes: EmptyBytes,
+		bytes: nil,
 	}
 
 	(*modelRegistry)[name] = loadedModel
@@ -155,8 +155,6 @@ type RegistryEntry struct {
 	Name  string
 	Model *Model
 }
-
-var EmptyBytes = make([]byte, 0)
 
 func (loadedModel *Model) Build(data wst.M, baseContext *EventContext) Instance {
 
@@ -175,17 +173,13 @@ func (loadedModel *Model) Build(data wst.M, baseContext *EventContext) Instance 
 		}
 	}
 
-	_bytes, _ := bson.Marshal(data)
-
 	var targetBaseContext = baseContext
-	deepLevel := 0
 	for {
 		if targetBaseContext.BaseContext != nil {
 			targetBaseContext = targetBaseContext.BaseContext
 		} else {
 			break
 		}
-		deepLevel++
 	}
 
 	for relationName, relationConfig := range *loadedModel.Config.Relations {
@@ -212,11 +206,11 @@ func (loadedModel *Model) Build(data wst.M, baseContext *EventContext) Instance 
 					data[relationName] = &relatedInstance
 				case "hasMany", "hasAndBelongsToMany":
 
-					var result []Instance
-					if asInstanceList, asInstanceListOk := rawRelatedData.([]Instance); asInstanceListOk {
+					var result InstanceA
+					if asInstanceList, asInstanceListOk := rawRelatedData.(InstanceA); asInstanceListOk {
 						result = asInstanceList
 					} else {
-						result = make([]Instance, len(rawRelatedData.(primitive.A)))
+						result = make(InstanceA, len(rawRelatedData.(primitive.A)))
 						for idx, v := range rawRelatedData.(primitive.A) {
 							result[idx] = relatedModel.(*Model).Build(v.(wst.M), targetBaseContext)
 						}
@@ -230,7 +224,7 @@ func (loadedModel *Model) Build(data wst.M, baseContext *EventContext) Instance 
 
 	modelInstance := Instance{
 		Id:    data["id"],
-		bytes: _bytes,
+		bytes: nil,
 		data:  data,
 		Model: loadedModel,
 	}
@@ -304,7 +298,7 @@ func (loadedModel *Model) FindMany(filterMap *wst.Filter, baseContext *EventCont
 			case InstanceA:
 				return eventContext.Result.(InstanceA), nil
 			case []*Instance:
-				var result InstanceA = make([]Instance, len(eventContext.Result.([]*Instance)))
+				var result = make(InstanceA, len(eventContext.Result.([]*Instance)))
 				for idx, v := range eventContext.Result.([]*Instance) {
 					if v != nil {
 						result[idx] = *v
@@ -314,14 +308,14 @@ func (loadedModel *Model) FindMany(filterMap *wst.Filter, baseContext *EventCont
 				}
 				return result, nil
 			case wst.A, []wst.M:
-				var result []Instance
+				var result InstanceA
 				if v, castOk := eventContext.Result.(wst.A); castOk {
-					result = make([]Instance, len(v))
+					result = make(InstanceA, len(v))
 					for idx, v := range v {
 						result[idx] = loadedModel.Build(v, targetBaseContext)
 					}
 				} else {
-					result = make([]Instance, len(v))
+					result = make(InstanceA, len(v))
 					for idx, v := range v {
 						result[idx] = loadedModel.Build(v, targetBaseContext)
 					}
@@ -369,7 +363,7 @@ func (loadedModel *Model) FindMany(filterMap *wst.Filter, baseContext *EventCont
 		}
 	}
 
-	var results = make([]Instance, len(*documents))
+	var results = make(InstanceA, len(*documents))
 
 	disabledCache := loadedModel.App.Viper.GetBool("disableCache")
 	for idx, document := range *documents {

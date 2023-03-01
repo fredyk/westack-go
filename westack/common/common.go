@@ -14,6 +14,7 @@ import (
 	"github.com/mailru/easyjson/jwriter"
 	"github.com/spf13/viper"
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/bsoncodec"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
@@ -67,11 +68,14 @@ func (m M) MarshalEasyJSON(w *jwriter.Writer) {
 		w.String(k)
 		w.RawByte(':')
 		if vv, ok := v.(easyjson.Marshaler); ok {
+			//fmt.Printf("Found easyjson.Marshaler: %v at %v\n", vv, k)
 			vv.MarshalEasyJSON(w)
 		} else if vv, ok := v.(json.Marshaler); ok {
+			//fmt.Printf("Found json.Marshaler: %v at %v\n", vv, k)
 			bytes, err := vv.MarshalJSON()
 			w.Raw(bytes, err)
 		} else {
+			//fmt.Printf("Found unknown: %v at %v\n", v, k)
 			bytes, err := json.Marshal(v)
 			w.Raw(bytes, err)
 		}
@@ -201,6 +205,10 @@ type Stats struct {
 	BuildsByModel map[string]map[string]float64
 }
 
+type BsonOptions struct {
+	Registry *bsoncodec.Registry
+}
+
 type IApp struct {
 	Debug          bool
 	SwaggerPaths   func() *map[string]M
@@ -208,6 +216,7 @@ type IApp struct {
 	FindDatasource func(datasource string) (interface{}, error)
 	JwtSecretKey   []byte
 	Viper          *viper.Viper
+	Bson           BsonOptions
 }
 
 var RegexpIdEntire = regexp.MustCompile("^([0-9a-f]{24})$")
