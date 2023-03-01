@@ -512,7 +512,9 @@ func (app *WeStack) setupModel(loadedModel *model.Model, dataSource *datasource.
 }
 
 func handleFindMany(loadedModel *model.Model, ctx *model.EventContext) error {
-	fmt.Println("DEBUG: handleFindMany")
+	if loadedModel.App.Debug {
+		fmt.Println("DEBUG: handleFindMany")
+	}
 	result, err := loadedModel.FindMany(ctx.Filter, ctx)
 	if err != nil {
 		return err
