@@ -538,6 +538,7 @@ func (app *WeStack) asInterface() *wst.IApp {
 		Debug:        app.debug,
 		JwtSecretKey: app.jwtSecretKey,
 		Viper:        app.Viper,
+		Bson:         app.Bson,
 		FindModel: func(modelName string) (interface{}, error) {
 			return app.FindModel(modelName)
 		},

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"reflect"
 	"runtime/debug"
 	"time"
 
@@ -14,6 +15,9 @@ import (
 	"github.com/gofiber/fiber/v2/middleware/recover"
 	"github.com/golang/protobuf/proto"
 	"github.com/spf13/viper"
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/bsoncodec"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"google.golang.org/grpc"
 
 	"github.com/goccy/go-json"
@@ -35,6 +39,7 @@ type WeStack struct {
 	Viper   *viper.Viper
 	DsViper *viper.Viper
 	Options Options
+	Bson    wst.BsonOptions
 
 	port              int32
 	datasources       *map[string]*datasource.Datasource
@@ -233,10 +238,25 @@ func New(options ...Options) *WeStack {
 	if finalOptions.Port == 0 {
 		finalOptions.Port = appViper.GetInt32("port")
 	}
+	var bsonRegistry *bsoncodec.Registry
+	if finalOptions.DatasourceOptions != nil {
+		for _, v := range *finalOptions.DatasourceOptions {
+			if v.MongoDB != nil && v.MongoDB.Registry != nil {
+				bsonRegistry = v.MongoDB.Registry
+				break
+			}
+		}
+	}
+	if bsonRegistry == nil {
+		bsonRegistry = bson.NewRegistryBuilder().RegisterCodec(reflect.TypeOf(primitive.ObjectID{}), &bsoncodec.TimeCodec{}).Build()
+	}
 	app := WeStack{
 		Server:  server,
 		Viper:   appViper,
 		Options: finalOptions,
+		Bson: wst.BsonOptions{
+			Registry: bsonRegistry,
+		},
 
 		modelRegistry:     &modelRegistry,
 		datasources:       &datasources,
