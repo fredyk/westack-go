@@ -32,6 +32,7 @@ type WeStack struct {
 	Server  *fiber.App
 	Viper   *viper.Viper
 	DsViper *viper.Viper
+	Options Options
 
 	port              int32
 	datasources       *map[string]*datasource.Datasource
@@ -111,7 +112,9 @@ func (app *WeStack) Boot(customRoutesCallbacks ...func(app *WeStack)) {
 		},
 	}))
 
-	app.Middleware(compress.New())
+	if app.Options.EnableCompression {
+		app.Middleware(compress.New(app.Options.CompressionConfig))
+	}
 
 	app.loadModelsFixedRoutes()
 
@@ -162,6 +165,8 @@ type Options struct {
 	Port              int32
 	JwtSecretKey      string
 	DatasourceOptions *map[string]*datasource.Options
+	EnableCompression bool
+	CompressionConfig compress.Config
 
 	debug bool
 }
@@ -224,8 +229,9 @@ func New(options ...Options) *WeStack {
 		finalOptions.Port = appViper.GetInt32("port")
 	}
 	app := WeStack{
-		Server: server,
-		Viper:  appViper,
+		Server:  server,
+		Viper:   appViper,
+		Options: finalOptions,
 
 		modelRegistry:     &modelRegistry,
 		datasources:       &datasources,
