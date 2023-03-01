@@ -1,7 +1,6 @@
 package model
 
 import (
-	"fmt"
 	"io"
 
 	"github.com/mailru/easyjson"
@@ -87,6 +86,7 @@ func (chunkGenerator *InstanceAChunkGenerator) GenerateNextChunk() bool {
 		nextChunk.raw = append(nextChunk.raw, ']')
 		nextChunk.length += 1
 	}
+
 	chunkGenerator.chunks = append(chunkGenerator.chunks, nextChunk)
 	//fmt.Printf("Generated chunk %d/%d\n", chunkGenerator.currentChunk, chunkGenerator.totalChunks)
 	return true
@@ -94,41 +94,48 @@ func (chunkGenerator *InstanceAChunkGenerator) GenerateNextChunk() bool {
 
 func (chunkGenerator *InstanceAChunkGenerator) Reader(eventContext *EventContext) io.Reader {
 	return ChunkGeneratorReader{
-		chunkGenerator,
-		eventContext,
+		chunkGenerator: chunkGenerator,
+		eventContext:   eventContext,
 	}
 
 }
 
 type ChunkGeneratorReader struct {
-	chunkGenerator ChunkGenerator
-	eventContext   *EventContext
+	chunkGenerator        ChunkGenerator
+	eventContext          *EventContext
+	currentChunk          Chunk
+	currentChunkReadIndex int
 }
 
 func (reader ChunkGeneratorReader) Read(p []byte) (n int, err error) {
-	chunk, err := reader.chunkGenerator.NextChunk()
-	if err != nil {
-		return 0, err
+	if reader.currentChunk.length == 0 {
+		reader.currentChunk, err = reader.chunkGenerator.NextChunk()
+		if err != nil {
+			return n, err
+		}
+		reader.currentChunkReadIndex = 0
 	}
-	//n, err = reader.eventContext.Ctx.Write(chunk.raw)
-	n, err = writeToBuffer(&p, chunk.raw, chunk.length)
-	if err != nil {
-		return 0, err
+	for i := 0; i < len(p); i++ {
+		if reader.currentChunkReadIndex == reader.currentChunk.length {
+			// stop reading from this chunk
+			reader.currentChunk, err = reader.chunkGenerator.NextChunk()
+			if err != nil {
+				return n, err
+			}
+			reader.currentChunkReadIndex = 0
+			break
+		}
+		p[i] = reader.currentChunk.raw[reader.currentChunkReadIndex]
+		reader.currentChunkReadIndex++
+		n++
 	}
-	if n != chunk.length {
-		return 0, fmt.Errorf("failed to write chunk")
-	}
+
 	return n, nil
 }
 
-func writeToBuffer(out *[]byte, in []byte, n int) (int, error) {
-	if len(*out) < n {
-		//return 0, fmt.Errorf("output buffer too small")
-		growBy := n - len(*out)
-		*out = append(*out, make([]byte, growBy)...)
-	}
+func writeToBuffer(out []byte, in []byte, n int) (int, error) {
 	for i := 0; i < n; i++ {
-		(*out)[i] = in[i]
+		out[i] = in[i]
 	}
 	return n, nil
 }
