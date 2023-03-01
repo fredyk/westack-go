@@ -20,6 +20,7 @@ import (
 	"github.com/fredyk/westack-go/westack/datasource"
 	"github.com/fredyk/westack-go/westack/lib"
 	"github.com/fredyk/westack-go/westack/model"
+	"github.com/fredyk/westack-go/westack/utils"
 )
 
 type LoginBody struct {
@@ -69,6 +70,17 @@ func (app *WeStack) Boot(customRoutesCallbacks ...func(app *WeStack)) {
 	err := app.loadModels()
 	if err != nil {
 		log.Fatalf("Error while loading models: %v", err)
+	}
+
+	pprofAuthUsername := os.Getenv("PPROF_AUTH_USERNAME")
+	pprofAuthPassword := os.Getenv("PPROF_AUTH_PASSWORD")
+	if pprofAuthUsername != "" && pprofAuthPassword != "" {
+		app.Middleware(utils.PprofHandlers(utils.PprofMiddleOptions{
+			Auth: utils.BasicAuthOptions{
+				Username: pprofAuthUsername,
+				Password: pprofAuthPassword,
+			},
+		}))
 	}
 
 	app.Middleware(func(c *fiber.Ctx) error {
