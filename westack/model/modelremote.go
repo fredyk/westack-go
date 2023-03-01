@@ -396,6 +396,7 @@ func (loadedModel *Model) HandleRemoteMethod(name string, eventContext *EventCon
 				// Content-Length is not set because it is unknown
 				// Content-Encoding is not set because it is unknown, so we set to transfer-encoding: chunked
 				eventContext.Ctx.Set("Transfer-Encoding", "chunked")
+				eventContext.Ctx.Response().Header.Set("Transfer-Encoding", "chunked")
 
 				//bodyWriter := response.BodyWriter()
 
