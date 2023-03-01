@@ -9,27 +9,24 @@ import (
 
 type Chunk struct {
 	raw    []byte
-	first  bool
-	last   bool
-	error  error
 	length int
 }
 
 type ChunkGenerator interface {
 	ContentType() string
 
-	GenerateNextChunk() bool
+	GenerateNextChunk() error
 	NextChunk() (Chunk, error)
 }
 
 type InstanceAChunkGenerator struct {
-	input InstanceA
+	Debug bool
 
+	input        InstanceA
 	chunks       []Chunk
 	totalChunks  int
 	currentChunk int
 	contentType  string
-	debug        bool
 }
 
 func (chunkGenerator *InstanceAChunkGenerator) ContentType() string {
@@ -37,30 +34,19 @@ func (chunkGenerator *InstanceAChunkGenerator) ContentType() string {
 }
 
 func (chunkGenerator *InstanceAChunkGenerator) NextChunk() (chunk Chunk, err error) {
-	didGenerateChunk := chunkGenerator.GenerateNextChunk()
 	if chunkGenerator.currentChunk == chunkGenerator.totalChunks {
-		if !didGenerateChunk {
-			return chunk, io.EOF
-		}
-	} else if chunkGenerator.currentChunk > chunkGenerator.totalChunks {
-		return chunk, io.ErrUnexpectedEOF
+		return chunk, io.EOF
+	}
+	err = chunkGenerator.GenerateNextChunk()
+	if err != nil {
+		return
 	}
 	chunk = chunkGenerator.chunks[chunkGenerator.currentChunk]
-	if chunkGenerator.currentChunk == 0 {
-		chunk.first = true
-	} else if chunkGenerator.currentChunk == chunkGenerator.totalChunks-1 {
-		chunk.last = true
-	}
 	chunkGenerator.currentChunk++
-	return chunk, nil
+	return
 }
 
-func (chunkGenerator *InstanceAChunkGenerator) GenerateNextChunk() bool {
-	// chunkGenerator.totalChunks is number of instances + 2 (for the [] at the start and end)
-	if chunkGenerator.currentChunk == chunkGenerator.totalChunks {
-		//fmt.Printf("ERROR: ChunkGenerator.GenerateNextChunk() called after EOF\n")
-		return false
-	}
+func (chunkGenerator *InstanceAChunkGenerator) GenerateNextChunk() (err error) {
 	var nextChunk Chunk
 	if chunkGenerator.currentChunk == 0 {
 		nextChunk.raw = []byte{'['}
@@ -77,26 +63,29 @@ func (chunkGenerator *InstanceAChunkGenerator) GenerateNextChunk() bool {
 		nextInstance := chunkGenerator.input[chunkGenerator.currentChunk-1]
 		nextInstance.HideProperties()
 		asM := nextInstance.ToJSON()
-		asBytes, err := easyjson.Marshal(asM)
+		var asBytes []byte
+		asBytes, err = easyjson.Marshal(asM)
 		if err != nil {
-			nextChunk.error = err
-			return false
+			if chunkGenerator.Debug {
+				fmt.Printf("ERROR: ChunkGenerator.GenerateNextChunk() failed to marshal instance %d/%d: %v\n", chunkGenerator.currentChunk, chunkGenerator.totalChunks, err)
+			}
+			return
 		}
 		nextChunk.raw = append(nextChunk.raw, asBytes...)
 		nextChunk.length += len(asBytes)
 	}
 	chunkGenerator.chunks = append(chunkGenerator.chunks, nextChunk)
-	if chunkGenerator.debug {
+	if chunkGenerator.Debug {
 		fmt.Printf("Generated chunk %d/%d\n", chunkGenerator.currentChunk, chunkGenerator.totalChunks)
 	}
-	return true
+	return
 }
 
 func (chunkGenerator *InstanceAChunkGenerator) Reader(eventContext *EventContext) io.Reader {
 	return &ChunkGeneratorReader{
 		chunkGenerator: chunkGenerator,
 		eventContext:   eventContext,
-		debug:          chunkGenerator.debug,
+		debug:          chunkGenerator.Debug,
 	}
 
 }
@@ -106,14 +95,10 @@ type ChunkGeneratorReader struct {
 	eventContext          *EventContext
 	currentChunk          Chunk
 	currentChunkReadIndex int
-	finished              bool
 	debug                 bool
 }
 
 func (reader *ChunkGeneratorReader) Read(p []byte) (n int, err error) {
-	if reader.finished {
-		return 0, io.EOF
-	}
 	if reader.debug {
 		fmt.Printf("DEBUG: ChunkGeneratorReader.Read() called with len(p)=%d\n", len(p))
 	}
@@ -127,7 +112,6 @@ func (reader *ChunkGeneratorReader) Read(p []byte) (n int, err error) {
 				if reader.debug {
 					fmt.Printf("DEBUG: ChunkGeneratorReader.Read() reached EOF\n")
 				}
-				reader.finished = true
 			}
 			return n, err
 		}
@@ -155,7 +139,7 @@ func NewInstanceAChunkGenerator(loadedModel *Model, input InstanceA, contentType
 		currentChunk: 0,
 		totalChunks:  len(input) + 2,
 		input:        input,
-		debug:        loadedModel.App.Debug,
+		Debug:        loadedModel.App.Debug,
 	}
 	return &result
 }
