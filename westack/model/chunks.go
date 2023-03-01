@@ -74,7 +74,7 @@ func (chunkGenerator *InstanceAChunkGenerator) GenerateNextChunk() bool {
 			nextChunk.length += 1
 		}
 
-		nextInstance := chunkGenerator.input[chunkGenerator.currentChunk]
+		nextInstance := chunkGenerator.input[chunkGenerator.currentChunk-1]
 		nextInstance.HideProperties()
 		asM := nextInstance.ToJSON()
 		asBytes, err := easyjson.Marshal(asM)
