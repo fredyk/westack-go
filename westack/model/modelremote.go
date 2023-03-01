@@ -379,6 +379,53 @@ func (loadedModel *Model) HandleRemoteMethod(name string, eventContext *EventCon
 		case []byte:
 			return eventContext.Ctx.Status(eventContext.StatusCode).Send(eventContext.Result.([]byte))
 		default:
+			if resultAsGenerator, ok := eventContext.Result.(InstanceAChunkGenerator); ok {
+				//eventContext.Ctx.Status(eventContext.StatusCode)
+
+				finalContentType := resultAsGenerator.ContentType()
+				if finalContentType == "" {
+					finalContentType = "application/octet-stream"
+				}
+				//response := eventContext.Ctx.Response()
+				//response.Header.SetStatusCode(eventContext.StatusCode)
+				//response.Header.SetStatusMessage([]byte{'O', 'K'})
+
+				//response.Header.Set("Content-Type", finalContentType)
+				//response.Header.Set("Transfer-Encoding", "chunked")
+				eventContext.Ctx.Set("Content-Type", finalContentType)
+				// Content-Length is not set because it is unknown
+				// Content-Encoding is not set because it is unknown, so we set to transfer-encoding: chunked
+				eventContext.Ctx.Set("Transfer-Encoding", "chunked")
+
+				//bodyWriter := response.BodyWriter()
+
+				//bytesWritten := 0
+				//
+				//for {
+				//	chunk, err := resultAsGenerator.NextChunk()
+				//	if err != nil {
+				//		if err == io.EOF {
+				//			break
+				//		}
+				//		return err
+				//	}
+				//	n, err := eventContext.Ctx.Write(chunk.raw)
+				//	if err != nil {
+				//		return err
+				//	}
+				//	if n != len(chunk.raw) {
+				//		return fmt.Errorf("failed to write chunk")
+				//	}
+				//	bytesWritten += n
+				//	if chunk.last {
+				//		break
+				//	}
+				//}
+				//fmt.Printf("DEBUG: Wrote %v bytes\n", bytesWritten)
+				return eventContext.Ctx.SendStream(resultAsGenerator.Reader(eventContext), -1)
+
+				//return nil
+			}
 			fmt.Printf("Unknown type: %T after remote method %v\n", eventContext.Result, name)
 		}
 	}

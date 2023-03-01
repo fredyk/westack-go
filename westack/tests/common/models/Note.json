@@ -20,12 +20,10 @@
   },
   "hidden": [],
   "casbin": {
-    "requestDefinition": "",
-    "policyDefinition": "",
-    "roleDefinition": "",
-    "policyEffect": "",
-    "matchersDefinition": "",
-    "policies": null
+    "policies": [
+      "$authenticated,*,create,allow",
+      "$everyone,*,read,allow"
+    ]
   },
   "cache": {
     "datasource": "",
