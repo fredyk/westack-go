@@ -375,19 +375,7 @@ func (app *WeStack) setupModel(loadedModel *model.Model, dataSource *datasource.
 		loadedModel.BaseUrl = app.restApiRoot + "/" + plural
 
 		loadedModel.On("findMany", func(ctx *model.EventContext) error {
-			result, err := loadedModel.FindMany(ctx.Filter, ctx)
-			out := make(wst.A, len(result))
-			for idx, item := range result {
-				item.HideProperties()
-				out[idx] = item.ToJSON()
-			}
-
-			if err != nil {
-				return err
-			}
-			ctx.StatusCode = fiber.StatusOK
-			ctx.Result = out
-			return nil
+			return handleFindMany(loadedModel, ctx)
 		})
 		loadedModel.On("count", func(ctx *model.EventContext) error {
 			result, err := loadedModel.Count(ctx.Filter, ctx)
@@ -521,6 +509,26 @@ func (app *WeStack) setupModel(loadedModel *model.Model, dataSource *datasource.
 		loadedModel.On("instance_delete", deleteByIdHandler)
 
 	}
+}
+
+func handleFindMany(loadedModel *model.Model, ctx *model.EventContext) error {
+	fmt.Println("DEBUG: handleFindMany")
+	result, err := loadedModel.FindMany(ctx.Filter, ctx)
+	if err != nil {
+		return err
+	}
+
+	chunkGenerator := model.NewInstanceAChunkGenerator(result, "application/json")
+
+	//out := make(wst.A, len(result))
+	//for idx, item := range result {
+	//	item.HideProperties()
+	//	out[idx] = item.ToJSON()
+	//}
+
+	ctx.StatusCode = fiber.StatusOK
+	ctx.Result = chunkGenerator
+	return nil
 }
 
 func (app *WeStack) asInterface() *wst.IApp {
