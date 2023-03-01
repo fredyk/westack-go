@@ -16,6 +16,8 @@ import (
 	"github.com/spf13/viper"
 	"google.golang.org/grpc"
 
+	"github.com/goccy/go-json"
+
 	wst "github.com/fredyk/westack-go/westack/common"
 	"github.com/fredyk/westack-go/westack/datasource"
 	"github.com/fredyk/westack-go/westack/lib"
@@ -172,7 +174,10 @@ type Options struct {
 }
 
 func New(options ...Options) *WeStack {
-	server := fiber.New()
+	server := fiber.New(fiber.Config{
+		JSONEncoder: json.Marshal,
+		JSONDecoder: json.Unmarshal,
+	})
 
 	modelRegistry := make(map[string]*model.Model)
 	datasources := make(map[string]*datasource.Datasource)

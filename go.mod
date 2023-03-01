@@ -5,6 +5,7 @@ go 1.20
 require (
 	github.com/casbin/casbin/v2 v2.63.0
 	github.com/go-redis/redis/v8 v8.11.5
+	github.com/goccy/go-json v0.10.0
 	github.com/gofiber/fiber/v2 v2.42.0
 	github.com/golang-jwt/jwt v3.2.2+incompatible
 	github.com/golang/protobuf v1.5.2
