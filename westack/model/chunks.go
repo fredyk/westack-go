@@ -56,6 +56,7 @@ func (chunkGenerator *InstanceAChunkGenerator) NextChunk() (chunk Chunk, err err
 }
 
 func (chunkGenerator *InstanceAChunkGenerator) GenerateNextChunk() bool {
+	// chunkGenerator.totalChunks is number of instances + 2 (for the [] at the start and end)
 	if chunkGenerator.currentChunk == chunkGenerator.totalChunks {
 		//fmt.Printf("ERROR: ChunkGenerator.GenerateNextChunk() called after EOF\n")
 		return false
@@ -64,29 +65,30 @@ func (chunkGenerator *InstanceAChunkGenerator) GenerateNextChunk() bool {
 	if chunkGenerator.currentChunk == 0 {
 		nextChunk.raw = []byte{'['}
 		nextChunk.length += 1
+	} else if chunkGenerator.currentChunk == chunkGenerator.totalChunks-1 {
+		nextChunk.raw = []byte{']'}
+		nextChunk.length += 1
 	} else {
-		nextChunk.raw = []byte{','}
-		nextChunk.length += 1
-	}
+		if chunkGenerator.currentChunk > 1 {
+			nextChunk.raw = []byte{','}
+			nextChunk.length += 1
+		}
 
-	nextInstance := chunkGenerator.input[chunkGenerator.currentChunk]
-	nextInstance.HideProperties()
-	asM := nextInstance.ToJSON()
-	asBytes, err := easyjson.Marshal(asM)
-	if err != nil {
-		nextChunk.error = err
-		return false
+		nextInstance := chunkGenerator.input[chunkGenerator.currentChunk]
+		nextInstance.HideProperties()
+		asM := nextInstance.ToJSON()
+		asBytes, err := easyjson.Marshal(asM)
+		if err != nil {
+			nextChunk.error = err
+			return false
+		}
+		nextChunk.raw = append(nextChunk.raw, asBytes...)
+		nextChunk.length += len(asBytes)
 	}
-	nextChunk.raw = append(nextChunk.raw, asBytes...)
-	nextChunk.length += len(asBytes)
-
-	if chunkGenerator.currentChunk == chunkGenerator.totalChunks-1 {
-		nextChunk.raw = append(nextChunk.raw, ']')
-		nextChunk.length += 1
-	}
-
 	chunkGenerator.chunks = append(chunkGenerator.chunks, nextChunk)
-	//fmt.Printf("Generated chunk %d/%d\n", chunkGenerator.currentChunk, chunkGenerator.totalChunks)
+	if chunkGenerator.debug {
+		fmt.Printf("Generated chunk %d/%d\n", chunkGenerator.currentChunk, chunkGenerator.totalChunks)
+	}
 	return true
 }
 
