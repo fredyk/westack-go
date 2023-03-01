@@ -25,6 +25,8 @@ func (loadedModel *Model) EnforceEx(token *BearerToken, objId string, action str
 	var bearerUserIdSt string
 	var targetObjId string
 
+	var locked bool
+
 	if token == nil || token.User == nil {
 		bearerUserIdSt = "_EVERYONE_"
 		targetObjId = "*"
@@ -68,6 +70,10 @@ func (loadedModel *Model) EnforceEx(token *BearerToken, objId string, action str
 			return nil, result
 		}
 
+		AuthMutex.Lock()
+		defer AuthMutex.Unlock()
+		locked = true
+
 		_, err := loadedModel.Enforcer.AddRoleForUser(bearerUserIdSt, "_EVERYONE_")
 		if err != nil {
 			return err, false
@@ -89,8 +95,10 @@ func (loadedModel *Model) EnforceEx(token *BearerToken, objId string, action str
 
 	}
 
-	AuthMutex.Lock()
-	defer AuthMutex.Unlock()
+	if !locked {
+		AuthMutex.Lock()
+		defer AuthMutex.Unlock()
+	}
 
 	allow, exp, err := loadedModel.Enforcer.EnforceEx(bearerUserIdSt, targetObjId, action)
 
