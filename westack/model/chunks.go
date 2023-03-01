@@ -153,7 +153,7 @@ func NewInstanceAChunkGenerator(loadedModel *Model, input InstanceA, contentType
 		contentType:  contentType,
 		chunks:       []Chunk{},
 		currentChunk: 0,
-		totalChunks:  len(input),
+		totalChunks:  len(input) + 2,
 		input:        input,
 		debug:        loadedModel.App.Debug,
 	}
