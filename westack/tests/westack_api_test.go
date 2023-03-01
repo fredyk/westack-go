@@ -121,24 +121,25 @@ func Test_FindMany(t *testing.T) {
 	var parsed wst.A
 	// read response body bytes
 	//_, err = response.Body.Read(out)
-	//if err != nil {
-	//	t.Errorf("Error: %v", err)
-	//}
-	for {
-		var buf [4096]byte
-		n, err := response.Body.Read(buf[:])
-		if err != nil {
-			if err == io.EOF {
-				break
-			} else if err == io.ErrUnexpectedEOF {
-				t.Errorf("Error: %v", err)
-				out = append(out, buf[:n]...)
-				break
-			}
-			t.Errorf("Error: %v", err)
-		}
-		out = append(out, buf[:n]...)
+	out, err = io.ReadAll(response.Body)
+	if err != nil {
+		t.Errorf("Error: %v", err)
 	}
+	//for {
+	//	var buf [4096]byte
+	//	n, err := response.Body.Read(buf[:])
+	//	if err != nil {
+	//		if err == io.EOF {
+	//			break
+	//		} else if err == io.ErrUnexpectedEOF {
+	//			t.Errorf("Error: %v", err)
+	//			out = append(out, buf[:n]...)
+	//			break
+	//		}
+	//		t.Errorf("Error: %v", err)
+	//	}
+	//	out = append(out, buf[:n]...)
+	//}
 
 	assert.Greaterf(t, len(out), 0, "Received bytes <-- %v, %v\n", len(out), string(out))
 
