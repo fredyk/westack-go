@@ -22,31 +22,22 @@ func createUserThroughNetwork(t *testing.T) wst.M {
 		"email":    fmt.Sprintf("user.%v@example.com", randUserN),
 		"password": "abcd1234.",
 	}))
-	if err != nil {
-		t.Errorf("Error: %v", err)
-	}
+	assert.Nil(t, err)
 	request.Header.Set("Content-Type", "application/json")
 
 	response, err := http.DefaultClient.Do(request)
-	if err != nil {
-		t.Errorf("Error: %v", err)
-	}
+	assert.Nil(t, err)
 
 	var out []byte
 	var parsed wst.M
 
 	// read response body bytes
 	_, err = response.Body.Read(out)
-	if err != nil {
-		t.Errorf("Error: %v", err)
-	}
+	assert.Nil(t, err)
 
 	// parse response body bytes
 	err = json.Unmarshal(out, &parsed)
-	if err != nil {
-		t.Errorf("Error: %v", err)
-		fmt.Printf("Received bytes <-- %v\n", out)
-	}
+	assert.Nilf(t, err, "Error: %v, received bytes: %v <--", err, string(out))
 
 	return parsed
 }
@@ -65,32 +56,24 @@ func createNoteForUser(userId string, token string, t *testing.T) (note wst.M, e
 		"content": "This is a test note",
 		"userId":  userId,
 	}))
-	if err != nil {
-		t.Errorf("Error: %v", err)
-	}
+	assert.Nil(t, err)
 
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("Authorization", fmt.Sprintf("Bearer %v", token))
 
 	response, err := http.DefaultClient.Do(request)
-	if err != nil {
-		t.Errorf("Error: %v", err)
-	}
+	assert.Nil(t, err)
 
 	var out []byte
 	var parsed wst.M
 
 	// read response body bytes
 	_, err = response.Body.Read(out)
-	if err != nil {
-		t.Errorf("Error: %v", err)
-	}
+	assert.Nil(t, err)
 
 	// parse response body bytes
 	err = json.Unmarshal(out, &parsed)
-	if err != nil {
-		t.Errorf("Error: %v", err)
-	}
+	assert.Nil(t, err)
 
 	return parsed, err
 
@@ -107,14 +90,10 @@ func Test_FindMany(t *testing.T) {
 	//}
 
 	request, err := http.NewRequest("GET", "http://localhost:8019/api/v1/notes", nil)
-	if err != nil {
-		t.Errorf("Error: %v", err)
-	}
+	assert.Nil(t, err)
 
 	response, err := http.DefaultClient.Do(request)
-	if err != nil {
-		t.Errorf("Error: %v", err)
-	}
+	assert.Nil(t, err)
 	assert.Equal(t, 200, response.StatusCode)
 
 	var out []byte
@@ -122,38 +101,42 @@ func Test_FindMany(t *testing.T) {
 	// read response body bytes
 	//_, err = response.Body.Read(out)
 	out, err = io.ReadAll(response.Body)
-	if err != nil {
-		t.Errorf("Error: %v", err)
-	}
-	//for {
-	//	var buf [4096]byte
-	//	n, err := response.Body.Read(buf[:])
-	//	if err != nil {
-	//		if err == io.EOF {
-	//			break
-	//		} else if err == io.ErrUnexpectedEOF {
-	//			t.Errorf("Error: %v", err)
-	//			out = append(out, buf[:n]...)
-	//			break
-	//		}
-	//		t.Errorf("Error: %v", err)
-	//	}
-	//	out = append(out, buf[:n]...)
-	//}
+	assert.Nil(t, err)
 
 	assert.Greaterf(t, len(out), 0, "Received bytes <-- %v, %v\n", len(out), string(out))
 
 	// parse response body bytes
 	err = json.Unmarshal(out, &parsed)
 	if err != nil {
-		t.Errorf("Error: %v", err)
-		fmt.Printf("Received bytes <-- %v, %v\n", len(out), string(out))
+		assert.Nilf(t, err, "Error: %v, received bytes: %v <--", err, string(out))
 		time.Sleep(5 * time.Minute)
 	}
 
-	//fmt.Printf("parsed: %v", parsed[:1])
-
 	assert.Greaterf(t, len(parsed), 0, "parsed: %v\n", parsed)
+
+}
+
+func Test_EmptyArray(t *testing.T) {
+
+	request, err := http.NewRequest("GET", "http://localhost:8019/api/v1/empties", nil)
+	assert.Nil(t, err)
+
+	response, err := http.DefaultClient.Do(request)
+	assert.Nil(t, err)
+
+	assert.Equal(t, 200, response.StatusCode)
+
+	var out []byte
+	var parsed wst.A
+
+	// read response body bytes
+	out, err = io.ReadAll(response.Body)
+	assert.Nil(t, err)
+
+	err = json.Unmarshal(out, &parsed)
+	assert.Nil(t, err)
+
+	assert.Equal(t, 0, len(parsed), "parsed: %v", parsed)
 
 }
 
