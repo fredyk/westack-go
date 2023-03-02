@@ -29,6 +29,7 @@ type EventContext struct {
 	DisableTypeConversions bool
 	SkipFieldProtection    bool
 	OperationName          wst.OperationName
+	Handled                bool
 }
 
 func (eventContext *EventContext) UpdateEphemeral(newData *wst.M) {
