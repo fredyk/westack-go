@@ -545,20 +545,23 @@ func (app *WeStack) loadModelsDynamicRoutes() {
 	}
 }
 
-func handleEvent(eventContext *model.EventContext, loadedModel *model.Model, event string) error {
+func handleEvent(eventContext *model.EventContext, loadedModel *model.Model, event string) (err error) {
 	if loadedModel.DisabledHandlers[event] != true {
-		err := loadedModel.GetHandler(event)(eventContext)
+		err = loadedModel.GetHandler(event)(eventContext)
 		if err != nil {
-			return err
+			return
 		}
 	}
-	if eventContext.StatusCode == 0 {
-		eventContext.StatusCode = fiber.StatusNotImplemented
-	}
-	if eventContext.Ephemeral != nil {
-		for k, v := range *eventContext.Ephemeral {
-			(eventContext.Result.(wst.M))[k] = v
+	if !eventContext.Handled {
+		if eventContext.StatusCode == 0 {
+			eventContext.StatusCode = fiber.StatusNotImplemented
 		}
+		if eventContext.Ephemeral != nil {
+			for k, v := range *eventContext.Ephemeral {
+				(eventContext.Result.(wst.M))[k] = v
+			}
+		}
+		err = eventContext.Ctx.Status(eventContext.StatusCode).JSON(eventContext.Result)
 	}
-	return eventContext.Ctx.Status(eventContext.StatusCode).JSON(eventContext.Result)
+	return
 }

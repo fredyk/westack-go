@@ -360,6 +360,7 @@ func (loadedModel *Model) HandleRemoteMethod(name string, eventContext *EventCon
 		return err
 	}
 	if eventContext.Result != nil || eventContext.StatusCode != 0 {
+		eventContext.Handled = true
 		if eventContext.StatusCode == 0 {
 			eventContext.StatusCode = fiber.StatusOK
 		} else if eventContext.StatusCode == fiber.StatusNoContent {
@@ -426,8 +427,10 @@ func (loadedModel *Model) HandleRemoteMethod(name string, eventContext *EventCon
 				return eventContext.Ctx.SendStream(resultAsGenerator.Reader(eventContext), -1)
 
 				//return nil
+			} else {
+				fmt.Printf("Unknown type: %T after remote method %v\n", eventContext.Result, name)
+				eventContext.Handled = false
 			}
-			fmt.Printf("Unknown type: %T after remote method %v\n", eventContext.Result, name)
 		}
 	}
 	resp := eventContext.Ctx.Response()
