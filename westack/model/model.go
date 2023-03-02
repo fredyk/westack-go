@@ -584,6 +584,7 @@ func (loadedModel *Model) Create(data interface{}, baseContext *EventContext) (*
 			}
 			err = bson.Unmarshal(bytes, &finalData)
 			if err != nil {
+				// how to test this???
 				return nil, err
 			}
 		} else {
@@ -595,14 +596,12 @@ func (loadedModel *Model) Create(data interface{}, baseContext *EventContext) (*
 		baseContext = &EventContext{}
 	}
 	var targetBaseContext = baseContext
-	deepLevel := 0
 	for {
 		if targetBaseContext.BaseContext != nil {
 			targetBaseContext = targetBaseContext.BaseContext
 		} else {
 			break
 		}
-		deepLevel++
 	}
 	if !baseContext.DisableTypeConversions {
 		datasource.ReplaceObjectIds(finalData)
@@ -643,7 +642,8 @@ func (loadedModel *Model) Create(data interface{}, baseContext *EventContext) (*
 	if err != nil {
 		return nil, err
 	} else if document == nil {
-		return nil, datasource.NewError(400, "Could not create document")
+		// how to test this???
+		return nil, datasource.NewError(fiber.StatusBadRequest, "Could not create document")
 	} else {
 		result := loadedModel.Build(*document, eventContext)
 		result.HideProperties()
