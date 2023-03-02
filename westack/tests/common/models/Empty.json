@@ -1,0 +1,22 @@
+{
+  "name": "Empty",
+  "plural": "",
+  "base": "PersistedModel",
+  "public": true,
+  "properties": {},
+  "relations": {},
+  "hidden": [],
+  "casbin": {
+    "policies": [
+      "$everyone,*,read,allow"
+    ]
+  },
+  "cache": {
+    "datasource": "",
+    "ttl": 0,
+    "keys": null
+  },
+  "mongo": {
+    "collection": ""
+  }
+}
