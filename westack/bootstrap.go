@@ -426,28 +426,32 @@ func (app *WeStack) setupModel(loadedModel *model.Model, dataSource *datasource.
 				}
 
 				if config.Base == "User" {
-					email := (*data)["email"]
-					if email == nil || strings.TrimSpace(email.(string)) == "" {
-						// TODO: Validate email
-						return wst.CreateError(fiber.ErrBadRequest, "EMAIL_PRESENCE", fiber.Map{"message": "Invalid email", "codes": wst.M{"email": []string{"presence"}}}, "ValidationError")
-					}
-					filter := wst.Filter{Where: &wst.Where{"email": email}}
-					existent, err2 := loadedModel.FindOne(&filter, ctx)
-					if err2 != nil {
-						return err2
-					}
-					if existent != nil {
-						return wst.CreateError(fiber.ErrConflict, "EMAIL_UNIQUENESS", fiber.Map{"message": fmt.Sprintf("The `user` instance is not valid. Details: `email` Email already exists (value: \"%v\").", email), "codes": wst.M{"email": []string{"uniqueness"}}}, "ValidationError")
-					}
 					username := (*data)["username"]
 					if username != nil && strings.TrimSpace(username.(string)) != "" {
-						filter = wst.Filter{Where: &wst.Where{"username": username}}
-						existent, err2 = loadedModel.FindOne(&filter, ctx)
+						filter := wst.Filter{Where: &wst.Where{"username": username}}
+						existent, err2 := loadedModel.FindOne(&filter, ctx)
 						if err2 != nil {
 							return err2
 						}
 						if existent != nil {
 							return wst.CreateError(fiber.ErrConflict, "USERNAME_UNIQUENESS", fiber.Map{"message": fmt.Sprintf("The `user` instance is not valid. Details: `username` User already exists (value: \"%v\").", username), "codes": wst.M{"username": []string{"uniqueness"}}}, "ValidationError")
+						}
+					}
+
+					// TODO: Jhon Validate Email
+					if username == nil || strings.TrimSpace(username.(string)) == "" {
+						email := (*data)["email"]
+						if email == nil || strings.TrimSpace(email.(string)) == "" {
+							// TODO: Validate email
+							return wst.CreateError(fiber.ErrBadRequest, "EMAIL_PRESENCE", fiber.Map{"message": "Invalid email", "codes": wst.M{"email": []string{"presence"}}}, "ValidationError")
+						}
+						filter := wst.Filter{Where: &wst.Where{"email": email}}
+						existent, err2 := loadedModel.FindOne(&filter, ctx)
+						if err2 != nil {
+							return err2
+						}
+						if existent != nil {
+							return wst.CreateError(fiber.ErrConflict, "EMAIL_UNIQUENESS", fiber.Map{"message": fmt.Sprintf("The `user` instance is not valid. Details: `email` Email already exists (value: \"%v\").", email), "codes": wst.M{"email": []string{"uniqueness"}}}, "ValidationError")
 						}
 					}
 
