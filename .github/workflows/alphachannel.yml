@@ -20,7 +20,7 @@ jobs:
         - name: Create Pull Request
           uses: peter-evans/create-pull-request@v3
           with:
-              token: ${{ secrets.GITHUB_TOKEN }}
+              token: ${{ secrets.PULL_REQUEST_TOKEN }}
               commit-message: Merge ${{ github.head_ref }} into alpha
               title: Merge ${{ github.head_ref }} into alpha
               body: on push to any branch that is not alpha, create a pull request to merge the branch into alpha
