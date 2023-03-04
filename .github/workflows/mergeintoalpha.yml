@@ -10,13 +10,12 @@ jobs:
         runs-on: ubuntu-latest
         steps:
         - name: Merge PR
-          uses: peter-evans/merge-pull-request@v3
+          uses: actions/github-script@v5
           with:
-              token: ${{ secrets.PULL_REQUEST_TOKEN }}
-              merge-method: squash
-              commit-message: Merge ${{ github.head_ref }} into alpha
-              title: Merge ${{ github.head_ref }} into alpha
-              body: on create a pull request to merge the branch into alpha, merge the pull request
-              labels: |
-                  auto-merge
-                  auto-merge-squash
+              github-token: ${{ secrets.PULL_REQUEST_TOKEN }}
+              script: |
+                  github.pulls.merge({
+                      owner: context.repo.owner,
+                      repo: context.repo.repo,
+                      pull_number: context.payload.pull_request.number
+                  })
