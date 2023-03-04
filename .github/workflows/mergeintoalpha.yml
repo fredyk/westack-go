@@ -49,7 +49,7 @@ jobs:
           run: |
             git config --global user.email "github-actions[bot]@users.noreply.github.com"
             git config --global user.name "github-actions[bot]"
-            git merge --no-edit --no-ff ${{ github.event.pull_request.head.sha }}
+            git merge --no-edit --no-ff --allow-unrelated-histories ${{ github.event.pull_request.head.sha }}
 
         - name: Install MongoDB
           run: |
