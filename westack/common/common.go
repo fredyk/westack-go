@@ -1,7 +1,6 @@
 package wst
 
 import (
-	"encoding/json"
 	"fmt"
 	"log"
 	"os"
@@ -9,11 +8,17 @@ import (
 	"strings"
 	"time"
 
+	"github.com/goccy/go-json"
 	fiber "github.com/gofiber/fiber/v2"
+	"github.com/mailru/easyjson"
+	"github.com/mailru/easyjson/jwriter"
 	"github.com/spf13/viper"
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/bsoncodec"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
+
+var NilBytes = []byte{'n', 'u', 'l', 'l'}
 
 type M map[string]interface{}
 
@@ -47,7 +52,68 @@ func (m M) GetString(key string) string {
 	return ""
 }
 
+func (m M) MarshalEasyJSON(w *jwriter.Writer) {
+	if m == nil {
+		w.Raw(NilBytes, nil)
+		return
+	}
+	w.RawByte('{')
+	first := true
+	for k, v := range m {
+		if first {
+			first = false
+		} else {
+			w.RawByte(',')
+		}
+		w.String(k)
+		w.RawByte(':')
+		if vv, ok := v.(easyjson.Marshaler); ok {
+			//fmt.Printf("Found easyjson.Marshaler: %v at %v\n", vv, k)
+			vv.MarshalEasyJSON(w)
+		} else if vv, ok := v.(json.Marshaler); ok {
+			//fmt.Printf("Found json.Marshaler: %v at %v\n", vv, k)
+			bytes, err := vv.MarshalJSON()
+			w.Raw(bytes, err)
+		} else {
+			//fmt.Printf("Found unknown: %v at %v\n", v, k)
+			bytes, err := json.Marshal(v)
+			w.Raw(bytes, err)
+		}
+	}
+	w.RawByte('}')
+}
+
 type A []M
+
+func (a A) MarshalEasyJSON(w *jwriter.Writer) {
+	if a == nil {
+		w.Raw(NilBytes, nil)
+		return
+	}
+	w.RawByte('[')
+	first := true
+	for _, v := range a {
+		if first {
+			first = false
+		} else {
+			w.RawByte(',')
+		}
+		bytes, err := easyjson.Marshal(v)
+		w.Raw(bytes, err)
+	}
+	w.RawByte(']')
+}
+
+//func (a A) String() string {
+//	if a == nil {
+//		return ""
+//	}
+//	bytes, err := easyjson.Marshal(a)
+//	if err != nil {
+//		return ""
+//	}
+//	return string(bytes)
+//}
 
 type OperationName string
 
@@ -139,6 +205,10 @@ type Stats struct {
 	BuildsByModel map[string]map[string]float64
 }
 
+type BsonOptions struct {
+	Registry *bsoncodec.Registry
+}
+
 type IApp struct {
 	Debug          bool
 	SwaggerPaths   func() *map[string]M
@@ -146,6 +216,7 @@ type IApp struct {
 	FindDatasource func(datasource string) (interface{}, error)
 	JwtSecretKey   []byte
 	Viper          *viper.Viper
+	Bson           BsonOptions
 }
 
 var RegexpIdEntire = regexp.MustCompile("^([0-9a-f]{24})$")

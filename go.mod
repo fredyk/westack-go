@@ -10,6 +10,7 @@ require (
 	github.com/golang-jwt/jwt v3.2.2+incompatible
 	github.com/golang/protobuf v1.5.2
 	github.com/google/uuid v1.3.0
+	github.com/mailru/easyjson v0.7.7
 	github.com/oliveagle/jsonpath v0.0.0-20180606110733-2e52cf6e6852
 	github.com/spf13/viper v1.15.0
 	github.com/stretchr/testify v1.8.1
@@ -34,6 +35,7 @@ require (
 	github.com/hashicorp/hcl v1.0.0 // indirect
 	github.com/jcchavezs/porto v0.4.0 // indirect
 	github.com/joeshaw/multierror v0.0.0-20140124173710-69b34d4ec901 // indirect
+	github.com/josharian/intern v1.0.0 // indirect
 	github.com/klauspost/compress v1.15.15 // indirect
 	github.com/magiconair/properties v1.8.7 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect

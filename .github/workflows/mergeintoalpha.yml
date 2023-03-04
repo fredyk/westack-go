@@ -11,6 +11,8 @@ jobs:
         env:
           WST_ADMIN_USERNAME: admin
           WST_ADMIN_PWD: testadmin
+          PPROF_AUTH_USERNAME: test
+          PPROF_AUTH_PASSWORD: abcd1234.
           GITHUB_TOKEN: ${{ secrets.PULL_REQUEST_TOKEN }}
         steps:
         - name: Checkout master
