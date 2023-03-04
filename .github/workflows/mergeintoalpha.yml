@@ -1,0 +1,23 @@
+name: Accept PRs into alpha
+description: on create a pull request to merge the branch into alpha, merge the pull request
+on:
+  pull_request:
+    branches:
+      - alpha
+    types: [opened, synchronize, reopened]
+
+jobs:
+    merge:
+        runs-on: ubuntu-latest
+        steps:
+        - name: Merge PR
+          uses: peter-evans/merge-pull-request@v3
+          with:
+              token: ${{ secrets.PULL_REQUEST_TOKEN }}
+              merge-method: squash
+              commit-message: Merge ${{ github.head_ref }} into alpha
+              title: Merge ${{ github.head_ref }} into alpha
+              body: on create a pull request to merge the branch into alpha, merge the pull request
+              labels: |
+                  auto-merge
+                  auto-merge-squash
