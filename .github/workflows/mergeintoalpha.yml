@@ -72,6 +72,8 @@ jobs:
           with:
               github_token: ${{ secrets.PULL_REQUEST_TOKEN }}
               branch: alpha
+              tags: true
+              commit_message: "Merge PR into alpha"
 
         - name: Comments on the pull request and closes it
           run: |
