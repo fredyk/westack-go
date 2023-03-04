@@ -1,6 +1,6 @@
 # on push to any branch that is not alpha, create a pull request to merge the branch into alpha
-
 name: Alpha Channel
+
 on:
   push:
     branches-ignore:
