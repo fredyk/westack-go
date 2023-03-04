@@ -69,7 +69,7 @@ jobs:
           run: git tag -a v${{ steps.latest_tag.outputs.tag }}-alpha-${{ steps.date.outputs.date }} -m "v${{ steps.latest_tag.outputs.tag }}-${{ steps.date.outputs.date }}"
 
         - name: Push
-          run:
+          run: |
             git push
             git push --tags
 
