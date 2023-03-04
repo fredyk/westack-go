@@ -13,21 +13,39 @@ type UserWithRoles struct {
 	Roles    []string `json:"roles"`
 }
 
-func UpsertUserWithRoles(app *WeStack, userToUpsert UserWithRoles, eventContext *model.EventContext) (err error) {
-	var user *model.Instance
+func UpsertUserWithRoles(app *WeStack, userToUpsert UserWithRoles, eventContext *model.EventContext) (user *model.Instance, err error) {
 	var role *model.Instance
 	var roleMapping *model.Instance
 
 	var userModel *model.Model
 	var roleModel *model.Model
-	userModel, err = app.FindModelWithClass("User")
-	if err != nil {
+
+	// validate:
+	if userToUpsert.Username == "" {
+		err = fmt.Errorf("username is required")
 		return
 	}
-	roleModel, err = app.FindModelWithClass("Role")
-	if err != nil {
+	if userToUpsert.Password == "" {
+		err = fmt.Errorf("password is required")
 		return
 	}
+	if len(userToUpsert.Roles) == 0 {
+		err = fmt.Errorf("roles is required")
+		return
+	}
+
+	foundModels := app.FindModelsWithClass("User")
+	if len(foundModels) == 0 {
+		err = fmt.Errorf("user model not found")
+		return
+	}
+	foundModels = app.FindModelsWithClass("Role")
+	if len(foundModels) == 0 {
+		err = fmt.Errorf("role model not found")
+		return
+	}
+	userModel = foundModels[0]
+	roleModel = foundModels[0]
 
 	// Check if the user exists
 	user, err = userModel.FindOne(&wst.Filter{
@@ -79,7 +97,7 @@ func UpsertUserWithRoles(app *WeStack, userToUpsert UserWithRoles, eventContext 
 			if err != nil {
 				return
 			}
-			fmt.Println("Created the role mapping with ID:", roleMapping.Id)
+			fmt.Printf("Assigned role %v to user %v with mapping id %v\n", roleName, userToUpsert.Username, roleMapping.Id)
 		} else {
 			fmt.Printf("Role mapping already exists for user %s and role %s\n", userToUpsert.Username, roleName)
 		}

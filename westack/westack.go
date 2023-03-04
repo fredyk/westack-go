@@ -66,13 +66,12 @@ func (app *WeStack) FindDatasource(dsName string) (*datasource.Datasource, error
 	return result, nil
 }
 
-func (app *WeStack) FindModelWithClass(modelClass string) (foundModel *model.Model, err error) {
-	for _, foundModel = range *app.modelRegistry {
+func (app *WeStack) FindModelsWithClass(modelClass string) (foundModels []*model.Model) {
+	for _, foundModel := range *app.modelRegistry {
 		if foundModel.Config.Base == modelClass {
-			return
+			foundModels = append(foundModels, foundModel)
 		}
 	}
-	err = errors.New(fmt.Sprintf("Model with class %v not found", modelClass))
 	return
 }
 
@@ -134,7 +133,8 @@ func (app *WeStack) Boot(customRoutesCallbacks ...func(app *WeStack)) {
 		Bearer: &model.BearerToken{User: &model.BearerUser{System: true}},
 	}
 
-	err = UpsertUserWithRoles(app, UserWithRoles{
+	// Upsert the admin user
+	_, err = UpsertUserWithRoles(app, UserWithRoles{
 		Username: app.Options.adminUsername,
 		Password: app.Options.adminPwd,
 		Roles:    []string{"admin"},
