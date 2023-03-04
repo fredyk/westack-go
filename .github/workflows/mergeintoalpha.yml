@@ -71,7 +71,7 @@ jobs:
           run: sudo systemctl start mongod
 
         - name: Test WeStack
-          run: go test -v ./westack/tests
+          run: go test -cover -v ./westack/tests
 
         - name: Create tag
           run: git tag -a v${{ steps.latest_tag.outputs.tag }}-alpha-${{ steps.date.outputs.date }} -m "v${{ steps.latest_tag.outputs.tag }}-alpha-${{ steps.date.outputs.date }}"
