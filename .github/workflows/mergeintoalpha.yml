@@ -68,12 +68,9 @@ jobs:
           run: git tag -a v${{ steps.latest_tag.outputs.tag }}-alpha-${{ steps.date.outputs.date }} -m "v${{ steps.latest_tag.outputs.tag }}-${{ steps.date.outputs.date }}"
 
         - name: Push
-          uses: ad-m/github-push-action@master
-          with:
-              github_token: ${{ secrets.PULL_REQUEST_TOKEN }}
-              branch: alpha
-              tags: true
-              commit_message: "Merge PR into alpha"
+          run:
+            git push
+            git push --tags
 
         - name: Comments on the pull request and closes it
           run: |
