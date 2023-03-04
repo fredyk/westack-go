@@ -32,7 +32,7 @@ func createUserThroughNetwork(t *testing.T) wst.M {
 	var parsed wst.M
 
 	// read response body bytes
-	_, err = response.Body.Read(out)
+	out, err = io.ReadAll(response.Body)
 	assert.Nil(t, err)
 
 	// parse response body bytes
@@ -68,7 +68,7 @@ func createNoteForUser(userId string, token string, t *testing.T) (note wst.M, e
 	var parsed wst.M
 
 	// read response body bytes
-	_, err = response.Body.Read(out)
+	out, err = io.ReadAll(response.Body)
 	assert.Nil(t, err)
 
 	// parse response body bytes
@@ -82,12 +82,12 @@ func createNoteForUser(userId string, token string, t *testing.T) (note wst.M, e
 func Test_FindMany(t *testing.T) {
 	var err error
 
-	//user := createUserThroughNetwork(t)
-	//token := loginUser(user["email"].(string), "abcd1234.", t)
-	//_, err = createNoteForUser(user["id"].(string), token["id"].(string), t)
-	//if err != nil {
-	//	t.Errorf("Error: %v", err)
-	//}
+	user := createUserThroughNetwork(t)
+	token := loginUser(user["email"].(string), "abcd1234.", t)
+	_, err = createNoteForUser(user["id"].(string), token["id"].(string), t)
+	if err != nil {
+		t.Errorf("Error: %v", err)
+	}
 
 	request, err := http.NewRequest("GET", "http://localhost:8019/api/v1/notes", nil)
 	assert.Nil(t, err)
@@ -99,7 +99,6 @@ func Test_FindMany(t *testing.T) {
 	var out []byte
 	var parsed wst.A
 	// read response body bytes
-	//_, err = response.Body.Read(out)
 	out, err = io.ReadAll(response.Body)
 	assert.Nil(t, err)
 
@@ -160,7 +159,7 @@ func loginUser(email string, password string, t *testing.T) wst.M {
 	var parsed wst.M
 
 	// read response body bytes
-	_, err = response.Body.Read(out)
+	out, err = io.ReadAll(response.Body)
 	if err != nil {
 		t.Errorf("Error: %v", err)
 	}
