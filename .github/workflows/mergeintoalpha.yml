@@ -33,15 +33,16 @@ jobs:
         - name: Find latest tag with regex v\d+\.\d+\.\d+$ and fallback to 0.0.0
           id: latest_tag
           run: |
-            echo "::set-output name=tag::$(git describe --tags --match 'v[0-9]*.[0-9]*.[0-9]*' --abbrev=0 || echo 'v0.0.0')"
-            major=$(echo ${{ steps.latest_tag.outputs.tag }} | cut -d. -f1)
-            minor=$(echo ${{ steps.latest_tag.outputs.tag }} | cut -d. -f2)
-            patch=$(echo ${{ steps.latest_tag.outputs.tag }} | cut -d. -f3)
+            latest_tag=$(git describe --tags --match "v[0-9]*.[0-9]*.[0-9]*" --abbrev=0)
+            major=$(echo $latest_tag | cut -d. -f1)
+            minor=$(echo $latest_tag | cut -d. -f2)
+            patch=$(echo $latest_tag | cut -d. -f3)
             patch=${patch%-*}
             patch=${patch%-*}
             patch=$((patch + 1))
+            latest_tag=${major}.${minor}.${patch}
             echo "::set-output name=tag::${major}.${minor}.${patch}"
-            echo "Found latest tag: ${{ steps.latest_tag.outputs.tag }}"
+            echo "Found latest tag: $latest_tag"
 
         - name: Install MongoDB
           run: |
