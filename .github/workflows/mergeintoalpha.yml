@@ -8,16 +8,48 @@ on:
 jobs:
     merge_and_push:
         runs-on: ubuntu-latest
+        env:
+          WST_ADMIN_USERNAME: admin
+          WST_ADMIN_PWD: testadmin
+          GITHUB_TOKEN: ${{ secrets.PULL_REQUEST_TOKEN }}
         steps:
-        - name: Checkout
+        - name: Checkout master
           uses: actions/checkout@v2
           with:
-              ref: alpha
+              ref: master
+
+        - name: Create go tag with date
+          id: date
+          run: echo "::set-output name=date::$(date +'%Y%m%d%H%M')"
+
+        - name: Fetch all tags
+          run: git fetch --prune --unshallow --tags
+
+        - name: Find latest tag with regex v\d+\.\d+\.\d+$ and fallback to 0.0.0, skipping -alpha and -beta
+          id: latest_tag
+          run: |
+            latest_tag=$(git describe --tags --match "v[0-9]*.[0-9]*.[0-9]*" --abbrev=0 | grep -v -E "alpha|beta" || echo "v0.0.0")
+            major=$(echo $latest_tag | cut -d. -f1)
+            major=${major#v}
+            minor=$(echo $latest_tag | cut -d. -f2)
+            patch=$(echo $latest_tag | cut -d. -f3)
+            patch=${patch%-*}
+            patch=${patch%-*}
+            patch=$((patch + 1))
+            latest_tag=${major}.${minor}.${patch}
+            echo "::set-output name=tag::${major}.${minor}.${patch}"
+            echo "Found latest tag: $latest_tag"
+
+        - name: Checkout alpha
+          run: |
+            git checkout -b alpha origin/alpha
+            git pull
+
         - name: Merge PR
           run: |
             git config --global user.email "github-actions[bot]@users.noreply.github.com"
             git config --global user.name "github-actions[bot]"
-            git merge --no-edit --no-ff ${{ github.event.pull_request.branch.name }}
+            git merge --no-edit --no-ff --allow-unrelated-histories ${{ github.event.pull_request.head.sha }}
 
         - name: Install MongoDB
           run: |
@@ -31,7 +63,7 @@ jobs:
         - name: Set up Go
           uses: actions/setup-go@v2
           with:
-            go-version: 1.19
+            go-version: 1.20.1
 
         - name: Start MongoDB
           run: sudo systemctl start mongod
@@ -39,25 +71,15 @@ jobs:
         - name: Test WeStack
           run: go test -v ./westack/tests
 
-        - name: Create go tag with date
-          id: date
-          run: echo "::set-output name=date::$(date +'%Y%m%d%H%M%S')"
-
-        - name: Find latest tag with regex v\d+\.\d+\.\d+$ and fallback to 0.0.0
-          id: latest_tag
-          uses:
-            fregante/setup-git-token@v1
-            fregante/find-latest-tag-name@v1
-          with:
-            token: ${{ secrets.GITHUB_TOKEN }}
-            tagRegex: v\d+\.\d+\.\d+$
-            fallback: 0.0.0
-
         - name: Create tag
-          run: git tag -a v${{ steps.latest_tag.outputs.tag }}-alpha-${{ steps.date.outputs.date }} -m "v${{ steps.latest_tag.outputs.tag }}-${{ steps.date.outputs.date }}"
+          run: git tag -a v${{ steps.latest_tag.outputs.tag }}-alpha-${{ steps.date.outputs.date }} -m "v${{ steps.latest_tag.outputs.tag }}-alpha-${{ steps.date.outputs.date }}"
 
         - name: Push
-          uses: ad-m/github-push-action@master
-          with:
-              github_token: ${{ secrets.GITHUB_TOKEN }}
-              branch: alpha
+          run: |
+            git push
+            git push --tags
+
+        - name: Comments on the pull request and closes it
+          run: |
+            curl -X POST -H "Authorization: token ${{ secrets.PULL_REQUEST_TOKEN }}" -H "Content-Type: application/json" -d '{"body": "This PR has been merged into alpha and tagged as ${{ steps.latest_tag.outputs.tag }}-alpha-${{ steps.date.outputs.date }}. Thanks for your contribution!"}' https://api.github.com/repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments
+            curl -X PATCH -H "Authorization: token ${{ secrets.PULL_REQUEST_TOKEN }}" -H "Content-Type: application/json" -d '{"state": "closed"}' https://api.github.com/repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}
