@@ -45,13 +45,9 @@ jobs:
 
         - name: Find latest tag with regex v\d+\.\d+\.\d+$ and fallback to 0.0.0
           id: latest_tag
-          uses:
-            fregante/setup-git-token@v1
-            fregante/find-latest-tag-name@v1
-          with:
-            token: ${{ secrets.GITHUB_TOKEN }}
-            tagRegex: v\d+\.\d+\.\d+$
-            fallback: 0.0.0
+          uses: actions-ecosystem/action-get-latest-tag@v1
+          run:
+            echo "::set-output name=tag::$(git describe --tags --abbrev=0 | grep -Eo 'v\d+\.\d+\.\d+$' || echo '0.0.0')"
 
         - name: Create tag
           run: git tag -a v${{ steps.latest_tag.outputs.tag }}-alpha-${{ steps.date.outputs.date }} -m "v${{ steps.latest_tag.outputs.tag }}-${{ steps.date.outputs.date }}"
