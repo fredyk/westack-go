@@ -41,7 +41,9 @@ jobs:
             echo "Found latest tag: $latest_tag"
 
         - name: Checkout alpha
-          run: git checkout -b alpha origin/alpha
+          run: |
+            git checkout -b alpha origin/alpha
+            git pull
 
         - name: Merge PR
           run: |
