@@ -1,5 +1,4 @@
 name: Accept PRs into alpha
-description: on create a pull request to merge the branch into alpha, merge the pull request
 on:
   pull_request:
     branches:
