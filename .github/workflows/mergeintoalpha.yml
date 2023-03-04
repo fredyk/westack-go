@@ -72,3 +72,10 @@ jobs:
           with:
               github_token: ${{ secrets.GITHUB_TOKEN }}
               branch: alpha
+
+        - name: Close PR
+          uses: peter-evans/close-pull-request@v3
+          with:
+              token: ${{ secrets.GITHUB_TOKEN }}
+              pull-request-number: ${{ github.event.number }}
+              delete-branch: false
