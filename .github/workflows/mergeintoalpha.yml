@@ -70,10 +70,10 @@ jobs:
         - name: Push
           uses: ad-m/github-push-action@master
           with:
-              github_token: ${{ secrets.GITHUB_TOKEN }}
+              github_token: ${{ secrets.PULL_REQUEST_TOKEN }}
               branch: alpha
 
         - name: Comments on the pull request and closes it
           run: |
-            curl -X PATCH -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" -H "Content-Type: application/json" -d '{"body": "This PR has been merged into alpha. Thank you for your contribution!"}' https://api.github.com/repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments
-            curl -X PATCH -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" -H "Content-Type: application/json" -d '{"state": "closed"}' https://api.github.com/repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}
+            curl -X PATCH -H "Authorization: token ${{ secrets.PULL_REQUEST_TOKEN }}" -H "Content-Type: application/json" -d '{"body": "This PR has been merged into alpha. Thank you for your contribution!"}' https://api.github.com/repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments
+            curl -X PATCH -H "Authorization: token ${{ secrets.PULL_REQUEST_TOKEN }}" -H "Content-Type: application/json" -d '{"state": "closed"}' https://api.github.com/repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}
