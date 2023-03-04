@@ -24,7 +24,7 @@ jobs:
               commit-message: Merge ${{ github.head_ref }} into alpha
               title: Merge ${{ github.head_ref }} into alpha
               body: on push to any branch that is not alpha, create a pull request to merge the branch into alpha
-              branch: alpha
+              branch: auto-merge/${{ github.head_ref }}-to-alpha
               base: alpha
               labels: |
                 auto-merge
