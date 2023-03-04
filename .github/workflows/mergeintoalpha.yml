@@ -13,16 +13,10 @@ jobs:
           WST_ADMIN_PWD: testadmin
           GITHUB_TOKEN: ${{ secrets.PULL_REQUEST_TOKEN }}
         steps:
-        - name: Checkout
+        - name: Checkout master
           uses: actions/checkout@v2
           with:
-              ref: alpha
-
-        - name: Merge PR
-          run: |
-            git config --global user.email "github-actions[bot]@users.noreply.github.com"
-            git config --global user.name "github-actions[bot]"
-            git merge --no-edit --no-ff ${{ github.event.pull_request.branch.name }}
+              ref: master
 
         - name: Create go tag with date
           id: date
@@ -45,6 +39,17 @@ jobs:
             latest_tag=${major}.${minor}.${patch}
             echo "::set-output name=tag::${major}.${minor}.${patch}"
             echo "Found latest tag: $latest_tag"
+
+        - name: Checkout alpha
+          uses: actions/checkout@v2
+          with:
+              ref: alpha
+
+        - name: Merge PR
+          run: |
+            git config --global user.email "github-actions[bot]@users.noreply.github.com"
+            git config --global user.name "github-actions[bot]"
+            git merge --no-edit --no-ff ${{ github.event.pull_request.branch.name }}
 
         - name: Install MongoDB
           run: |
@@ -71,7 +76,7 @@ jobs:
 
         - name: Push
           run: |
-            git push origin alpha
+            git -c http.extraheader="AUTHORIZATION: basic $(echo -n ${{ secrets.PULL_REQUEST_TOKEN }} | base64)" push
             git push --tags
 
         - name: Comments on the pull request and closes it
