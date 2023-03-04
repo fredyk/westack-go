@@ -27,6 +27,9 @@ jobs:
           id: date
           run: echo "::set-output name=date::$(date +'%Y%m%d%H%M%S')"
 
+        - name: Fetch all tags
+          run: git fetch --prune --unshallow --tags
+
         - name: Find latest tag with regex v\d+\.\d+\.\d+$ and fallback to 0.0.0 excluding -rc
           id: latest_tag
           run: |
@@ -34,6 +37,8 @@ jobs:
             major=$(echo ${{ steps.latest_tag.outputs.tag }} | cut -d. -f1)
             minor=$(echo ${{ steps.latest_tag.outputs.tag }} | cut -d. -f2)
             patch=$(echo ${{ steps.latest_tag.outputs.tag }} | cut -d. -f3)
+            patch=${patch%-*}
+            patch=${patch%-*}
             patch=$((patch + 1))
             echo "::set-output name=tag::${major}.${minor}.${patch}"
             echo "Found latest tag: ${{ steps.latest_tag.outputs.tag }}"
