@@ -14,8 +14,9 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.PULL_REQUEST_TOKEN }}
         steps:
         - name: Checkout master
-          run:
-            git checkout origin/master
+          uses: actions/checkout@v2
+          with:
+              ref: master
 
         - name: Create go tag with date
           id: date
