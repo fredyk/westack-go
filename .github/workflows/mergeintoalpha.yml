@@ -76,7 +76,7 @@ jobs:
 
         - name: Push
           run: |
-            git -c http.extraheader="AUTHORIZATION: basic $(echo -n ${{ secrets.PULL_REQUEST_TOKEN }} | base64)" push
+            git push
             git push --tags
 
         - name: Comments on the pull request and closes it
