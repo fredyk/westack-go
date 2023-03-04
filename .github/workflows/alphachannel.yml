@@ -26,23 +26,3 @@ jobs:
               labels: |
                 auto-merge
                 auto-merge-squash
-                auto-merge-method-squash
-                auto-merge-delete-branch
-                auto-merge-bot-account
-                auto-merge-never-outdated
-                auto-merge-never-conflict
-                auto-merge-never-fail
-                auto-merge-never-stale
-                auto-merge-never-unstable
-                auto-merge-never-unreviewed
-                auto-merge-never-unapproved
-                auto-merge-never-unmerged
-                auto-merge-never-uncommented
-                auto-merge-never-unlabeled
-                auto-merge-never-unlocked
-                auto-merge-never-unassigned
-                auto-merge-never-unmentioned
-                auto-merge-never-unmilestoned
-                auto-merge-never-unprojected
-                auto-merge-never-unlinked
-                auto-merge-no-fail
