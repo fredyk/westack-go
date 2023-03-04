@@ -14,9 +14,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.PULL_REQUEST_TOKEN }}
         steps:
         - name: Checkout master
-          uses: actions/checkout@v2
-          with:
-              ref: master
+          run:
+            git checkout origin/master
 
         - name: Create go tag with date
           id: date
@@ -41,9 +40,7 @@ jobs:
             echo "Found latest tag: $latest_tag"
 
         - name: Checkout alpha
-          uses: actions/checkout@v2
-          with:
-              ref: alpha
+          run: git checkout -b alpha origin/alpha
 
         - name: Merge PR
           run: |
