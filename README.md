@@ -195,6 +195,11 @@ $ curl -X PATCH http://localhost:8023/api/v1/notes/622f1643377ca3f1a39241f5 -H '
 
 Response body: {"title":"Note 1","body":"I modified the note body","userId":"622f1643377ca3f1a39241f4","id":"622f1643377ca3f1a39241f5"}
 ```
+### Change Log
+
+* **v1.5.48**
+
+    Breaking change: environment variables `WST_ADMIN_USERNAME` and `WST_ADMIN_PWD` are required to start the server
 
 ### Contribute
 

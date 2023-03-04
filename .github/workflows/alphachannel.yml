@@ -1,0 +1,28 @@
+# on push to any branch that is not alpha, create a pull request to merge the branch into alpha
+name: Alpha Channel
+
+on:
+  push:
+    branches-ignore:
+      - alpha
+
+jobs:
+
+    alpha:
+        runs-on: ubuntu-latest
+        steps:
+        - name: Checkout
+          uses: actions/checkout@v2
+
+        - name: Create Pull Request
+          uses: peter-evans/create-pull-request@v3
+          with:
+              token: ${{ secrets.PULL_REQUEST_TOKEN }}
+              commit-message: Merge ${{ github.ref }} into alpha
+              title: Merge ${{ github.ref }} into alpha
+              body: on push to any branch that is not alpha, create a pull request to merge the branch into alpha
+              branch: ${{ github.ref }}
+              base: alpha
+              labels: |
+                auto-merge
+                auto-merge-squash
