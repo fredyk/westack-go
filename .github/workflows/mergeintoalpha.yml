@@ -25,10 +25,10 @@ jobs:
         - name: Fetch all tags
           run: git fetch --prune --unshallow --tags
 
-        - name: Find latest tag with regex v\d+\.\d+\.\d+$ and fallback to 0.0.0
+        - name: Find latest tag with regex v\d+\.\d+\.\d+$ and fallback to 0.0.0, skipping -alpha and -beta
           id: latest_tag
           run: |
-            latest_tag=$(git describe --tags --match "v[0-9]*.[0-9]*.[0-9]*" --abbrev=0)
+            latest_tag=$(git describe --tags --match "v[0-9]*.[0-9]*.[0-9]*" --abbrev=0 | grep -v -E "alpha|beta" || echo "v0.0.0")
             major=$(echo $latest_tag | cut -d. -f1)
             major=${major#v}
             minor=$(echo $latest_tag | cut -d. -f2)
