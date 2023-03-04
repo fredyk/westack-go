@@ -71,7 +71,7 @@ func login(t *testing.T, b *bytes.Buffer) (string, string) {
 		return "", ""
 	}
 
-	if !assert.Greater(t, count, 0) {
+	if !assert.Equal(t, count, contentLength) {
 		return "", ""
 	}
 
