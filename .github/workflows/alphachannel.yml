@@ -14,36 +14,38 @@ jobs:
     alpha:
         runs-on: ubuntu-latest
         steps:
-        - uses: actions/checkout@v2
+        - name: Checkout
+          uses: actions/checkout@v2
+
         - name: Create Pull Request
-        uses: peter-evans/create-pull-request@v3
-        with:
-            token: ${{ secrets.GITHUB_TOKEN }}
-            commit-message: Merge ${{ github.head_ref }} into alpha
-            title: Merge ${{ github.head_ref }} into alpha
-            body: on push to any branch that is not alpha, create a pull request to merge the branch into alpha
-            branch: alpha
-            base: alpha
-            labels: |
-              auto-merge
-              auto-merge-squash
-              auto-merge-method-squash
-              auto-merge-delete-branch
-              auto-merge-bot-account
-              auto-merge-never-outdated
-              auto-merge-never-conflict
-              auto-merge-never-fail
-              auto-merge-never-stale
-              auto-merge-never-unstable
-              auto-merge-never-unreviewed
-              auto-merge-never-unapproved
-              auto-merge-never-unmerged
-              auto-merge-never-uncommented
-              auto-merge-never-unlabeled
-              auto-merge-never-unlocked
-              auto-merge-never-unassigned
-              auto-merge-never-unmentioned
-              auto-merge-never-unmilestoned
-              auto-merge-never-unprojected
-              auto-merge-never-unlinked
-              auto-merge-no-fail
+          uses: peter-evans/create-pull-request@v3
+          with:
+              token: ${{ secrets.GITHUB_TOKEN }}
+              commit-message: Merge ${{ github.head_ref }} into alpha
+              title: Merge ${{ github.head_ref }} into alpha
+              body: on push to any branch that is not alpha, create a pull request to merge the branch into alpha
+              branch: alpha
+              base: alpha
+              labels: |
+                auto-merge
+                auto-merge-squash
+                auto-merge-method-squash
+                auto-merge-delete-branch
+                auto-merge-bot-account
+                auto-merge-never-outdated
+                auto-merge-never-conflict
+                auto-merge-never-fail
+                auto-merge-never-stale
+                auto-merge-never-unstable
+                auto-merge-never-unreviewed
+                auto-merge-never-unapproved
+                auto-merge-never-unmerged
+                auto-merge-never-uncommented
+                auto-merge-never-unlabeled
+                auto-merge-never-unlocked
+                auto-merge-never-unassigned
+                auto-merge-never-unmentioned
+                auto-merge-never-unmilestoned
+                auto-merge-never-unprojected
+                auto-merge-never-unlinked
+                auto-merge-no-fail
