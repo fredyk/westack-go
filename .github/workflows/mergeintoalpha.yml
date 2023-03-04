@@ -10,7 +10,7 @@ jobs:
         runs-on: ubuntu-latest
         env:
           WST_ADMIN_USERNAME: admin
-          WST_ADMIN_PASSWORD: testadmin
+          WST_ADMIN_PWD: testadmin
         steps:
         - name: Checkout
           uses: actions/checkout@v2
