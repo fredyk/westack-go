@@ -16,11 +16,22 @@ jobs:
           uses: actions/checkout@v2
           with:
               ref: alpha
+
         - name: Merge PR
           run: |
             git config --global user.email "github-actions[bot]@users.noreply.github.com"
             git config --global user.name "github-actions[bot]"
             git merge --no-edit --no-ff ${{ github.event.pull_request.branch.name }}
+
+        - name: Create go tag with date
+          id: date
+          run: echo "::set-output name=date::$(date +'%Y%m%d%H%M%S')"
+
+        - name: Find latest tag with regex v\d+\.\d+\.\d+$ and fallback to 0.0.0 excluding -rc
+          id: latest_tag
+          run: |
+            echo "::set-output name=tag::$(git ls-remote --tags --refs --exit-code origin 'refs/tags/v[0-9]*' | grep -v '\-rc' | sed 's/.*\///' | sort -V | tail -n1 | sed 's/^v//')"
+            echo "Found latest tag: ${{ steps.latest_tag.outputs.tag }}"
 
         - name: Install MongoDB
           run: |
@@ -41,15 +52,6 @@ jobs:
 
         - name: Test WeStack
           run: go test -v ./westack/tests
-
-        - name: Create go tag with date
-          id: date
-          run: echo "::set-output name=date::$(date +'%Y%m%d%H%M%S')"
-
-        - name: Find latest tag with regex v\d+\.\d+\.\d+$ and fallback to 0.0.0
-          id: latest_tag
-          run:
-            echo "::set-output name=tag::$(git describe --tags --abbrev=0 | grep -Eo 'v\d+\.\d+\.\d+$' || echo '0.0.0')"
 
         - name: Create tag
           run: git tag -a v${{ steps.latest_tag.outputs.tag }}-alpha-${{ steps.date.outputs.date }} -m "v${{ steps.latest_tag.outputs.tag }}-${{ steps.date.outputs.date }}"
