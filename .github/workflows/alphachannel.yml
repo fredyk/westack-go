@@ -20,7 +20,8 @@ jobs:
               token: ${{ secrets.PULL_REQUEST_TOKEN }}
               commit-message: Merge ${{ github.ref }} into alpha
               title: Merge ${{ github.ref }} into alpha
-              body: on push to any branch that is not alpha, create a pull request to merge the branch into alpha
+              body: |
+                Merge ${{ github.ref }} into alpha
               branch: ${{ github.ref }}
               base: alpha
               labels: |
