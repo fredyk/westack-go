@@ -71,7 +71,7 @@ jobs:
 
         - name: Push
           run: |
-            git push
+            git push origin alpha
             git push --tags
 
         - name: Comments on the pull request and closes it
