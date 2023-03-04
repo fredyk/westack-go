@@ -66,6 +66,15 @@ func (app *WeStack) FindDatasource(dsName string) (*datasource.Datasource, error
 	return result, nil
 }
 
+func (app *WeStack) FindModelsWithClass(modelClass string) (foundModels []*model.Model) {
+	for _, foundModel := range *app.modelRegistry {
+		if foundModel.Config.Base == modelClass {
+			foundModels = append(foundModels, foundModel)
+		}
+	}
+	return
+}
+
 func (app *WeStack) Boot(customRoutesCallbacks ...func(app *WeStack)) {
 
 	app.loadDataSources()
@@ -120,6 +129,20 @@ func (app *WeStack) Boot(customRoutesCallbacks ...func(app *WeStack)) {
 
 	app.loadModelsFixedRoutes()
 
+	systemContext := &model.EventContext{
+		Bearer: &model.BearerToken{User: &model.BearerUser{System: true}},
+	}
+
+	// Upsert the admin user
+	_, err = UpsertUserWithRoles(app, UserWithRoles{
+		Username: app.Options.adminUsername,
+		Password: app.Options.adminPwd,
+		Roles:    []string{"admin"},
+	}, systemContext)
+	if err != nil {
+		log.Fatalf("Error while creating admin user: %v", err)
+	}
+
 	for _, cb := range customRoutesCallbacks {
 		cb(app)
 	}
@@ -132,7 +155,6 @@ func (app *WeStack) Boot(customRoutesCallbacks ...func(app *WeStack)) {
 	app.Server.Get("/swagger/*", func(ctx *fiber.Ctx) error {
 		return ctx.Type("html", "utf-8").Send(lib.SwaggerUIStatic)
 	})
-
 }
 
 func (app *WeStack) Start() error {
@@ -170,7 +192,9 @@ type Options struct {
 	EnableCompression bool
 	CompressionConfig compress.Config
 
-	debug bool
+	debug         bool
+	adminUsername string
+	adminPwd      string
 }
 
 func New(options ...Options) *WeStack {
@@ -195,6 +219,18 @@ func New(options ...Options) *WeStack {
 	if envDebug, _ := os.LookupEnv("DEBUG"); envDebug == "true" {
 		_debug = true
 	}
+
+	adminUsername, present := os.LookupEnv("WST_ADMIN_USERNAME")
+	if !present {
+		log.Fatalf("WST_ADMIN_USERNAME environment variable is not set")
+	}
+	finalOptions.adminUsername = adminUsername
+
+	adminPassword, present := os.LookupEnv("WST_ADMIN_PWD")
+	if !present {
+		log.Fatalf("WST_ADMIN_PWD environment variable is not set")
+	}
+	finalOptions.adminPwd = adminPassword
 
 	appViper := viper.New()
 

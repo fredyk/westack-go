@@ -2,14 +2,17 @@ name: Go
 
 on:
   push:
-    branches: [ master, feature/hooks ]
+    branches: [ master, beta ]
   pull_request:
-    branches: [ master, feature/hooks ]
+    branches: [ master, beta ]
 
 jobs:
 
   test:
     runs-on: ubuntu-latest
+    env:
+      WST_ADMIN_USERNAME: admin
+      WST_ADMIN_PASSWORD: testadmin
     steps:
     - uses: actions/checkout@v2
 
