@@ -299,5 +299,3 @@ func InitAndServe() {
 
 	log.Fatal(app.Start())
 }
-
-// TEST: comment
