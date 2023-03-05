@@ -71,7 +71,7 @@ func login(t *testing.T, b *bytes.Buffer) (string, string) {
 		return "", ""
 	}
 
-	if !assert.Greater(t, count, 0) {
+	if !assert.Equal(t, count, contentLength) {
 		return "", ""
 	}
 
@@ -91,6 +91,8 @@ func login(t *testing.T, b *bytes.Buffer) (string, string) {
 }
 
 func Test_WeStackCreateUser(t *testing.T) {
+
+	t.Parallel()
 
 	n, _ := rand.Int(rand.Reader, big.NewInt(899999999))
 	email := fmt.Sprintf("email%v@example.com", 100000000+n.Int64())
@@ -112,6 +114,8 @@ func createBody(t *testing.T, body wst.M) *bytes.Buffer {
 
 func Test_WeStackLogin(t *testing.T) {
 
+	t.Parallel()
+
 	n, _ := rand.Int(rand.Reader, big.NewInt(899999999))
 	email := fmt.Sprintf("email%v@example.com", 100000000+n.Int64())
 	password := "test"
@@ -127,6 +131,8 @@ func Test_WeStackLogin(t *testing.T) {
 }
 
 func Test_WeStackDelete(t *testing.T) {
+
+	t.Parallel()
 
 	n, _ := rand.Int(rand.Reader, big.NewInt(899999999))
 	email := fmt.Sprintf("email%v@example.com", 100000000+n.Int64())

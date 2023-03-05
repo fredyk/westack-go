@@ -27,21 +27,24 @@ func PprofHandlers(options PprofMiddleOptions) func(ctx *fiber.Ctx) error {
 			auth := ctx.Get("Authorization")
 
 			if auth == "" {
-				_, err := ctx.Status(fiber.StatusUnauthorized).Write([]byte("Unauthorized"))
-				return err
+				ctx.Status(fiber.StatusUnauthorized)
+				ctx.Set("WWW-Authenticate", "Basic realm=\"Restricted\"")
+				return ctx.Send([]byte("Unauthorized"))
 			}
 
 			// parse the basic auth
 			user, pass, ok := parseBasicAuth(auth)
 			if !ok {
-				_, err := ctx.Status(fiber.StatusUnauthorized).Write([]byte("Unauthorized"))
-				return err
+				ctx.Status(fiber.StatusUnauthorized)
+				ctx.Set("WWW-Authenticate", "Basic realm=\"Restricted\"")
+				return ctx.Send([]byte("Unauthorized"))
 			}
 
 			// check if the user and password are correct
 			if user != options.Auth.Username || pass != options.Auth.Password {
-				_, err := ctx.Status(fiber.StatusUnauthorized).Write([]byte("Unauthorized"))
-				return err
+				ctx.Status(fiber.StatusUnauthorized)
+				ctx.Set("WWW-Authenticate", "Basic realm=\"Restricted\"")
+				return ctx.Send([]byte("Unauthorized"))
 			}
 
 			return pprofHandler(ctx)

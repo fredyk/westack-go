@@ -11,6 +11,8 @@ import (
 
 func Test_Get_Swagger_Docs(t *testing.T) {
 
+	t.Parallel()
+
 	// start client
 	client := http.Client{}
 

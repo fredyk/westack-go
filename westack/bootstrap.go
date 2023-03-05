@@ -375,19 +375,7 @@ func (app *WeStack) setupModel(loadedModel *model.Model, dataSource *datasource.
 		loadedModel.BaseUrl = app.restApiRoot + "/" + plural
 
 		loadedModel.On("findMany", func(ctx *model.EventContext) error {
-			result, err := loadedModel.FindMany(ctx.Filter, ctx)
-			out := make(wst.A, len(result))
-			for idx, item := range result {
-				item.HideProperties()
-				out[idx] = item.ToJSON()
-			}
-
-			if err != nil {
-				return err
-			}
-			ctx.StatusCode = fiber.StatusOK
-			ctx.Result = out
-			return nil
+			return handleFindMany(loadedModel, ctx)
 		})
 		loadedModel.On("count", func(ctx *model.EventContext) error {
 			result, err := loadedModel.Count(ctx.Filter, ctx)
@@ -523,11 +511,34 @@ func (app *WeStack) setupModel(loadedModel *model.Model, dataSource *datasource.
 	}
 }
 
+func handleFindMany(loadedModel *model.Model, ctx *model.EventContext) error {
+	if loadedModel.App.Debug {
+		fmt.Println("DEBUG: handleFindMany")
+	}
+	result, err := loadedModel.FindMany(ctx.Filter, ctx)
+	if err != nil {
+		return err
+	}
+
+	chunkGenerator := model.NewInstanceAChunkGenerator(loadedModel, result, "application/json")
+
+	//out := make(wst.A, len(result))
+	//for idx, item := range result {
+	//	item.HideProperties()
+	//	out[idx] = item.ToJSON()
+	//}
+
+	ctx.StatusCode = fiber.StatusOK
+	ctx.Result = chunkGenerator
+	return nil
+}
+
 func (app *WeStack) asInterface() *wst.IApp {
 	return &wst.IApp{
 		Debug:        app.debug,
 		JwtSecretKey: app.jwtSecretKey,
 		Viper:        app.Viper,
+		Bson:         app.Bson,
 		FindModel: func(modelName string) (interface{}, error) {
 			return app.FindModel(modelName)
 		},

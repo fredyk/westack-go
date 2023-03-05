@@ -239,6 +239,20 @@ func TestMain(m *testing.M) {
 			if (*ctx.Data)["__overwriteWith"] != nil {
 				ctx.Result = (*ctx.Data)["__overwriteWith"]
 			}
+			if (*ctx.Data)["__overwriteWithInstance"] != nil {
+				ctx.Result = noteModel.Build((*ctx.Data)["__overwriteWithInstance"].(wst.M), ctx)
+			}
+			if (*ctx.Data)["__overwriteWithInstancePointer"] != nil {
+				v := noteModel.Build((*ctx.Data)["__overwriteWithInstancePointer"].(wst.M), ctx)
+				ctx.Result = &v
+			}
+			return nil
+		})
+
+		noteModel.Observe("after save", func(ctx *model.EventContext) error {
+			if (*ctx.Data)["__forceAfterError"] == true {
+				return fmt.Errorf("forced error")
+			}
 			return nil
 		})
 
