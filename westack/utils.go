@@ -9,7 +9,6 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/golang/protobuf/jsonpb"
 	"github.com/golang/protobuf/proto"
-	"go.elastic.co/apm/module/apmgrpc"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
@@ -91,8 +90,7 @@ func gRPCCallWithBody[InputT any, ClientT interface{}, OutputT proto.Message](se
 }
 
 func connectGRPCService(url string) (*grpc.ClientConn, error) {
-	return grpc.Dial(url, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock(), grpc.WithBlock(), grpc.WithUnaryInterceptor(apmgrpc.NewUnaryClientInterceptor()),
-		grpc.WithStreamInterceptor(apmgrpc.NewStreamClientInterceptor()))
+	return grpc.Dial(url, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock(), grpc.WithBlock())
 }
 
 func disconnect(conn *grpc.ClientConn) error {
