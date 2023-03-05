@@ -14,7 +14,6 @@ import (
 	"github.com/gofiber/fiber/v2/middleware/recover"
 	"github.com/golang/protobuf/proto"
 	"github.com/spf13/viper"
-	"go.mongodb.org/mongo-driver/bson/primitive"
 	"google.golang.org/grpc"
 
 	"github.com/goccy/go-json"
@@ -65,6 +64,15 @@ func (app *WeStack) FindDatasource(dsName string) (*datasource.Datasource, error
 	}
 
 	return result, nil
+}
+
+func (app *WeStack) FindModelsWithClass(modelClass string) (foundModels []*model.Model) {
+	for _, foundModel := range *app.modelRegistry {
+		if foundModel.Config.Base == modelClass {
+			foundModels = append(foundModels, foundModel)
+		}
+	}
+	return
 }
 
 func (app *WeStack) Boot(customRoutesCallbacks ...func(app *WeStack)) {
@@ -124,89 +132,15 @@ func (app *WeStack) Boot(customRoutesCallbacks ...func(app *WeStack)) {
 	systemContext := &model.EventContext{
 		Bearer: &model.BearerToken{User: &model.BearerUser{System: true}},
 	}
-	// Find user model to add admin user
-potentialUserModelLoop:
-	for _, potentialUserModel := range *app.modelRegistry {
-		if potentialUserModel.Config.Base == "User" {
-			// Check if admin user exists
-			adminUser, err := potentialUserModel.FindOne(&wst.Filter{
-				Where: &wst.Where{
-					"username": app.Options.adminUsername,
-				},
-			}, systemContext)
-			if err != nil {
-				log.Fatal("Error while checking admin user", err)
-			}
-			if adminUser != nil {
-				fmt.Println("Admin user already exists")
-				break potentialUserModelLoop
-			} else {
-				user, err := potentialUserModel.Create(wst.M{
-					"username": app.Options.adminUsername,
-					"password": app.Options.adminPwd,
-				}, systemContext)
-				if err != nil {
-					log.Fatal("Error while creating admin user", err)
-				}
-				fmt.Println("Created admin user with ID:", user.Id)
-				// find role model to add admin role
-			potentialRoleModelLoop:
-				for _, potentialRoleModel := range *app.modelRegistry {
-					if potentialRoleModel.Config.Base == "Role" {
-						// check if admin role exists
-						var roleId primitive.ObjectID
-						adminRole, err := potentialRoleModel.FindOne(&wst.Filter{
-							Where: &wst.Where{
-								"name": "admin",
-							},
-						}, systemContext)
-						if err != nil {
-							log.Fatal("Error while checking admin role", err)
-						}
-						if adminRole != nil {
-							fmt.Println("Admin role already exists")
-							roleId = adminRole.Id.(primitive.ObjectID)
-						} else {
-							role, err := potentialRoleModel.Create(wst.M{
-								"name": "admin",
-							}, systemContext)
-							if err != nil {
-								log.Fatal("Error while creating admin role", err)
-							}
-							fmt.Println("Created admin role with ID:", role.Id)
-							roleId = role.Id.(primitive.ObjectID)
-						}
 
-						// check if role mapping exists
-						roleMapping, err := app.roleMappingModel.FindOne(&wst.Filter{
-							Where: &wst.Where{
-								"principalType": "USER",
-								"principalId":   user.Id,
-								"roleId":        roleId,
-							},
-						}, systemContext)
-						if err != nil {
-							log.Fatal("Error while checking admin role mapping", err)
-						}
-						if roleMapping != nil {
-							fmt.Println("Admin role mapping already exists")
-						} else {
-							createdRoleMapping, err := app.roleMappingModel.Create(wst.M{
-								"principalType": "USER",
-								"principalId":   user.Id,
-								"roleId":        roleId,
-							}, systemContext)
-							if err != nil {
-								log.Fatal("Error while creating admin role mapping", err)
-							}
-							fmt.Println("Created admin role mapping with ID:", createdRoleMapping.Id)
-						}
-						break potentialRoleModelLoop
-					}
-				}
-				break potentialUserModelLoop
-			}
-		}
+	// Upsert the admin user
+	_, err = UpsertUserWithRoles(app, UserWithRoles{
+		Username: app.Options.adminUsername,
+		Password: app.Options.adminPwd,
+		Roles:    []string{"admin"},
+	}, systemContext)
+	if err != nil {
+		log.Fatalf("Error while creating admin user: %v", err)
 	}
 
 	for _, cb := range customRoutesCallbacks {
