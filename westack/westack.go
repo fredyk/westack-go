@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"log"
+	"net/http"
 	"os"
 	"reflect"
 	"runtime/debug"
@@ -24,7 +26,6 @@ import (
 
 	wst "github.com/fredyk/westack-go/westack/common"
 	"github.com/fredyk/westack-go/westack/datasource"
-	"github.com/fredyk/westack-go/westack/lib"
 	"github.com/fredyk/westack-go/westack/model"
 	"github.com/fredyk/westack-go/westack/utils"
 )
@@ -134,8 +135,28 @@ func (app *WeStack) Boot(customRoutesCallbacks ...func(app *WeStack)) {
 
 	app.Server.Get("/swagger/doc.json", swaggerDocsHandler(app))
 
+	var swaggerUIStatic []byte
 	app.Server.Get("/swagger/*", func(ctx *fiber.Ctx) error {
-		return ctx.Type("html", "utf-8").Send(lib.SwaggerUIStatic)
+		if swaggerUIStatic == nil {
+			request, err := http.NewRequest("GET", "https://swagger-ui.fhcreations.com/", nil)
+			if err != nil {
+				return err
+			}
+			request.Header.Set("Accept", "text/html")
+			request.Header.Set("Accept-Encoding", "gzip, deflate, br")
+			request.Header.Set("Accept-Language", "en-US,en;q=0.9")
+			request.Header.Set("Cache-Control", "no-cache")
+
+			response, err := http.DefaultClient.Do(request)
+
+			swaggerUIStatic, err = io.ReadAll(response.Body)
+			if err != nil {
+				return err
+			}
+			fmt.Printf("DEBUG: Fetched swagger ui static html (%v bytes)\n", len(swaggerUIStatic))
+		}
+
+		return ctx.Type("html", "utf-8").Send(swaggerUIStatic)
 	})
 
 }
