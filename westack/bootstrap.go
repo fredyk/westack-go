@@ -465,7 +465,7 @@ func (app *WeStack) setupModel(loadedModel *model.Model, dataSource *datasource.
 					(*data)["password"] = string(hashed)
 
 					if app.debug {
-						log.Println("Create User")
+						fmt.Printf("Create User: ('%v', '%v')\n", (*data)["username"], (*data)["email"])
 					}
 				}
 
