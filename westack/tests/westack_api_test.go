@@ -80,6 +80,9 @@ func createNoteForUser(userId string, token string, t *testing.T) (note wst.M, e
 }
 
 func Test_FindMany(t *testing.T) {
+
+	t.Parallel()
+
 	var err error
 
 	user := createUserThroughNetwork(t)
@@ -116,6 +119,8 @@ func Test_FindMany(t *testing.T) {
 }
 
 func Test_EmptyArray(t *testing.T) {
+
+	t.Parallel()
 
 	request, err := http.NewRequest("GET", "http://localhost:8019/api/v1/empties", nil)
 	assert.Nil(t, err)
