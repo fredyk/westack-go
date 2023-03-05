@@ -9,6 +9,9 @@ import (
 )
 
 func Test_GetHeap(t *testing.T) {
+
+	t.Parallel()
+
 	request, err := http.NewRequest("GET", "http://localhost:8019/debug/pprof/heap", nil)
 	assert.Nil(t, err)
 
@@ -22,6 +25,9 @@ func Test_GetHeap(t *testing.T) {
 }
 
 func Test_GetHeapUnauthorized1(t *testing.T) {
+
+	t.Parallel()
+
 	request, err := http.NewRequest("GET", "http://localhost:8019/debug/pprof/heap", nil)
 	assert.Nil(t, err)
 
@@ -31,6 +37,9 @@ func Test_GetHeapUnauthorized1(t *testing.T) {
 }
 
 func Test_GetHeapUnauthorized2(t *testing.T) {
+
+	t.Parallel()
+
 	request, err := http.NewRequest("GET", "http://localhost:8019/debug/pprof/heap", nil)
 	assert.Nil(t, err)
 
@@ -42,6 +51,9 @@ func Test_GetHeapUnauthorized2(t *testing.T) {
 }
 
 func Test_GetHeapUnauthorized3(t *testing.T) {
+
+	t.Parallel()
+
 	request, err := http.NewRequest("GET", "http://localhost:8019/debug/pprof/heap", nil)
 	assert.Nil(t, err)
 
@@ -54,6 +66,9 @@ func Test_GetHeapUnauthorized3(t *testing.T) {
 }
 
 func Test_GetHeapUnauthorized4(t *testing.T) {
+
+	t.Parallel()
+
 	request, err := http.NewRequest("GET", "http://localhost:8019/debug/pprof/heap", nil)
 	assert.Nil(t, err)
 
@@ -67,6 +82,9 @@ func Test_GetHeapUnauthorized4(t *testing.T) {
 }
 
 func Test_GetHeapUnauthorized5(t *testing.T) {
+
+	t.Parallel()
+
 	request, err := http.NewRequest("GET", "http://localhost:8019/debug/pprof/heap", nil)
 	assert.Nil(t, err)
 
