@@ -159,6 +159,7 @@ func (app *WeStack) Boot(customRoutesCallbacks ...func(app *WeStack)) {
 	app.Server.Get("/swagger/doc.json", swaggerDocsHandler(app))
 
 	var swaggerUIStatic []byte
+	var swaggerContentEncoding = "deflate"
 	app.Server.Get("/swagger/*", func(ctx *fiber.Ctx) error {
 		if swaggerUIStatic == nil {
 			request, err := http.NewRequest("GET", "https://swagger-ui.fhcreations.com/", nil)
@@ -167,19 +168,41 @@ func (app *WeStack) Boot(customRoutesCallbacks ...func(app *WeStack)) {
 			}
 			request.Header.Set("Accept", "text/html")
 			request.Header.Set("Accept-Encoding", "gzip, deflate, br")
-			request.Header.Set("Accept-Language", "en-US,en;q=0.9")
-			request.Header.Set("Cache-Control", "no-cache")
+			//request.Header.Set("Accept-Language", "en-US,en;q=0.9")
+			//request.Header.Set("Cache-Control", "no-cache")
 
 			response, err := http.DefaultClient.Do(request)
 
-			swaggerUIStatic, err = io.ReadAll(response.Body)
+			for _, v := range response.Header["Content-Encoding"] {
+				swaggerContentEncoding = v
+			}
+
+			var reader io.Reader
+			//// decompress
+			//switch swaggerContentEncoding {
+			//case "gzip":
+			//	reader, err = gzip.NewReader(response.Body)
+			//	if err != nil {
+			//		break
+			//	}
+			//case "br":
+			//	reader = brotli.NewReader(response.Body)
+			//case "deflate", "":
+			reader = response.Body
+			//}
+			swaggerUIStatic, err = io.ReadAll(reader)
 			if err != nil {
 				return err
 			}
+
 			fmt.Printf("DEBUG: Fetched swagger ui static html (%v bytes)\n", len(swaggerUIStatic))
+			fmt.Printf("DEBUG: Swagger Content-Encoding: %v\n", swaggerContentEncoding)
 		}
 
-		return ctx.Type("html", "utf-8").Send(swaggerUIStatic)
+		ctx.Status(fiber.StatusOK).Set("Content-Type", "text/html; charset=utf-8")
+		ctx.Set("Content-Encoding", swaggerContentEncoding)
+
+		return ctx.Send(swaggerUIStatic)
 	})
 }
 
