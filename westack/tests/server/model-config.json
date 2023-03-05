@@ -1,4 +1,7 @@
 {
+  "Empty": {
+    "dataSource": "db"
+  },
   "Note": {
     "dataSource": "db"
   },

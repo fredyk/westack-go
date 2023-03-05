@@ -11,6 +11,8 @@ import (
 
 func Test_ExtractLookups(t *testing.T) {
 
+	t.Parallel()
+
 	// test nil filter
 	lookups, err := noteModel.ExtractLookupsFromFilter(nil, false)
 	assert.Nil(t, err)
