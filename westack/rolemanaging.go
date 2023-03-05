@@ -39,12 +39,12 @@ func UpsertUserWithRoles(app *WeStack, userToUpsert UserWithRoles, eventContext 
 		err = fmt.Errorf("user model not found")
 		return
 	}
+	userModel = foundModels[0]
 	foundModels = app.FindModelsWithClass("Role")
 	if len(foundModels) == 0 {
 		err = fmt.Errorf("role model not found")
 		return
 	}
-	userModel = foundModels[0]
 	roleModel = foundModels[0]
 
 	// Check if the user exists
