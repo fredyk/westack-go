@@ -11,6 +11,9 @@ import (
 )
 
 func Test_CreateWithMap(t *testing.T) {
+
+	t.Parallel()
+
 	created, err := noteModel.Create(map[string]interface{}{
 		"title": "Test",
 	}, systemContext)
@@ -19,6 +22,9 @@ func Test_CreateWithMap(t *testing.T) {
 }
 
 func Test_CreateWithMapPointer(t *testing.T) {
+
+	t.Parallel()
+
 	created, err := noteModel.Create(&map[string]interface{}{
 		"date": time.Now(),
 	}, systemContext)
@@ -27,6 +33,9 @@ func Test_CreateWithMapPointer(t *testing.T) {
 }
 
 func Test_CreateWithStruct(t *testing.T) {
+
+	t.Parallel()
+
 	created, err := noteModel.Create(struct {
 		SomeInt int `bson:"someInt"`
 	}{
@@ -37,6 +46,9 @@ func Test_CreateWithStruct(t *testing.T) {
 }
 
 func Test_CreateWithM(t *testing.T) {
+
+	t.Parallel()
+
 	created, err := noteModel.Create(wst.M{
 		"someFloat": 1.1,
 	}, systemContext)
@@ -45,6 +57,9 @@ func Test_CreateWithM(t *testing.T) {
 }
 
 func Test_CreateWithMPointer(t *testing.T) {
+
+	t.Parallel()
+
 	created, err := noteModel.Create(&wst.M{
 		"someBoolean": true,
 	}, systemContext)
@@ -53,6 +68,9 @@ func Test_CreateWithMPointer(t *testing.T) {
 }
 
 func Test_CreateWithInstance(t *testing.T) {
+
+	t.Parallel()
+
 	created, err := noteModel.Create(noteModel.Build(wst.M{
 		"foo": "bar",
 	}, systemContext), systemContext)
@@ -61,6 +79,9 @@ func Test_CreateWithInstance(t *testing.T) {
 }
 
 func Test_CreateWithInstancePointer(t *testing.T) {
+
+	t.Parallel()
+
 	v := noteModel.Build(wst.M{
 		"foo2": "bar2",
 	}, systemContext)
@@ -70,6 +91,9 @@ func Test_CreateWithInstancePointer(t *testing.T) {
 }
 
 func Test_CreateWithBadStruct(t *testing.T) {
+
+	t.Parallel()
+
 	_, err := noteModel.Create(struct {
 		SomeInt chan int `bson:"someInt"`
 	}{
@@ -79,11 +103,17 @@ func Test_CreateWithBadStruct(t *testing.T) {
 }
 
 func Test_CreateWithInvalidInput(t *testing.T) {
+
+	t.Parallel()
+
 	_, err := noteModel.Create(1, systemContext)
 	assert.NotNil(t, err)
 }
 
 func Test_CreateWithOverrideResultAsM(t *testing.T) {
+
+	t.Parallel()
+
 	created, err := noteModel.Create(wst.M{
 		"__overwriteWith": wst.M{
 			"overrided1": true,
@@ -94,6 +124,9 @@ func Test_CreateWithOverrideResultAsM(t *testing.T) {
 }
 
 func Test_CreateWithOverrideResultAsInstance(t *testing.T) {
+
+	t.Parallel()
+
 	_, err := noteModel.Create(wst.M{
 		"__overwriteWithInstance": wst.M{
 			"overrided2": wst.M{
@@ -105,6 +138,9 @@ func Test_CreateWithOverrideResultAsInstance(t *testing.T) {
 }
 
 func Test_CreateWithOverrideResultAsInstancePointer(t *testing.T) {
+
+	t.Parallel()
+
 	_, err := noteModel.Create(wst.M{
 		"__overwriteWithInstancePointer": wst.M{
 			"overrided4": wst.M{
@@ -116,6 +152,9 @@ func Test_CreateWithOverrideResultAsInstancePointer(t *testing.T) {
 }
 
 func Test_CreateWithOverrideResultError(t *testing.T) {
+
+	t.Parallel()
+
 	_, err := noteModel.Create(wst.M{
 		"__forceError": true,
 	}, systemContext)
@@ -123,6 +162,9 @@ func Test_CreateWithOverrideResultError(t *testing.T) {
 }
 
 func Test_CreateWithOverrideInvalid(t *testing.T) {
+
+	t.Parallel()
+
 	_, err := noteModel.Create(wst.M{
 		"__overwriteWith": 1,
 	}, systemContext)
@@ -130,6 +172,9 @@ func Test_CreateWithOverrideInvalid(t *testing.T) {
 }
 
 func Test_CreateWithInvalidBsonInput(t *testing.T) {
+
+	t.Parallel()
+
 	created, err := noteModel.Create(wst.M{
 		"invalid": make(chan int),
 	}, systemContext)
@@ -137,6 +182,9 @@ func Test_CreateWithInvalidBsonInput(t *testing.T) {
 }
 
 func Test_CreateWithForcingError(t *testing.T) {
+
+	t.Parallel()
+
 	_, err := noteModel.Create(wst.M{
 		"__forceAfterError": true,
 	}, systemContext)
