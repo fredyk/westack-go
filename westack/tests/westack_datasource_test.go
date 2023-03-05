@@ -11,6 +11,8 @@ import (
 
 func Test_Datasource_Initialize_InvalidConnector(t *testing.T) {
 
+	t.Parallel()
+
 	ds := datasource.New("test2020", app.DsViper, context.Background())
 	err := ds.Initialize()
 	assert.NotNil(t, err)
@@ -19,6 +21,8 @@ func Test_Datasource_Initialize_InvalidConnector(t *testing.T) {
 }
 
 func Test_Datasource_Initialize_ConnectError(t *testing.T) {
+
+	t.Parallel()
 
 	prevHost := app.DsViper.GetString("db.host")
 	app.DsViper.Set("db.host", "<invalid host>")

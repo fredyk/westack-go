@@ -11,6 +11,9 @@ import (
 )
 
 func Test_GenerateNextChunk_Error(t *testing.T) {
+
+	t.Parallel()
+
 	var err error
 
 	// unmarshable map
