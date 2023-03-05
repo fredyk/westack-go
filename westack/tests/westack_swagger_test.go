@@ -2,14 +2,19 @@ package tests
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"testing"
+
+	"github.com/andybalholm/brotli"
 
 	wst "github.com/fredyk/westack-go/westack/common"
 )
 
 func Test_Get_Swagger_Docs(t *testing.T) {
+
+	t.Parallel()
 
 	// start client
 	client := http.Client{}
@@ -48,6 +53,8 @@ func Test_Get_Swagger_Docs(t *testing.T) {
 
 func Test_Get_Swagger_UI(t *testing.T) {
 
+	t.Parallel()
+
 	// start client
 	client := http.Client{}
 
@@ -64,7 +71,7 @@ func Test_Get_Swagger_UI(t *testing.T) {
 	}
 
 	// read response
-	body, err := io.ReadAll(res.Body)
+	body, err := io.ReadAll(brotli.NewReader(res.Body))
 	if err != nil {
 		t.Errorf("Get Swagger Error: %s", err)
 		return
@@ -74,4 +81,6 @@ func Test_Get_Swagger_UI(t *testing.T) {
 		t.Errorf("Get Swagger Error: empty response")
 		return
 	}
+
+	fmt.Printf("DEBUG: Swagger: got %v bytes <-- %v\n", len(body), string(body[:32]))
 }
