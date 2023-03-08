@@ -188,13 +188,22 @@ func Test_ParseDate2(t *testing.T) {
 	assert.Equal(t, "2020-12-31T18:00:00Z", d.Format("2006-01-02T15:04:05Z"))
 }
 
-func Test_ParseDate3(t *testing.T) {
+func Test_ParseDate3_00(t *testing.T) {
 
 	t.Parallel()
 
 	d, err := wst.ParseDate("2021-01-01T00:00:00Z")
 	assert.NoError(t, err)
 	assert.Equal(t, int64(1609459200), d.Unix())
+}
+
+func Test_ParseDate3_01(t *testing.T) {
+
+	t.Parallel()
+
+	d, err := wst.ParseDate("1967-11-07T00:00:00")
+	assert.NoError(t, err)
+	assert.Equal(t, int64(-67910400), d.Unix())
 }
 
 func Test_ParseDate4(t *testing.T) {

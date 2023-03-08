@@ -225,8 +225,8 @@ var RegexpIpStart = regexp.MustCompile("^[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}\\.
 var regexpTimeZoneReplacing = regexp.MustCompile("([+\\-]\\d{2}):(\\d{2})$")
 var regexpDate1 = regexp.MustCompile("^(\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2})([+\\-:0-9]+)$")
 var regexpDate2 = regexp.MustCompile("^(\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3})([+\\-:0-9]+)$")
-var regexpDate3 = regexp.MustCompile("^(\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2})([Z]+)?$")
-var regexpDate4 = regexp.MustCompile("^(\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3})([Z]+)?$")
+var regexpDate3 = regexp.MustCompile("^(\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2})(Z)?$")
+var regexpDate4 = regexp.MustCompile("^(\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3})(Z)?$")
 
 type WeStackError struct {
 	FiberError *fiber.Error
@@ -300,9 +300,19 @@ func ParseDate(data string) (time.Time, error) {
 	} else if IsDate2(data) {
 		layout := "2006-01-02T15:04:05.000-0700"
 		parsedDate, err = time.Parse(layout, regexpTimeZoneReplacing.ReplaceAllString(data, "$1$2"))
-	} else if IsDate3(data) {
-		layout := "2006-01-02T15:04:05Z"
+	} else if is3, groups := IsDate3(data); is3 {
+		//layout := "2006-01-02T15:04:05Z"
+		var layout string
+		isZ := groups[2] == "Z"
+		if isZ {
+			layout = "2006-01-02T15:04:05Z"
+		} else {
+			layout = "2006-01-02T15:04:05"
+		}
 		parsedDate, err = time.Parse(layout, data)
+		if !isZ && err == nil && parsedDate.Unix() != 0 {
+			parsedDate = parsedDate.In(time.UTC)
+		}
 	} else if IsDate4(data) {
 		layout := "2006-01-02T15:04:05.000Z"
 		parsedDate, err = time.Parse(layout, data)
@@ -314,7 +324,8 @@ func ParseDate(data string) (time.Time, error) {
 }
 
 func IsAnyDate(data string) bool {
-	return IsDate1(data) || IsDate2(data) || IsDate3(data) || IsDate4(data)
+	isDate3, _ := IsDate3(data)
+	return IsDate1(data) || IsDate2(data) || isDate3 || IsDate4(data)
 }
 
 func IsDate1(data string) bool {
@@ -325,8 +336,10 @@ func IsDate2(data string) bool {
 	return regexpDate2.MatchString(data)
 }
 
-func IsDate3(data string) bool {
-	return regexpDate3.MatchString(data)
+func IsDate3(data string) (bool, []string) {
+	matchGroups := regexpDate3.FindStringSubmatch(data)
+	//return regexpDate3.MatchString(data)
+	return len(matchGroups) == 3, matchGroups
 }
 
 func IsDate4(data string) bool {
