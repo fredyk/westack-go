@@ -11,6 +11,7 @@ import (
 	"net"
 	"net/http"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -103,6 +104,58 @@ func Test_GRPCCallWithQueryParams_WithBadQueryParams(t *testing.T) {
 	if res.StatusCode != 500 {
 		t.Errorf("GRPCCallWithQueryParams Error: %d", res.StatusCode)
 	}
+
+}
+
+func Test_GRPCCallWithBodyParamsOK(t *testing.T) {
+
+	t.Parallel()
+
+	// start client
+	client := http.Client{}
+
+	// test for ok
+	res, err := client.Post("http://localhost:8020/test-grpc-post", "application/json", bufio.NewReader(strings.NewReader(`{"foo":1}`)))
+	assert.Nil(t, err)
+	assert.Equal(t, 200, res.StatusCode)
+
+	// read response
+	body, err := io.ReadAll(res.Body)
+	assert.Nil(t, err)
+
+	// compare response
+	var out pb.ResGrpcTestMessage
+	err = json.Unmarshal(body, &out)
+	assert.Nil(t, err)
+	assert.Equal(t, int32(1), out.Bar)
+
+}
+
+func Test_GRPCCallWithBodyParamsError(t *testing.T) {
+
+	t.Parallel()
+
+	// start client
+	client := http.Client{}
+
+	// test for error
+	res, err := client.Post("http://localhost:8020/test-grpc-post", "application/json", bufio.NewReader(strings.NewReader(`{"foo":"abc"}`)))
+	assert.Nil(t, err)
+	assert.Equal(t, 500, res.StatusCode)
+
+}
+
+func Test_GRPCCallWithBodyParams_WithBadBody(t *testing.T) {
+
+	t.Parallel()
+
+	// start client
+	client := http.Client{}
+
+	// test for error
+	res, err := client.Post("http://localhost:8020/test-grpc-post", "application/json", bufio.NewReader(strings.NewReader(`{"foo":abc}`)))
+	assert.Nil(t, err)
+	assert.Equal(t, 500, res.StatusCode)
 
 }
 
@@ -216,6 +269,11 @@ func TestMain(m *testing.M) {
 			pb.NewGrpcTestClient,
 			pb.FooClient.TestFoo,
 		)).Name("Test_TestGrpcGet")
+		app.Server.Post("/test-grpc-post", westack.GRPCCallWithBody[pb.ReqGrpcTestMessage, pb.FooClient, *pb.ResGrpcTestMessage](
+			"localhost:7777",
+			pb.NewGrpcTestClient,
+			pb.FooClient.TestFoo,
+		)).Name("Test_TestGrpcPost")
 		//// for invalid connections
 		//app.Server.Get("/test-grpc-get-invalid", westack.GRPCCallWithQueryParams[pb.ReqGrpcTestMessage, pb.FooClient, *pb.ResGrpcTestMessage](
 		//	"localhost:8020",
