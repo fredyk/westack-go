@@ -1,0 +1,19 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="beta tests" type="GoTestRunConfiguration" factoryName="Go Test">
+    <module name="westack-go" />
+    <working_directory value="$PROJECT_DIR$/westack/tests" />
+    <envs>
+      <env name="WST_ADMIN_USERNAME" value="test" />
+      <env name="WST_ADMIN_PWD" value="abcd1234." />
+      <env name="PPROF_AUTH_USERNAME" value="test" />
+      <env name="PPROF_AUTH_PASSWORD" value="abcd1234." />
+      <env name="DEBUG" value="true" />
+    </envs>
+    <root_directory value="$PROJECT_DIR$" />
+    <kind value="FILE" />
+    <directory value="$PROJECT_DIR$" />
+    <filePath value="$PROJECT_DIR$/westack/tests/westack_api_test.go|$PROJECT_DIR$/westack/tests/westack_chunks_test.go|$PROJECT_DIR$/westack/tests/westack_common_test.go|$PROJECT_DIR$/westack/tests/westack_datasource_test.go|$PROJECT_DIR$/westack/tests/westack_grpc_test.go|$PROJECT_DIR$/westack/tests/westack_model_instance_test.go|$PROJECT_DIR$/westack/tests/westack_model_test.go|$PROJECT_DIR$/westack/tests/westack_pprof_test.go|$PROJECT_DIR$/westack/tests/westack_relation_test.go|$PROJECT_DIR$/westack/tests/westack_roles_test.go|$PROJECT_DIR$/westack/tests/westack_swagger_test.go|$PROJECT_DIR$/westack/tests/westack_test.go" />
+    <framework value="gotest" />
+    <method v="2" />
+  </configuration>
+</component>
