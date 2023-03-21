@@ -229,10 +229,10 @@ func (loadedModel *Model) Build(data wst.M, sameLevelCache *buildCache, baseCont
 					strict := loadedModel.App.Viper.GetBool("strictSingleRelatedDocumentCheck")
 					if v, ok := sameLevelCache.singleRelatedDocumentsById[modelInstance.Id.(primitive.ObjectID).Hex()]; ok {
 						if strict {
-							fmt.Printf("ERROR: Model.Build() --> Found multiple single related documents with the same parent id: %v\n", v.Id.(primitive.ObjectID).Hex())
-							return Instance{}, fmt.Errorf("found multiple single related documents with the same parent id: %v", v.Id.(primitive.ObjectID).Hex())
+							fmt.Printf("ERROR: Model.Build() --> Found multiple single related documents at %v.%v with the same parent %v.Id=%v\n", loadedModel.Name, relationName, loadedModel.Name, v.Id.(primitive.ObjectID).Hex())
+							return Instance{}, fmt.Errorf("found multiple single related documents at %v.%v with the same parent %v.Id=%v", loadedModel.Name, relationName, loadedModel.Name, v.Id.(primitive.ObjectID).Hex())
 						} else {
-							fmt.Printf("WARNING: Model.Build() --> Found multiple single related documents with the same parent id: %v\n", v.Id.(primitive.ObjectID).Hex())
+							fmt.Printf("WARNING: Model.Build() --> Found multiple single related documents at %v.%v with the same parent %v.Id=%v\n", loadedModel.Name, relationName, loadedModel.Name, v.Id.(primitive.ObjectID).Hex())
 						}
 					} else {
 						sameLevelCache.singleRelatedDocumentsById[modelInstance.Id.(primitive.ObjectID).Hex()] = modelInstance
