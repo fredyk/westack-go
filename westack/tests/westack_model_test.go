@@ -1,6 +1,7 @@
 package tests
 
 import (
+	"github.com/fredyk/westack-go/westack/model"
 	"testing"
 	"time"
 
@@ -71,9 +72,11 @@ func Test_CreateWithInstance(t *testing.T) {
 
 	t.Parallel()
 
-	created, err := noteModel.Create(noteModel.Build(wst.M{
+	build, err2 := noteModel.Build(wst.M{
 		"foo": "bar",
-	}, systemContext), systemContext)
+	}, model.NewBuildCache(), systemContext)
+	assert.Nil(t, err2)
+	created, err := noteModel.Create(build, systemContext)
 	assert.Nil(t, err)
 	assert.Equal(t, "bar", created.GetString("foo"))
 }
@@ -82,9 +85,10 @@ func Test_CreateWithInstancePointer(t *testing.T) {
 
 	t.Parallel()
 
-	v := noteModel.Build(wst.M{
+	v, err := noteModel.Build(wst.M{
 		"foo2": "bar2",
-	}, systemContext)
+	}, model.NewBuildCache(), systemContext)
+	assert.Nil(t, err)
 	created, err := noteModel.Create(&v, systemContext)
 	assert.Nil(t, err)
 	assert.Equal(t, "bar2", created.GetString("foo2"))

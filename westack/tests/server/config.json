@@ -9,5 +9,6 @@
     }
   },
   "restApiRoot": "/api/v1",
-  "port": 8019
+  "port": 8019,
+  "strictSingleRelatedDocumentCheck": true
 }
