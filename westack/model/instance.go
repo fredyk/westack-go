@@ -202,7 +202,10 @@ func (modelInstance *Instance) UpdateAttributes(data interface{}, baseContext *E
 				v := eventContext.Result.(Instance)
 				return &v, nil
 			case wst.M:
-				v := modelInstance.Model.Build(eventContext.Result.(wst.M), targetBaseContext)
+				v, err := modelInstance.Model.Build(eventContext.Result.(wst.M), NewBuildCache(), targetBaseContext)
+				if err != nil {
+					return nil, err
+				}
 				return &v, nil
 			default:
 				return nil, fmt.Errorf("invalid eventContext.Result type, expected *Instance, Instance or wst.M; found %T", eventContext.Result)

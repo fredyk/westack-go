@@ -156,7 +156,17 @@ type RegistryEntry struct {
 	Model *Model
 }
 
-func (loadedModel *Model) Build(data wst.M, baseContext *EventContext) Instance {
+type buildCache struct {
+	singleRelatedDocumentsById map[string]interface{}
+}
+
+func NewBuildCache() *buildCache {
+	return &buildCache{
+		singleRelatedDocumentsById: make(map[string]interface{}),
+	}
+}
+
+func (loadedModel *Model) Build(data wst.M, sameLevelCache *buildCache, baseContext *EventContext) (Instance, error) {
 
 	//if loadedModel.App.Stats.BuildsByModel[loadedModel.Name] == nil {
 	//	loadedModel.App.Stats.BuildsByModel[loadedModel.Name] = map[string]float64{
@@ -192,7 +202,7 @@ func (loadedModel *Model) Build(data wst.M, baseContext *EventContext) Instance 
 			relatedModel, err := loadedModel.App.FindModel(relationConfig.Model)
 			if err != nil {
 				log.Printf("ERROR: Model.Build() --> %v\n", err)
-				return Instance{}
+				return Instance{}, nil
 			}
 			if relatedModel != nil {
 				switch relationConfig.Type {
@@ -201,7 +211,25 @@ func (loadedModel *Model) Build(data wst.M, baseContext *EventContext) Instance 
 					if asInstance, asInstanceOk := rawRelatedData.(Instance); asInstanceOk {
 						relatedInstance = asInstance
 					} else {
-						relatedInstance = relatedModel.(*Model).Build(rawRelatedData.(wst.M), targetBaseContext)
+						relatedInstance, err = relatedModel.(*Model).Build(rawRelatedData.(wst.M), sameLevelCache, targetBaseContext)
+						if err != nil {
+							log.Printf("ERROR: Model.Build() --> %v\n", err)
+							return Instance{}, err
+						}
+					}
+					// Check if this related instance is already in the same level cache
+					// If so, check app.Viper.GetBool("strictSingleRelatedDocumentCheck") and if true, return an error
+					// If not, print a warning
+					strict := loadedModel.App.Viper.GetBool("strictSingleRelatedDocumentCheck")
+					if v, ok := sameLevelCache.singleRelatedDocumentsById[relatedInstance.Id.(primitive.ObjectID).Hex()]; ok {
+						if strict {
+							log.Printf("ERROR: Model.Build() --> Found multiple single related documents with the same id: %v\n", v)
+							return Instance{}, fmt.Errorf("found multiple single related documents with the same id: %v", v)
+						} else {
+							log.Printf("WARNING: Model.Build() --> Found multiple single related documents with the same id: %v\n", v)
+						}
+					} else {
+						sameLevelCache.singleRelatedDocumentsById[relatedInstance.Id.(primitive.ObjectID).Hex()] = relatedInstance
 					}
 					data[relationName] = &relatedInstance
 				case "hasMany", "hasAndBelongsToMany":
@@ -212,7 +240,11 @@ func (loadedModel *Model) Build(data wst.M, baseContext *EventContext) Instance 
 					} else {
 						result = make(InstanceA, len(rawRelatedData.(primitive.A)))
 						for idx, v := range rawRelatedData.(primitive.A) {
-							result[idx] = relatedModel.(*Model).Build(v.(wst.M), targetBaseContext)
+							result[idx], err = relatedModel.(*Model).Build(v.(wst.M), sameLevelCache, targetBaseContext)
+							if err != nil {
+								log.Printf("ERROR: Model.Build() --> %v\n", err)
+								return Instance{}, err
+							}
 						}
 					}
 
@@ -238,14 +270,14 @@ func (loadedModel *Model) Build(data wst.M, baseContext *EventContext) Instance 
 		err := loadedModel.GetHandler("__operation__after_load")(eventContext)
 		if err != nil {
 			log.Println("Warning", err)
-			return Instance{}
+			return Instance{}, nil
 		}
 	}
 
 	//loadedModel.App.Stats.BuildsByModel[loadedModel.Name]["count"]++
 	//loadedModel.App.Stats.BuildsByModel[loadedModel.Name]["time"] += float64(time.Now().UnixMilli() - init)
 
-	return modelInstance
+	return modelInstance, nil
 }
 
 func ParseFilter(filter string) *wst.Filter {
@@ -309,15 +341,22 @@ func (loadedModel *Model) FindMany(filterMap *wst.Filter, baseContext *EventCont
 				return result, nil
 			case wst.A, []wst.M:
 				var result InstanceA
+				sameLevelCache := NewBuildCache()
 				if v, castOk := eventContext.Result.(wst.A); castOk {
 					result = make(InstanceA, len(v))
 					for idx, v := range v {
-						result[idx] = loadedModel.Build(v, targetBaseContext)
+						result[idx], err = loadedModel.Build(v, sameLevelCache, targetBaseContext)
+						if err != nil {
+							return nil, err
+						}
 					}
 				} else {
 					result = make(InstanceA, len(v))
 					for idx, v := range v {
-						result[idx] = loadedModel.Build(v, targetBaseContext)
+						result[idx], err = loadedModel.Build(v, sameLevelCache, targetBaseContext)
+						if err != nil {
+							return nil, err
+						}
 					}
 				}
 				return result, nil
@@ -366,8 +405,12 @@ func (loadedModel *Model) FindMany(filterMap *wst.Filter, baseContext *EventCont
 	var results = make(InstanceA, len(*documents))
 
 	disabledCache := loadedModel.App.Viper.GetBool("disableCache")
+	sameLevelCache := NewBuildCache()
 	for idx, document := range *documents {
-		results[idx] = loadedModel.Build(document, targetBaseContext)
+		results[idx], err = loadedModel.Build(document, sameLevelCache, targetBaseContext)
+		if err != nil {
+			return nil, err
+		}
 
 		if targetInclude == nil && loadedModel.Config.Cache.Datasource != "" && !disabledCache {
 
@@ -627,7 +670,10 @@ func (loadedModel *Model) Create(data interface{}, baseContext *EventContext) (*
 				v := eventContext.Result.(Instance)
 				return &v, nil
 			case wst.M:
-				v := loadedModel.Build(eventContext.Result.(wst.M), targetBaseContext)
+				v, err := loadedModel.Build(eventContext.Result.(wst.M), NewBuildCache(), targetBaseContext)
+				if err != nil {
+					return nil, err
+				}
 				return &v, nil
 			default:
 				return nil, fmt.Errorf("invalid eventContext.Result type, expected *Instance, Instance or wst.M; found %T", eventContext.Result)
@@ -645,7 +691,10 @@ func (loadedModel *Model) Create(data interface{}, baseContext *EventContext) (*
 		// how to test this???
 		return nil, datasource.NewError(fiber.StatusBadRequest, "Could not create document")
 	} else {
-		result := loadedModel.Build(*document, eventContext)
+		result, err := loadedModel.Build(*document, NewBuildCache(), eventContext)
+		if err != nil {
+			return nil, err
+		}
 		result.HideProperties()
 		eventContext.Instance = &result
 		if loadedModel.DisabledHandlers["__operation__after_save"] != true {
