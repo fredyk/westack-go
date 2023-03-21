@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
 	"reflect"
 	"runtime/debug"
 	"strings"
@@ -208,7 +207,7 @@ func (loadedModel *Model) Build(data wst.M, sameLevelCache *buildCache, baseCont
 			rawRelatedData := data[relationName]
 			relatedModel, err := loadedModel.App.FindModel(relationConfig.Model)
 			if err != nil {
-				log.Printf("ERROR: Model.Build() --> %v\n", err)
+				fmt.Printf("ERROR: Model.Build() --> %v\n", err)
 				return Instance{}, nil
 			}
 			if relatedModel != nil {
@@ -220,7 +219,7 @@ func (loadedModel *Model) Build(data wst.M, sameLevelCache *buildCache, baseCont
 					} else {
 						relatedInstance, err = relatedModel.(*Model).Build(rawRelatedData.(wst.M), sameLevelCache, targetBaseContext)
 						if err != nil {
-							log.Printf("ERROR: Model.Build() --> %v\n", err)
+							fmt.Printf("ERROR: Model.Build() --> %v\n", err)
 							return Instance{}, err
 						}
 					}
@@ -230,10 +229,10 @@ func (loadedModel *Model) Build(data wst.M, sameLevelCache *buildCache, baseCont
 					strict := loadedModel.App.Viper.GetBool("strictSingleRelatedDocumentCheck")
 					if v, ok := sameLevelCache.singleRelatedDocumentsById[modelInstance.Id.(primitive.ObjectID).Hex()]; ok {
 						if strict {
-							log.Printf("ERROR: Model.Build() --> Found multiple single related documents with the same parent id: %v\n", v.Id.(primitive.ObjectID).Hex())
-							return Instance{}, fmt.Errorf("found multiple single related documents with the same parent id: %v", v.Id.(primitive.ObjectID).Hex())
+							fmt.Printf("ERROR: Model.Build() --> Found multiple single related documents at %v.%v with the same parent %v.Id=%v\n", loadedModel.Name, relationName, loadedModel.Name, v.Id.(primitive.ObjectID).Hex())
+							return Instance{}, fmt.Errorf("found multiple single related documents at %v.%v with the same parent %v.Id=%v", loadedModel.Name, relationName, loadedModel.Name, v.Id.(primitive.ObjectID).Hex())
 						} else {
-							log.Printf("WARNING: Model.Build() --> Found multiple single related documents with the same parent id: %v\n", v.Id.(primitive.ObjectID).Hex())
+							fmt.Printf("WARNING: Model.Build() --> Found multiple single related documents at %v.%v with the same parent %v.Id=%v\n", loadedModel.Name, relationName, loadedModel.Name, v.Id.(primitive.ObjectID).Hex())
 						}
 					} else {
 						sameLevelCache.singleRelatedDocumentsById[modelInstance.Id.(primitive.ObjectID).Hex()] = modelInstance
@@ -249,7 +248,7 @@ func (loadedModel *Model) Build(data wst.M, sameLevelCache *buildCache, baseCont
 						for idx, v := range rawRelatedData.(primitive.A) {
 							result[idx], err = relatedModel.(*Model).Build(v.(wst.M), sameLevelCache, targetBaseContext)
 							if err != nil {
-								log.Printf("ERROR: Model.Build() --> %v\n", err)
+								fmt.Printf("ERROR: Model.Build() --> %v\n", err)
 								return Instance{}, err
 							}
 						}
@@ -270,7 +269,7 @@ func (loadedModel *Model) Build(data wst.M, sameLevelCache *buildCache, baseCont
 	if loadedModel.DisabledHandlers["__operation__after_load"] != true {
 		err := loadedModel.GetHandler("__operation__after_load")(eventContext)
 		if err != nil {
-			log.Println("Warning", err)
+			fmt.Println("Warning", err)
 			return Instance{}, nil
 		}
 	}
@@ -728,7 +727,7 @@ func (loadedModel *Model) DeleteById(id interface{}) (int64, error) {
 		break
 	default:
 		if loadedModel.App.Debug {
-			log.Println(fmt.Sprintf("WARNING: Invalid input for Model.DeleteById() <- %s", id))
+			fmt.Println(fmt.Sprintf("WARNING: Invalid input for Model.DeleteById() <- %s", id))
 		}
 	}
 	//TODO: Invoke hook for __operation__before_delete and __operation__after_delete
@@ -798,7 +797,7 @@ func wrapEventHandler(model *Model, eventKey string, handler func(eventContext *
 			currentHandlerError := currentHandler(eventContext)
 			if currentHandlerError != nil {
 				if model.App.Debug {
-					log.Println("WARNING: Stop handling on error", currentHandlerError)
+					fmt.Println("WARNING: Stop handling on error", currentHandlerError)
 					debug.PrintStack()
 				}
 				return currentHandlerError
@@ -829,7 +828,7 @@ func (loadedModel *Model) GetHandler(event string) func(eventContext *EventConte
 		handlerMutex.Unlock()
 		res = func(eventContext *EventContext) error {
 			if loadedModel.App.Debug {
-				log.Println("no handler found for ", loadedModel.Name, ".", event)
+				fmt.Println("no handler found for ", loadedModel.Name, ".", event)
 			}
 			return nil
 		}
