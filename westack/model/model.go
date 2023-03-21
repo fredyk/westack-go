@@ -157,12 +157,12 @@ type RegistryEntry struct {
 }
 
 type buildCache struct {
-	singleRelatedDocumentsById map[string]interface{}
+	singleRelatedDocumentsById map[string]Instance
 }
 
 func NewBuildCache() *buildCache {
 	return &buildCache{
-		singleRelatedDocumentsById: make(map[string]interface{}),
+		singleRelatedDocumentsById: make(map[string]Instance),
 	}
 }
 
@@ -192,6 +192,13 @@ func (loadedModel *Model) Build(data wst.M, sameLevelCache *buildCache, baseCont
 		}
 	}
 
+	modelInstance := Instance{
+		Id:    data["id"],
+		bytes: nil,
+		data:  data,
+		Model: loadedModel,
+	}
+
 	for relationName, relationConfig := range *loadedModel.Config.Relations {
 		if data[relationName] != nil {
 			if relationConfig.Type == "" {
@@ -217,19 +224,19 @@ func (loadedModel *Model) Build(data wst.M, sameLevelCache *buildCache, baseCont
 							return Instance{}, err
 						}
 					}
-					// Check if this related instance is already in the same level cache
+					// Check if this parent instance is already in the same level cache
 					// If so, check app.Viper.GetBool("strictSingleRelatedDocumentCheck") and if true, return an error
 					// If not, print a warning
 					strict := loadedModel.App.Viper.GetBool("strictSingleRelatedDocumentCheck")
-					if v, ok := sameLevelCache.singleRelatedDocumentsById[relatedInstance.Id.(primitive.ObjectID).Hex()]; ok {
+					if v, ok := sameLevelCache.singleRelatedDocumentsById[modelInstance.Id.(primitive.ObjectID).Hex()]; ok {
 						if strict {
-							log.Printf("ERROR: Model.Build() --> Found multiple single related documents with the same id: %v\n", v)
-							return Instance{}, fmt.Errorf("found multiple single related documents with the same id: %v", v)
+							log.Printf("ERROR: Model.Build() --> Found multiple single related documents with the same parent id: %v\n", v.Id.(primitive.ObjectID).Hex())
+							return Instance{}, fmt.Errorf("found multiple single related documents with the same parent id: %v", v.Id.(primitive.ObjectID).Hex())
 						} else {
-							log.Printf("WARNING: Model.Build() --> Found multiple single related documents with the same id: %v\n", v)
+							log.Printf("WARNING: Model.Build() --> Found multiple single related documents with the same parent id: %v\n", v.Id.(primitive.ObjectID).Hex())
 						}
 					} else {
-						sameLevelCache.singleRelatedDocumentsById[relatedInstance.Id.(primitive.ObjectID).Hex()] = relatedInstance
+						sameLevelCache.singleRelatedDocumentsById[modelInstance.Id.(primitive.ObjectID).Hex()] = modelInstance
 					}
 					data[relationName] = &relatedInstance
 				case "hasMany", "hasAndBelongsToMany":
@@ -254,12 +261,6 @@ func (loadedModel *Model) Build(data wst.M, sameLevelCache *buildCache, baseCont
 		}
 	}
 
-	modelInstance := Instance{
-		Id:    data["id"],
-		bytes: nil,
-		data:  data,
-		Model: loadedModel,
-	}
 	eventContext := &EventContext{
 		BaseContext: targetBaseContext,
 	}
