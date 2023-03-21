@@ -298,10 +298,16 @@ func TestMain(m *testing.M) {
 				ctx.Result = (*ctx.Data)["__overwriteWith"]
 			}
 			if (*ctx.Data)["__overwriteWithInstance"] != nil {
-				ctx.Result = noteModel.Build((*ctx.Data)["__overwriteWithInstance"].(wst.M), ctx)
+				ctx.Result, err = noteModel.Build((*ctx.Data)["__overwriteWithInstance"].(wst.M), model.NewBuildCache(), ctx)
+				if err != nil {
+					return err
+				}
 			}
 			if (*ctx.Data)["__overwriteWithInstancePointer"] != nil {
-				v := noteModel.Build((*ctx.Data)["__overwriteWithInstancePointer"].(wst.M), ctx)
+				v, err := noteModel.Build((*ctx.Data)["__overwriteWithInstancePointer"].(wst.M), model.NewBuildCache(), ctx)
+				if err != nil {
+					return err
+				}
 				ctx.Result = &v
 			}
 			return nil

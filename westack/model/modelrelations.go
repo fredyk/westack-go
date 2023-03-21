@@ -175,6 +175,13 @@ func (loadedModel *Model) ExtractLookupsFromFilter(filterMap *wst.Filter, disabl
 						}
 					}
 
+					// limit "belongsTo" and "hasOne" to 2 documents, in order to check later if there is more than one
+					if relation.Type == "belongsTo" || relation.Type == "hasOne" {
+						pipeline = append(pipeline, wst.M{
+							"$limit": 2,
+						})
+					}
+
 					*lookups = append(*lookups, wst.M{
 						"$lookup": wst.M{
 							"from":     relatedLoadedModel.CollectionName,
@@ -321,8 +328,12 @@ func (loadedModel *Model) mergeRelated(relationDeepLevel byte, documents *wst.A,
 									return err
 								}
 
+								nestedDocsCache := NewBuildCache()
 								for _, cachedDoc := range *cachedDocs {
-									cachedInstance := relatedLoadedModel.Build(cachedDoc, baseContext)
+									cachedInstance, err := relatedLoadedModel.Build(cachedDoc, nestedDocsCache, baseContext)
+									if err != nil {
+										return err
+									}
 									if cachedRelatedDocs[documentIdx] == nil {
 										cachedRelatedDocs[documentIdx] = InstanceA{}
 									}
