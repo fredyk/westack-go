@@ -34,13 +34,14 @@ func Test_ToJSON_BelongsToRelation(t *testing.T) {
 
 	t.Parallel()
 
-	instance := noteModel.Build(wst.M{
+	instance, err := noteModel.Build(wst.M{
 		"_id":    noteId,
 		"userId": userId,
 		"user": wst.M{
 			"id": userId,
 		},
-	}, systemContext)
+	}, model.NewBuildCache(), systemContext)
+	assert.NoError(t, err)
 	originalUser := instance.GetOne("user")
 	json := instance.ToJSON()
 	user := json.GetM("user")
@@ -54,12 +55,13 @@ func Test_ToJSON_HasManyRelation(t *testing.T) {
 
 	t.Parallel()
 
-	instance := noteModel.Build(wst.M{
+	instance, err := noteModel.Build(wst.M{
 		"_id": noteId,
 		"entries": primitive.A{
 			wst.M{"date": "2021-01-01", "text": "Entry 1"},
 		},
-	}, systemContext)
+	}, model.NewBuildCache(), systemContext)
+	assert.NoError(t, err)
 	originalEntries := instance.GetMany("entries")
 	json := instance.ToJSON()
 	entries := json["entries"]
@@ -73,9 +75,10 @@ func Test_Access_Empty_Relation(t *testing.T) {
 
 	t.Parallel()
 
-	instance := noteModel.Build(wst.M{
+	instance, err := noteModel.Build(wst.M{
 		"_id": noteId,
-	}, systemContext)
+	}, model.NewBuildCache(), systemContext)
+	assert.Nil(t, err)
 	// assert user is nil
 	assert.Nil(t, instance.GetOne("user"))
 	// assert entries is empty
@@ -94,7 +97,7 @@ func Test_Instance_Transform(t *testing.T) {
 
 	t.Parallel()
 
-	instance := noteModel.Build(wst.M{
+	instance, err := noteModel.Build(wst.M{
 		"_id":    noteId,
 		"userId": userId,
 		"user": wst.M{
@@ -103,14 +106,15 @@ func Test_Instance_Transform(t *testing.T) {
 		"entries": primitive.A{
 			wst.M{"date": "2021-01-01", "text": "Entry 1"},
 		},
-	}, systemContext)
+	}, model.NewBuildCache(), systemContext)
+	assert.Nil(t, err)
 	var out struct {
 		Id      primitive.ObjectID `bson:"id"`
 		UserId  primitive.ObjectID `bson:"userId"`
 		User    User               `bson:"user"`
 		Entries []Entry            `bson:"entries"`
 	}
-	err := instance.Transform(&out)
+	err = instance.Transform(&out)
 	assert.Nil(t, err)
 	assert.Equal(t, noteId.Hex(), out.Id.Hex())
 	assert.Equal(t, userId.Hex(), out.UserId.Hex())
@@ -124,18 +128,19 @@ func Test_Instance_Transform_Error(t *testing.T) {
 
 	t.Parallel()
 
-	instance := noteModel.Build(wst.M{
+	instance, err := noteModel.Build(wst.M{
 		"entries": primitive.A{
 			wst.M{"date": "2021-01-01"},
 		},
-	}, systemContext)
+	}, model.NewBuildCache(), systemContext)
+	assert.Nil(t, err)
 	var out struct {
 		Entries []struct {
 			Date chan string `bson:"date"`
 		}
 	}
 	noteModel.App.Debug = false
-	err := instance.Transform(&out)
+	err = instance.Transform(&out)
 	noteModel.App.Debug = true
 	assert.NotNil(t, err)
 }
@@ -152,11 +157,12 @@ func Test_Instance_UncheckedTransform(t *testing.T) {
 		}
 	}()
 
-	instance := noteModel.Build(wst.M{
+	instance, err := noteModel.Build(wst.M{
 		"entries": primitive.A{
 			wst.M{"date": "2021-01-01"},
 		},
-	}, systemContext)
+	}, model.NewBuildCache(), systemContext)
+	assert.Nil(t, err)
 	type SafeType struct {
 		Entries []struct {
 			Date string `bson:"date"`
@@ -177,11 +183,12 @@ func Test_Instance_UncheckedTransform_Panic(t *testing.T) {
 		}
 	}()
 
-	instance := noteModel.Build(wst.M{
+	instance, err := noteModel.Build(wst.M{
 		"entries": primitive.A{
 			wst.M{"date": "2021-01-01"},
 		},
-	}, systemContext)
+	}, model.NewBuildCache(), systemContext)
+	assert.Nil(t, err)
 	type UnsafeType struct {
 		Entries []struct {
 			Date chan string `bson:"date"`

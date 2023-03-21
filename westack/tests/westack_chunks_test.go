@@ -17,11 +17,13 @@ func Test_GenerateNextChunk_Error(t *testing.T) {
 	var err error
 
 	// unmarshable map
-	var input = model.InstanceA{noteModel.Build(wst.M{
+	build, err := noteModel.Build(wst.M{
 		"title":   "Note 0015",
 		"body":    "This is a note",
 		"invalid": make(chan int),
-	}, systemContext)}
+	}, model.NewBuildCache(), systemContext)
+	assert.NoError(t, err)
+	var input = model.InstanceA{build}
 
 	chunkGenerator := model.NewInstanceAChunkGenerator(noteModel, input, "application/json")
 	chunkGenerator.Debug = true
