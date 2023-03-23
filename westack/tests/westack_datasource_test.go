@@ -3,6 +3,7 @@ package tests
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 
@@ -39,5 +40,14 @@ func Test_Datasource_Initialize_ConnectError(t *testing.T) {
 	app.DsViper.Set("db.host", prevHost)
 	err = ds.Initialize()
 	assert.Nil(t, err)
+
+}
+
+func Test_Datasource_Ping(t *testing.T) {
+
+	t.Parallel()
+
+	// Simply wait 5.2 seconds to cover datasource ping interval
+	time.Sleep(5200 * time.Millisecond)
 
 }
