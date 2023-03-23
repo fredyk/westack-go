@@ -197,9 +197,17 @@ Response body: {"title":"Note 1","body":"I modified the note body","userId":"622
 ```
 ### Change Log
 
+* **v1.5.49**
+
+    * Added parameter `strictSingleRelatedDocumentCheck` in config.json, defaults to `true`in new projects, and `false` in existing ones.
+    * `"hasOne"` and `"belongsTo"` relations are now checked after fetching documents from Mongo. If `strictSingleRelatedDocumentCheck` is `true` and the relation returns more than 1 document, an error is thrown. Otherwise, only the first document is used and a warning is logged.
+    * **Breaking changes**:
+      * `model.Build()` requires now parameter `sameLevelCache *buildCache` to be passed in. Can be generated with `model.NewBuildCache()`
+      * `model.Build()` returns now `error` as second value, in addition to the instance. So it is now `func (loadedModel *Model) Build(data wst.M, sameLevelCache *buildCache, baseContext *EventContext) (Instance, error)`
+
 * **v1.5.48**
 
-    Breaking change: environment variables `WST_ADMIN_USERNAME` and `WST_ADMIN_PWD` are required to start the server
+    * **Breaking change**: environment variables `WST_ADMIN_USERNAME` and `WST_ADMIN_PWD` are required to start the server
 
 ### Contribute
 
