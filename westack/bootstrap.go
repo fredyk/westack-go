@@ -201,7 +201,10 @@ func (app *WeStack) setupModel(loadedModel *model.Model, dataSource *datasource.
 
 		loadedModel.On("login", func(ctx *model.EventContext) error {
 			data := ctx.Data
-			if (*data)["email"] == nil || strings.TrimSpace((*data)["email"].(string)) == "" {
+			email := data.GetString("email")
+			username := data.GetString("username")
+
+			if email == "" && username == "" {
 				return wst.CreateError(fiber.ErrBadRequest, "USERNAME_EMAIL_REQUIRED", fiber.Map{"message": "username or email is required"}, "ValidationError")
 			}
 
@@ -209,11 +212,14 @@ func (app *WeStack) setupModel(loadedModel *model.Model, dataSource *datasource.
 				return wst.CreateError(fiber.ErrUnauthorized, "LOGIN_FAILED", fiber.Map{"message": "login failed"}, "Error")
 			}
 
-			email := (*data)["email"].(string)
+			var where wst.Where
+			if email != "" {
+				where = wst.Where{"email": email}
+			} else {
+				where = wst.Where{"username": username}
+			}
 			users, err := loadedModel.FindMany(&wst.Filter{
-				Where: &wst.Where{
-					"email": email,
-				},
+				Where: &where,
 			}, ctx)
 			if len(users) == 0 {
 				return wst.CreateError(fiber.ErrUnauthorized, "LOGIN_FAILED", fiber.Map{"message": "login failed"}, "Error")
