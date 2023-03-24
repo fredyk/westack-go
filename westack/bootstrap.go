@@ -169,7 +169,7 @@ func (app *WeStack) setupModel(loadedModel *model.Model, dataSource *datasource.
 			Plural: "role-mappings",
 			Base:   "PersistedModel",
 			//Datasource: config.Datasource,
-			Public:     false,
+			Public:     true,
 			Properties: nil,
 			Relations: &map[string]*model.Relation{
 				"role": {
@@ -188,6 +188,8 @@ func (app *WeStack) setupModel(loadedModel *model.Model, dataSource *datasource.
 			Casbin: model.CasbinConfig{
 				Policies: []string{
 					"$owner,*,__get__role,allow",
+					"roleManager,*,read,allow",
+					"roleManager,*,write,allow",
 				},
 			},
 		}, app.modelRegistry)
