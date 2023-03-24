@@ -63,11 +63,12 @@ func (ds *Datasource) Initialize() error {
 	var connector = dsViper.GetString(ds.Key + ".connector")
 	switch connector {
 	case "mongodb":
-		mongoCtx, cancelFn := context.WithCancel(ds.Context)
-		if ds.Options != nil && ds.Options.MongoDB != nil {
-			if ds.Options.MongoDB.Timeout > 0 {
-				mongoCtx, cancelFn = context.WithTimeout(mongoCtx, time.Duration(ds.Options.MongoDB.Timeout)*time.Second)
-			}
+		var mongoCtx context.Context
+		var cancelFn context.CancelFunc
+		if ds.Options != nil && ds.Options.MongoDB != nil && ds.Options.MongoDB.Timeout > 0 {
+			mongoCtx, cancelFn = context.WithTimeout(ds.Context, time.Duration(ds.Options.MongoDB.Timeout)*time.Second)
+		} else {
+			mongoCtx, cancelFn = context.WithCancel(ds.Context)
 		}
 
 		var clientOpts *options.ClientOptions
@@ -124,14 +125,14 @@ func (ds *Datasource) Initialize() error {
 
 		init := time.Now().UnixMilli()
 		go func() {
+			initialCtx := mongoCtx
 			for {
 				time.Sleep(time.Second * 5)
 
-				mongoCtx, cancelFn = context.WithCancel(mongoCtx)
-				if ds.Options != nil && ds.Options.MongoDB != nil {
-					if ds.Options.MongoDB.Timeout > 0 {
-						mongoCtx, cancelFn = context.WithTimeout(mongoCtx, time.Duration(ds.Options.MongoDB.Timeout)*time.Second)
-					}
+				if ds.Options != nil && ds.Options.MongoDB != nil && ds.Options.MongoDB.Timeout > 0 {
+					mongoCtx, cancelFn = context.WithTimeout(initialCtx, time.Duration(ds.Options.MongoDB.Timeout)*time.Second)
+				} else {
+					mongoCtx, cancelFn = context.WithCancel(initialCtx)
 				}
 
 				err := ds.Db.(*mongo.Client).Ping(mongoCtx, readpref.SecondaryPreferred())
