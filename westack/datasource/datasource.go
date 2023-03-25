@@ -265,7 +265,7 @@ func (ds *Datasource) FindMany(collectionName string, lookups *wst.A) (*wst.A, e
 			idAsString = _id.(uuid.UUID).String()
 		}
 		bucket := db.GetBucket(collectionName)
-		bytes, err := bucket.Get(idAsString)
+		bytes, err := bucket.Get(fmt.Sprintf("_id:%v", idAsString))
 		if err != nil {
 			return nil, err
 		} else if bytes == nil {
@@ -373,7 +373,7 @@ func findByObjectId(collectionName string, _id interface{}, ds *Datasource, look
 			idAsString = _id.(uuid.UUID).String()
 		}
 		var document wst.M
-		bytes, err := bucket.Get(idAsString)
+		bytes, err := bucket.Get(fmt.Sprintf("_id:%v", idAsString))
 		if err != nil {
 			return nil, err
 		}
