@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/fredyk/westack-go/westack/memorykv"
 	"io"
 	"log"
 	"net/http"
@@ -156,6 +157,16 @@ func (app *WeStack) Boot(customRoutesCallbacks ...func(app *WeStack)) {
 
 	app.loadModelsDynamicRoutes()
 	app.loadNotFoundRoutes()
+
+	app.Server.Get("/system/memorykv/stats", func(c *fiber.Ctx) error {
+		allStats := make(map[string]map[string]memorykv.MemoryKvStats)
+		for _, ds := range *app.datasources {
+			if ds.SubViper.GetString("connector") == "memorykv" {
+				allStats[ds.Name] = ds.Db.(memorykv.MemoryKvDb).Stats()
+			}
+		}
+		return c.JSON(fiber.Map{"stats": allStats})
+	})
 
 	app.Server.Get("/swagger/doc.json", swaggerDocsHandler(app))
 
