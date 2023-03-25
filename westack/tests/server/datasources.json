@@ -10,14 +10,14 @@
     "useNewUrlParser": true,
     "allowExtendedOperators": true
   },
-  "redis": {
-    "name": "redis",
-    "url": "localhost:6306",
+  "memorykv": {
+    "name": "memorykv",
+    "url": "localhost:0",
     "database": "example_db",
     "databaseIndex": 0,
     "password": "",
     "username": "",
-    "connector": "redis"
+    "connector": "memorykv"
   }
 
 }
