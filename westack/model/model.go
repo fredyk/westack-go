@@ -464,9 +464,15 @@ func (loadedModel *Model) FindMany(filterMap *wst.Filter, baseContext *EventCont
 				bucket := db.GetBucket(loadedModel.CollectionName)
 				baseKey := ""
 				for _, keyGroup := range loadedModel.Config.Cache.Keys {
-					keyToExpire := baseKey
-					for _, key := range keyGroup {
+					canonicalId := baseKey
+					for idx, key := range keyGroup {
+						if idx > 0 {
+							canonicalId = fmt.Sprintf("%v:", canonicalId)
+						}
 						v := (document)[key]
+						if key == "_id" && v == nil && document["id"] != nil {
+							v = document["id"]
+						}
 						switch v.(type) {
 						case primitive.ObjectID:
 							v = v.(primitive.ObjectID).Hex()
@@ -477,18 +483,18 @@ func (loadedModel *Model) FindMany(filterMap *wst.Filter, baseContext *EventCont
 						default:
 							break
 						}
-						if keyToExpire != "" {
-							keyToExpire = fmt.Sprintf("%v:", keyToExpire)
-						}
-						keyToExpire = fmt.Sprintf("%v%v:%v", keyToExpire, key, v)
-						ttl := time.Duration(loadedModel.Config.Cache.Ttl) * time.Second
-						err := bucket.Expire(keyToExpire, ttl)
-						if err != nil {
-							return nil, err
-						}
-						if loadedModel.App.Debug {
-							fmt.Printf("[DEBUG] expiring %v in %v seconds\n", keyToExpire, ttl)
-						}
+						canonicalId = fmt.Sprintf("%v%v:%v", canonicalId, key, v)
+					}
+					ttl := time.Duration(loadedModel.Config.Cache.Ttl) * time.Second
+					if loadedModel.App.Debug {
+						fmt.Printf("[DEBUG] trying to expire %v in %v seconds\n", canonicalId, ttl)
+					}
+					err := bucket.Expire(canonicalId, ttl)
+					if err != nil {
+						return nil, err
+					}
+					if loadedModel.App.Debug {
+						fmt.Printf("[DEBUG] expiring %v in %v seconds\n", canonicalId, ttl)
 					}
 				}
 			default:
