@@ -4,13 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/fredyk/westack-go/westack/memorykv"
+	"github.com/google/uuid"
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"log"
 	"time"
 
-	"github.com/go-redis/redis/v8"
-	"github.com/google/uuid"
 	"github.com/spf13/viper"
-	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/bsoncodec"
 	"go.mongodb.org/mongo-driver/event"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -163,19 +164,12 @@ func (ds *Datasource) Initialize() error {
 		}()
 		break
 	case "redis":
-
-		// Create redis client
-		var rClient *redis.Client = redis.NewClient(&redis.Options{
-			Addr:     dsViper.GetString(ds.Key + ".url"),
-			Password: dsViper.GetString(ds.Key + ".password"),   // no password set
-			DB:       dsViper.GetInt(ds.Key + ".databaseIndex"), // use default DB
+		return fmt.Errorf("redis connector not implemented yet")
+	case "memorykv":
+		ds.Db = memorykv.NewMemoryKvDb(memorykv.Options{
+			Name: ds.Key,
 		})
-		ds.Db = rClient
-
 		break
-	//case "memory":
-	//	ds.Db = make(map[interface{}]interface{})
-	//	break
 	default:
 		return errors.New("invalid connector " + connector)
 	}
@@ -232,58 +226,12 @@ func (ds *Datasource) FindMany(collectionName string, lookups *wst.A) (*wst.A, e
 		}
 		return &documents, nil
 	case "redis":
-		var rClient = ds.Db.(*redis.Client)
-
-		if lookups == nil || len(*lookups) == 0 {
-			return nil, errors.New("empty query")
-		}
-
-		potentialMatchStage := (*lookups)[0]
-
-		var _id interface{}
-		if match, isPresent := potentialMatchStage["$match"]; !isPresent {
-			return nil, errors.New("invalid first stage for redis. First stage must contain $match")
-		} else {
-			if asM, ok := match.(wst.M); !ok {
-				return nil, errors.New(fmt.Sprintf("invalid $match value type %s", asM))
-			} else {
-				if len(asM) == 0 {
-					return nil, errors.New("empty $match")
-				} else {
-					for _, v := range asM {
-						//key := fmt.Sprintf("%v:%v:%v", ds.Viper.GetString(ds.Keys+".database"), collectionName, k)
-						_id = v
-						break
-					}
-				}
-			}
-		}
-
-		cmd := rClient.Get(ds.Context, fmt.Sprintf("%v:%v:%v", ds.Viper.GetString(ds.Key+".database"), collectionName, _id))
-		err := cmd.Err()
-
-		if err != nil {
-			if err.Error() == "redis: nil" {
-				return &wst.A{}, nil
-			} else {
-				return nil, err
-			}
-		}
-
-		bytes, err := cmd.Bytes()
-		if err != nil {
-			return nil, err
-		}
-
-		out := make(wst.A, 1)
-		err = bson.Unmarshal(bytes, &out[0])
-		if err != nil {
-			return nil, err
-		}
-
-		return &out, nil
+		return nil, fmt.Errorf("redis connector not implemented yet")
+	case "memorykv":
+		return nil, fmt.Errorf("memorykv connector not implemented yet")
+	default:
+		return nil, errors.New("invalid connector " + connector)
 	}
-	return nil, errors.New(fmt.Sprintf("invalid connector %v", connector))
 }
 
 func (ds *Datasource) Count(collectionName string, lookups *wst.A) (int64, error) {
@@ -360,36 +308,34 @@ func findByObjectId(collectionName string, _id interface{}, ds *Datasource, look
 		} else {
 			return nil, errors.New("document not found")
 		}
-	//case "memory":
-	//	if result, isPresent := ds.Db.(map[interface{}]wst.M)[_id]; isPresent {
-	//		return &result, nil
-	//	} else {
-	//		return ???
-	//	}
 	case "redis":
-		var rClient = ds.Db.(*redis.Client)
-
-		cmd := rClient.Get(ds.Context, fmt.Sprintf("%v:%v:%v", ds.Viper.GetString(ds.Key+".database"), collectionName, _id))
-		err := cmd.Err()
-
+		return nil, fmt.Errorf("redis connector not implemented yet")
+	case "memorykv":
+		db := ds.Db.(memorykv.MemoryKvDb)
+		bucket := db.GetBucket(collectionName)
+		var idAsString string
+		switch _id.(type) {
+		case string:
+			idAsString = _id.(string)
+		case primitive.ObjectID:
+			idAsString = _id.(primitive.ObjectID).Hex()
+		case uuid.UUID:
+			idAsString = _id.(uuid.UUID).String()
+		}
+		var document wst.M
+		bytes, err := bucket.Get(idAsString)
 		if err != nil {
 			return nil, err
 		}
 
-		bytes, err := cmd.Bytes()
+		err = bson.Unmarshal(bytes, &document)
 		if err != nil {
 			return nil, err
 		}
-
-		var out wst.M
-		err = bson.Unmarshal(bytes, &out)
-		if err != nil {
-			return nil, err
-		}
-
-		return &out, nil
+		return &document, nil
+	default:
+		return nil, errors.New("invalid connector " + connector)
 	}
-	return nil, errors.New(fmt.Sprintf("invalid connector %v", connector))
 }
 
 func (ds *Datasource) Create(collectionName string, data *wst.M) (*wst.M, error) {
@@ -409,45 +355,40 @@ func (ds *Datasource) Create(collectionName string, data *wst.M) (*wst.M, error)
 		}
 		return findByObjectId(collectionName, insertOneResult.InsertedID, ds, nil)
 	case "redis":
-		var rClient = ds.Db.(*redis.Client)
+		return nil, fmt.Errorf("redis connector not implemented yet")
+	case "memorykv":
+		dict := ds.Db.(memorykv.MemoryKvDb)
 
 		var id interface{}
-
-		if (*data)["_redId"] == nil {
-			id = uuid.New().String()
-			(*data)["_redId"] = id
+		if (*data)["_id"] == nil {
+			id = uuid.New()
+			(*data)["_id"] = id
 		} else {
-			id = (*data)["_redId"]
+			id = (*data)["_id"]
+		}
+		var idAsStr string
+		switch id.(type) {
+		case string:
+			idAsStr = id.(string)
+		case primitive.ObjectID:
+			idAsStr = id.(primitive.ObjectID).Hex()
+		case uuid.UUID:
+			idAsStr = id.(uuid.UUID).String()
 		}
 
-		bytes, err := bson.Marshal(data)
+		var dataAsBytes []byte
+		dataAsBytes, err := bson.Marshal(data)
 		if err != nil {
 			return nil, err
 		}
 
-		//key := fmt.Sprintf("%v:%v:%v", ds.Viper.GetString(ds.Key+".database"), collectionName, id)
-		key := fmt.Sprintf("%v:%v:%v", ds.Viper.GetString(ds.Key+".database"), collectionName, id)
-
-		statusCmd := rClient.Set(ds.Context, key, bytes, 0)
-		err = statusCmd.Err()
+		//dict[id] = data
+		err = dict.GetBucket(collectionName).Set(idAsStr, dataAsBytes)
 		if err != nil {
 			return nil, err
 		}
+
 		return findByObjectId(collectionName, id, ds, nil)
-		//case "memory":
-		//	dict := ds.Db.(map[interface{}]interface{})
-		//
-		//	var id interface{}
-		//	if (*data)["_id"] == nil {
-		//		id = uuid.New()
-		//		(*data)["_id"] = id
-		//	} else {
-		//		id = (*data)["_id"]
-		//	}
-		//
-		//	dict[id] = data
-		//
-		//	return findByObjectId(collectionName, id, ds, nil)
 	}
 	return nil, errors.New(fmt.Sprintf("invalid connector %v", connector))
 }

@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"net"
 	"net/http"
@@ -15,7 +14,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/go-redis/redis/v8"
 	"github.com/stretchr/testify/assert"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/bsoncodec"
@@ -259,9 +257,6 @@ func TestMain(m *testing.M) {
 	// start a mock grpc server
 	go startMockGrpcServer()
 
-	// start a mock redis server
-	go startMockRedisServer()
-
 	server.Boot(func(app *westack.WeStack) {
 		// for valid connections
 		app.Server.Get("/test-grpc-get", westack.GRPCCallWithQueryParams[pb.ReqGrpcTestMessage, pb.FooClient, *pb.ResGrpcTestMessage](
@@ -344,70 +339,6 @@ func TestMain(m *testing.M) {
 		log.Fatalf("failed to stop: %v", err)
 	}
 
-}
-
-func startMockRedisServer() {
-	// create a new redis server
-	redisServer := NewRedisServer(&redis.Options{
-		Addr: ":6306",
-	})
-
-	// start the server
-	err := redisServer.ListenAndServe()
-	if err != nil {
-		log.Fatalf("failed to start redis server: %v", err)
-	}
-}
-
-type RedisServer struct {
-	options *redis.Options
-}
-
-func (s *RedisServer) ListenAndServe() error {
-	netListener, err := net.Listen("tcp", s.options.Addr)
-	if err != nil {
-		return fmt.Errorf("failed to listen: %v", err)
-	}
-	for {
-		conn, err := netListener.Accept()
-		if err != nil {
-			return fmt.Errorf("failed to accept: %v", err)
-		}
-		go func(conn net.Conn) {
-
-			// read the first line
-			reader := bufio.NewReader(conn)
-			line, err := reader.ReadString('\n')
-			if err != nil {
-				log.Printf("failed to read first line: %v", err)
-				return
-			}
-			log.Printf("first line: %s", line)
-
-			// read the rest
-			rest, err := ioutil.ReadAll(reader)
-			if err != nil {
-				log.Printf("failed to read rest: %v", err)
-				return
-			}
-			log.Printf("rest: %s", rest)
-
-			// write response
-			_, err = conn.Write([]byte("+OK\r\n"))
-			if err != nil {
-				log.Printf("failed to write response: %v", err)
-				return
-			}
-
-		}(conn)
-	}
-
-}
-
-func NewRedisServer(options *redis.Options) *RedisServer {
-	return &RedisServer{
-		options: options,
-	}
 }
 
 func FakeMongoDbMonitor() *event.CommandMonitor {

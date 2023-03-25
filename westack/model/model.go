@@ -4,21 +4,18 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	casbin "github.com/casbin/casbin/v2"
+	casbinmodel "github.com/casbin/casbin/v2/model"
+	fileadapter "github.com/casbin/casbin/v2/persist/file-adapter"
+	fiber "github.com/gofiber/fiber/v2"
+	"github.com/golang-jwt/jwt"
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"log"
 	"reflect"
 	"runtime/debug"
 	"strings"
 	"sync"
-	"time"
-
-	casbin "github.com/casbin/casbin/v2"
-	casbinmodel "github.com/casbin/casbin/v2/model"
-	fileadapter "github.com/casbin/casbin/v2/persist/file-adapter"
-	redis "github.com/go-redis/redis/v8"
-	fiber "github.com/gofiber/fiber/v2"
-	"github.com/golang-jwt/jwt"
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/bson/primitive"
 
 	wst "github.com/fredyk/westack-go/westack/common"
 	"github.com/fredyk/westack-go/westack/datasource"
@@ -413,30 +410,10 @@ func (loadedModel *Model) FindMany(filterMap *wst.Filter, baseContext *EventCont
 			connectorName := safeCacheDs.Key + ".connector"
 			switch safeCacheDs.Viper.GetString(connectorName) {
 			case "redis":
-				baseKey := fmt.Sprintf("%v:%v", safeCacheDs.Viper.GetString(safeCacheDs.Key+".database"), loadedModel.CollectionName)
-				for _, keyGroup := range loadedModel.Config.Cache.Keys {
-					keyToExpire := baseKey
-					for _, key := range keyGroup {
-						v := (document)[key]
-						switch v.(type) {
-						case primitive.ObjectID:
-							v = v.(primitive.ObjectID).Hex()
-							break
-						case *primitive.ObjectID:
-							v = v.(*primitive.ObjectID).Hex()
-							break
-						default:
-							break
-						}
-						keyToExpire = fmt.Sprintf("%v:%v:%v", keyToExpire, key, v)
-					}
-					cmd := safeCacheDs.Db.(*redis.Client).Expire(safeCacheDs.Context, keyToExpire, time.Duration(loadedModel.Config.Cache.Ttl)*time.Second)
-					_, err := cmd.Result()
-					if err != nil {
-						return nil, err
-					}
-				}
-				break
+				return nil, errors.New("redis cache connector not implemented")
+			case "memorykv":
+				// TODO: Implement memorykv cache connector
+				fmt.Printf("[DEBUG] cached %v in memorykv\n", toCache["_redId"])
 			default:
 				return nil, errors.New(fmt.Sprintf("Unsupported cache connector %v", connectorName))
 			}
