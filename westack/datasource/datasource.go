@@ -57,6 +57,7 @@ type Datasource struct {
 	Options *Options
 
 	ctxCancelFn context.CancelFunc
+	SubViper    *viper.Viper
 }
 
 func (ds *Datasource) Initialize() error {
@@ -482,8 +483,9 @@ func New(dsKey string, dsViper *viper.Viper, parentContext context.Context) *Dat
 	}
 	ctx, ctxCancelFn := context.WithCancel(parentContext)
 	ds := &Datasource{
-		Name:  name,
-		Viper: dsViper,
+		Name:     name,
+		Viper:    dsViper,
+		SubViper: dsViper.Sub(dsKey),
 
 		Key: dsKey,
 
