@@ -160,12 +160,20 @@ func (app *WeStack) Boot(customRoutesCallbacks ...func(app *WeStack)) {
 
 	app.Server.Get("/system/memorykv/stats", func(c *fiber.Ctx) error {
 		allStats := make(map[string]map[string]memorykv.MemoryKvStats)
+		var totalSizeKiB float64
 		for _, ds := range *app.datasources {
 			if ds.SubViper.GetString("connector") == "memorykv" {
-				allStats[ds.Name] = ds.Db.(memorykv.MemoryKvDb).Stats()
+				kvDbStats := ds.Db.(memorykv.MemoryKvDb).Stats()
+				allStats[ds.Name] = kvDbStats
+				for _, kvStats := range kvDbStats {
+					totalSizeKiB += float64(kvStats.TotalSize) / 1024.0
+				}
 			}
 		}
-		return c.JSON(fiber.Map{"stats": allStats})
+		return c.JSON(fiber.Map{"stats": wst.M{
+			"totalSizeKiB": totalSizeKiB,
+			"datasources":  allStats,
+		}})
 	})
 
 	app.Server.Get("/swagger/doc.json", swaggerDocsHandler(app))
