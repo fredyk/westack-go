@@ -229,7 +229,53 @@ func (ds *Datasource) FindMany(collectionName string, lookups *wst.A) (*wst.A, e
 	case "redis":
 		return nil, fmt.Errorf("redis connector not implemented yet")
 	case "memorykv":
-		return nil, fmt.Errorf("memorykv connector not implemented yet")
+		db := ds.Db.(memorykv.MemoryKvDb)
+		if lookups == nil || len(*lookups) == 0 {
+			return nil, errors.New("empty query")
+		}
+
+		potentialMatchStage := (*lookups)[0]
+
+		var _id interface{}
+		if match, isPresent := potentialMatchStage["$match"]; !isPresent {
+			return nil, errors.New("invalid first stage for memorykv. First stage must contain $match")
+		} else {
+			if asM, ok := match.(wst.M); !ok {
+				return nil, errors.New(fmt.Sprintf("invalid $match value type %s", asM))
+			} else {
+				if len(asM) == 0 {
+					return nil, errors.New("empty $match")
+				} else {
+					for _, v := range asM {
+						//key := fmt.Sprintf("%v:%v:%v", ds.Viper.GetString(ds.Keys+".database"), collectionName, k)
+						_id = v
+						break
+					}
+				}
+			}
+		}
+
+		var idAsString string
+		switch _id.(type) {
+		case string:
+			idAsString = _id.(string)
+		case primitive.ObjectID:
+			idAsString = _id.(primitive.ObjectID).Hex()
+		case uuid.UUID:
+			idAsString = _id.(uuid.UUID).String()
+		}
+		bucket := db.GetBucket(collectionName)
+		var documents wst.A = make(wst.A, 1)
+		bytes, err := bucket.Get(idAsString)
+		if err != nil {
+			return nil, err
+		}
+		err = bson.Unmarshal(bytes, &documents[0])
+		if err != nil {
+			return nil, err
+		}
+		return &documents, nil
+
 	default:
 		return nil, errors.New("invalid connector " + connector)
 	}
