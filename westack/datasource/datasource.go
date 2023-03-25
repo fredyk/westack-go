@@ -265,7 +265,7 @@ func (ds *Datasource) FindMany(collectionName string, lookups *wst.A) (*wst.A, e
 			idAsString = _id.(uuid.UUID).String()
 		}
 		bucket := db.GetBucket(collectionName)
-		bytes, err := bucket.Get(fmt.Sprintf("_id:%v", idAsString))
+		bytes, err := bucket.Get(idAsString)
 		if err != nil {
 			return nil, err
 		} else if bytes == nil {
@@ -373,7 +373,7 @@ func findByObjectId(collectionName string, _id interface{}, ds *Datasource, look
 			idAsString = _id.(uuid.UUID).String()
 		}
 		var document wst.M
-		bytes, err := bucket.Get(fmt.Sprintf("_id:%v", idAsString))
+		bytes, err := bucket.Get(idAsString)
 		if err != nil {
 			return nil, err
 		}
@@ -410,11 +410,12 @@ func (ds *Datasource) Create(collectionName string, data *wst.M) (*wst.M, error)
 		dict := ds.Db.(memorykv.MemoryKvDb)
 
 		var id interface{}
-		if (*data)["_id"] == nil {
-			id = uuid.New()
-			(*data)["_id"] = id
+
+		if (*data)["_redId"] == nil {
+			id = uuid.New().String()
+			(*data)["_redId"] = id
 		} else {
-			id = (*data)["_id"]
+			id = (*data)["_redId"]
 		}
 		var idAsStr string
 		switch id.(type) {
@@ -422,22 +423,18 @@ func (ds *Datasource) Create(collectionName string, data *wst.M) (*wst.M, error)
 			idAsStr = id.(string)
 		case primitive.ObjectID:
 			idAsStr = id.(primitive.ObjectID).Hex()
-		case uuid.UUID:
-			idAsStr = id.(uuid.UUID).String()
 		}
 
-		var dataAsBytes []byte
-		dataAsBytes, err := bson.Marshal(data)
+		bytes, err := bson.Marshal(data)
 		if err != nil {
 			return nil, err
 		}
 
 		//dict[id] = data
-		err = dict.GetBucket(collectionName).Set(fmt.Sprintf("_id:%v", idAsStr), dataAsBytes)
+		err = dict.GetBucket(collectionName).Set(idAsStr, bytes)
 		if err != nil {
 			return nil, err
 		}
-
 		return findByObjectId(collectionName, id, ds, nil)
 	}
 	return nil, errors.New(fmt.Sprintf("invalid connector %v", connector))
