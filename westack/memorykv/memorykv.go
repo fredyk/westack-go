@@ -237,7 +237,7 @@ func (kvBucket *MemoryKvBucketImpl) Stats() MemoryKvStats {
 		realPair, ok := kvBucket.data[pair.key]
 		if ok {
 			bytelen := len(realPair.value)
-			totalSize += int64(bytelen)
+			totalSize += int64(bytelen) + int64(len(pair.key)*2) // key is stored twice, once as data key, once as expiration queue key
 			_avgObjSizeSum += float64(bytelen)
 			_avgObjSizeCount += 1
 		}
