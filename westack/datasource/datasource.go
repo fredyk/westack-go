@@ -169,6 +169,7 @@ func (ds *Datasource) Initialize() error {
 		ds.Db = memorykv.NewMemoryKvDb(memorykv.Options{
 			Name: ds.Key,
 		})
+		// TODO: other setup operations
 		break
 	default:
 		return errors.New("invalid connector " + connector)
