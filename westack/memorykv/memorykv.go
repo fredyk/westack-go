@@ -233,10 +233,14 @@ func (kvBucket *MemoryKvBucketImpl) Stats() MemoryKvStats {
 		}
 		_avgExpirationSum += float64(pair.expiresAt)
 		_avgExpirationCount += 1
-		bytelen := len(pair.value)
-		totalSize += int64(bytelen)
-		_avgObjSizeSum += float64(bytelen)
-		_avgObjSizeCount += 1
+
+		realPair, ok := kvBucket.data[pair.key]
+		if ok {
+			bytelen := len(realPair.value)
+			totalSize += int64(bytelen)
+			_avgObjSizeSum += float64(bytelen)
+			_avgObjSizeCount += 1
+		}
 	}
 	if _avgExpirationCount > 0 {
 		avgExpirationTime = _avgExpirationSum / _avgExpirationCount
