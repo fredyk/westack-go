@@ -265,11 +265,14 @@ func (ds *Datasource) FindMany(collectionName string, lookups *wst.A) (*wst.A, e
 			idAsString = _id.(uuid.UUID).String()
 		}
 		bucket := db.GetBucket(collectionName)
-		var documents wst.A = make(wst.A, 1)
 		bytes, err := bucket.Get(idAsString)
 		if err != nil {
 			return nil, err
+		} else if bytes == nil {
+			// TODO: Check if we should return an error or not
+			return &wst.A{}, nil
 		}
+		var documents wst.A = make(wst.A, 1)
 		err = bson.Unmarshal(bytes, &documents[0])
 		if err != nil {
 			return nil, err
