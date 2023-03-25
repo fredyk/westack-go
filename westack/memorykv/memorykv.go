@@ -225,7 +225,7 @@ func (kvBucket *MemoryKvBucketImpl) Stats() MemoryKvStats {
 	var avgObjSize float64
 	var _avgObjSizeCount float64
 	var _avgObjSizeSum float64
-	var sizeOfPair int64
+	var sizeOfPair int64 = int64(unsafe.Sizeof(kvPair{}))
 	for pair := range kvBucket.expirationQueue.Cursor() {
 		if earliestExpirationTime == 0 || earliestExpirationTime > pair.expiresAt {
 			earliestExpirationTime = pair.expiresAt
@@ -240,10 +240,7 @@ func (kvBucket *MemoryKvBucketImpl) Stats() MemoryKvStats {
 		if ok {
 			bytelen := len(realPair.value)
 			totalSize += int64(bytelen) + int64(len(pair.key)*2) // key is stored twice, once as data key, once as expiration queue key
-			if sizeOfPair == 0 {
-				sizeOfPair = int64(unsafe.Sizeof(realPair))
-			}
-			totalSize += sizeOfPair * 2 // pair is stored twice, once as data value, once as expiration queue value
+			totalSize += sizeOfPair * 2                          // pair is stored twice, once as data value, once as expiration queue value
 			_avgObjSizeSum += float64(bytelen)
 			_avgObjSizeCount += 1
 		}
