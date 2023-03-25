@@ -10,15 +10,18 @@ type Options struct {
 	Name string
 }
 
+//goland:noinspection GoNameStartsWithPackageName
 type MemoryKvDb interface {
 	GetBucket(name string) MemoryKvBucket
 }
 
+//goland:noinspection GoNameStartsWithPackageName
 type MemoryKvBucket interface {
 	Get(key string) ([]byte, error)
 	Set(key string, value []byte) error
 	SetEx(key string, value []byte, ttl time.Duration) error
 	Delete(key string) error
+	Expire(key string, ttl time.Duration) error
 }
 
 type kvPair struct {
@@ -26,12 +29,14 @@ type kvPair struct {
 	expiresAt int64 // unix timestamp in seconds
 }
 
+//goland:noinspection GoNameStartsWithPackageName
 type MemoryKvBucketImpl struct {
 	name string
 	data map[string]kvPair
 }
 
 var dataLock sync.RWMutex
+
 func (kvBucket *MemoryKvBucketImpl) Get(key string) ([]byte, error) {
 	dataLock.RLock()
 	pair, ok := kvBucket.data[key]
@@ -68,14 +73,32 @@ func (kvBucket *MemoryKvBucketImpl) SetEx(key string, value []byte, ttl time.Dur
 	if err != nil {
 		return err
 	}
-	go func() {
-		time.Sleep(ttl)
-		err := kvBucket.Delete(key)
-		if err != nil {
-			fmt.Printf("[memorykv] Error deleting key: %v\n", err)
-		}
-	}()
+	go waitAndDoExpire(ttl, kvBucket, key)
 	return nil
+}
+
+func waitAndDoExpire(ttl time.Duration, kvBucket *MemoryKvBucketImpl, key string) {
+	time.Sleep(ttl)
+	err := kvBucket.Delete(key)
+	if err != nil {
+		fmt.Printf("[memorykv] Error deleting key: %v\n", err)
+	}
+}
+
+func (kvBucket *MemoryKvBucketImpl) Expire(key string, ttl time.Duration) error {
+	dataLock.RLock()
+	pair, ok := kvBucket.data[key]
+	dataLock.RUnlock()
+	if ok {
+		dataLock.Lock()
+		pair.expiresAt = time.Now().Add(ttl).Unix()
+		kvBucket.data[key] = pair
+		dataLock.Unlock()
+		go waitAndDoExpire(ttl, kvBucket, key)
+		return nil
+	} else {
+		return fmt.Errorf("key not found")
+	}
 }
 
 func (kvBucket *MemoryKvBucketImpl) Delete(key string) error {
@@ -91,12 +114,14 @@ func createBucket() MemoryKvBucket {
 	}
 }
 
+//goland:noinspection GoNameStartsWithPackageName
 type MemoryKvDbImpl struct {
-	name   string
+	name    string
 	buckets map[string]MemoryKvBucket
 }
 
 var bucketsLock sync.RWMutex
+
 func (kvDb *MemoryKvDbImpl) GetBucket(name string) MemoryKvBucket {
 	bucketsLock.RLock()
 	bucket, ok := kvDb.buckets[name]
@@ -117,7 +142,7 @@ func (kvDb *MemoryKvDbImpl) GetBucket(name string) MemoryKvBucket {
 
 func NewMemoryKvDb(options Options) MemoryKvDb {
 	return &MemoryKvDbImpl{
-		name: options.Name,
+		name:    options.Name,
 		buckets: make(map[string]MemoryKvBucket),
 	}
 }

@@ -7,6 +7,7 @@ import (
 	casbin "github.com/casbin/casbin/v2"
 	casbinmodel "github.com/casbin/casbin/v2/model"
 	fileadapter "github.com/casbin/casbin/v2/persist/file-adapter"
+	"github.com/fredyk/westack-go/westack/memorykv"
 	fiber "github.com/gofiber/fiber/v2"
 	"github.com/golang-jwt/jwt"
 	"go.mongodb.org/mongo-driver/bson"
@@ -15,6 +16,7 @@ import (
 	"runtime/debug"
 	"strings"
 	"sync"
+	"time"
 
 	wst "github.com/fredyk/westack-go/westack/common"
 	"github.com/fredyk/westack-go/westack/datasource"
@@ -448,6 +450,9 @@ func (loadedModel *Model) FindMany(filterMap *wst.Filter, baseContext *EventCont
 				if err != nil {
 					return nil, err
 				}
+				if loadedModel.App.Debug {
+					fmt.Printf("[DEBUG] cached %v in memorykv\n", toCache["_redId"])
+				}
 			}
 
 			connectorName := safeCacheDs.Key + ".connector"
@@ -455,8 +460,37 @@ func (loadedModel *Model) FindMany(filterMap *wst.Filter, baseContext *EventCont
 			case "redis":
 				return nil, errors.New("redis cache connector not implemented")
 			case "memorykv":
-				// TODO: Implement memorykv cache connector
-				fmt.Printf("[DEBUG] cached %v in memorykv\n", toCache["_redId"])
+				db := safeCacheDs.Db.(memorykv.MemoryKvDb)
+				bucket := db.GetBucket(loadedModel.CollectionName)
+				baseKey := ""
+				for _, keyGroup := range loadedModel.Config.Cache.Keys {
+					keyToExpire := baseKey
+					for _, key := range keyGroup {
+						v := (document)[key]
+						switch v.(type) {
+						case primitive.ObjectID:
+							v = v.(primitive.ObjectID).Hex()
+							break
+						case *primitive.ObjectID:
+							v = v.(*primitive.ObjectID).Hex()
+							break
+						default:
+							break
+						}
+						if keyToExpire != "" {
+							keyToExpire = fmt.Sprintf("%v:", keyToExpire)
+						}
+						keyToExpire = fmt.Sprintf("%v%v", keyToExpire, v)
+						ttl := time.Duration(loadedModel.Config.Cache.Ttl) * time.Second
+						err := bucket.Expire(keyToExpire, ttl)
+						if err != nil {
+							return nil, err
+						}
+						if loadedModel.App.Debug {
+							fmt.Printf("[DEBUG] expiring %v in %v seconds\n", keyToExpire, ttl)
+						}
+					}
+				}
 			default:
 				return nil, errors.New(fmt.Sprintf("Unsupported cache connector %v", connectorName))
 			}
