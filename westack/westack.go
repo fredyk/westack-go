@@ -10,6 +10,7 @@ import (
 	"os"
 	"reflect"
 	"runtime/debug"
+	"strconv"
 	"time"
 
 	fiber "github.com/gofiber/fiber/v2"
@@ -318,6 +319,17 @@ func New(options ...Options) *WeStack {
 	if finalOptions.Port == 0 {
 		finalOptions.Port = appViper.GetInt32("port")
 	}
+	if os.Getenv("PORT") != "" {
+		portFromEnv, err := strconv.Atoi(os.Getenv("PORT"))
+		if err != nil {
+			log.Fatalf("Invalid PORT environment variable: %v", err)
+		}
+		if finalOptions.debug {
+			log.Printf("DEBUG: PORT environment variable is set to %v", portFromEnv)
+		}
+		finalOptions.Port = int32(portFromEnv)
+	}
+
 	var bsonRegistry *bsoncodec.Registry
 	if finalOptions.DatasourceOptions != nil {
 		for _, v := range *finalOptions.DatasourceOptions {
