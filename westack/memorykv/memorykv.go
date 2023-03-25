@@ -14,8 +14,8 @@ type Options struct {
 type MemoryKvStats struct {
 	Entries                int     `json:"entries"`
 	AvgExpirationTime      float64 `json:"avgExpirationTime"`
-	EarliestExpirationTime int64   `json:"earliestExpirationTime"`
-	LatestExpirationTime   int64   `json:"latestExpirationTime"`
+	EarliestExpirationTime string  `json:"earliestExpirationTime"` // ISO 8601
+	LatestExpirationTime   string  `json:"latestExpirationTime"`   // ISO 8601
 	ExpirationQueueSize    int64   `json:"expirationQueueSize"`
 	TotalSize              int64   `json:"totalSize"`
 	AvgObjSize             float64 `json:"avgObjSize"`
@@ -248,11 +248,19 @@ func (kvBucket *MemoryKvBucketImpl) Stats() MemoryKvStats {
 	if _avgObjSizeCount > 0 {
 		avgObjSize = _avgObjSizeSum / _avgObjSizeCount
 	}
+	var earliestExpirationTimeIso8601 string
+	if earliestExpirationTime > 0 {
+		earliestExpirationTimeIso8601 = time.Unix(earliestExpirationTime, 0).Format(time.RFC3339)
+	}
+	var latestExpirationTimeIso8601 string
+	if latestExpirationTime > 0 {
+		latestExpirationTimeIso8601 = time.Unix(latestExpirationTime, 0).Format(time.RFC3339)
+	}
 	return MemoryKvStats{
 		Entries:                len(kvBucket.data),
 		AvgExpirationTime:      avgExpirationTime,
-		EarliestExpirationTime: earliestExpirationTime,
-		LatestExpirationTime:   latestExpirationTime,
+		EarliestExpirationTime: earliestExpirationTimeIso8601,
+		LatestExpirationTime:   latestExpirationTimeIso8601,
 		ExpirationQueueSize:    kvBucket.expirationQueue.Len(),
 		TotalSize:              totalSize,
 		AvgObjSize:             avgObjSize,
