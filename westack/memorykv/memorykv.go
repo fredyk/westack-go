@@ -73,7 +73,10 @@ func (kvBucket *MemoryKvBucketImpl) SetEx(key string, value []byte, ttl time.Dur
 	if err != nil {
 		return err
 	}
-	go waitAndDoExpire(ttl, kvBucket, key)
+	err = kvBucket.Expire(key, ttl)
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
