@@ -433,7 +433,7 @@ func (ds *Datasource) Create(collectionName string, data *wst.M) (*wst.M, error)
 		}
 
 		//dict[id] = data
-		err = dict.GetBucket(collectionName).Set(idAsStr, dataAsBytes)
+		err = dict.GetBucket(collectionName).Set(fmt.Sprintf("_id:%v", idAsStr), dataAsBytes)
 		if err != nil {
 			return nil, err
 		}
