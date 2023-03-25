@@ -480,7 +480,7 @@ func (loadedModel *Model) FindMany(filterMap *wst.Filter, baseContext *EventCont
 						if keyToExpire != "" {
 							keyToExpire = fmt.Sprintf("%v:", keyToExpire)
 						}
-						keyToExpire = fmt.Sprintf("%v%v", keyToExpire, v)
+						keyToExpire = fmt.Sprintf("%v%v:%v", keyToExpire, key, v)
 						ttl := time.Duration(loadedModel.Config.Cache.Ttl) * time.Second
 						err := bucket.Expire(keyToExpire, ttl)
 						if err != nil {
