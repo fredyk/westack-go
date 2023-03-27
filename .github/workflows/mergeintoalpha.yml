@@ -37,10 +37,13 @@ jobs:
             patch=$(echo $latest_tag | cut -d. -f3)
             patch=${patch%-*}
             patch=${patch%-*}
-            patch=$((patch + 1))
             latest_tag=${major}.${minor}.${patch}
-            echo "::set-output name=tag::${major}.${minor}.${patch}"
             echo "Found latest tag: $latest_tag"
+            minor=$((minor + 1))
+            patch="0"
+            new_tag=${major}.${minor}.${patch}
+            echo "Tagging new as: $new_tag"
+            echo "::set-output name=tag::${new_tag}"
 
         - name: Checkout alpha
           run: |
