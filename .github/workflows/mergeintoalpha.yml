@@ -76,13 +76,18 @@ jobs:
         - name: Test WeStack
           run: go test -v ./westack/tests
 
-        - name: Create tag
-          run: git tag -a v${{ steps.latest_tag.outputs.tag }}-alpha-${{ steps.date.outputs.date }} -m "v${{ steps.latest_tag.outputs.tag }}-alpha-${{ steps.date.outputs.date }}"
+#        - name: Create tag
+#          run: git tag -a v${{ steps.latest_tag.outputs.tag }}-alpha-${{ steps.date.outputs.date }} -m "v${{ steps.latest_tag.outputs.tag }}-alpha-${{ steps.date.outputs.date }}"
+
+        - name: Create a new branch
+          run: |
+            git checkout -b v-${{ steps.latest_tag.outputs.tag }}-alpha HEAD
 
         - name: Push
           run: |
-            git push
-            git push --tags
+            git push origin alpha
+            git push -u origin v-${{ steps.latest_tag.outputs.tag }}-alpha
+#            git push --tags
 
         - name: Comments on the pull request and closes it
           run: |
