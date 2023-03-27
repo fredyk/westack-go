@@ -81,7 +81,7 @@ jobs:
 
         - name: Create a new branch
           run: |
-            git checkout -b v-${{ steps.latest_tag.outputs.tag }}-alpha -u origin/v-${{ steps.latest_tag.outputs.tag }}-alpha
+            git checkout -b v-${{ steps.latest_tag.outputs.tag }}-alpha origin/v-${{ steps.latest_tag.outputs.tag }}-alpha
 
         - name: Push
           run: |
