@@ -34,10 +34,11 @@ jobs:
             major=$(echo $latest_tag | cut -d. -f1)
             major=${major#v}
             minor=$(echo $latest_tag | cut -d. -f2)
+            minor=${minor%-*}
+            minor=${minor%-*}
+            minor=$((minor + 1))
             patch=$(echo $latest_tag | cut -d. -f3)
-            patch=${patch%-*}
-            patch=${patch%-*}
-            patch=$((patch + 1))
+            patch="0"
             latest_tag=${major}.${minor}.${patch}
             echo "::set-output name=tag::${major}.${minor}.${patch}"
             echo "Found latest tag: $latest_tag"
