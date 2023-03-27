@@ -70,7 +70,9 @@ func (ds *Datasource) Initialize() error {
 		if ds.Options != nil && ds.Options.MongoDB != nil && ds.Options.MongoDB.Timeout > 0 {
 			mongoCtx, cancelFn = context.WithTimeout(ds.Context, time.Duration(ds.Options.MongoDB.Timeout)*time.Second)
 		} else {
-			mongoCtx, cancelFn = context.WithCancel(ds.Context)
+			//mongoCtx, cancelFn = context.WithCancel(ds.Context)
+			mongoCtx = ds.Context
+			cancelFn = ds.ctxCancelFn
 		}
 
 		var clientOpts *options.ClientOptions
@@ -133,9 +135,9 @@ func (ds *Datasource) Initialize() error {
 
 				if ds.Options != nil && ds.Options.MongoDB != nil && ds.Options.MongoDB.Timeout > 0 {
 					mongoCtx, cancelFn = context.WithTimeout(initialCtx, time.Duration(ds.Options.MongoDB.Timeout)*time.Second)
-				} else {
+				} /* else {
 					mongoCtx, cancelFn = context.WithCancel(initialCtx)
-				}
+				}*/
 
 				err := ds.Db.(*mongo.Client).Ping(mongoCtx, readpref.SecondaryPreferred())
 				if err != nil {
