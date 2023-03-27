@@ -82,11 +82,10 @@ jobs:
         - name: Create a new branch
           run: |
             git checkout -b v-${{ steps.latest_tag.outputs.tag }}-alpha HEAD
-            git branch -u origin/v-${{ steps.latest_tag.outputs.tag }}-alpha
 
         - name: Push
           run: |
-            git push
+            git push -u origin v-${{ steps.latest_tag.outputs.tag }}-alpha
 #            git push --tags
 
         - name: Comments on the pull request and closes it
