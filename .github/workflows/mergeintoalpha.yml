@@ -85,6 +85,7 @@ jobs:
 
         - name: Push
           run: |
+            git push origin alpha
             git push -u origin v-${{ steps.latest_tag.outputs.tag }}-alpha
 #            git push --tags
 
