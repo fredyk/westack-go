@@ -1,6 +1,8 @@
 package tests
 
 import (
+	"github.com/mailru/easyjson"
+	"math"
 	"os"
 	"testing"
 
@@ -307,4 +309,63 @@ func Test_AFromPrimitiveSlice_WrongType(t *testing.T) {
 	assert.Equal(t, 2, a[1]["a"])
 	// Ensure the second 1 is an empty wst.M
 	assert.Equal(t, 0, len(a[2]))
+}
+
+func Test_MMarshalEasyJSON(t *testing.T) {
+
+	t.Parallel()
+
+	m := wst.M{"a": 1, "b": "2"}
+	b, err := easyjson.Marshal(m)
+	assert.NoError(t, err)
+	assert.Equal(t, `{"a":1,"b":"2"}`, string(b))
+}
+
+func Test_MMarshalEasyJSONNil(t *testing.T) {
+
+	t.Parallel()
+
+	var m wst.M
+	b, err := easyjson.Marshal(m)
+	assert.NoError(t, err)
+	assert.Equal(t, `null`, string(b))
+}
+
+func Test_MMarshalEasyJSONSpecialNumbers(t *testing.T) {
+
+	t.Parallel()
+
+	m := wst.M{
+		"a": math.Inf(1),
+		"b": math.Inf(-1),
+		"c": math.NaN(),
+		"d": uint8(1),
+		"e": uint16(2),
+		"f": uint32(3),
+		"g": uint64(4),
+		"h": int8(5),
+		"i": int16(6),
+		"j": int32(7),
+		"k": int64(8),
+		"l": float32(9),
+		"m": float64(10),
+		"n": true,
+	}
+	b, err := easyjson.Marshal(m)
+	assert.NoError(t, err)
+	assert.Contains(t, string(b), `"a":+Inf`)
+	assert.Contains(t, string(b), `"b":-Inf`)
+	assert.Contains(t, string(b), `"c":NaN`)
+	assert.Contains(t, string(b), `"d":1`)
+	assert.Contains(t, string(b), `"e":2`)
+	assert.Contains(t, string(b), `"f":3`)
+	assert.Contains(t, string(b), `"g":4`)
+	assert.Contains(t, string(b), `"h":5`)
+	assert.Contains(t, string(b), `"i":6`)
+	assert.Contains(t, string(b), `"j":7`)
+	assert.Contains(t, string(b), `"k":8`)
+	assert.Contains(t, string(b), `"l":9`)
+	assert.Contains(t, string(b), `"m":10`)
+	assert.Contains(t, string(b), `"n":true`)
+
 }
