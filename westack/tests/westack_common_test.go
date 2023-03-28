@@ -382,7 +382,8 @@ func Test_MMarshalEasyJSONDateTime(t *testing.T) {
 
 	// The time is converted to the local timezone
 	// if the time is not in UTC:
-	if time.Now().Location().String() != "UTC" {
+	_, offset := time.Now().Zone()
+	if offset != 0 {
 		assert.Contains(t, string(b), `"a":"2023-02-28T20:42:42.824+01:00"`)
 	} else {
 		assert.Contains(t, string(b), `"a":"2023-02-28T19:42:42.824Z"`)
