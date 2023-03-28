@@ -5,6 +5,7 @@ import (
 	"math"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/stretchr/testify/assert"
@@ -318,7 +319,8 @@ func Test_MMarshalEasyJSON(t *testing.T) {
 	m := wst.M{"a": 1, "b": "2"}
 	b, err := easyjson.Marshal(m)
 	assert.NoError(t, err)
-	assert.Equal(t, `{"a":1,"b":"2"}`, string(b))
+	assert.Contains(t, string(b), `"a":1`)
+	assert.Contains(t, string(b), `"b":"2"`)
 }
 
 func Test_MMarshalEasyJSONNil(t *testing.T) {
@@ -368,4 +370,21 @@ func Test_MMarshalEasyJSONSpecialNumbers(t *testing.T) {
 	assert.Contains(t, string(b), `"m":10`)
 	assert.Contains(t, string(b), `"n":true`)
 
+}
+
+func Test_MMarshalEasyJSONDateTime(t *testing.T) {
+
+	t.Parallel()
+
+	m := wst.M{"a": primitive.NewDateTimeFromTime(time.Date(2023, 2, 28, 19, 42, 42, 824000000, time.UTC))}
+	b, err := easyjson.Marshal(m)
+	assert.NoError(t, err)
+
+	// The time is converted to the local timezone
+	// if the time is not in UTC:
+	if time.Now().Location().String() != "UTC" {
+		assert.Contains(t, string(b), `"a":"2023-02-28T20:42:42.824+01:00"`)
+	} else {
+		assert.Contains(t, string(b), `"a":"2023-02-28T19:42:42.824Z"`)
+	}
 }
