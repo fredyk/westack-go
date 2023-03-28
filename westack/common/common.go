@@ -67,17 +67,57 @@ func (m M) MarshalEasyJSON(w *jwriter.Writer) {
 		}
 		w.String(k)
 		w.RawByte(':')
-		if vv, ok := v.(easyjson.Marshaler); ok {
-			//fmt.Printf("Found easyjson.Marshaler: %v at %v\n", vv, k)
-			vv.MarshalEasyJSON(w)
-		} else if vv, ok := v.(json.Marshaler); ok {
-			//fmt.Printf("Found json.Marshaler: %v at %v\n", vv, k)
-			bytes, err := vv.MarshalJSON()
-			w.Raw(bytes, err)
-		} else {
-			//fmt.Printf("Found unknown: %v at %v\n", v, k)
-			bytes, err := json.Marshal(v)
-			w.Raw(bytes, err)
+		switch v := v.(type) {
+		case nil:
+			w.Raw(NilBytes, nil)
+		case bool:
+			w.Bool(v)
+		case string:
+			w.String(v)
+		case int:
+			w.Int(v)
+		case int8:
+			w.Int8(v)
+		case int16:
+			w.Int16(v)
+		case int32:
+			w.Int32(v)
+		case int64:
+			w.Int64(v)
+		case uint:
+			w.Uint(v)
+		case uint8:
+			w.Uint8(v)
+		case uint16:
+			w.Uint16(v)
+		case uint32:
+			w.Uint32(v)
+		case uint64:
+			w.Uint64(v)
+		case float32:
+			w.Float32(v)
+		case float64:
+			w.Float64(v)
+		case time.Time:
+			w.String(v.Format(time.RFC3339))
+		case primitive.ObjectID:
+			w.String(v.Hex())
+		case primitive.DateTime:
+			// format in time.RFC3339Nano v.(primitive.DateTime).Time()
+			w.String(v.Time().Format(time.RFC3339Nano))
+		default:
+			if vv, ok := v.(easyjson.Marshaler); ok {
+				//fmt.Printf("Found easyjson.Marshaler: %v at %v\n", vv, k)
+				vv.MarshalEasyJSON(w)
+			} else if vv, ok := v.(json.Marshaler); ok {
+				//fmt.Printf("Found json.Marshaler: %v at %v\n", vv, k)
+				bytes, err := vv.MarshalJSON()
+				w.Raw(bytes, err)
+			} else {
+				//fmt.Printf("Found unknown: %v at %v\n", v, k)
+				bytes, err := json.Marshal(v)
+				w.Raw(bytes, err)
+			}
 		}
 	}
 	w.RawByte('}')
