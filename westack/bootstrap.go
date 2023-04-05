@@ -8,6 +8,7 @@ import (
 	"os"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	casbinmodel "github.com/casbin/casbin/v2/model"
@@ -523,10 +524,29 @@ func (app *WeStack) setupModel(loadedModel *model.Model, dataSource *datasource.
 	}
 }
 
+var activeRequests int32
+var activeRequestsMutex sync.RWMutex
+
 func handleFindMany(loadedModel *model.Model, ctx *model.EventContext) error {
 	if loadedModel.App.Debug {
 		fmt.Println("DEBUG: handleFindMany")
 	}
+	// Limit to 6 concurrent requests, new requests will be queued
+	activeRequestsMutex.Lock()
+	for activeRequests >= 6 {
+		activeRequestsMutex.Unlock()
+		time.Sleep(17 * time.Millisecond)
+		activeRequestsMutex.Lock()
+	}
+	activeRequests++
+	activeRequestsMutex.Unlock()
+
+	defer func() {
+		activeRequestsMutex.Lock()
+		activeRequests--
+		activeRequestsMutex.Unlock()
+	}()
+
 	result, err := loadedModel.FindMany(ctx.Filter, ctx)
 	if err != nil {
 		return err
