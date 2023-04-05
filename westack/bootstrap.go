@@ -532,12 +532,14 @@ func handleFindMany(loadedModel *model.Model, ctx *model.EventContext) error {
 		fmt.Println("DEBUG: handleFindMany")
 	}
 	// Limit to 6 concurrent requests, new requests will be queued
-	activeRequestsMutex.Lock()
+	activeRequestsMutex.RLock()
 	for activeRequests >= 6 {
-		activeRequestsMutex.Unlock()
+		activeRequestsMutex.RUnlock()
 		time.Sleep(17 * time.Millisecond)
-		activeRequestsMutex.Lock()
+		activeRequestsMutex.RLock()
 	}
+	activeRequestsMutex.RUnlock()
+	activeRequestsMutex.Lock()
 	activeRequests++
 	activeRequestsMutex.Unlock()
 
