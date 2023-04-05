@@ -524,28 +524,29 @@ func (app *WeStack) setupModel(loadedModel *model.Model, dataSource *datasource.
 	}
 }
 
-var activeRequests int32
+var activeRequestsPerModel = make(map[string]int)
 var activeRequestsMutex sync.RWMutex
 
 func handleFindMany(loadedModel *model.Model, ctx *model.EventContext) error {
 	if loadedModel.App.Debug {
 		fmt.Println("DEBUG: handleFindMany")
 	}
-	// Limit to 6 concurrent requests, new requests will be queued
-	activeRequestsMutex.RLock()
-	for activeRequests >= 6 {
-		activeRequestsMutex.RUnlock()
-		time.Sleep(16 * time.Millisecond)
-		activeRequestsMutex.RLock()
-	}
-	activeRequestsMutex.RUnlock()
+	// Limit to 2 concurrent requests per model, new requests will be queued
 	activeRequestsMutex.Lock()
-	activeRequests++
+	if _, ok := activeRequestsPerModel[loadedModel.Name]; !ok {
+		activeRequestsPerModel[loadedModel.Name] = 0
+	}
+	for activeRequestsPerModel[loadedModel.Name] >= 6 {
+		activeRequestsMutex.Unlock()
+		time.Sleep(16 * time.Millisecond)
+		activeRequestsMutex.Lock()
+	}
+	activeRequestsPerModel[loadedModel.Name]++
 	activeRequestsMutex.Unlock()
 
 	defer func() {
 		activeRequestsMutex.Lock()
-		activeRequests--
+		activeRequestsPerModel[loadedModel.Name]--
 		activeRequestsMutex.Unlock()
 	}()
 
