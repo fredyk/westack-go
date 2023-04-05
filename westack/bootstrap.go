@@ -536,7 +536,7 @@ func handleFindMany(loadedModel *model.Model, ctx *model.EventContext) error {
 	if _, ok := activeRequestsPerModel[loadedModel.Name]; !ok {
 		activeRequestsPerModel[loadedModel.Name] = 0
 	}
-	for activeRequestsPerModel[loadedModel.Name] >= 6 {
+	for activeRequestsPerModel[loadedModel.Name] >= 2 {
 		activeRequestsMutex.Unlock()
 		time.Sleep(16 * time.Millisecond)
 		activeRequestsMutex.Lock()
