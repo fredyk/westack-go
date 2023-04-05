@@ -24,8 +24,7 @@ type InstanceAChunkGenerator struct {
 	input             InstanceA
 	totalChunks       int
 	currentChunkIndex int
-	currentChunk      *Chunk
-	nextChunk         *Chunk
+	currentChunk      Chunk
 	contentType       string
 }
 
@@ -41,23 +40,24 @@ func (chunkGenerator *InstanceAChunkGenerator) NextChunk() (chunk Chunk, err err
 	if err != nil {
 		return
 	}
-	chunk = *chunkGenerator.currentChunk
+	chunk = chunkGenerator.currentChunk
 	chunkGenerator.currentChunkIndex++
 	return
 }
 
 func (chunkGenerator *InstanceAChunkGenerator) GenerateNextChunk() (err error) {
-	var nextChunk Chunk
+	chunkGenerator.currentChunk.raw = nil
+	chunkGenerator.currentChunk.length = 0
 	if chunkGenerator.currentChunkIndex == 0 {
-		nextChunk.raw = []byte{'['}
-		nextChunk.length += 1
+		chunkGenerator.currentChunk.raw = []byte{'['}
+		chunkGenerator.currentChunk.length += 1
 	} else if chunkGenerator.currentChunkIndex == chunkGenerator.totalChunks-1 {
-		nextChunk.raw = []byte{']'}
-		nextChunk.length += 1
+		chunkGenerator.currentChunk.raw = []byte{']'}
+		chunkGenerator.currentChunk.length += 1
 	} else {
 		if chunkGenerator.currentChunkIndex > 1 {
-			nextChunk.raw = []byte{','}
-			nextChunk.length += 1
+			chunkGenerator.currentChunk.raw = []byte{','}
+			chunkGenerator.currentChunk.length += 1
 		}
 
 		nextInstance := chunkGenerator.input[chunkGenerator.currentChunkIndex-1]
@@ -71,10 +71,9 @@ func (chunkGenerator *InstanceAChunkGenerator) GenerateNextChunk() (err error) {
 			}
 			return
 		}
-		nextChunk.raw = append(nextChunk.raw, asBytes...)
-		nextChunk.length += len(asBytes)
+		chunkGenerator.currentChunk.raw = append(chunkGenerator.currentChunk.raw, asBytes...)
+		chunkGenerator.currentChunk.length += len(asBytes)
 	}
-	chunkGenerator.currentChunk = &nextChunk
 	if chunkGenerator.Debug {
 		fmt.Printf("Generated chunk %d/%d\n", chunkGenerator.currentChunkIndex, chunkGenerator.totalChunks)
 	}
