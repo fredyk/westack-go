@@ -3,6 +3,8 @@ package model
 import (
 	"fmt"
 	"io"
+	"sync"
+	"time"
 
 	"github.com/mailru/easyjson"
 )
@@ -46,7 +48,26 @@ func (chunkGenerator *InstanceAChunkGenerator) NextChunk() (chunk Chunk, err err
 	return
 }
 
+var activeChunks int32
+var activeChunksMutex sync.RWMutex
+
 func (chunkGenerator *InstanceAChunkGenerator) GenerateNextChunk() (err error) {
+	activeChunksMutex.RLock()
+	for activeChunks >= 6 {
+		// fmt.Printf("Waiting for active chunks to finish: %d\n", activeChunks)
+		activeChunksMutex.RUnlock()
+		time.Sleep(16 * time.Millisecond)
+		activeChunksMutex.RLock()
+	}
+	activeChunksMutex.RUnlock()
+	activeChunksMutex.Lock()
+	activeChunks++
+	activeChunksMutex.Unlock()
+	defer func() {
+		activeChunksMutex.Lock()
+		activeChunks--
+		activeChunksMutex.Unlock()
+	}()
 	var nextChunk Chunk
 	if chunkGenerator.currentChunk == 0 {
 		nextChunk.raw = []byte{'['}
