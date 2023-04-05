@@ -535,7 +535,7 @@ func handleFindMany(loadedModel *model.Model, ctx *model.EventContext) error {
 	activeRequestsMutex.RLock()
 	for activeRequests >= 6 {
 		activeRequestsMutex.RUnlock()
-		time.Sleep(17 * time.Millisecond)
+		time.Sleep(16 * time.Millisecond)
 		activeRequestsMutex.RLock()
 	}
 	activeRequestsMutex.RUnlock()
