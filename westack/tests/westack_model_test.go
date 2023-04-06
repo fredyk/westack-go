@@ -194,3 +194,11 @@ func Test_CreateWithForcingError(t *testing.T) {
 	}, systemContext)
 	assert.NotNil(t, err)
 }
+
+func Test_EnforceExError(t *testing.T) {
+
+	t.Parallel()
+
+	_, err := noteModel.EnforceEx(nil, "", "create", &model.EventContext{})
+	assert.NotNil(t, err)
+}
