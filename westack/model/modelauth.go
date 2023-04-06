@@ -112,27 +112,25 @@ func (loadedModel *Model) EnforceEx(token *BearerToken, objId string, action str
 		}
 	}
 	if err != nil {
-		if loadedModel.authCache[bearerUserIdSt] == nil {
-			addSubjectAuthCacheEntry(loadedModel, bearerUserIdSt)
-		}
-		if loadedModel.authCache[bearerUserIdSt][targetObjId] == nil {
-			addObjectAuthCacheEntry(loadedModel, bearerUserIdSt, targetObjId)
-		}
-		addActionAuthCacheEntry(loadedModel, bearerUserIdSt, targetObjId, action, false)
+		updateAuthCache(loadedModel, bearerUserIdSt, targetObjId, action, false)
 		return err, false
 	}
 	if allow {
-		if loadedModel.authCache[bearerUserIdSt] == nil {
-			addSubjectAuthCacheEntry(loadedModel, bearerUserIdSt)
-		}
-		if loadedModel.authCache[bearerUserIdSt][targetObjId] == nil {
-			addObjectAuthCacheEntry(loadedModel, bearerUserIdSt, targetObjId)
-		}
-		addActionAuthCacheEntry(loadedModel, bearerUserIdSt, targetObjId, action, true)
+		updateAuthCache(loadedModel, bearerUserIdSt, targetObjId, action, true)
 		return nil, true
-
 	}
 	return fiber.ErrUnauthorized, false
+}
+
+//go:noinline
+func updateAuthCache(loadedModel *Model, bearerUserIdSt string, targetObjId string, action string, allow bool) {
+	if loadedModel.authCache[bearerUserIdSt] == nil {
+		addSubjectAuthCacheEntry(loadedModel, bearerUserIdSt)
+	}
+	if loadedModel.authCache[bearerUserIdSt][targetObjId] == nil {
+		addObjectAuthCacheEntry(loadedModel, bearerUserIdSt, targetObjId)
+	}
+	addActionAuthCacheEntry(loadedModel, bearerUserIdSt, targetObjId, action, allow)
 }
 
 //go:noinline
