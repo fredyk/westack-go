@@ -195,7 +195,7 @@ func getDbUrl(dsViper *viper.Viper, ds *Datasource) string {
 	return url
 }
 
-func (ds *Datasource) FindMany(collectionName string, lookups *wst.A) (*wst.A, error) {
+func (ds *Datasource) FindMany(collectionName string, lookups *wst.A) (MongoCursorI, error) {
 	var connector = ds.Viper.GetString(ds.Key + ".connector")
 	switch connector {
 	case "mongodb":
@@ -217,18 +217,20 @@ func (ds *Datasource) FindMany(collectionName string, lookups *wst.A) (*wst.A, e
 		if err != nil {
 			return nil, err
 		}
-		defer func(cursor *mongo.Cursor, ctx context.Context) {
-			err := cursor.Close(ctx)
-			if err != nil {
-				panic(err)
-			}
-		}(cursor, ctx)
-		var documents wst.A
-		err = cursor.All(ds.Context, &documents)
-		if err != nil {
-			return nil, err
-		}
-		return &documents, nil
+		// Close mongo cursor outside of this function
+		//defer func(cursor *mongo.Cursor, ctx context.Context) {
+		//	err := cursor.Close(ctx)
+		//	if err != nil {
+		//		panic(err)
+		//	}
+		//}(cursor, ctx)
+		//var documents wst.A
+		//err = cursor.All(ds.Context, &documents)
+		//if err != nil {
+		//	return nil, err
+		//}
+		//return &documents, nil
+		return cursor, nil
 	case "redis":
 		return nil, fmt.Errorf("redis connector not implemented yet")
 	case "memorykv":
@@ -269,18 +271,24 @@ func (ds *Datasource) FindMany(collectionName string, lookups *wst.A) (*wst.A, e
 		}
 		bucket := db.GetBucket(collectionName)
 		bytes, err := bucket.Get(idAsString)
+		var documents [][]byte
 		if err != nil {
 			return nil, err
 		} else if bytes == nil {
 			// TODO: Check if we should return an error or not
-			return &wst.A{}, nil
+			//return &wst.A{}, nil
+			documents = nil
+		} else {
+			//documents = make(wst.A, 1)
+			documents = make([][]byte, 1)
+			documents[0] = bytes
+			//err = bson.Unmarshal(bytes, &documents[0])
+			//if err != nil {
+			//	return nil, err
+			//}
+			//return &documents, nil
 		}
-		var documents wst.A = make(wst.A, 1)
-		err = bson.Unmarshal(bytes, &documents[0])
-		if err != nil {
-			return nil, err
-		}
-		return &documents, nil
+		return NewFixedMongoCursor(documents), nil
 
 	default:
 		return nil, errors.New("invalid connector " + connector)
@@ -352,12 +360,23 @@ func findByObjectId(collectionName string, _id interface{}, ds *Datasource, look
 		if lookups != nil {
 			*wrappedLookups = append(*wrappedLookups, *lookups...)
 		}
-		results, err := ds.FindMany(collectionName, wrappedLookups)
+		cursor, err := ds.FindMany(collectionName, wrappedLookups)
 		if err != nil {
 			return nil, err
 		}
-		if results != nil && len(*results) > 0 {
-			return &(*results)[0], nil
+		defer func(cursor MongoCursorI, ctx context.Context) {
+			err := cursor.Close(ctx)
+			if err != nil {
+				panic(err)
+			}
+		}(cursor, ds.Context)
+		var results []wst.M
+		err = cursor.All(ds.Context, &results)
+		if err != nil {
+			return nil, err
+		}
+		if results != nil && len(results) > 0 {
+			return &(results)[0], nil
 		} else {
 			return nil, errors.New("document not found")
 		}

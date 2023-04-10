@@ -1,6 +1,7 @@
 package model
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -368,11 +369,11 @@ func (loadedModel *Model) FindMany(filterMap *wst.Filter, baseContext *EventCont
 	//	delete(finalData, key)
 	//}
 
-	documents, err := loadedModel.Datasource.FindMany(loadedModel.CollectionName, lookups)
+	dsCursor, err := loadedModel.Datasource.FindMany(loadedModel.CollectionName, lookups)
 	if err != nil {
 		return newErrorCursor(err)
 	}
-	if documents == nil {
+	if dsCursor == nil {
 		return newErrorCursor(fmt.Errorf("invalid query result"))
 	}
 
@@ -383,23 +384,6 @@ func (loadedModel *Model) FindMany(filterMap *wst.Filter, baseContext *EventCont
 	} else {
 		targetInclude = nil
 	}
-	if targetInclude != nil {
-		for _, includeItem := range *targetInclude {
-			relationName := includeItem.Relation
-			relation := (*loadedModel.Config.Relations)[relationName]
-			relatedModelName := relation.Model
-			relatedLoadedModel := (*loadedModel.modelRegistry)[relatedModelName]
-			if relatedLoadedModel == nil {
-				return newErrorCursor(fmt.Errorf("related model not found"))
-			}
-
-			err := loadedModel.mergeRelated(1, documents, includeItem, targetBaseContext)
-			if err != nil {
-				return newErrorCursor(err)
-			}
-
-		}
-	}
 
 	var results = make(chan *Instance)
 	var cursor = newChannelCursor(results).(*ChannelCursor)
@@ -409,7 +393,31 @@ func (loadedModel *Model) FindMany(filterMap *wst.Filter, baseContext *EventCont
 			defer close(results)
 			disabledCache := loadedModel.App.Viper.GetBool("disableCache")
 			sameLevelCache := NewBuildCache()
-			for _, document := range *documents {
+			for dsCursor.Next(context.Background()) {
+				var document wst.M
+				err := dsCursor.Decode(&document)
+				if err != nil {
+					return err
+				}
+
+				if targetInclude != nil {
+					for _, includeItem := range *targetInclude {
+						relationName := includeItem.Relation
+						relation := (*loadedModel.Config.Relations)[relationName]
+						relatedModelName := relation.Model
+						relatedLoadedModel := (*loadedModel.modelRegistry)[relatedModelName]
+						if relatedLoadedModel == nil {
+							return fmt.Errorf("related model not found")
+						}
+
+						err := loadedModel.mergeRelated(1, &wst.A{document}, includeItem, targetBaseContext)
+						if err != nil {
+							return err
+						}
+
+					}
+				}
+
 				inst, err := loadedModel.Build(document, sameLevelCache, targetBaseContext)
 				if err != nil {
 					return err
