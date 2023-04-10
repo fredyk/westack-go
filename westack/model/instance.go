@@ -99,10 +99,10 @@ func (modelInstance *Instance) HideProperties() {
 func (modelInstance *Instance) Transform(out interface{}) (err error) {
 	err = modelInstance.requireBytes()
 	if err == nil {
-		//err = bson.Unmarshal(modelInstance.bytes, out)
+		//Err = bson.Unmarshal(modelInstance.bytes, out)
 		err = bson.UnmarshalWithRegistry(modelInstance.Model.App.Bson.Registry, modelInstance.bytes, out)
-		//err = json.Unmarshal(modelInstance.bytes, out)
-		//err = easyjson.Unmarshal(modelInstance.bytes, out)
+		//Err = json.Unmarshal(modelInstance.bytes, out)
+		//Err = easyjson.Unmarshal(modelInstance.bytes, out)
 		if err != nil && modelInstance.Model.App.Debug {
 			fmt.Printf("Error while unmarshalling instance: %s", err)
 		}
@@ -450,13 +450,13 @@ func (modelInstance *Instance) requireBytes() (err error) {
 		//// register decoder for primitive.ObjectID
 		//bson.DefaultRegistry.RegisterDecoder(primitive.ObjectID{}, bson.ObjectIDDecoder{})
 
-		//modelInstance.bytes, err = bson.Marshal(modelInstance.data)
+		//modelInstance.bytes, Err = bson.Marshal(modelInstance.data)
 		if modelInstance.Model.App.Debug {
 			log.Printf("DEBUG: marshalling at requireBytes(): %v\n", modelInstance.data)
 		}
-		//modelInstance.bytes, err = bson.MarshalWithRegistry(modelInstance.Model.App.Bson.Registry, modelInstance.data)
+		//modelInstance.bytes, Err = bson.MarshalWithRegistry(modelInstance.Model.App.Bson.Registry, modelInstance.data)
 		modelInstance.bytes, err = modelInstance.MarshalBSON()
-		//modelInstance.bytes, err = easyjson.Marshal(modelInstance.data)
+		//modelInstance.bytes, Err = easyjson.Marshal(modelInstance.data)
 	}
 	if err != nil && modelInstance.Model.App.Debug {
 		log.Printf("ERROR: while marshalling Instance: %v\n", err)
@@ -472,8 +472,8 @@ func (modelInstance *Instance) MarshalBSON() (out []byte, err error) {
 	if modelInstance.Model.App.Debug {
 		log.Printf("DEBUG: marshalling Instance: %v\n", toMarshal)
 	}
-	//bytes, err := easyjson.Marshal(toMarshal)
-	//w.Raw(bytes, err)
+	//bytes, Err := easyjson.Marshal(toMarshal)
+	//w.Raw(bytes, Err)
 	//if modelInstance.Model.App.Debug {
 	//	log.Printf("DEBUG: marshalled Instance: %v\n", len(bytes))
 	//}
@@ -488,7 +488,7 @@ func (instances InstanceA) ToJSON() []wst.M {
 	return result
 }
 
-//func (instances InstanceA) MarshalBSON() (out []byte, err error) {
+//func (instances InstanceA) MarshalBSON() (out []byte, Err error) {
 //	// marshal bson as array of modelInstance.data
 //	//toMarshal := make([]wst.M, len(instances))
 //	//for idx, instance := range instances {
@@ -500,14 +500,14 @@ func (instances InstanceA) ToJSON() []wst.M {
 //	//
 //	for idx, instance := range instances {
 //		if idx == 0 {
-//			out, err = bson.MarshalWithRegistry(instance.Model.App.Bson.Registry, instance.data)
-//			if err != nil {
+//			out, Err = bson.MarshalWithRegistry(instance.Model.App.Bson.Registry, instance.data)
+//			if Err != nil {
 //				return
 //			}
 //		} else {
-//			aux, err := bson.MarshalWithRegistry(instance.Model.App.Bson.Registry, instance.data)
-//			if err != nil {
-//				return nil, err
+//			aux, Err := bson.MarshalWithRegistry(instance.Model.App.Bson.Registry, instance.data)
+//			if Err != nil {
+//				return nil, Err
 //			}
 //			out = append(out, aux...)
 //		}

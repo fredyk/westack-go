@@ -223,7 +223,7 @@ func (app *WeStack) setupModel(loadedModel *model.Model, dataSource *datasource.
 			}
 			users, err := loadedModel.FindMany(&wst.Filter{
 				Where: &where,
-			}, ctx)
+			}, ctx).All()
 			if len(users) == 0 {
 				return wst.CreateError(fiber.ErrUnauthorized, "LOGIN_FAILED", fiber.Map{"message": "login failed"}, "Error")
 			}
@@ -261,7 +261,7 @@ func (app *WeStack) setupModel(loadedModel *model.Model, dataSource *datasource.
 							"principalId": firstUser.Id,
 						},
 					},
-				}, Include: &wst.Include{{Relation: "role"}}}, roleContext)
+				}, Include: &wst.Include{{Relation: "role"}}}, roleContext).All()
 				if err != nil {
 					return err
 				}
@@ -550,20 +550,14 @@ func handleFindMany(loadedModel *model.Model, ctx *model.EventContext) error {
 		activeRequestsMutex.Unlock()
 	}()
 
-	result, err := loadedModel.FindMany(ctx.Filter, ctx)
-	if err != nil {
-		return err
+	cursor := loadedModel.FindMany(ctx.Filter, ctx)
+
+	//chunkGenerator := model.NewInstanceAChunkGenerator(loadedModel, cursor, "application/json")
+	chunkGenerator := model.NewCursorChunkGenerator(loadedModel, cursor)
+
+	if cursor.(*model.ChannelCursor).Err == nil {
+		ctx.StatusCode = fiber.StatusOK
 	}
-
-	chunkGenerator := model.NewInstanceAChunkGenerator(loadedModel, result, "application/json")
-
-	//out := make(wst.A, len(result))
-	//for idx, item := range result {
-	//	item.HideProperties()
-	//	out[idx] = item.ToJSON()
-	//}
-
-	ctx.StatusCode = fiber.StatusOK
 	ctx.Result = chunkGenerator
 	return nil
 }
