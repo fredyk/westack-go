@@ -3,8 +3,6 @@ package proto
 import (
 	"context"
 	"fmt"
-
-	"github.com/golang/protobuf/proto"
 	"google.golang.org/grpc"
 )
 
@@ -14,9 +12,11 @@ type ReqGrpcTestMessage struct {
 	Foo int32 `protobuf:"varint,1,opt,name=foo,proto3" json:"foo,omitempty"`
 }
 
-func (m *ReqGrpcTestMessage) Reset()         { *m = ReqGrpcTestMessage{} }
-func (m *ReqGrpcTestMessage) String() string { return proto.CompactTextString(m) }
-func (*ReqGrpcTestMessage) ProtoMessage()    {}
+func (m *ReqGrpcTestMessage) Reset() { *m = ReqGrpcTestMessage{} }
+func (m *ReqGrpcTestMessage) String() string {
+	return fmt.Sprintf("ReqGrpcTestMessage{Foo: %d}", m.Foo)
+}
+func (*ReqGrpcTestMessage) ProtoMessage() {}
 
 // extends proto.Message
 
@@ -24,9 +24,11 @@ type ResGrpcTestMessage struct {
 	Bar int32 `protobuf:"varint,1,opt,name=bar,proto3" json:"bar,omitempty"`
 }
 
-func (m *ResGrpcTestMessage) Reset()         { *m = ResGrpcTestMessage{} }
-func (m *ResGrpcTestMessage) String() string { return proto.CompactTextString(m) }
-func (*ResGrpcTestMessage) ProtoMessage()    {}
+func (m *ResGrpcTestMessage) Reset() { *m = ResGrpcTestMessage{} }
+func (m *ResGrpcTestMessage) String() string {
+	return fmt.Sprintf("ResGrpcTestMessage{Bar: %d}", m.Bar)
+}
+func (*ResGrpcTestMessage) ProtoMessage() {}
 
 type FooClient interface {
 	TestFoo(ctx context.Context, in *ReqGrpcTestMessage, opts ...grpc.CallOption) (*ResGrpcTestMessage, error)
