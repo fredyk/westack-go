@@ -1,6 +1,7 @@
 package model
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"strings"
@@ -323,7 +324,11 @@ func (loadedModel *Model) mergeRelated(relationDeepLevel byte, documents *wst.A,
 								var cachedDocs *wst.A
 
 								cacheLookups := &wst.A{wst.M{"$match": wst.M{keyFrom: cacheKeyTo}}}
-								cachedDocs, err = safeCacheDs.FindMany(relatedLoadedModel.CollectionName, cacheLookups)
+								cursor, err := safeCacheDs.FindMany(relatedLoadedModel.CollectionName, cacheLookups)
+								if err != nil {
+									return err
+								}
+								err = cursor.All(context.Background(), &cachedDocs)
 								if err != nil {
 									return err
 								}
