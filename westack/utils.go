@@ -24,18 +24,11 @@ func gRPCCallWithQueryParams[InputT any, ClientT interface{}, OutputT proto.Mess
 			fmt.Printf("GRPCCallWithQueryParams Query Parse Error: %s\n", err)
 			return SendError(ctx, err)
 		}
-		conn, err := connectGRPCService(serviceUrl)
+		client, err := obtainConnectedClient(serviceUrl, clientConstructor)
 		if err != nil {
 			fmt.Printf("GRPCCallWithQueryParams Connect Error: %s\n", err)
 			return SendError(ctx, err)
 		}
-		//defer func(conn *grpc.ClientConn) {
-		//	err := disconnect(conn)
-		//	if err != nil {
-		//		fmt.Printf("GRPCCallWithQueryParams Disconnect Error: %s\n", err)
-		//	}
-		//}(conn)
-		client := clientConstructor(conn)
 
 		res, err := clientMethod(client, ctx.Context(), &rawParamsQuery)
 		if err != nil {
@@ -53,6 +46,40 @@ func gRPCCallWithQueryParams[InputT any, ClientT interface{}, OutputT proto.Mess
 	}
 }
 
+var cachedConnectionsByURL = make(map[string]map[string]interface{})
+var cachedConnectionsByURLMutex = &sync.RWMutex{}
+
+func obtainConnectedClient[ClientT interface{}](serviceUrl string, clientConstructor func(cc grpc.ClientConnInterface) ClientT) (ClientT, error) {
+	var client ClientT
+	cachedConnectionsByURLMutex.Lock()
+	if _, ok := cachedConnectionsByURL[serviceUrl]; !ok {
+		cachedConnectionsByURL[serviceUrl] = make(map[string]interface{})
+	}
+	clientConstructorName := strings.TrimPrefix(fmt.Sprintf("%T", clientConstructor), "*")
+	if client1, ok := cachedConnectionsByURL[serviceUrl][clientConstructorName]; ok {
+		cachedConnectionsByURLMutex.Unlock()
+		return client1.(ClientT), nil
+	}
+
+	cachedConnectionsByURLMutex.Unlock()
+	conn, err := connectGRPCService(serviceUrl)
+	if err != nil {
+		fmt.Printf("GRPCCallWithQueryParams Connect Error: %s\n", err)
+		return client, err
+	}
+	//defer func(conn *grpc.ClientConn) {
+	//	err := disconnect(conn)
+	//	if err != nil {
+	//		fmt.Printf("GRPCCallWithQueryParams Disconnect Error: %s\n", err)
+	//	}
+	//}(conn)
+	client = clientConstructor(conn)
+	cachedConnectionsByURLMutex.Lock()
+	cachedConnectionsByURL[serviceUrl][clientConstructorName] = client
+	cachedConnectionsByURLMutex.Unlock()
+	return client, err
+}
+
 func gRPCCallWithBody[InputT any, ClientT interface{}, OutputT proto.Message](serviceUrl string, clientConstructor func(cc grpc.ClientConnInterface) ClientT, clientMethod func(ClientT, context.Context, *InputT, ...grpc.CallOption) (OutputT, error)) func(ctx *fiber.Ctx) error {
 	return func(ctx *fiber.Ctx) error {
 		//fmt.Printf("%s %T \n", serviceUrl, clientMethod)
@@ -61,18 +88,11 @@ func gRPCCallWithBody[InputT any, ClientT interface{}, OutputT proto.Message](se
 			fmt.Printf("GRPCCallWithBody Body Parse Error: %s\n", err)
 			return SendError(ctx, err)
 		}
-		conn, err := connectGRPCService(serviceUrl)
+		client, err := obtainConnectedClient(serviceUrl, clientConstructor)
 		if err != nil {
 			fmt.Printf("GRPCCallWithBody Connect Error: %s\n", err)
 			return SendError(ctx, err)
 		}
-		//defer func(conn *grpc.ClientConn) {
-		//	err := disconnect(conn)
-		//	if err != nil {
-		//		fmt.Printf("GRPCCallWithBody Disconnect Error: %s\n", err)
-		//	}
-		//}(conn)
-		client := clientConstructor(conn)
 
 		res, err := clientMethod(client, ctx.Context(), &rawParamsInput)
 		if err != nil {
@@ -90,23 +110,9 @@ func gRPCCallWithBody[InputT any, ClientT interface{}, OutputT proto.Message](se
 	}
 }
 
-var cachedConnectionsByURL = make(map[string]*grpc.ClientConn)
-var cachedConnectionsByURLMutex = &sync.RWMutex{}
-
 func connectGRPCService(url string) (*grpc.ClientConn, error) {
-	cachedConnectionsByURLMutex.RLock()
-	if clientConn, ok := cachedConnectionsByURL[url]; ok {
-		cachedConnectionsByURLMutex.RUnlock()
-		return clientConn, nil
-	}
-	cachedConnectionsByURLMutex.RUnlock()
 	fmt.Printf("[DEBUG] wst-grpc: Connecting to %s\n", url)
 	clientConn, err := grpc.Dial(url, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock(), grpc.WithBlock())
-	if err == nil && clientConn != nil {
-		cachedConnectionsByURLMutex.Lock()
-		cachedConnectionsByURL[url] = clientConn
-		cachedConnectionsByURLMutex.Unlock()
-	}
 	return clientConn, err
 }
 
