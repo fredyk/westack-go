@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"sync"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/golang/protobuf/jsonpb"
@@ -28,12 +29,12 @@ func gRPCCallWithQueryParams[InputT any, ClientT interface{}, OutputT proto.Mess
 			fmt.Printf("GRPCCallWithQueryParams Connect Error: %s\n", err)
 			return SendError(ctx, err)
 		}
-		defer func(conn *grpc.ClientConn) {
-			err := disconnect(conn)
-			if err != nil {
-				fmt.Printf("GRPCCallWithQueryParams Disconnect Error: %s\n", err)
-			}
-		}(conn)
+		//defer func(conn *grpc.ClientConn) {
+		//	err := disconnect(conn)
+		//	if err != nil {
+		//		fmt.Printf("GRPCCallWithQueryParams Disconnect Error: %s\n", err)
+		//	}
+		//}(conn)
 		client := clientConstructor(conn)
 
 		res, err := clientMethod(client, ctx.Context(), &rawParamsQuery)
@@ -65,12 +66,12 @@ func gRPCCallWithBody[InputT any, ClientT interface{}, OutputT proto.Message](se
 			fmt.Printf("GRPCCallWithBody Connect Error: %s\n", err)
 			return SendError(ctx, err)
 		}
-		defer func(conn *grpc.ClientConn) {
-			err := disconnect(conn)
-			if err != nil {
-				fmt.Printf("GRPCCallWithBody Disconnect Error: %s\n", err)
-			}
-		}(conn)
+		//defer func(conn *grpc.ClientConn) {
+		//	err := disconnect(conn)
+		//	if err != nil {
+		//		fmt.Printf("GRPCCallWithBody Disconnect Error: %s\n", err)
+		//	}
+		//}(conn)
 		client := clientConstructor(conn)
 
 		res, err := clientMethod(client, ctx.Context(), &rawParamsInput)
@@ -89,8 +90,24 @@ func gRPCCallWithBody[InputT any, ClientT interface{}, OutputT proto.Message](se
 	}
 }
 
+var cachedConnectionsByURL = make(map[string]*grpc.ClientConn)
+var cachedConnectionsByURLMutex = &sync.RWMutex{}
+
 func connectGRPCService(url string) (*grpc.ClientConn, error) {
-	return grpc.Dial(url, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock(), grpc.WithBlock())
+	cachedConnectionsByURLMutex.RLock()
+	if clientConn, ok := cachedConnectionsByURL[url]; ok {
+		cachedConnectionsByURLMutex.RUnlock()
+		return clientConn, nil
+	}
+	cachedConnectionsByURLMutex.RUnlock()
+	fmt.Printf("[DEBUG] wst-grpc: Connecting to %s\n", url)
+	clientConn, err := grpc.Dial(url, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock(), grpc.WithBlock())
+	if err == nil && clientConn != nil {
+		cachedConnectionsByURLMutex.Lock()
+		cachedConnectionsByURL[url] = clientConn
+		cachedConnectionsByURLMutex.Unlock()
+	}
+	return clientConn, err
 }
 
 func disconnect(conn *grpc.ClientConn) error {
