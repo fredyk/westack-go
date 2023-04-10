@@ -3,14 +3,12 @@ package tests
 import (
 	"bytes"
 	"fmt"
+	"github.com/goccy/go-json"
+	"github.com/stretchr/testify/assert"
 	"io"
 	"math/rand"
 	"net/http"
 	"testing"
-	"time"
-
-	"github.com/goccy/go-json"
-	"github.com/stretchr/testify/assert"
 
 	wst "github.com/fredyk/westack-go/westack/common"
 )
@@ -101,6 +99,44 @@ func Test_FindMany(t *testing.T) {
 
 	var out []byte
 	var parsed wst.A
+	//out = make([]byte, 1)
+	//n, err := io.ReadFull(response.Body, out)
+	//assert.Nil(t, err)
+	//assert.Equal(t, 1, n)
+	//assert.Equal(t, "[", string(out))
+	//
+	//var decoder *json.Decoder
+	//decoder = json.NewDecoder(response.Body)
+	//decoder.DisallowUnknownFields()
+	//decoder.UseNumber()
+	//
+	//for {
+	//	var parsedItem wst.M
+	//	err = decoder.Decode(&parsedItem)
+	//	if err != nil {
+	//		if err == io.EOF {
+	//			break
+	//		}
+	//
+	//		buffered := decoder.Buffered()
+	//		if buffered != nil {
+	//			bufOut := make([]byte, 1)
+	//			n, err := io.ReadFull(buffered, bufOut)
+	//			assert.Nil(t, err)
+	//			assert.Equal(t, 1, n)
+	//			if string(bufOut) == "]" {
+	//				break
+	//			}
+	//		}
+	//
+	//		t.Errorf("Error: %v", err)
+	//		time.Sleep(5 * time.Minute)
+	//		break
+	//	}
+	//	fmt.Printf("parsedItem: %v\n", parsedItem)
+	//	parsed = append(parsed, parsedItem)
+	//}
+
 	// read response body bytes
 	out, err = io.ReadAll(response.Body)
 	assert.Nil(t, err)
@@ -111,7 +147,6 @@ func Test_FindMany(t *testing.T) {
 	err = json.Unmarshal(out, &parsed)
 	if err != nil {
 		assert.Nilf(t, err, "Error: %v, received bytes: %v <--", err, string(out))
-		time.Sleep(5 * time.Minute)
 	}
 
 	assert.Greaterf(t, len(parsed), 0, "parsed: %v\n", parsed)
@@ -136,6 +171,9 @@ func Test_EmptyArray(t *testing.T) {
 	// read response body bytes
 	out, err = io.ReadAll(response.Body)
 	assert.Nil(t, err)
+
+	assert.Equal(t, 2, len(out), "Received bytes <-- %v, %v\n", len(out), string(out))
+	assert.Equal(t, "[]", string(out))
 
 	err = json.Unmarshal(out, &parsed)
 	assert.Nil(t, err)
