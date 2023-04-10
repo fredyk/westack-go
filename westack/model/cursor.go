@@ -34,6 +34,10 @@ func (cursor *mongoCursor) All() (result InstanceA, err error) {
 	return
 }
 
+func (cursor *mongoCursor) Close() error {
+	return cursor.mCursor.Close(cursor.ctx)
+}
+
 func newMongoCursor(ctx context.Context, mCursor *mongo.Cursor) Cursor {
 	return &mongoCursor{
 		mCursor: mCursor,

@@ -3,14 +3,14 @@ package westack
 import (
 	"context"
 	"fmt"
-	jsonpb "google.golang.org/protobuf/encoding/protojson"
 	"regexp"
 	"strings"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/golang/protobuf/jsonpb"
+	"github.com/golang/protobuf/proto"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/protobuf/proto"
 
 	wst "github.com/fredyk/westack-go/westack/common"
 )
@@ -41,14 +41,14 @@ func gRPCCallWithQueryParams[InputT any, ClientT interface{}, OutputT proto.Mess
 			fmt.Printf("GRPCCallWithQueryParams Call Error: %v --> %s\n", ctx.Route().Name, err)
 			return SendError(ctx, err)
 		}
-		m := jsonpb.MarshalOptions{EmitUnpopulated: true}
-		toSend, err := m.Marshal(res)
+		m := jsonpb.Marshaler{EmitDefaults: true}
+		toSend, err := m.MarshalToString(res)
 		if err != nil {
 			fmt.Printf("GRPCCallWithQueryParams Marshal Error: %s\n", err)
 			return SendError(ctx, err)
 		}
 		ctx.Response().Header.SetContentType("application/json")
-		return ctx.SendString(string(toSend))
+		return ctx.SendString(toSend)
 	}
 }
 
@@ -78,14 +78,14 @@ func gRPCCallWithBody[InputT any, ClientT interface{}, OutputT proto.Message](se
 			fmt.Printf("GRPCCallWithBody Call Error: %v --> %s\n", ctx.Route().Name, err)
 			return SendError(ctx, err)
 		}
-		m := jsonpb.MarshalOptions{EmitUnpopulated: true}
-		toSend, err := m.Marshal(res)
+		m := jsonpb.Marshaler{EmitDefaults: true}
+		toSend, err := m.MarshalToString(res)
 		if err != nil {
 			fmt.Printf("GRPCCallWithBody Marshal Error: %s\n", err)
 			return SendError(ctx, err)
 		}
 		ctx.Response().Header.SetContentType("application/json")
-		return ctx.SendString(string(toSend))
+		return ctx.SendString(toSend)
 	}
 }
 
