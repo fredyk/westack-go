@@ -287,7 +287,7 @@ func ParseFilter(filter string) *wst.Filter {
 	return filterMap
 }
 
-func (loadedModel *Model) FindMany(filterMap *wst.Filter, baseContext *EventContext) (InstanceA, error) {
+func (loadedModel *Model) FindMany(filterMap *wst.Filter, baseContext *EventContext) Cursor {
 
 	if baseContext == nil {
 		baseContext = &EventContext{}
@@ -305,7 +305,7 @@ func (loadedModel *Model) FindMany(filterMap *wst.Filter, baseContext *EventCont
 
 	lookups, err := loadedModel.ExtractLookupsFromFilter(filterMap, baseContext.DisableTypeConversions)
 	if err != nil {
-		return nil, err
+		return newErrorCursor(err)
 	}
 
 	eventContext := &EventContext{
@@ -320,14 +320,14 @@ func (loadedModel *Model) FindMany(filterMap *wst.Filter, baseContext *EventCont
 	if loadedModel.DisabledHandlers["__operation__before_load"] != true {
 		err := loadedModel.GetHandler("__operation__before_load")(eventContext)
 		if err != nil {
-			return nil, err
+			return newErrorCursor(err)
 		}
 		if eventContext.Result != nil {
 			switch eventContext.Result.(type) {
 			case *InstanceA:
-				return *eventContext.Result.(*InstanceA), nil
+				return newFixedLengthCursor(*eventContext.Result.(*InstanceA))
 			case InstanceA:
-				return eventContext.Result.(InstanceA), nil
+				return newFixedLengthCursor(eventContext.Result.(InstanceA))
 			case []*Instance:
 				var result = make(InstanceA, len(eventContext.Result.([]*Instance)))
 				for idx, v := range eventContext.Result.([]*Instance) {
@@ -337,7 +337,7 @@ func (loadedModel *Model) FindMany(filterMap *wst.Filter, baseContext *EventCont
 						result[idx] = Instance{}
 					}
 				}
-				return result, nil
+				return newFixedLengthCursor(result)
 			case wst.A, []wst.M:
 				var result InstanceA
 				sameLevelCache := NewBuildCache()
@@ -346,7 +346,7 @@ func (loadedModel *Model) FindMany(filterMap *wst.Filter, baseContext *EventCont
 					for idx, v := range v {
 						result[idx], err = loadedModel.Build(v, sameLevelCache, targetBaseContext)
 						if err != nil {
-							return nil, err
+							return newErrorCursor(err)
 						}
 					}
 				} else {
@@ -354,13 +354,13 @@ func (loadedModel *Model) FindMany(filterMap *wst.Filter, baseContext *EventCont
 					for idx, v := range v {
 						result[idx], err = loadedModel.Build(v, sameLevelCache, targetBaseContext)
 						if err != nil {
-							return nil, err
+							return newErrorCursor(err)
 						}
 					}
 				}
-				return result, nil
+				return newFixedLengthCursor(result)
 			default:
-				return nil, fmt.Errorf("invalid eventContext.Result type, expected InstanceA or []wst.M; found %T", eventContext.Result)
+				return newErrorCursor(fmt.Errorf("invalid eventContext.Result type, expected InstanceA or []wst.M; found %T", eventContext.Result))
 			}
 		}
 	}
@@ -370,10 +370,10 @@ func (loadedModel *Model) FindMany(filterMap *wst.Filter, baseContext *EventCont
 
 	documents, err := loadedModel.Datasource.FindMany(loadedModel.CollectionName, lookups)
 	if err != nil {
-		return nil, err
+		return newErrorCursor(err)
 	}
 	if documents == nil {
-		return nil, errors.New("invalid query result")
+		return newErrorCursor(fmt.Errorf("invalid query result"))
 	}
 
 	var targetInclude *wst.Include
@@ -390,122 +390,133 @@ func (loadedModel *Model) FindMany(filterMap *wst.Filter, baseContext *EventCont
 			relatedModelName := relation.Model
 			relatedLoadedModel := (*loadedModel.modelRegistry)[relatedModelName]
 			if relatedLoadedModel == nil {
-				return nil, errors.New("related model not found")
+				return newErrorCursor(fmt.Errorf("related model not found"))
 			}
 
 			err := loadedModel.mergeRelated(1, documents, includeItem, targetBaseContext)
 			if err != nil {
-				return nil, err
+				return newErrorCursor(err)
 			}
 
 		}
 	}
 
-	var results = make(InstanceA, len(*documents))
+	var results = make(chan *Instance)
+	var cursor = newChannelCursor(results).(*ChannelCursor)
 
-	disabledCache := loadedModel.App.Viper.GetBool("disableCache")
-	sameLevelCache := NewBuildCache()
-	for idx, document := range *documents {
-		results[idx], err = loadedModel.Build(document, sameLevelCache, targetBaseContext)
-		if err != nil {
-			return nil, err
-		}
-
-		if targetInclude == nil && loadedModel.Config.Cache.Datasource != "" && !disabledCache {
-
-			// Dont cache if include is set
-			cacheDs, err := loadedModel.App.FindDatasource(loadedModel.Config.Cache.Datasource)
-			if err != nil {
-				return nil, err
-			}
-
-			safeCacheDs := cacheDs.(*datasource.Datasource)
-
-			toCache := wst.CopyMap(document)
-
-			for _, keyGroup := range loadedModel.Config.Cache.Keys {
-				canonicalId := ""
-				for idx, key := range keyGroup {
-					if idx > 0 {
-						canonicalId = fmt.Sprintf("%v:", canonicalId)
-					}
-					v := (document)[key]
-					if key == "_id" && v == nil && document["id"] != nil {
-						v = document["id"]
-					}
-					switch v.(type) {
-					case primitive.ObjectID:
-						v = v.(primitive.ObjectID).Hex()
-						break
-					case *primitive.ObjectID:
-						v = v.(*primitive.ObjectID).Hex()
-						break
-					default:
-						break
-					}
-					canonicalId = fmt.Sprintf("%v%v:%v", canonicalId, key, v)
-				}
-				toCache["_redId"] = canonicalId
-				_, err := safeCacheDs.Create(loadedModel.CollectionName, &toCache)
+	go func() {
+		err := func() error {
+			defer close(results)
+			disabledCache := loadedModel.App.Viper.GetBool("disableCache")
+			sameLevelCache := NewBuildCache()
+			for _, document := range *documents {
+				inst, err := loadedModel.Build(document, sameLevelCache, targetBaseContext)
 				if err != nil {
-					return nil, err
+					return err
 				}
-				if loadedModel.App.Debug {
-					fmt.Printf("[DEBUG] cached %v in memorykv\n", toCache["_redId"])
-				}
-			}
+				results <- &inst
 
-			connectorName := safeCacheDs.Key + ".connector"
-			switch safeCacheDs.Viper.GetString(connectorName) {
-			case "redis":
-				return nil, errors.New("redis cache connector not implemented")
-			case "memorykv":
-				db := safeCacheDs.Db.(memorykv.MemoryKvDb)
-				bucket := db.GetBucket(loadedModel.CollectionName)
-				baseKey := ""
-				for _, keyGroup := range loadedModel.Config.Cache.Keys {
-					canonicalId := baseKey
-					for idx, key := range keyGroup {
-						if idx > 0 {
-							canonicalId = fmt.Sprintf("%v:", canonicalId)
-						}
-						v := (document)[key]
-						if key == "_id" && v == nil && document["id"] != nil {
-							v = document["id"]
-						}
-						switch v.(type) {
-						case primitive.ObjectID:
-							v = v.(primitive.ObjectID).Hex()
-							break
-						case *primitive.ObjectID:
-							v = v.(*primitive.ObjectID).Hex()
-							break
-						default:
-							break
-						}
-						canonicalId = fmt.Sprintf("%v%v:%v", canonicalId, key, v)
-					}
-					ttl := time.Duration(loadedModel.Config.Cache.Ttl) * time.Second
-					if loadedModel.App.Debug {
-						fmt.Printf("[DEBUG] trying to expire %v in %v seconds\n", canonicalId, ttl)
-					}
-					err := bucket.Expire(canonicalId, ttl)
+				if targetInclude == nil && loadedModel.Config.Cache.Datasource != "" && !disabledCache {
+
+					// Dont cache if include is set
+					cacheDs, err := loadedModel.App.FindDatasource(loadedModel.Config.Cache.Datasource)
 					if err != nil {
-						return nil, err
+						return err
 					}
-					if loadedModel.App.Debug {
-						fmt.Printf("[DEBUG] expiring %v in %v seconds\n", canonicalId, ttl)
+
+					safeCacheDs := cacheDs.(*datasource.Datasource)
+
+					toCache := wst.CopyMap(document)
+
+					for _, keyGroup := range loadedModel.Config.Cache.Keys {
+						canonicalId := ""
+						for idx, key := range keyGroup {
+							if idx > 0 {
+								canonicalId = fmt.Sprintf("%v:", canonicalId)
+							}
+							v := (document)[key]
+							if key == "_id" && v == nil && document["id"] != nil {
+								v = document["id"]
+							}
+							switch v.(type) {
+							case primitive.ObjectID:
+								v = v.(primitive.ObjectID).Hex()
+								break
+							case *primitive.ObjectID:
+								v = v.(*primitive.ObjectID).Hex()
+								break
+							default:
+								break
+							}
+							canonicalId = fmt.Sprintf("%v%v:%v", canonicalId, key, v)
+						}
+						toCache["_redId"] = canonicalId
+						_, err := safeCacheDs.Create(loadedModel.CollectionName, &toCache)
+						if err != nil {
+							return err
+						}
+						if loadedModel.App.Debug {
+							fmt.Printf("[DEBUG] cached %v in memorykv\n", toCache["_redId"])
+						}
 					}
+
+					connectorName := safeCacheDs.Key + ".connector"
+					switch safeCacheDs.Viper.GetString(connectorName) {
+					case "redis":
+						return errors.New("redis cache connector not implemented")
+					case "memorykv":
+						db := safeCacheDs.Db.(memorykv.MemoryKvDb)
+						bucket := db.GetBucket(loadedModel.CollectionName)
+						baseKey := ""
+						for _, keyGroup := range loadedModel.Config.Cache.Keys {
+							canonicalId := baseKey
+							for idx, key := range keyGroup {
+								if idx > 0 {
+									canonicalId = fmt.Sprintf("%v:", canonicalId)
+								}
+								v := (document)[key]
+								if key == "_id" && v == nil && document["id"] != nil {
+									v = document["id"]
+								}
+								switch v.(type) {
+								case primitive.ObjectID:
+									v = v.(primitive.ObjectID).Hex()
+									break
+								case *primitive.ObjectID:
+									v = v.(*primitive.ObjectID).Hex()
+									break
+								default:
+									break
+								}
+								canonicalId = fmt.Sprintf("%v%v:%v", canonicalId, key, v)
+							}
+							ttl := time.Duration(loadedModel.Config.Cache.Ttl) * time.Second
+							if loadedModel.App.Debug {
+								fmt.Printf("[DEBUG] trying to expire %v in %v seconds\n", canonicalId, ttl)
+							}
+							err := bucket.Expire(canonicalId, ttl)
+							if err != nil {
+								return err
+							}
+							if loadedModel.App.Debug {
+								fmt.Printf("[DEBUG] expiring %v in %v seconds\n", canonicalId, ttl)
+							}
+						}
+					default:
+						return errors.New(fmt.Sprintf("Unsupported cache connector %v", connectorName))
+					}
+
 				}
-			default:
-				return nil, errors.New(fmt.Sprintf("Unsupported cache connector %v", connectorName))
+
 			}
-
+			return nil
+		}()
+		if err != nil {
+			cursor.Error(err)
 		}
+	}()
 
-	}
-
-	return results, nil
+	return cursor
 }
 
 func (loadedModel *Model) Count(filterMap *wst.Filter, baseContext *EventContext) (int64, error) {
@@ -558,16 +569,7 @@ func (loadedModel *Model) FindOne(filterMap *wst.Filter, baseContext *EventConte
 	}
 	filterMap.Limit = 1
 
-	instances, err := loadedModel.FindMany(filterMap, baseContext)
-	if err != nil {
-		return nil, err
-	}
-
-	if len(instances) > 0 {
-		return &instances[0], nil
-	}
-
-	return nil, nil
+	return loadedModel.FindMany(filterMap, baseContext).Next()
 }
 
 func (loadedModel *Model) FindById(id interface{}, filterMap *wst.Filter, baseContext *EventContext) (*Instance, error) {
@@ -594,7 +596,7 @@ func (loadedModel *Model) FindById(id interface{}, filterMap *wst.Filter, baseCo
 	filterMap.Limit = 1
 
 	baseContext.OperationName = wst.OperationNameFindById
-	instances, err := loadedModel.FindMany(filterMap, baseContext)
+	instances, err := loadedModel.FindMany(filterMap, baseContext).All()
 	if err != nil {
 		return nil, err
 	}

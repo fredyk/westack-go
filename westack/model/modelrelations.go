@@ -356,7 +356,7 @@ func (loadedModel *Model) mergeRelated(relationDeepLevel byte, documents *wst.A,
 					}
 
 					var err error
-					relatedInstances, err = relatedLoadedModel.FindMany(targetScope, baseContext)
+					relatedInstances, err = relatedLoadedModel.FindMany(targetScope, baseContext).All()
 					if err != nil {
 						return err
 					}

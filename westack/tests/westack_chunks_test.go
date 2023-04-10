@@ -26,7 +26,7 @@ func Test_GenerateNextChunk_Error(t *testing.T) {
 	var input = model.InstanceA{build}
 
 	chunkGenerator := model.NewInstanceAChunkGenerator(noteModel, input, "application/json")
-	chunkGenerator.Debug = true
+	chunkGenerator.SetDebug(true)
 
 	outBytes, err := io.ReadAll(chunkGenerator.Reader(systemContext))
 	assert.Error(t, err)
