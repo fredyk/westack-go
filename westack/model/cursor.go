@@ -2,20 +2,25 @@ package model
 
 import (
 	"context"
-	"go.mongodb.org/mongo-driver/mongo"
+	"github.com/fredyk/westack-go/westack/datasource"
 )
 
 type Cursor interface {
 	Next() (result *Instance, err error)
 	All() (result InstanceA, err error)
+	Close() error
 }
 
-type mongoCursor struct {
-	mCursor *mongo.Cursor
+type MongoCursor struct {
+	mCursor datasource.MongoCursorI
 	ctx     context.Context
+	Err     error
 }
 
-func (cursor *mongoCursor) Next() (result *Instance, err error) {
+func (cursor *MongoCursor) Next() (result *Instance, err error) {
+	if cursor.Err != nil {
+		return result, cursor.Err
+	}
 	if cursor.mCursor.Next(cursor.ctx) {
 		err = cursor.mCursor.Decode(&result)
 		return
@@ -24,17 +29,21 @@ func (cursor *mongoCursor) Next() (result *Instance, err error) {
 	}
 }
 
-func (cursor *mongoCursor) All() (result InstanceA, err error) {
+func (cursor *MongoCursor) All() (result InstanceA, err error) {
 	err = cursor.mCursor.All(cursor.ctx, &result)
 	return
 }
 
-func (cursor *mongoCursor) Close() error {
+func (cursor *MongoCursor) Close() error {
 	return cursor.mCursor.Close(cursor.ctx)
 }
 
-func newMongoCursor(ctx context.Context, mCursor *mongo.Cursor) Cursor {
-	return &mongoCursor{
+func (cursor *MongoCursor) Error(err error) {
+	cursor.Err = err
+}
+
+func newMongoCursor(ctx context.Context, mCursor datasource.MongoCursorI) Cursor {
+	return &MongoCursor{
 		mCursor: mCursor,
 		ctx:     ctx,
 	}
@@ -50,6 +59,10 @@ func (cursor *errorCursor) Next() (result *Instance, err error) {
 
 func (cursor *errorCursor) All() (result InstanceA, err error) {
 	return result, cursor.err
+}
+
+func (cursor *errorCursor) Close() error {
+	return nil
 }
 
 func newErrorCursor(err error) Cursor {
@@ -74,6 +87,10 @@ func (cursor *fixedLengthCursor) Next() (result *Instance, err error) {
 
 func (cursor *fixedLengthCursor) All() (result InstanceA, err error) {
 	return cursor.instances, nil
+}
+
+func (cursor *fixedLengthCursor) Close() error {
+	return nil
 }
 
 func newFixedLengthCursor(instances InstanceA) Cursor {
