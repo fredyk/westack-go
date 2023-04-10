@@ -391,6 +391,12 @@ func (loadedModel *Model) FindMany(filterMap *wst.Filter, baseContext *EventCont
 	go func() {
 		err := func() error {
 			defer close(results)
+			defer func(dsCursor datasource.MongoCursorI, ctx context.Context) {
+				err := dsCursor.Close(ctx)
+				if err != nil {
+					fmt.Printf("ERROR: Could not close cursor: %v\n", err)
+				}
+			}(dsCursor, context.Background())
 			disabledCache := loadedModel.App.Viper.GetBool("disableCache")
 			sameLevelCache := NewBuildCache()
 			for dsCursor.Next(context.Background()) {
