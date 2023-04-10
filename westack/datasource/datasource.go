@@ -195,6 +195,15 @@ func getDbUrl(dsViper *viper.Viper, ds *Datasource) string {
 	return url
 }
 
+// FindMany retrieves data from the specified collection based on the provided lookup conditions using the appropriate
+// data source connector specified in the configuration file.
+// @param collectionName string: the name of the collection from which to retrieve data.
+// @param lookups *wst.A: a pointer to an array of conditions to be used as lookup criteria. If nil, all data in the
+// collection will be returned.
+// @return MongoCursorI: a cursor to the result set that matches the lookup criteria, or an error if an error occurs
+// while attempting to retrieve the data.
+// The cursor needs to be closed outside of the function.
+// Implementations for Redis and memorykv connectors are not yet implemented and will result in an error.
 func (ds *Datasource) FindMany(collectionName string, lookups *wst.A) (MongoCursorI, error) {
 	var connector = ds.Viper.GetString(ds.Key + ".connector")
 	switch connector {
