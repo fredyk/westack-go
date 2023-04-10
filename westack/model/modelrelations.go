@@ -330,8 +330,10 @@ func (loadedModel *Model) mergeRelated(relationDeepLevel byte, documents *wst.A,
 								}
 								err = cursor.All(context.Background(), &cachedDocs)
 								if err != nil {
+									cursor.Close(context.Background())
 									return err
 								}
+								cursor.Close(context.Background())
 
 								nestedDocsCache := NewBuildCache()
 								for _, cachedDoc := range *cachedDocs {
