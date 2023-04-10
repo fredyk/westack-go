@@ -387,11 +387,11 @@ func (loadedModel *Model) FindMany(filterMap *wst.Filter, baseContext *EventCont
 
 	var results = make(chan *Instance)
 	var cursor = NewChannelCursor(results).(*ChannelCursor)
+	//var cursor = newMongoCursor(context.Background(), dsCursor).(*MongoCursor)
 
 	go func() {
 		err := func() error {
-			//defer close(results)
-			defer func(cursor *ChannelCursor) {
+			defer func(cursor Cursor) {
 				err := cursor.Close()
 				if err != nil {
 					fmt.Printf("ERROR: Could not close cursor: %v\n", err)
