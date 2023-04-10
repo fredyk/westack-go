@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"sync"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/golang/protobuf/jsonpb"
@@ -89,8 +90,24 @@ func gRPCCallWithBody[InputT any, ClientT interface{}, OutputT proto.Message](se
 	}
 }
 
+var cachedConnectionsByURL = make(map[string]*grpc.ClientConn)
+var cachedConnectionsByURLMutex = &sync.RWMutex{}
+
 func connectGRPCService(url string) (*grpc.ClientConn, error) {
-	return grpc.Dial(url, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock(), grpc.WithBlock())
+	cachedConnectionsByURLMutex.RLock()
+	if clientConn, ok := cachedConnectionsByURL[url]; ok {
+		cachedConnectionsByURLMutex.RUnlock()
+		return clientConn, nil
+	}
+	cachedConnectionsByURLMutex.RUnlock()
+	fmt.Printf("[DEBUG] wst-grpc: Connecting to %s\n", url)
+	clientConn, err := grpc.Dial(url, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock(), grpc.WithBlock())
+	if err == nil {
+		cachedConnectionsByURLMutex.Lock()
+		cachedConnectionsByURL[url] = clientConn
+		cachedConnectionsByURLMutex.Unlock()
+	}
+	return clientConn, err
 }
 
 func disconnect(conn *grpc.ClientConn) error {
