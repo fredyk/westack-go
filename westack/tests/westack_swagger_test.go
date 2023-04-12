@@ -3,6 +3,7 @@ package tests
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/stretchr/testify/assert"
 	"io"
 	"net/http"
 	"testing"
@@ -21,33 +22,21 @@ func Test_Get_Swagger_Docs(t *testing.T) {
 
 	// test for error
 	res, err := client.Get("http://localhost:8020/swagger/doc.json")
-	if err != nil {
-		t.Errorf("Get Swagger Error: %s", err)
-		return
-	}
+	assert.Nilf(t, err, "Get Swagger Error while getting response: %s", err)
 
-	if res.StatusCode != 200 {
-		t.Errorf("Get Swagger Error: %d", res.StatusCode)
-		return
-	}
+	assert.Equalf(t, 200, res.StatusCode, "Get Swagger Error invalid status code: %d", res.StatusCode)
 
 	// read response
 	var out wst.M
 	body, err := io.ReadAll(res.Body)
-	if err != nil {
-		t.Errorf("Get Swagger Error: %s", err)
-		return
-	}
-	err = json.Unmarshal(body, &out)
-	if err != nil {
-		t.Errorf("Get Swagger Error: %s", err)
-		return
-	}
+	assert.Nilf(t, err, "Get Swagger Error while reading body: %s", err)
 
-	if out["openapi"] != "3.0.1" {
-		t.Errorf("Invalid openapi version: %s", out["openapi"])
-		return
-	}
+	err = json.Unmarshal(body, &out)
+	assert.Nilf(t, err, "Get Swagger Error while unmarshaling body: %s", err)
+
+	assert.Equalf(t, "3.0.1", out["openapi"], "Invalid openapi version %v", out["openapi"])
+	assert.Equalf(t, "Swagger API", out.GetM("info").GetString("title"), "Invalid title %v", out.GetM("info").GetString("title"))
+	assert.Equalf(t, "3.0", out.GetM("info").GetString("version"), "Invalid version %v", out.GetM("info").GetString("version"))
 
 }
 
