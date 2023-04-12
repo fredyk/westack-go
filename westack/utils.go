@@ -6,6 +6,7 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/golang/protobuf/jsonpb"
@@ -55,7 +56,7 @@ func obtainConnectedClient[ClientT interface{}](serviceUrl string, clientConstru
 	if _, ok := cachedConnectionsByURL[serviceUrl]; !ok {
 		cachedConnectionsByURL[serviceUrl] = make(map[string]interface{})
 	}
-	clientConstructorName := strings.TrimPrefix(fmt.Sprintf("%T", clientConstructor), "*")
+	clientConstructorName := fmt.Sprintf("%T", clientConstructor)
 	if client1, ok := cachedConnectionsByURL[serviceUrl][clientConstructorName]; ok {
 		cachedConnectionsByURLMutex.Unlock()
 		return client1.(ClientT), nil
@@ -67,12 +68,17 @@ func obtainConnectedClient[ClientT interface{}](serviceUrl string, clientConstru
 		fmt.Printf("GRPCCallWithQueryParams Connect Error: %s\n", err)
 		return client, err
 	}
-	//defer func(conn *grpc.ClientConn) {
-	//	err := disconnect(conn)
-	//	if err != nil {
-	//		fmt.Printf("GRPCCallWithQueryParams Disconnect Error: %s\n", err)
-	//	}
-	//}(conn)
+	// Disconnect and remove from cache after 5 minutes
+	go func(conn *grpc.ClientConn, serviceUrl string, clientConstructorName string) {
+		<-time.After(5 * time.Minute)
+		cachedConnectionsByURLMutex.Lock()
+		delete(cachedConnectionsByURL[serviceUrl], clientConstructorName)
+		cachedConnectionsByURLMutex.Unlock()
+		err := disconnect(conn)
+		if err != nil {
+			fmt.Printf("GRPCCallWithQueryParams Disconnect Error: %s\n", err)
+		}
+	}(conn, serviceUrl, clientConstructorName)
 	client = clientConstructor(conn)
 	cachedConnectionsByURLMutex.Lock()
 	cachedConnectionsByURL[serviceUrl][clientConstructorName] = client
