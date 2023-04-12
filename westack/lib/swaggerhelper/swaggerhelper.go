@@ -77,6 +77,14 @@ func (s *swaggerHelper) CreateOpenAPI() error {
 	if err != nil {
 		return err
 	}
+	// Create data directory if it doesn't exist
+	_, err = os.Stat("data")
+	if os.IsNotExist(err) {
+		err = os.Mkdir("data", 0755)
+		if err != nil {
+			return err
+		}
+	}
 	// Save
 	err2 := os.WriteFile("data/swagger.json", swagger, 0644)
 	return err2
