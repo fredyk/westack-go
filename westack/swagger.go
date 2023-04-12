@@ -14,6 +14,17 @@ import (
 func swaggerDocsHandler(app *WeStack) func(ctx *fiber.Ctx) error {
 	return func(ctx *fiber.Ctx) error {
 
+		// Get X-Forwarded-For header or remote IP
+		var remoteForwardedForIp string
+		var forwarded bool
+		if ctx.Get("X-Forwarded-For") != "" {
+			remoteForwardedForIp = ctx.Get("X-Forwarded-For")
+			forwarded = true
+		} else {
+			remoteForwardedForIp = ctx.IP()
+		}
+		fmt.Printf("Request /swagger/doc.json from %s (forwarded = %t)\n", remoteForwardedForIp, forwarded)
+
 		hostname := ctx.Hostname()
 
 		matchedProtocol := "https"
