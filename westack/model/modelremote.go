@@ -215,10 +215,7 @@ func (loadedModel *Model) RemoteMethod(handler func(context *EventContext) error
 	}
 
 	//(*loadedModel.App.SwaggerPaths())[fullPath][verb] = pathDef
-	err = loadedModel.App.SwaggerHelper().AddPathSpec(fullPath, verb, pathDef)
-	if err != nil {
-		panic(err)
-	}
+	loadedModel.App.SwaggerHelper().AddPathSpec(fullPath, verb, pathDef)
 
 	loadedModel.remoteMethodsMap[options.Name] = &OperationItem{
 		Handler: handler,
