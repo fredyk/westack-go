@@ -4,6 +4,7 @@ import (
 	"github.com/goccy/go-json"
 	"github.com/gofiber/fiber/v2"
 	"os"
+	"runtime"
 )
 
 type SwaggerHelper interface {
@@ -77,6 +78,14 @@ func (s *swaggerHelper) CreateOpenAPI() error {
 	if err != nil {
 		return err
 	}
+	// Create data directory if it doesn't exist
+	_, err = os.Stat("data")
+	if os.IsNotExist(err) {
+		err = os.Mkdir("data", 0755)
+		if err != nil {
+			return err
+		}
+	}
 	// Save
 	err2 := os.WriteFile("data/swagger.json", swagger, 0644)
 	return err2
@@ -111,6 +120,14 @@ func (s *swaggerHelper) AddPathSpec(path string, verb string, verbSpec map[strin
 	}
 	// Save
 	err4 := os.WriteFile("data/swagger.json", swagger, 0644)
+	// Force the GC to collect the swaggerMap
+	// and free up the memory
+	swaggerMap = nil
+	paths = nil
+	pathMap = nil
+	swagger = nil
+	// Invoke the GC to free up the memory immediately
+	runtime.GC()
 	return err4
 }
 
