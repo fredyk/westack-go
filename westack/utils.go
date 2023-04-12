@@ -53,16 +53,15 @@ var cachedConnectionsByURLMutex = &sync.RWMutex{}
 func obtainConnectedClient[ClientT interface{}](serviceUrl string, clientConstructor func(cc grpc.ClientConnInterface) ClientT) (ClientT, error) {
 	var client ClientT
 	cachedConnectionsByURLMutex.Lock()
+	defer cachedConnectionsByURLMutex.Unlock()
 	if _, ok := cachedConnectionsByURL[serviceUrl]; !ok {
 		cachedConnectionsByURL[serviceUrl] = make(map[string]interface{})
 	}
 	clientConstructorName := fmt.Sprintf("%T", clientConstructor)
 	if client1, ok := cachedConnectionsByURL[serviceUrl][clientConstructorName]; ok {
-		cachedConnectionsByURLMutex.Unlock()
 		return client1.(ClientT), nil
 	}
 
-	defer cachedConnectionsByURLMutex.Unlock()
 	conn, err := connectGRPCService(serviceUrl)
 	if err != nil {
 		fmt.Printf("GRPCCallWithQueryParams Connect Error: %s\n", err)
