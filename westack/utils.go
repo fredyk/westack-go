@@ -62,7 +62,7 @@ func obtainConnectedClient[ClientT interface{}](serviceUrl string, clientConstru
 		return client1.(ClientT), nil
 	}
 
-	cachedConnectionsByURLMutex.Unlock()
+	defer cachedConnectionsByURLMutex.Unlock()
 	conn, err := connectGRPCService(serviceUrl)
 	if err != nil {
 		fmt.Printf("GRPCCallWithQueryParams Connect Error: %s\n", err)
@@ -80,9 +80,7 @@ func obtainConnectedClient[ClientT interface{}](serviceUrl string, clientConstru
 		}
 	}(conn, serviceUrl, clientConstructorName)
 	client = clientConstructor(conn)
-	cachedConnectionsByURLMutex.Lock()
 	cachedConnectionsByURL[serviceUrl][clientConstructorName] = client
-	cachedConnectionsByURLMutex.Unlock()
 	return client, err
 }
 
