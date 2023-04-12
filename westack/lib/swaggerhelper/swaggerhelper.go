@@ -12,14 +12,17 @@ type SwaggerHelper interface {
 	GetOpenAPI() (map[string]interface{}, error)
 	// CreateOpenAPI creates a new OpenAPI specification and saves it to disk, or returns an error if it fails
 	CreateOpenAPI() error
-	// AddPathSpec adds a path specification to the OpenAPI specification and saves it
-	AddPathSpec(path string, verb string, verbSpec map[string]interface{}) error
+	// AddPathSpec adds a path specification to the OpenAPI specification
+	AddPathSpec(path string, verb string, verbSpec map[string]interface{})
+	// Dump dumps the OpenAPI specification to disk, or returns an error if it fails
+	Dump() error
 }
 
 type swaggerHelper struct {
+	swaggerMap map[string]interface{}
 }
 
-func (s *swaggerHelper) GetOpenAPI() (map[string]interface{}, error) {
+func (sH *swaggerHelper) GetOpenAPI() (map[string]interface{}, error) {
 	// Load data/swagger.json
 	swagger, err := os.ReadFile("data/swagger.json")
 	if err != nil {
@@ -34,8 +37,8 @@ func (s *swaggerHelper) GetOpenAPI() (map[string]interface{}, error) {
 	return swaggerMap, nil
 }
 
-func (s *swaggerHelper) CreateOpenAPI() error {
-	openApi := map[string]interface{}{
+func (sH *swaggerHelper) CreateOpenAPI() error {
+	sH.swaggerMap = map[string]interface{}{
 		//"schemes": []string{"http"},
 		"openapi": "3.0.1",
 		"info": fiber.Map{
@@ -69,12 +72,12 @@ func (s *swaggerHelper) CreateOpenAPI() error {
 		//		"bearerFormat": "JWT",
 		//	},
 		//},
-		"servers": make([]fiber.Map, 0),
+		"servers": make([]map[string]interface{}, 0),
 		//"basePath": "/",
 		"paths": make(map[string]interface{}),
 	}
 	// Marshal
-	swagger, err := json.Marshal(openApi)
+	swagger, err := json.Marshal(sH.swaggerMap)
 	if err != nil {
 		return err
 	}
@@ -91,44 +94,33 @@ func (s *swaggerHelper) CreateOpenAPI() error {
 	return err2
 }
 
-func (s *swaggerHelper) AddPathSpec(path string, verb string, verbSpec map[string]interface{}) error {
-	// Load data/swagger.json
-	swagger, err := os.ReadFile("data/swagger.json")
+func (sH *swaggerHelper) AddPathSpec(path string, verb string, verbSpec map[string]interface{}) {
+	// Add verbSpec to [path][verb]
+	if _, ok := sH.swaggerMap["paths"].(map[string]interface{})[path]; !ok {
+		sH.swaggerMap["paths"].(map[string]interface{})[path] = make(map[string]interface{})
+	}
+	sH.swaggerMap["paths"].(map[string]interface{})[path].(map[string]interface{})[verb] = verbSpec
+	return
+}
+
+func (sH *swaggerHelper) Dump() error {
+	// Marshal
+	swagger, err := json.Marshal(sH.swaggerMap)
 	if err != nil {
 		return err
 	}
-	// Unmarshal
-	var swaggerMap map[string]interface{}
-	err2 := json.Unmarshal(swagger, &swaggerMap)
-	if err2 != nil {
-		return err2
-	}
-	// Add verbSpec to [path][verb]
-	if _, ok := swaggerMap["paths"]; !ok {
-		swaggerMap["paths"] = make(map[string]interface{})
-	}
-	paths := swaggerMap["paths"].(map[string]interface{})
-	if _, ok := paths[path]; !ok {
-		paths[path] = make(map[string]interface{})
-	}
-	pathMap := paths[path].(map[string]interface{})
-	pathMap[verb] = verbSpec
-	// Marshal
-	swagger, err3 := json.Marshal(swaggerMap)
-	if err3 != nil {
-		return err3
-	}
 	// Save
-	err4 := os.WriteFile("data/swagger.json", swagger, 0644)
-	// Force the GC to collect the swaggerMap
-	// and free up the memory
-	swaggerMap = nil
-	paths = nil
-	pathMap = nil
+	err2 := os.WriteFile("data/swagger.json", swagger, 0644)
+	// Free up memory
 	swagger = nil
+	sH.free()
+	return err2
+}
+
+func (sH *swaggerHelper) free() {
+	sH.swaggerMap = nil
 	// Invoke the GC to free up the memory immediately
 	runtime.GC()
-	return err4
 }
 
 func NewSwaggerHelper() SwaggerHelper {
