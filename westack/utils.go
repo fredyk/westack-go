@@ -75,7 +75,7 @@ func obtainConnectedClient[ClientT interface{}](serviceUrl string, clientConstru
 		cachedConnectionsByURLMutex.Unlock()
 		// Wait another 5 minutes before disconnecting
 		<-time.After(5 * time.Minute)
-		err := disconnect(conn)
+		err := conn.Close()
 		if err != nil {
 			fmt.Printf("GRPCCallWithQueryParams Disconnect Error: %s\n", err)
 		}
@@ -117,12 +117,10 @@ func gRPCCallWithBody[InputT any, ClientT interface{}, OutputT proto.Message](se
 
 func connectGRPCService(url string) (*grpc.ClientConn, error) {
 	fmt.Printf("[DEBUG] wst-grpc: Connecting to %s\n", url)
-	clientConn, err := grpc.Dial(url, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock(), grpc.WithBlock())
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	clientConn, err := grpc.DialContext(ctx, url, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock(), grpc.WithBlock())
 	return clientConn, err
-}
-
-func disconnect(conn *grpc.ClientConn) error {
-	return conn.Close()
 }
 
 func SendError(ctx *fiber.Ctx, err error) error {
