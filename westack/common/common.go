@@ -2,6 +2,7 @@ package wst
 
 import (
 	"fmt"
+	"github.com/fredyk/westack-go/westack/lib/swaggerhelper"
 	"log"
 	"os"
 	"regexp"
@@ -251,7 +252,7 @@ type BsonOptions struct {
 
 type IApp struct {
 	Debug          bool
-	SwaggerPaths   func() *map[string]M
+	SwaggerHelper  func() swaggerhelper.SwaggerHelper
 	FindModel      func(modelName string) (interface{}, error)
 	FindDatasource func(datasource string) (interface{}, error)
 	JwtSecretKey   []byte

@@ -3,6 +3,7 @@ package westack
 import (
 	"context"
 	"fmt"
+	"github.com/fredyk/westack-go/westack/lib/swaggerhelper"
 	"io/fs"
 	"log"
 	"os"
@@ -40,7 +41,11 @@ func (app *WeStack) loadModels() error {
 		panic("Missing or invalid ./server/model-config.json: " + err.Error())
 	}
 
-	app._swaggerPaths = map[string]wst.M{}
+	app.swaggerHelper = swaggerhelper.NewSwaggerHelper()
+	err = app.swaggerHelper.CreateOpenAPI()
+	if err != nil {
+		return err
+	}
 	var someUserModel *model.Model
 	for _, fileInfo := range fileInfos {
 
@@ -574,8 +579,8 @@ func (app *WeStack) asInterface() *wst.IApp {
 		FindDatasource: func(datasource string) (interface{}, error) {
 			return app.FindDatasource(datasource)
 		},
-		SwaggerPaths: func() *map[string]wst.M {
-			return app.SwaggerPaths()
+		SwaggerHelper: func() swaggerhelper.SwaggerHelper {
+			return app.swaggerHelper
 		},
 	}
 }

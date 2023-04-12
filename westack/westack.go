@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/fredyk/westack-go/westack/lib/swaggerhelper"
 	"github.com/fredyk/westack-go/westack/memorykv"
 	"io"
 	"log"
@@ -51,9 +52,9 @@ type WeStack struct {
 	restApiRoot       string
 	roleMappingModel  *model.Model
 	dataSourceOptions *map[string]*datasource.Options
-	_swaggerPaths     map[string]wst.M
 	init              time.Time
 	jwtSecretKey      []byte
+	swaggerHelper     swaggerhelper.SwaggerHelper
 }
 
 func (app *WeStack) FindModel(modelName string) (*model.Model, error) {
