@@ -69,10 +69,12 @@ func obtainConnectedClient[ClientT interface{}](serviceUrl string, clientConstru
 	}
 	// Disconnect and remove from cache after 5 minutes
 	go func(conn *grpc.ClientConn, serviceUrl string, clientConstructorName string) {
-		<-time.After(30 * time.Second)
+		<-time.After(1 * time.Minute)
 		cachedConnectionsByURLMutex.Lock()
 		delete(cachedConnectionsByURL[serviceUrl], clientConstructorName)
 		cachedConnectionsByURLMutex.Unlock()
+		// Wait another 5 minutes before disconnecting
+		<-time.After(5 * time.Minute)
 		err := disconnect(conn)
 		if err != nil {
 			fmt.Printf("GRPCCallWithQueryParams Disconnect Error: %s\n", err)
