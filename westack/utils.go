@@ -117,7 +117,9 @@ func gRPCCallWithBody[InputT any, ClientT interface{}, OutputT proto.Message](se
 
 func connectGRPCService(url string) (*grpc.ClientConn, error) {
 	fmt.Printf("[DEBUG] wst-grpc: Connecting to %s\n", url)
-	clientConn, err := grpc.Dial(url, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock(), grpc.WithBlock())
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	clientConn, err := grpc.DialContext(ctx, url, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock(), grpc.WithBlock())
 	return clientConn, err
 }
 
