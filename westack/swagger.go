@@ -9,9 +9,6 @@ import (
 	wst "github.com/fredyk/westack-go/westack/common"
 )
 
-func (app *WeStack) SwaggerPaths() *map[string]wst.M {
-	return &app._swaggerPaths
-}
 func swaggerDocsHandler(app *WeStack) func(ctx *fiber.Ctx) error {
 	return func(ctx *fiber.Ctx) error {
 
@@ -23,50 +20,20 @@ func swaggerDocsHandler(app *WeStack) func(ctx *fiber.Ctx) error {
 			matchedProtocol = "http"
 		}
 
-		return ctx.JSON(fiber.Map{
-			//"schemes": []string{"http"},
-			"openapi": "3.0.1",
-			"info": fiber.Map{
-				"description":    "This is your go-based API Server.",
-				"title":          "Swagger API",
-				"termsOfService": "https://swagger.io/terms/",
-				"contact": fiber.Map{
-					"name":  "API Support",
-					"url":   "https://www.swagger.io/support",
-					"email": "support@swagger.io",
-				},
-				"license": fiber.Map{
-					"name": "Apache 2.0",
-					"url":  "https://www.apache.org/licenses/LICENSE-2.0.html",
-				},
-				"version": "3.0",
+		swaggerMap, err := app.swaggerHelper.GetOpenAPI()
+		if err != nil {
+			return ctx.Status(fiber.StatusInternalServerError).JSON(wst.M{
+				"error": err.Error(),
+			})
+		}
+		swaggerMap["servers"] = []wst.M{
+			{
+				"url": fmt.Sprintf("%v://%v", matchedProtocol, hostname),
 			},
-			"components": fiber.Map{
-				"securitySchemes": fiber.Map{
-					"bearerAuth": fiber.Map{
-						"type":         "http",
-						"scheme":       "bearer",
-						"bearerFormat": "JWT",
-					},
-				},
+			{
+				"url": fmt.Sprintf("http://127.0.0.1:%d", app.port),
 			},
-			//"security": fiber.Map{
-			//	"bearerAuth": fiber.Map{
-			//		"type": "http",
-			//		"scheme": "bearer",
-			//		"bearerFormat": "JWT",
-			//	},
-			//},
-			"servers": []fiber.Map{
-				{
-					"url": fmt.Sprintf("%v://%v", matchedProtocol, hostname),
-				},
-				{
-					"url": fmt.Sprintf("http://127.0.0.1:%v", app.port),
-				},
-			},
-			//"basePath": "/",
-			"paths": app.SwaggerPaths(),
-		})
+		}
+		return ctx.JSON(swaggerMap)
 	}
 }
