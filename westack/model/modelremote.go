@@ -108,10 +108,6 @@ func (loadedModel *Model) RemoteMethod(handler func(context *EventContext) error
 	fullPath = regexp.MustCompile("//+").ReplaceAllString(fullPath, "/")
 	fullPath = regexp.MustCompile(`:(\w+)`).ReplaceAllString(fullPath, "{$1}")
 
-	if (*loadedModel.App.SwaggerPaths())[fullPath] == nil {
-		(*loadedModel.App.SwaggerPaths())[fullPath] = wst.M{}
-	}
-
 	if description == "" {
 		description = fmt.Sprintf("%v %v.", operation, loadedModel.Config.Plural)
 	}
@@ -166,7 +162,11 @@ func (loadedModel *Model) RemoteMethod(handler func(context *EventContext) error
 		}
 	}
 
-	(*loadedModel.App.SwaggerPaths())[fullPath][verb] = pathDef
+	//(*loadedModel.App.SwaggerPaths())[fullPath][verb] = pathDef
+	//err = loadedModel.App.SwaggerHelper().AddPathSpec(fullPath, verb, pathDef)
+	//if err != nil {
+	//	panic(err)
+	//}
 
 	if verb == "post" || verb == "put" || verb == "patch" {
 		pathDef["requestBody"] = wst.M{
@@ -214,7 +214,11 @@ func (loadedModel *Model) RemoteMethod(handler func(context *EventContext) error
 		pathDef["parameters"] = params
 	}
 
-	(*loadedModel.App.SwaggerPaths())[fullPath][verb] = pathDef
+	//(*loadedModel.App.SwaggerPaths())[fullPath][verb] = pathDef
+	err = loadedModel.App.SwaggerHelper().AddPathSpec(fullPath, verb, pathDef)
+	if err != nil {
+		panic(err)
+	}
 
 	loadedModel.remoteMethodsMap[options.Name] = &OperationItem{
 		Handler: handler,
