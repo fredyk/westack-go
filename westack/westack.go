@@ -225,6 +225,13 @@ func (app *WeStack) Boot(customRoutesCallbacks ...func(app *WeStack)) {
 
 		return ctx.Send(swaggerUIStatic)
 	})
+
+	// Free up memory
+	err = app.swaggerHelper.Dump()
+	if err != nil {
+		fmt.Printf("Error while dumping swagger helper: %v\n", err)
+	}
+
 }
 
 func (app *WeStack) Start() error {
