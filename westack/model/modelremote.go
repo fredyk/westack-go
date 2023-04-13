@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"regexp"
+	"runtime"
 	"strconv"
 	"strings"
 
@@ -216,6 +217,9 @@ func (loadedModel *Model) RemoteMethod(handler func(context *EventContext) error
 
 	//(*loadedModel.App.SwaggerPaths())[fullPath][verb] = pathDef
 	loadedModel.App.SwaggerHelper().AddPathSpec(fullPath, verb, pathDef)
+	// clean up memory
+	pathDef = nil
+	runtime.GC()
 
 	loadedModel.remoteMethodsMap[options.Name] = &OperationItem{
 		Handler: handler,
