@@ -113,26 +113,17 @@ func (loadedModel *Model) RemoteMethod(handler func(context *EventContext) error
 		description = fmt.Sprintf("%v %v.", operation, loadedModel.Config.Plural)
 	}
 
-	pathDef := createOpenAPIPathDef(loadedModel, description)
-
 	pathParams := regexp.MustCompile(`:(\w+)`).FindAllString(path, -1)
 
-	params := createOpenAPIPathParams(pathParams)
-
-	for idx, param := range pathParams {
-		assignOpenAPIPathParam(params, idx, param)
-	}
+	pathDef := createOpenAPIPathDef(loadedModel, description, pathParams)
 
 	if verb == "post" || verb == "put" || verb == "patch" {
 		assignOpenAPIRequestBody(pathDef)
 	} else {
-
-		params = assignOpenAPIAdditionalParams(options, params)
-
-	}
-
-	if len(params) > 0 {
-		pathDef["parameters"] = params
+		params := createOpenAPIAdditionalParams(options)
+		if len(params) > 0 {
+			pathDef["parameters"] = params
+		}
 	}
 
 	loadedModel.App.SwaggerHelper().AddPathSpec(fullPath, verb, pathDef)
@@ -173,7 +164,8 @@ func createRemoteMethodOperationItem(handler func(context *EventContext) error, 
 	}
 }
 
-func assignOpenAPIAdditionalParams(options RemoteMethodOptions, params []wst.M) []wst.M {
+func createOpenAPIAdditionalParams(options RemoteMethodOptions) []wst.M {
+	var params []wst.M
 	for _, param := range options.Accepts {
 		paramType := param.Type
 		if paramType == "" {
@@ -211,43 +203,13 @@ func assignOpenAPIRequestBody(pathDef wst.M) {
 	}
 }
 
-func assignOpenAPIPathParam(params []wst.M, idx int, param string) {
-	params[idx] = wst.M{
-		"name":     strings.TrimPrefix(param, ":"),
-		"in":       "path",
-		"required": true,
-		"schema": wst.M{
-			"type": "string",
-		},
-	}
-}
-
-func createOpenAPIPathParams(pathParams []string) []wst.M {
-	params := make([]wst.M, len(pathParams))
-	return params
-}
-
-func createOpenAPIPathDef(loadedModel *Model, description string) wst.M {
+func createOpenAPIPathDef(loadedModel *Model, description string, rawPathParams []string) wst.M {
 	pathDef := wst.M{
-		"tags": []string{
-			loadedModel.Name,
-		},
-		"summary": description,
-		"security": []fiber.Map{
-			{"bearerAuth": []string{}},
-		},
-		"responses": wst.M{
-			"200": wst.M{
-				"description": "OK",
-				"content": wst.M{
-					"application/json": wst.M{
-						"schema": wst.M{
-							"type": "object",
-						},
-					},
-				},
-			},
-		},
+		"modelName": loadedModel.Name,
+		"summary":   description,
+	}
+	if len(rawPathParams) > 0 {
+		pathDef["rawPathParams"] = append([]string{}, rawPathParams...)
 	}
 	return pathDef
 }

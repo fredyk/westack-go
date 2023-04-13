@@ -47,6 +47,47 @@ func swaggerDocsHandler(app *WeStack) func(ctx *fiber.Ctx) error {
 				"url": fmt.Sprintf("http://127.0.0.1:%d", app.port),
 			},
 		}
+		// Iterate over paths
+		for _, pathItem := range swaggerMap["paths"].(map[string]interface{}) {
+			// Iterate over methods
+			for _, operation := range pathItem.(map[string]interface{}) {
+				operation.(map[string]interface{})["security"] = []fiber.Map{
+					{"bearerAuth": []string{}},
+				}
+				if v, ok := operation.(map[string]interface{})["modelName"]; ok {
+					delete(operation.(map[string]interface{}), "modelName")
+					operation.(map[string]interface{})["tags"] = []string{v.(string)}
+				}
+				if v, ok := operation.(map[string]interface{})["rawPathParams"]; ok {
+					delete(operation.(map[string]interface{}), "rawPathParams")
+					if _, ok := operation.(map[string]interface{})["parameters"]; !ok {
+						operation.(map[string]interface{})["parameters"] = make([]interface{}, 0)
+					}
+					for _, rawPathParam := range v.([]interface{}) {
+						operation.(map[string]interface{})["parameters"] = append(operation.(map[string]interface{})["parameters"].([]interface{}), wst.M{
+							"name":     strings.TrimPrefix(rawPathParam.(string), ":"),
+							"in":       "path",
+							"required": true,
+							"schema": wst.M{
+								"type": "string",
+							},
+						})
+					}
+				}
+				operation.(map[string]interface{})["responses"] = wst.M{
+					"200": wst.M{
+						"description": "OK",
+						"content": wst.M{
+							"application/json": wst.M{
+								"schema": wst.M{
+									"type": "object",
+								},
+							},
+						},
+					},
+				}
+			}
+		}
 		bytes, err := marshallSwaggerMap(ctx, err, swaggerMap)
 		// Free memory
 		swaggerMap = nil
