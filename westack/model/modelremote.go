@@ -82,25 +82,25 @@ func (loadedModel *Model) RemoteMethod(handler func(context *EventContext) error
 	router := *loadedModel.Router
 	switch verb {
 	case "get":
-		toInvoke = asFunction(router.Get)
+		toInvoke = router.Get
 		operation = "Finds"
 	case "options":
-		toInvoke = asFunction(router.Options)
+		toInvoke = router.Options
 		operation = "Gets options for"
 	case "head":
-		toInvoke = asFunction(router.Head)
+		toInvoke = router.Head
 		operation = "Checks"
 	case "post":
-		toInvoke = asFunction(router.Post)
+		toInvoke = router.Post
 		operation = "Creates"
 	case "put":
-		toInvoke = asFunction(router.Put)
+		toInvoke = router.Put
 		operation = "Replaces"
 	case "patch":
-		toInvoke = asFunction(router.Patch)
+		toInvoke = router.Patch
 		operation = "Updates attributes in"
 	case "delete":
-		toInvoke = asFunction(router.Delete)
+		toInvoke = router.Delete
 		operation = "Deletes"
 	}
 
@@ -240,12 +240,6 @@ func (loadedModel *Model) RemoteMethod(handler func(context *EventContext) error
 		}
 		return nil
 	}).Name(loadedModel.Name + "." + options.Name)
-}
-
-func asFunction(method func(path string, handlers ...fiber.Handler) fiber.Router) func(string, ...fiber.Handler) fiber.Router {
-	return func(path string, handlers ...fiber.Handler) fiber.Router {
-		return method(path, handlers...)
-	}
 }
 
 func (loadedModel *Model) HandleRemoteMethod(name string, eventContext *EventContext) error {
