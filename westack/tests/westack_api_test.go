@@ -90,7 +90,7 @@ func Test_FindMany(t *testing.T) {
 		t.Errorf("Error: %v", err)
 	}
 
-	request, err := http.NewRequest("GET", `http://localhost:8019/api/v1/notes?filter={"include":[{"relation":"user"}]}`, nil)
+	request, err := http.NewRequest("GET", `http://localhost:8019/api/v1/notes?filter={"include":[{"relation":"user"},{"relation":"footer1"},{"relation":"footer2"}]}`, nil)
 	assert.Nil(t, err)
 
 	response, err := http.DefaultClient.Do(request)
