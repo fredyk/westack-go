@@ -8,6 +8,8 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/gofiber/fiber/v2"
 
@@ -136,8 +138,30 @@ func (loadedModel *Model) RemoteMethod(handler func(context *EventContext) error
 	return toInvoke(path, createFiberHandler(options, loadedModel, verb, path)).Name(loadedModel.Name + "." + options.Name)
 }
 
+var activeRequestsPerModel = make(map[string]int)
+var activeRequestsMutex sync.RWMutex
+
 func createFiberHandler(options RemoteMethodOptions, loadedModel *Model, verb string, path string) func(ctx *fiber.Ctx) error {
 	return func(ctx *fiber.Ctx) error {
+		// Limit to 2 concurrent requests per model, new requests will be queued
+		activeRequestsMutex.Lock()
+		if _, ok := activeRequestsPerModel[loadedModel.Name]; !ok {
+			activeRequestsPerModel[loadedModel.Name] = 0
+		}
+		for activeRequestsPerModel[loadedModel.Name] >= 2 {
+			activeRequestsMutex.Unlock()
+			time.Sleep(16 * time.Millisecond)
+			activeRequestsMutex.Lock()
+		}
+		activeRequestsPerModel[loadedModel.Name]++
+		activeRequestsMutex.Unlock()
+
+		defer func() {
+			activeRequestsMutex.Lock()
+			activeRequestsPerModel[loadedModel.Name]--
+			activeRequestsMutex.Unlock()
+		}()
+
 		eventContext := &EventContext{
 			Ctx:    ctx,
 			Remote: &options,
