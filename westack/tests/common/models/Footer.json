@@ -1,0 +1,22 @@
+{
+  "name": "Footer",
+  "plural": "",
+  "base": "PersistedModel",
+  "public": true,
+  "properties": {},
+  "relations": {},
+  "hidden": [],
+  "casbin": {
+    "policies": [
+      "$everyone,*,*,allow"
+    ]
+  },
+  "cache": {
+    "datasource": "memorykv",
+    "keys": [["_id"]],
+    "ttl": 15
+  },
+  "mongo": {
+    "collection": ""
+  }
+}
