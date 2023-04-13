@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"regexp"
+	"runtime"
 	"strconv"
 	"strings"
 
@@ -112,101 +113,21 @@ func (loadedModel *Model) RemoteMethod(handler func(context *EventContext) error
 		description = fmt.Sprintf("%v %v.", operation, loadedModel.Config.Plural)
 	}
 
-	pathDef := wst.M{
-		//"description": description,
-		//"consumes": []string{
-		//	"*/*",
-		//},
-		//"produces": []string{
-		//	"application/json",
-		//},
-		"tags": []string{
-			loadedModel.Name,
-		},
-		//"requestBody": requestBody,
-		"summary": description,
-		"security": []fiber.Map{
-			{"bearerAuth": []string{}},
-		},
-		"responses": wst.M{
-			"200": wst.M{
-				"description": "OK",
-				"content": wst.M{
-					"application/json": wst.M{
-						"schema": wst.M{
-							"type": "object",
-						},
-					},
-				},
-				//"$ref": "#/components/schemas/" + loadedModel.Config.Name,
-				//"schema": wst.M{
-				//	"type":                 "object",
-				//	"additionalProperties": true,
-				//},
-			},
-		},
-	}
+	pathDef := createOpenAPIPathDef(loadedModel, description)
 
 	pathParams := regexp.MustCompile(`:(\w+)`).FindAllString(path, -1)
 
-	params := make([]wst.M, len(pathParams))
+	params := createOpenAPIPathParams(pathParams)
 
 	for idx, param := range pathParams {
-		params[idx] = wst.M{
-			"name":     strings.TrimPrefix(param, ":"),
-			"in":       "path",
-			"required": true,
-			"schema": wst.M{
-				"type": "string",
-			},
-		}
+		assignOpenAPIPathParam(params, idx, param)
 	}
 
-	//(*loadedModel.App.SwaggerPaths())[fullPath][verb] = pathDef
-	//err = loadedModel.App.SwaggerHelper().AddPathSpec(fullPath, verb, pathDef)
-	//if err != nil {
-	//	panic(err)
-	//}
-
 	if verb == "post" || verb == "put" || verb == "patch" {
-		pathDef["requestBody"] = wst.M{
-			"description": "data",
-			"required":    true,
-			//"name":        "data",
-			//"in":          "body",
-			//"schema": wst.M{
-			//	"type": "object",
-			//},
-			"content": wst.M{
-				"application/json": wst.M{
-					"schema": wst.M{
-						"type": "object",
-					},
-				},
-			},
-		}
+		assignOpenAPIRequestBody(pathDef)
 	} else {
 
-		for _, param := range options.Accepts {
-			paramType := param.Type
-			if paramType == "" {
-				panic(fmt.Sprintf("Argument '%v' in the remote method '%v' has an invalid 'type' value: '%v'", param.Arg, options.Name, paramType))
-			}
-			paramDescription := param.Description
-			if paramType == "date" {
-				paramType = "string"
-				paramDescription += " (format: ISO8601)"
-			}
-			params = append(params, wst.M{
-				"name":        param.Arg,
-				"in":          param.Http.Source,
-				"description": paramDescription,
-				"required":    param.Required,
-				"schema": wst.M{
-					"type": paramType,
-				},
-			})
-		}
+		params = assignOpenAPIAdditionalParams(options, params)
 
 	}
 
@@ -214,15 +135,18 @@ func (loadedModel *Model) RemoteMethod(handler func(context *EventContext) error
 		pathDef["parameters"] = params
 	}
 
-	//(*loadedModel.App.SwaggerPaths())[fullPath][verb] = pathDef
 	loadedModel.App.SwaggerHelper().AddPathSpec(fullPath, verb, pathDef)
+	// clean up memory
+	pathDef = nil
+	runtime.GC()
 
-	loadedModel.remoteMethodsMap[options.Name] = &OperationItem{
-		Handler: handler,
-		Options: options,
-	}
+	loadedModel.remoteMethodsMap[options.Name] = createRemoteMethodOperationItem(handler, options)
 
-	return toInvoke(path, func(ctx *fiber.Ctx) error {
+	return toInvoke(path, createFiberHandler(options, loadedModel, verb, path)).Name(loadedModel.Name + "." + options.Name)
+}
+
+func createFiberHandler(options RemoteMethodOptions, loadedModel *Model, verb string, path string) func(ctx *fiber.Ctx) error {
+	return func(ctx *fiber.Ctx) error {
 		eventContext := &EventContext{
 			Ctx:    ctx,
 			Remote: &options,
@@ -239,7 +163,93 @@ func (loadedModel *Model) RemoteMethod(handler func(context *EventContext) error
 			return loadedModel.SendError(eventContext.Ctx, err2)
 		}
 		return nil
-	}).Name(loadedModel.Name + "." + options.Name)
+	}
+}
+
+func createRemoteMethodOperationItem(handler func(context *EventContext) error, options RemoteMethodOptions) *OperationItem {
+	return &OperationItem{
+		Handler: handler,
+		Options: options,
+	}
+}
+
+func assignOpenAPIAdditionalParams(options RemoteMethodOptions, params []wst.M) []wst.M {
+	for _, param := range options.Accepts {
+		paramType := param.Type
+		if paramType == "" {
+			panic(fmt.Sprintf("Argument '%v' in the remote method '%v' has an invalid 'type' value: '%v'", param.Arg, options.Name, paramType))
+		}
+		paramDescription := param.Description
+		if paramType == "date" {
+			paramType = "string"
+			paramDescription += " (format: ISO8601)"
+		}
+		params = append(params, wst.M{
+			"name":        param.Arg,
+			"in":          param.Http.Source,
+			"description": paramDescription,
+			"required":    param.Required,
+			"schema": wst.M{
+				"type": paramType,
+			},
+		})
+	}
+	return params
+}
+
+func assignOpenAPIRequestBody(pathDef wst.M) {
+	pathDef["requestBody"] = wst.M{
+		"description": "data",
+		"required":    true,
+		"content": wst.M{
+			"application/json": wst.M{
+				"schema": wst.M{
+					"type": "object",
+				},
+			},
+		},
+	}
+}
+
+func assignOpenAPIPathParam(params []wst.M, idx int, param string) {
+	params[idx] = wst.M{
+		"name":     strings.TrimPrefix(param, ":"),
+		"in":       "path",
+		"required": true,
+		"schema": wst.M{
+			"type": "string",
+		},
+	}
+}
+
+func createOpenAPIPathParams(pathParams []string) []wst.M {
+	params := make([]wst.M, len(pathParams))
+	return params
+}
+
+func createOpenAPIPathDef(loadedModel *Model, description string) wst.M {
+	pathDef := wst.M{
+		"tags": []string{
+			loadedModel.Name,
+		},
+		"summary": description,
+		"security": []fiber.Map{
+			{"bearerAuth": []string{}},
+		},
+		"responses": wst.M{
+			"200": wst.M{
+				"description": "OK",
+				"content": wst.M{
+					"application/json": wst.M{
+						"schema": wst.M{
+							"type": "object",
+						},
+					},
+				},
+			},
+		},
+	}
+	return pathDef
 }
 
 func (loadedModel *Model) HandleRemoteMethod(name string, eventContext *EventContext) error {
