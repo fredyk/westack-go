@@ -218,11 +218,8 @@ func (ds *Datasource) FindMany(collectionName string, lookups *wst.A) (MongoCurs
 		if lookups != nil {
 			pipeline = append(pipeline, *lookups...)
 		}
-		allowDiskUse := true
 		ctx := ds.Context
-		cursor, err := collection.Aggregate(ctx, pipeline, &options.AggregateOptions{
-			AllowDiskUse: &allowDiskUse,
-		})
+		cursor, err := collection.Aggregate(ctx, pipeline, options.Aggregate().SetAllowDiskUse(true).SetMaxTime(5*time.Second).SetBatchSize(16).SetMaxAwaitTime(5*time.Second))
 		if err != nil {
 			return nil, err
 		}
