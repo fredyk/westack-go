@@ -1,25 +1,22 @@
 package swaggerhelper
 
 import (
-	"github.com/goccy/go-json"
+	wst "github.com/fredyk/westack-go/westack/common"
+	"github.com/fredyk/westack-go/westack/lib/swaggerhelperinterface"
 	"github.com/gofiber/fiber/v2"
+	"github.com/mailru/easyjson"
+	"github.com/mailru/easyjson/jwriter"
 	"os"
 	"runtime"
 )
 
-type SwaggerHelper interface {
-	// GetOpenAPI returns the OpenAPI specification as a map, or an error if it fails
-	GetOpenAPI() (map[string]interface{}, error)
-	// CreateOpenAPI creates a new OpenAPI specification and saves it to disk, or returns an error if it fails
-	CreateOpenAPI() error
-	// AddPathSpec adds a path specification to the OpenAPI specification
-	AddPathSpec(path string, verb string, verbSpec map[string]interface{})
-	// Dump dumps the OpenAPI specification to disk, or returns an error if it fails
-	Dump() error
+type SwaggerMap interface {
+	easyjson.Marshaler
+	//map[string]interface{}
 }
 
 type swaggerHelper struct {
-	swaggerMap map[string]interface{}
+	swaggerMap SwaggerMap
 }
 
 func (sH *swaggerHelper) GetOpenAPI() (map[string]interface{}, error) {
@@ -29,8 +26,8 @@ func (sH *swaggerHelper) GetOpenAPI() (map[string]interface{}, error) {
 		return nil, err
 	}
 	// Unmarshal it into a map
-	var swaggerMap map[string]interface{}
-	err = json.Unmarshal(swagger, &swaggerMap)
+	var swaggerMap wst.M
+	err = easyjson.Unmarshal(swagger, &swaggerMap)
 	if err != nil {
 		return nil, err
 	}
@@ -38,7 +35,7 @@ func (sH *swaggerHelper) GetOpenAPI() (map[string]interface{}, error) {
 }
 
 func (sH *swaggerHelper) CreateOpenAPI() error {
-	sH.swaggerMap = map[string]interface{}{
+	sH.swaggerMap = wst.M{
 		//"schemes": []string{"http"},
 		"openapi": "3.0.1",
 		"info": fiber.Map{
@@ -77,7 +74,14 @@ func (sH *swaggerHelper) CreateOpenAPI() error {
 		"paths": make(map[string]interface{}),
 	}
 	// Marshal
-	swagger, err := json.Marshal(sH.swaggerMap)
+	//swagger, err := easyjson.Marshal(sH.swaggerMap)
+	jw := jwriter.Writer{}
+	sH.swaggerMap.MarshalEasyJSON(&jw)
+	err := jw.Error
+	if err != nil {
+		return err
+	}
+	swagger, err := jw.BuildBytes()
 	if err != nil {
 		return err
 	}
@@ -96,16 +100,22 @@ func (sH *swaggerHelper) CreateOpenAPI() error {
 
 func (sH *swaggerHelper) AddPathSpec(path string, verb string, verbSpec map[string]interface{}) {
 	// Add verbSpec to [path][verb]
-	if _, ok := sH.swaggerMap["paths"].(map[string]interface{})[path]; !ok {
-		sH.swaggerMap["paths"].(map[string]interface{})[path] = make(map[string]interface{})
+	if _, ok := sH.swaggerMap.(wst.M)["paths"].(map[string]interface{})[path]; !ok {
+		sH.swaggerMap.(wst.M)["paths"].(map[string]interface{})[path] = make(map[string]interface{})
 	}
-	sH.swaggerMap["paths"].(map[string]interface{})[path].(map[string]interface{})[verb] = verbSpec
+	sH.swaggerMap.(wst.M)["paths"].(map[string]interface{})[path].(map[string]interface{})[verb] = verbSpec
 	return
 }
 
 func (sH *swaggerHelper) Dump() error {
 	// Marshal
-	swagger, err := json.Marshal(sH.swaggerMap)
+	jw := jwriter.Writer{}
+	sH.swaggerMap.MarshalEasyJSON(&jw)
+	err := jw.Error
+	if err != nil {
+		return err
+	}
+	swagger, err := jw.BuildBytes()
 	if err != nil {
 		return err
 	}
@@ -123,6 +133,6 @@ func (sH *swaggerHelper) free() {
 	runtime.GC()
 }
 
-func NewSwaggerHelper() SwaggerHelper {
+func NewSwaggerHelper() swaggerhelperinterface.SwaggerHelper {
 	return &swaggerHelper{}
 }
