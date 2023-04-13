@@ -213,16 +213,6 @@ func (loadedModel *Model) Build(data wst.M, sameLevelCache *buildCache, baseCont
 			if relatedModel != nil {
 				switch relationConfig.Type {
 				case "belongsTo", "hasOne":
-					var relatedInstance Instance
-					if asInstance, asInstanceOk := rawRelatedData.(Instance); asInstanceOk {
-						relatedInstance = asInstance
-					} else {
-						relatedInstance, err = relatedModel.(*Model).Build(rawRelatedData.(wst.M), sameLevelCache, targetBaseContext)
-						if err != nil {
-							fmt.Printf("ERROR: Model.Build() --> %v\n", err)
-							return Instance{}, err
-						}
-					}
 					// Check if this parent instance is already in the same level cache
 					// If so, check app.Viper.GetBool("strictSingleRelatedDocumentCheck") and if true, return an error
 					// If not, print a warning
@@ -236,6 +226,16 @@ func (loadedModel *Model) Build(data wst.M, sameLevelCache *buildCache, baseCont
 						}
 					} else {
 						sameLevelCache.singleRelatedDocumentsById[modelInstance.Id.(primitive.ObjectID).Hex()] = modelInstance
+					}
+					var relatedInstance Instance
+					if asInstance, asInstanceOk := rawRelatedData.(Instance); asInstanceOk {
+						relatedInstance = asInstance
+					} else {
+						relatedInstance, err = relatedModel.(*Model).Build(rawRelatedData.(wst.M), sameLevelCache, targetBaseContext)
+						if err != nil {
+							fmt.Printf("ERROR: Model.Build() --> %v\n", err)
+							return Instance{}, err
+						}
 					}
 					data[relationName] = &relatedInstance
 				case "hasMany", "hasAndBelongsToMany":
