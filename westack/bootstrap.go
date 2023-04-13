@@ -10,7 +10,6 @@ import (
 	"os"
 	"regexp"
 	"strings"
-	"sync"
 	"time"
 
 	casbinmodel "github.com/casbin/casbin/v2/model"
@@ -530,31 +529,10 @@ func (app *WeStack) setupModel(loadedModel *model.Model, dataSource *datasource.
 	}
 }
 
-var activeRequestsPerModel = make(map[string]int)
-var activeRequestsMutex sync.RWMutex
-
 func handleFindMany(loadedModel *model.Model, ctx *model.EventContext) error {
 	if loadedModel.App.Debug {
 		fmt.Println("DEBUG: handleFindMany")
 	}
-	// Limit to 2 concurrent requests per model, new requests will be queued
-	activeRequestsMutex.Lock()
-	if _, ok := activeRequestsPerModel[loadedModel.Name]; !ok {
-		activeRequestsPerModel[loadedModel.Name] = 0
-	}
-	for activeRequestsPerModel[loadedModel.Name] >= 2 {
-		activeRequestsMutex.Unlock()
-		time.Sleep(16 * time.Millisecond)
-		activeRequestsMutex.Lock()
-	}
-	activeRequestsPerModel[loadedModel.Name]++
-	activeRequestsMutex.Unlock()
-
-	defer func() {
-		activeRequestsMutex.Lock()
-		activeRequestsPerModel[loadedModel.Name]--
-		activeRequestsMutex.Unlock()
-	}()
 
 	cursor := loadedModel.FindMany(ctx.Filter, ctx)
 
