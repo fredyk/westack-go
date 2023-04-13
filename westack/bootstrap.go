@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/fredyk/westack-go/westack/lib/swaggerhelper"
+	swaggerhelper2 "github.com/fredyk/westack-go/westack/lib/swaggerhelperinterface"
 	"io/fs"
 	"log"
 	"os"
@@ -579,7 +580,7 @@ func (app *WeStack) asInterface() *wst.IApp {
 		FindDatasource: func(datasource string) (interface{}, error) {
 			return app.FindDatasource(datasource)
 		},
-		SwaggerHelper: func() swaggerhelper.SwaggerHelper {
+		SwaggerHelper: func() swaggerhelper2.SwaggerHelper {
 			return app.swaggerHelper
 		},
 	}

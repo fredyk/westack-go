@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/fredyk/westack-go/westack/lib/swaggerhelper"
+	"github.com/fredyk/westack-go/westack/lib/swaggerhelperinterface"
 	"github.com/fredyk/westack-go/westack/memorykv"
 	"io"
 	"log"
@@ -54,7 +54,7 @@ type WeStack struct {
 	dataSourceOptions *map[string]*datasource.Options
 	init              time.Time
 	jwtSecretKey      []byte
-	swaggerHelper     swaggerhelper.SwaggerHelper
+	swaggerHelper     swaggerhelperinterface.SwaggerHelper
 }
 
 func (app *WeStack) FindModel(modelName string) (*model.Model, error) {
