@@ -125,28 +125,19 @@ func (m M) MarshalEasyJSON(w *jwriter.Writer) {
 	w.RawByte('}')
 }
 
-func (m M) UnmarshalEasyJSON(l *jlexer.Lexer) {
+func (m *M) UnmarshalEasyJSON(l *jlexer.Lexer) {
 	if l.IsNull() {
 		l.Skip()
 		return
 	}
 	if m == nil {
-		m = make(M)
+		*m = make(M)
 	}
-	for l.IsDelim('{') {
-		l.Delim('{')
-		for !l.IsDelim('}') {
-			key := l.String()
-			l.WantColon()
-			switch key {
-			case "<wst.NilMap>":
-				m = nil
-			default:
-				m[key] = l.Interface()
-			}
-			l.WantComma()
-		}
-		l.Delim('}')
+	inputBytes := l.Raw()
+	err := json.Unmarshal(inputBytes, &m)
+	if err != nil {
+		l.AddError(err)
+		return
 	}
 }
 
