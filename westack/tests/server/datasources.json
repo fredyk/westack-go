@@ -10,6 +10,17 @@
     "useNewUrlParser": true,
     "allowExtendedOperators": true
   },
+  "db1": {
+    "host": "127.0.0.1",
+    "port": 27017,
+    "database": "example_db_2",
+    "password": "",
+    "name": "db1",
+    "username": "",
+    "connector": "mongodb",
+    "useNewUrlParser": true,
+    "allowExtendedOperators": true
+  },
   "memorykv": {
     "name": "memorykv",
     "url": "localhost:0",
