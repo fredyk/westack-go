@@ -122,8 +122,9 @@ func (loadedModel *Model) EnforceEx(token *BearerToken, objId string, action str
 	return fiber.ErrUnauthorized, false
 }
 
-//go:noinline
 func updateAuthCache(loadedModel *Model, bearerUserIdSt string, targetObjId string, action string, allow bool) {
+	cacheLock.Lock()
+	defer cacheLock.Unlock()
 	if loadedModel.authCache[bearerUserIdSt] == nil {
 		addSubjectAuthCacheEntry(loadedModel, bearerUserIdSt)
 	}
@@ -135,10 +136,7 @@ func updateAuthCache(loadedModel *Model, bearerUserIdSt string, targetObjId stri
 
 var cacheLock = sync.Mutex{}
 
-//go:noinline
 func addSubjectAuthCacheEntry(loadedModel *Model, bearerUserIdSt string) {
-	cacheLock.Lock()
-	defer cacheLock.Unlock()
 
 	// Delete after 5 minutes
 	go func() {
@@ -151,16 +149,10 @@ func addSubjectAuthCacheEntry(loadedModel *Model, bearerUserIdSt string) {
 	loadedModel.authCache[bearerUserIdSt] = make(map[string]map[string]bool)
 }
 
-//go:noinline
 func addObjectAuthCacheEntry(loadedModel *Model, bearerUserIdSt string, targetObjId string) {
-	cacheLock.Lock()
-	defer cacheLock.Unlock()
 	loadedModel.authCache[bearerUserIdSt][targetObjId] = make(map[string]bool)
 }
 
-//go:noinline
 func addActionAuthCacheEntry(loadedModel *Model, bearerUserIdSt string, targetObjId string, action string, allow bool) {
-	cacheLock.Lock()
-	defer cacheLock.Unlock()
 	loadedModel.authCache[bearerUserIdSt][targetObjId][action] = allow
 }
