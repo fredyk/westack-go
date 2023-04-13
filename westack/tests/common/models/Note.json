@@ -23,7 +23,9 @@
     },
     "footer2": {
       "type": "belongsTo",
-      "model": "Footer"
+      "model": "Footer",
+      "foreignKey": "footerId",
+      "primaryKey": "_id"
     }
   },
   "hidden": [],

@@ -48,11 +48,12 @@ func jsonToReader(m wst.M) io.Reader {
 	return bytes.NewReader(out)
 }
 
-func createNoteForUser(userId string, token string, t *testing.T) (note wst.M, err error) {
+func createNoteForUser(userId string, token string, footerId string, t *testing.T) (note wst.M, err error) {
 	request, err := http.NewRequest("POST", "http://localhost:8019/api/v1/notes", jsonToReader(wst.M{
-		"title":   "Test Note",
-		"content": "This is a test note",
-		"userId":  userId,
+		"title":    "Test Note",
+		"content":  "This is a test note",
+		"userId":   userId,
+		"footerId": footerId,
 	}))
 	assert.Nil(t, err)
 
@@ -85,10 +86,16 @@ func Test_FindMany(t *testing.T) {
 
 	user := createUserThroughNetwork(t)
 	token := loginUser(user["email"].(string), "abcd1234.", t)
-	_, err = createNoteForUser(user["id"].(string), token["id"].(string), t)
-	if err != nil {
-		t.Errorf("Error: %v", err)
-	}
+
+	footer, err := createFooter2ForUser(token["id"].(string), user["id"].(string), t)
+	assert.Nilf(t, err, "Error while creating footer: %v", err)
+	assert.NotNilf(t, footer, "Footer is nil: %v", footer)
+	assert.NotEmpty(t, footer["id"].(string))
+
+	note, err := createNoteForUser(user["id"].(string), token["id"].(string), footer["id"].(string), t)
+	assert.Nilf(t, err, "Error while creating note: %v", err)
+	assert.NotNilf(t, note, "Note is nil: %v", note)
+	assert.NotEmpty(t, note["id"].(string))
 
 	request, err := http.NewRequest("GET", `http://localhost:8019/api/v1/notes?filter={"include":[{"relation":"user"},{"relation":"footer1"},{"relation":"footer2"}]}`, nil)
 	assert.Nil(t, err)
@@ -151,6 +158,32 @@ func Test_FindMany(t *testing.T) {
 
 	assert.Greaterf(t, len(parsed), 0, "parsed: %v\n", parsed)
 
+}
+
+func createFooter2ForUser(token string, userId string, t *testing.T) (wst.M, error) {
+	request, err := http.NewRequest("POST", "http://localhost:8019/api/v1/footers", jsonToReader(wst.M{
+		"userId": userId,
+	}))
+	assert.Nil(t, err)
+
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("Authorization", fmt.Sprintf("Bearer %v", token))
+
+	response, err := http.DefaultClient.Do(request)
+	assert.Nil(t, err)
+
+	var out []byte
+	var parsed wst.M
+
+	// read response body bytes
+	out, err = io.ReadAll(response.Body)
+	assert.Nil(t, err)
+
+	// parse response body bytes
+	err = json.Unmarshal(out, &parsed)
+	assert.Nil(t, err)
+
+	return parsed, err
 }
 
 func Test_EmptyArray(t *testing.T) {
