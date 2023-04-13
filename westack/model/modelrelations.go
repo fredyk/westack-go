@@ -321,7 +321,7 @@ func (loadedModel *Model) mergeRelated(relationDeepLevel byte, documents *wst.A,
 							if localCache[cacheKeyTo] != nil {
 								cachedRelatedDocs[documentIdx] = localCache[cacheKeyTo]
 							} else {
-								var cachedDocs wst.A
+								var cachedDocs []wst.M
 
 								cacheLookups := &wst.A{wst.M{"$match": wst.M{keyFrom: cacheKeyTo}}}
 								cursor, err := safeCacheDs.FindMany(relatedLoadedModel.CollectionName, cacheLookups)

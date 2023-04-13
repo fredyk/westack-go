@@ -2,6 +2,9 @@
   "Empty": {
     "dataSource": "db"
   },
+  "Footer": {
+    "dataSource": "db1"
+  },
   "Note": {
     "dataSource": "db"
   },
