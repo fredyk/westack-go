@@ -129,7 +129,7 @@ func (ds *Datasource) Initialize() error {
 
 		init := time.Now().UnixMilli()
 		go func() {
-			initialCtx := mongoCtx
+			initialCtx := ds.Context
 			for {
 				time.Sleep(time.Second * 5)
 
