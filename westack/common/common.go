@@ -2,7 +2,8 @@ package wst
 
 import (
 	"fmt"
-	"github.com/fredyk/westack-go/westack/lib/swaggerhelper"
+	"github.com/fredyk/westack-go/westack/lib/swaggerhelperinterface"
+	"github.com/mailru/easyjson/jlexer"
 	"log"
 	"os"
 	"regexp"
@@ -31,7 +32,7 @@ func (m M) GetM(key string) M {
 		if vv, ok := v.(M); ok {
 			return vv
 		} else if vv, ok := v.(map[string]interface{}); ok {
-			var out M = make(M, len(vv))
+			var out = make(M, len(vv))
 			for k, v := range vv {
 				out[k] = v
 			}
@@ -122,6 +123,22 @@ func (m M) MarshalEasyJSON(w *jwriter.Writer) {
 		}
 	}
 	w.RawByte('}')
+}
+
+func (m *M) UnmarshalEasyJSON(l *jlexer.Lexer) {
+	if l.IsNull() {
+		l.Skip()
+		return
+	}
+	if m == nil {
+		*m = make(M)
+	}
+	inputBytes := l.Raw()
+	err := json.Unmarshal(inputBytes, &m)
+	if err != nil {
+		l.AddError(err)
+		return
+	}
 }
 
 type A []M
@@ -252,7 +269,7 @@ type BsonOptions struct {
 
 type IApp struct {
 	Debug          bool
-	SwaggerHelper  func() swaggerhelper.SwaggerHelper
+	SwaggerHelper  func() swaggerhelperinterface.SwaggerHelper
 	FindModel      func(modelName string) (interface{}, error)
 	FindDatasource func(datasource string) (interface{}, error)
 	JwtSecretKey   []byte
