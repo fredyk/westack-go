@@ -24,12 +24,12 @@ func Test_Get_Swagger_Docs(t *testing.T) {
 	res, err := client.Get("http://localhost:8020/swagger/doc.json")
 	assert.Nilf(t, err, "Get Swagger Error while getting response: %s", err)
 
-	assert.Equalf(t, 200, res.StatusCode, "Get Swagger Error invalid status code: %d", res.StatusCode)
-
 	// read response
 	var out wst.M
 	body, err := io.ReadAll(res.Body)
 	assert.Nilf(t, err, "Get Swagger Error while reading body: %s", err)
+
+	assert.Equalf(t, 200, res.StatusCode, "Get Swagger Error invalid status code: %d body: %s", res.StatusCode, string(body))
 
 	err = json.Unmarshal(body, &out)
 	assert.Nilf(t, err, "Get Swagger Error while unmarshaling body: %s", err)
