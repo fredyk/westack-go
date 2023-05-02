@@ -1,6 +1,6 @@
 MIT License
 
-Copyright (c) 2021 Jhon Magdalena Vila & Gleen Montiel González [westack.team@gmail.com](mailto://westack.team@gmail.com)
+Copyright (c) 2023 Jhon Magdalena Vila & Gleen Montiel González [westack.team@gmail.com](mailto://westack.team@gmail.com)
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
