@@ -197,7 +197,7 @@ Response body: {"title":"Note 1","body":"I modified the note body","userId":"622
 ```
 ### Change Log
 
-* **v1.5.49**
+* **v1.6.0**
 
     * Added parameter `strictSingleRelatedDocumentCheck` in config.json, defaults to `true`in new projects, and `false` in existing ones.
     * `"hasOne"` and `"belongsTo"` relations are now checked after fetching documents from Mongo. If `strictSingleRelatedDocumentCheck` is `true` and the relation returns more than 1 document, an error is thrown. Otherwise, only the first document is used and a warning is logged.
