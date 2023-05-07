@@ -480,8 +480,8 @@ func (loadedModel *Model) FindMany(filterMap *wst.Filter, baseContext *EventCont
 						}
 					}
 
-					connectorName := safeCacheDs.Key + ".connector"
-					switch safeCacheDs.Viper.GetString(connectorName) {
+					connectorName := safeCacheDs.SubViper.GetString("connector")
+					switch connectorName {
 					case "redis":
 						return errors.New("redis cache connector not implemented")
 					case "memorykv":
