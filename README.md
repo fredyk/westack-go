@@ -213,4 +213,6 @@ Response body: {"title":"Note 1","body":"I modified the note body","userId":"622
 
 Write to [westack.team@gmail.com](mailto://westack.team@gmail.com) if you want to contribute to the project: D
 
-You can also create as many pull requests as you want
+You are also welcome on our official [Discord](https://discord.gg/tFRYbGQWjZ)
+
+And of course... create as many pull requests as you want!
