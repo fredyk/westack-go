@@ -10,7 +10,7 @@ import (
 	"github.com/fredyk/westack-go/westack/datasource"
 )
 
-func Test_Datasource_Initialize_InvalidConnector(t *testing.T) {
+func Test_Datasource_Initialize_InvalidDatasource(t *testing.T) {
 
 	t.Parallel()
 
@@ -26,8 +26,8 @@ func Test_Datasource_Initialize_ConnectError(t *testing.T) {
 	t.Parallel()
 
 	prevHost := app.DsViper.GetString("db.host")
-	app.DsViper.Set("db.host", "<invalid host>")
 	ds := datasource.New("db", app.DsViper, context.Background())
+	ds.SubViper.Set("host", "<invalid host>")
 	ds.Options = &datasource.Options{
 		MongoDB: &datasource.MongoDBDatasourceOptions{
 			Timeout: 3,
@@ -37,7 +37,7 @@ func Test_Datasource_Initialize_ConnectError(t *testing.T) {
 	assert.NotNil(t, err)
 	assert.Regexp(t, "no such host", err.Error(), "error message should be 'no such host'")
 
-	app.DsViper.Set("db.host", prevHost)
+	ds.SubViper.Set("host", prevHost)
 	err = ds.Initialize()
 	assert.Nil(t, err)
 

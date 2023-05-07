@@ -245,11 +245,11 @@ func TestMain(m *testing.M) {
 		DatasourceOptions: &map[string]*datasource.Options{
 			"db": {
 				MongoDB: &datasource.MongoDBDatasourceOptions{
-					Registry:     FakeMongoDbRegistry(),
-					Monitor:      FakeMongoDbMonitor(),
-					Timeout:      3,
-					RetryOnError: true,
+					Registry: FakeMongoDbRegistry(),
+					Monitor:  FakeMongoDbMonitor(),
+					Timeout:  3,
 				},
+				RetryOnError: true,
 			},
 		},
 	})
