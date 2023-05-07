@@ -11,14 +11,10 @@ import (
 	"log"
 	"time"
 
+	wst "github.com/fredyk/westack-go/westack/common"
 	"github.com/spf13/viper"
-	"go.mongodb.org/mongo-driver/bson/bsoncodec"
-	"go.mongodb.org/mongo-driver/event"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
-	"go.mongodb.org/mongo-driver/mongo/readpref"
-
-	wst "github.com/fredyk/westack-go/westack/common"
 )
 
 type OperationError struct {
@@ -26,15 +22,9 @@ type OperationError struct {
 	Message string
 }
 
-type MongoDBDatasourceOptions struct {
-	Registry     *bsoncodec.Registry
-	Monitor      *event.CommandMonitor
-	Timeout      int
-	RetryOnError bool
-}
-
 type Options struct {
-	MongoDB *MongoDBDatasourceOptions
+	RetryOnError bool
+	MongoDB      *MongoDBDatasourceOptions
 }
 
 func (e *OperationError) Error() string {
@@ -60,139 +50,85 @@ type Datasource struct {
 	SubViper    *viper.Viper
 }
 
-func (ds *Datasource) Initialize() error {
-	dsViper := ds.Viper
-	var connector = dsViper.GetString(ds.Key + ".connector")
-	switch connector {
+func getConnectorByName(name string, dsKey string, dsViper *viper.Viper, options *Options) (PersistedConnector, error) {
+	switch name {
 	case "mongodb":
-		var mongoCtx context.Context
-		var cancelFn context.CancelFunc
-		if ds.Options != nil && ds.Options.MongoDB != nil && ds.Options.MongoDB.Timeout > 0 {
-			mongoCtx, cancelFn = context.WithTimeout(ds.Context, time.Duration(ds.Options.MongoDB.Timeout)*time.Second)
-		} else {
-			//mongoCtx, cancelFn = context.WithCancel(ds.Context)
-			mongoCtx = ds.Context
-			cancelFn = ds.ctxCancelFn
+		var mongoOptions *MongoDBDatasourceOptions
+		if options != nil {
+			mongoOptions = options.MongoDB
 		}
-
-		var clientOpts *options.ClientOptions
-
-		url := getDbUrl(dsViper, ds)
-
-		if dsViper.GetString(ds.Key+".username") != "" && dsViper.GetString(ds.Key+".password") != "" {
-			credential := options.Credential{
-				Username: dsViper.GetString(ds.Key + ".username"),
-				Password: dsViper.GetString(ds.Key + ".password"),
-			}
-			clientOpts = options.Client().ApplyURI(url).SetAuth(credential)
-		} else {
-			clientOpts = options.Client().ApplyURI(url)
-		}
-
-		timeoutForOptions := time.Second * 30
-		if ds.Options != nil && ds.Options.MongoDB != nil && ds.Options.MongoDB.Timeout > 0 {
-			timeoutForOptions = time.Duration(ds.Options.MongoDB.Timeout) * time.Second
-		}
-		clientOpts = clientOpts.SetSocketTimeout(timeoutForOptions).SetConnectTimeout(timeoutForOptions).SetServerSelectionTimeout(timeoutForOptions).SetMinPoolSize(1).SetMaxPoolSize(5)
-
-		if ds.Options != nil && ds.Options.MongoDB != nil && ds.Options.MongoDB.Registry != nil {
-			clientOpts = clientOpts.SetRegistry(ds.Options.MongoDB.Registry)
-		}
-
-		if ds.Options != nil && ds.Options.MongoDB != nil && ds.Options.MongoDB.Monitor != nil {
-			clientOpts = clientOpts.SetMonitor(ds.Options.MongoDB.Monitor)
-		}
-
-		fmt.Printf("Connecting to datasource %v...\n", ds.Key)
-		db, err := mongo.Connect(mongoCtx, clientOpts)
-		if err != nil {
-			cancelFn()
-			return err
-		}
-		ds.Db = db
-
-		if ds.Options != nil && ds.Options.MongoDB != nil {
-			if ds.Options.MongoDB.Timeout > 0 {
-				fmt.Printf("DEBUG: Setting timeout to %v seconds\n", ds.Options.MongoDB.Timeout)
-				mongoCtx, cancelFn = context.WithTimeout(context.Background(), time.Duration(ds.Options.MongoDB.Timeout)*time.Second)
-			}
-		}
-		fmt.Printf("Pinging datasource %v...\n", ds.Key)
-		err = ds.Db.(*mongo.Client).Ping(mongoCtx, readpref.SecondaryPreferred())
-		if err != nil {
-			fmt.Printf("Could not connect to datasource %v: %v\n", ds.Key, err)
-			cancelFn()
-			return err
-		} else {
-			fmt.Printf("DEBUG: Connected to datasource %v\n", ds.Key)
-		}
-
-		init := time.Now().UnixMilli()
-		go func() {
-			initialCtx := ds.Context
-			for {
-				time.Sleep(time.Second * 5)
-
-				if ds.Options != nil && ds.Options.MongoDB != nil && ds.Options.MongoDB.Timeout > 0 {
-					mongoCtx, cancelFn = context.WithTimeout(initialCtx, time.Duration(ds.Options.MongoDB.Timeout)*time.Second)
-				} /* else {
-					mongoCtx, cancelFn = context.WithCancel(initialCtx)
-				}*/
-
-				err := ds.Db.(*mongo.Client).Ping(mongoCtx, readpref.SecondaryPreferred())
-				if err != nil {
-					url = getDbUrl(dsViper, ds)
-					log.Printf("Reconnecting datasource %v...\n", ds.Key)
-					db, err := mongo.Connect(mongoCtx, clientOpts)
-					if err != nil {
-						cancelFn()
-						if ds.Options == nil || ds.Options.MongoDB == nil || !ds.Options.MongoDB.RetryOnError {
-							log.Fatalf("Could not reconnect %v: %v\n", url, err)
-						}
-					} else {
-						err = ds.Db.(*mongo.Client).Ping(mongoCtx, readpref.SecondaryPreferred())
-						if err != nil {
-							cancelFn()
-							if ds.Options == nil || ds.Options.MongoDB == nil || !ds.Options.MongoDB.RetryOnError {
-								log.Fatalf("Mongo client disconnected after %vms: %v", time.Now().UnixMilli()-init, err)
-							}
-						} else {
-							log.Printf("successfully reconnected to %v\n", url)
-						}
-
-					}
-					ds.Db = db
-				}
-			}
-		}()
-		break
+		return NewMongoDBConnector(dsViper, mongoOptions), nil
 	case "redis":
-		return fmt.Errorf("redis connector not implemented yet")
+		return nil, fmt.Errorf("redis connector not implemented yet")
 	case "memorykv":
-		ds.Db = memorykv.NewMemoryKvDb(memorykv.Options{
-			Name: ds.Key,
-		})
-		// TODO: other setup operations
-		break
+		return NewMemoryKVConnector(dsKey), nil
 	default:
-		return errors.New("invalid connector " + connector)
+		return nil, errors.New("invalid connector " + name)
 	}
-	return nil
 }
 
-func getDbUrl(dsViper *viper.Viper, ds *Datasource) string {
-	url := ""
-	if dsViper.GetString(ds.Key+".url") != "" {
-		url = dsViper.GetString(ds.Key + ".url")
-	} else {
-		port := 0
-		if dsViper.GetInt(ds.Key+".port") > 0 {
-			port = dsViper.GetInt(ds.Key + ".port")
-		}
-		url = fmt.Sprintf("mongodb://%v:%v/%v", dsViper.GetString(ds.Key+".host"), port, dsViper.GetString(ds.Key+".database"))
-		log.Printf("Using composed url %v\n", url)
+func (ds *Datasource) Initialize() error {
+	dsViper := ds.SubViper
+	if dsViper == nil {
+		return fmt.Errorf("could not find datasource %v", ds.Key)
 	}
-	return url
+	var connectorName = dsViper.GetString("connector")
+	var connector PersistedConnector
+	var err error
+	connector, err = getConnectorByName(connectorName, ds.Key, dsViper, ds.Options)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("Connecting to datasource %v...\n", ds.Key)
+	err = connector.Connect(ds.Context)
+	if err != nil {
+		fmt.Printf("Could not connect to datasource %v: %v\n", ds.Key, err)
+		return err
+	} else {
+		fmt.Printf("DEBUG: Connected to datasource %v\n", ds.Key)
+	}
+
+	fmt.Printf("Pinging datasource %v...\n", ds.Key)
+	err = connector.Ping(ds.Context)
+	if err != nil {
+		fmt.Printf("Could not connect to datasource %v: %v\n", ds.Key, err)
+		return err
+	} else {
+		fmt.Printf("DEBUG: Connected to datasource %v\n", ds.Key)
+		ds.Db = connector.GetClient()
+	}
+
+	// Start a goroutine to reconnect to the datasource if it gets disconnected
+	init := time.Now().UnixMilli()
+	go func() {
+		initialCtx := ds.Context
+		for {
+			time.Sleep(time.Second * 5)
+
+			err := connector.Ping(initialCtx)
+			if err != nil {
+				log.Printf("Reconnecting datasource %v...\n", ds.Key)
+				err := connector.Connect(initialCtx)
+				if err != nil {
+					if ds.Options == nil || !ds.Options.RetryOnError {
+						log.Fatalf("Could not reconnect %v: %v\n", ds.Key, err)
+					}
+				} else {
+					err = connector.Ping(initialCtx)
+					if err != nil {
+						if ds.Options == nil || !ds.Options.RetryOnError {
+							log.Fatalf("Mongo client disconnected after %vms: %v", time.Now().UnixMilli()-init, err)
+						}
+					} else {
+						log.Printf("successfully reconnected to %v\n", ds.Key)
+						ds.Db = connector.GetClient()
+					}
+				}
+			}
+		}
+	}()
+
+	return nil
 }
 
 // FindMany retrieves data from the specified collection based on the provided lookup conditions using the appropriate
@@ -205,12 +141,12 @@ func getDbUrl(dsViper *viper.Viper, ds *Datasource) string {
 // The cursor needs to be closed outside of the function.
 // Implementations for Redis and memorykv connectors are not yet implemented and will result in an error.
 func (ds *Datasource) FindMany(collectionName string, lookups *wst.A) (MongoCursorI, error) {
-	var connector = ds.Viper.GetString(ds.Key + ".connector")
+	var connector = ds.SubViper.GetString("connector")
 	switch connector {
 	case "mongodb":
 		var db = ds.Db.(*mongo.Client)
 
-		database := db.Database(ds.Viper.GetString(ds.Key + ".database"))
+		database := db.Database(ds.SubViper.GetString("database"))
 		collection := database.Collection(collectionName)
 
 		pipeline := wst.A{}
@@ -302,12 +238,12 @@ func (ds *Datasource) FindMany(collectionName string, lookups *wst.A) (MongoCurs
 }
 
 func (ds *Datasource) Count(collectionName string, lookups *wst.A) (int64, error) {
-	var connector = ds.Viper.GetString(ds.Key + ".connector")
+	var connector = ds.SubViper.GetString("connector")
 	switch connector {
 	case "mongodb":
 		var db = ds.Db.(*mongo.Client)
 
-		database := db.Database(ds.Viper.GetString(ds.Key + ".database"))
+		database := db.Database(ds.SubViper.GetString("database"))
 		collection := database.Collection(collectionName)
 
 		pipeline := wst.A{}
@@ -353,7 +289,7 @@ func (ds *Datasource) Count(collectionName string, lookups *wst.A) (int64, error
 }
 
 func findByObjectId(collectionName string, _id interface{}, ds *Datasource, lookups *wst.A) (*wst.M, error) {
-	var connector = ds.Viper.GetString(ds.Key + ".connector")
+	var connector = ds.SubViper.GetString("connector")
 	switch connector {
 	case "mongodb":
 		wrappedLookups := &wst.A{
@@ -417,12 +353,12 @@ func findByObjectId(collectionName string, _id interface{}, ds *Datasource, look
 }
 
 func (ds *Datasource) Create(collectionName string, data *wst.M) (*wst.M, error) {
-	var connector = ds.Viper.GetString(ds.Key + ".connector")
+	var connector = ds.SubViper.GetString("connector")
 	switch connector {
 	case "mongodb":
 		var db = ds.Db.(*mongo.Client)
 
-		database := db.Database(ds.Viper.GetString(ds.Key + ".database"))
+		database := db.Database(ds.SubViper.GetString("database"))
 		collection := database.Collection(collectionName)
 		if (*data)["_id"] == nil && (*data)["id"] != nil {
 			(*data)["_id"] = (*data)["id"]
@@ -469,12 +405,12 @@ func (ds *Datasource) Create(collectionName string, data *wst.M) (*wst.M, error)
 }
 
 func (ds *Datasource) UpdateById(collectionName string, id interface{}, data *wst.M) (*wst.M, error) {
-	var connector = ds.Viper.GetString(ds.Key + ".connector")
+	var connector = ds.SubViper.GetString("connector")
 	switch connector {
 	case "mongodb":
 		var db = ds.Db.(*mongo.Client)
 
-		database := db.Database(ds.Viper.GetString(ds.Key + ".database"))
+		database := db.Database(ds.SubViper.GetString("database"))
 		collection := database.Collection(collectionName)
 		delete(*data, "id")
 		delete(*data, "_id")
@@ -487,12 +423,12 @@ func (ds *Datasource) UpdateById(collectionName string, id interface{}, data *ws
 }
 
 func (ds *Datasource) DeleteById(collectionName string, id interface{}) int64 {
-	var connector = ds.Viper.GetString(ds.Key + ".connector")
+	var connector = ds.SubViper.GetString("connector")
 	switch connector {
 	case "mongodb":
 		var db = ds.Db.(*mongo.Client)
 
-		database := db.Database(ds.Viper.GetString(ds.Key + ".database"))
+		database := db.Database(ds.SubViper.GetString("database"))
 		collection := database.Collection(collectionName)
 		if result, err := collection.DeleteOne(ds.Context, wst.M{"_id": id}); err != nil {
 			panic(err)
@@ -504,7 +440,11 @@ func (ds *Datasource) DeleteById(collectionName string, id interface{}) int64 {
 }
 
 func New(dsKey string, dsViper *viper.Viper, parentContext context.Context) *Datasource {
-	name := dsViper.GetString(dsKey + ".name")
+	subViper := dsViper.Sub(dsKey)
+	if subViper == nil {
+		subViper = viper.New()
+	}
+	name := subViper.GetString("name")
 	if name == "" {
 		name = dsKey
 	}
@@ -512,7 +452,7 @@ func New(dsKey string, dsViper *viper.Viper, parentContext context.Context) *Dat
 	ds := &Datasource{
 		Name:     name,
 		Viper:    dsViper,
-		SubViper: dsViper.Sub(dsKey),
+		SubViper: subViper,
 
 		Key: dsKey,
 
