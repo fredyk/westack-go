@@ -58,9 +58,10 @@ type CasbinConfig struct {
 }
 
 type CacheConfig struct {
-	Datasource string     `json:"datasource"`
-	Ttl        int        `json:"ttl"`
-	Keys       [][]string `json:"keys"`
+	Datasource    string     `json:"datasource"`
+	Ttl           int        `json:"ttl"`
+	Keys          [][]string `json:"keys"`
+	ExcludeFields []string   `json:"excludeFields"`
 }
 
 type MongoConfig struct {
@@ -447,6 +448,13 @@ func (loadedModel *Model) FindMany(filterMap *wst.Filter, baseContext *EventCont
 					safeCacheDs := cacheDs.(*datasource.Datasource)
 
 					toCache := wst.CopyMap(document)
+
+					// Remove fields that are not cacheable
+					if loadedModel.Config.Cache.ExcludeFields != nil {
+						for _, field := range loadedModel.Config.Cache.ExcludeFields {
+							delete(toCache, field)
+						}
+					}
 
 					for _, keyGroup := range loadedModel.Config.Cache.Keys {
 						canonicalId := ""
