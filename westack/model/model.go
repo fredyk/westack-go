@@ -452,7 +452,9 @@ func (loadedModel *Model) FindMany(filterMap *wst.Filter, baseContext *EventCont
 					// Remove fields that are not cacheable
 					if loadedModel.Config.Cache.ExcludeFields != nil {
 						for _, field := range loadedModel.Config.Cache.ExcludeFields {
-							delete(toCache, field)
+							if _, ok := toCache[field]; ok {
+								delete(toCache, field)
+							}
 						}
 					}
 
