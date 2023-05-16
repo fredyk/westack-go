@@ -1,0 +1,38 @@
+{
+  "name": "User",
+  "plural": "users",
+  "base": "User",
+  "public": true,
+  "properties": {
+    "email": {
+      "type": "string",
+      "required": true,
+      "default": null
+    },
+    "password": {
+      "type": "string",
+      "required": true,
+      "default": null
+    }
+  },
+  "relations": {},
+  "hidden": [
+    "password"
+  ],
+  "casbin": {
+    "requestDefinition": "",
+    "policyDefinition": "",
+    "roleDefinition": "",
+    "policyEffect": "",
+    "matchersDefinition": "",
+    "policies": null
+  },
+  "cache": {
+    "datasource": "",
+    "ttl": 0,
+    "keys": null
+  },
+  "mongo": {
+    "collection": ""
+  }
+}
