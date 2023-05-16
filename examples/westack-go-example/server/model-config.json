@@ -1,0 +1,11 @@
+{
+  "Note": {
+    "dataSource": "db"
+  },
+  "Role": {
+    "dataSource": "db"
+  },
+  "User": {
+    "dataSource": "db"
+  }
+}

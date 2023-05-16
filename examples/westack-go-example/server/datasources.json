@@ -1,0 +1,10 @@
+{
+  "db": {
+    "connector": "mongodb",
+    "name": "db",
+    "url": "mongodb://localhost:27017",
+    "database": "westack_go_example",
+    "user": "",
+    "password": ""
+  }
+}
