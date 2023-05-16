@@ -1,0 +1,15 @@
+{
+  "name": "westack-go-example",
+  "version": "0.0.1",
+  "description": "Example app",
+  "casbin": {
+    "dumpModels": false,
+    "policies": {
+      "outputDirectory": "./common/models"
+    }
+  },
+  "restApiRoot": "/api/v1",
+  "port": 8023,
+  "strictSingleRelatedDocumentCheck": true,
+  "env": {}
+}
