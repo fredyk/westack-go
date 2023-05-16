@@ -1,0 +1,11 @@
+{
+  "name": "Note",
+  "base": "PersistedModel",
+  "public": true,
+  "casbin": {
+    "policies": [
+      "$everyone,*,create,allow",
+      "$everyone,*,read,allow"
+    ]
+  }
+}
