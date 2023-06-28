@@ -3,14 +3,15 @@ package westack
 import (
 	"context"
 	"fmt"
-	"github.com/fredyk/westack-go/westack/lib/swaggerhelper"
-	swaggerhelper2 "github.com/fredyk/westack-go/westack/lib/swaggerhelperinterface"
 	"io/fs"
 	"log"
 	"os"
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/fredyk/westack-go/westack/lib/swaggerhelper"
+	swaggerhelper2 "github.com/fredyk/westack-go/westack/lib/swaggerhelperinterface"
 
 	casbinmodel "github.com/casbin/casbin/v2/model"
 	fileadapter "github.com/casbin/casbin/v2/persist/file-adapter"
@@ -538,7 +539,10 @@ func handleFindMany(loadedModel *model.Model, ctx *model.EventContext) error {
 
 	//chunkGenerator := model.NewInstanceAChunkGenerator(loadedModel, cursor, "application/json")
 	chunkGenerator := model.NewCursorChunkGenerator(loadedModel, cursor)
-
+	switch cursor.(type) {
+	case *model.ErrorCursor:
+		return cursor.(*model.ErrorCursor).Error()
+	}
 	if cursor.(*model.ChannelCursor).Err == nil {
 		ctx.StatusCode = fiber.StatusOK
 	}
