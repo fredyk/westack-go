@@ -2,6 +2,7 @@ package model
 
 import (
 	"context"
+
 	"github.com/fredyk/westack-go/westack/datasource"
 )
 
@@ -49,24 +50,28 @@ func newMongoCursor(ctx context.Context, mCursor datasource.MongoCursorI) Cursor
 	}
 }
 
-type errorCursor struct {
+type ErrorCursor struct {
 	err error
 }
 
-func (cursor *errorCursor) Next() (result *Instance, err error) {
+func (cursor *ErrorCursor) Next() (result *Instance, err error) {
 	return result, cursor.err
 }
 
-func (cursor *errorCursor) All() (result InstanceA, err error) {
+func (cursor *ErrorCursor) All() (result InstanceA, err error) {
 	return result, cursor.err
 }
 
-func (cursor *errorCursor) Close() error {
+func (cursor *ErrorCursor) Close() error {
 	return nil
 }
 
+func (cursor *ErrorCursor) Error() error {
+	return cursor.err
+}
+
 func newErrorCursor(err error) Cursor {
-	return &errorCursor{
+	return &ErrorCursor{
 		err: err,
 	}
 }
