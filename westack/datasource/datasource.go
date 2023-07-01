@@ -4,12 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
+	"time"
+
 	"github.com/fredyk/westack-go/westack/memorykv"
 	"github.com/google/uuid"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
-	"log"
-	"time"
 
 	wst "github.com/fredyk/westack-go/westack/common"
 	"github.com/spf13/viper"
@@ -212,6 +213,9 @@ func (ds *Datasource) FindMany(collectionName string, lookups *wst.A) (MongoCurs
 			idAsString = _id.(uuid.UUID).String()
 		}
 		bucket := db.GetBucket(collectionName)
+
+		// fmt.Println("QUERYING CACHE: collection=", collectionName, "id=", idAsString) TODO: check debug
+
 		bytes, err := bucket.Get(idAsString)
 		var documents [][]byte
 		if err != nil {
