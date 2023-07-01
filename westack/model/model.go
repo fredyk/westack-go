@@ -5,6 +5,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
+	"reflect"
+	"runtime/debug"
+	"strings"
+	"sync"
+	"time"
+
 	"github.com/casbin/casbin/v2"
 	casbinmodel "github.com/casbin/casbin/v2/model"
 	fileadapter "github.com/casbin/casbin/v2/persist/file-adapter"
@@ -13,11 +20,6 @@ import (
 	"github.com/golang-jwt/jwt"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
-	"reflect"
-	"runtime/debug"
-	"strings"
-	"sync"
-	"time"
 
 	wst "github.com/fredyk/westack-go/westack/common"
 	"github.com/fredyk/westack-go/westack/datasource"
@@ -436,8 +438,15 @@ func (loadedModel *Model) FindMany(filterMap *wst.Filter, baseContext *EventCont
 					return err
 				}
 				results <- &inst
-
-				if targetInclude == nil && loadedModel.Config.Cache.Datasource != "" && !disabledCache {
+				var includePrefix = ""
+				if targetInclude != nil {
+					marshalledTargetInclude, err := json.Marshal(targetInclude)
+					if err != nil {
+						return err
+					}
+					includePrefix = fmt.Sprintf("_inc_%s_", marshalledTargetInclude)
+				}
+				if loadedModel.Config.Cache.Datasource != "" && !disabledCache {
 
 					// Dont cache if include is set
 					cacheDs, err := loadedModel.App.FindDatasource(loadedModel.Config.Cache.Datasource)
@@ -459,7 +468,7 @@ func (loadedModel *Model) FindMany(filterMap *wst.Filter, baseContext *EventCont
 					}
 
 					for _, keyGroup := range loadedModel.Config.Cache.Keys {
-						canonicalId := ""
+						canonicalId := includePrefix
 						for idx, key := range keyGroup {
 							if idx > 0 {
 								canonicalId = fmt.Sprintf("%v:", canonicalId)
@@ -497,10 +506,19 @@ func (loadedModel *Model) FindMany(filterMap *wst.Filter, baseContext *EventCont
 					case "memorykv":
 						db := safeCacheDs.Db.(memorykv.MemoryKvDb)
 						bucket := db.GetBucket(loadedModel.CollectionName)
-						baseKey := ""
+						baseKey := includePrefix
+						if loadedModel.App.Debug {
+							log.Println("CACHING", loadedModel.Name)
+						}
 						for _, keyGroup := range loadedModel.Config.Cache.Keys {
+							if loadedModel.App.Debug {
+								log.Println("CACHING GROUP", keyGroup)
+							}
 							canonicalId := baseKey
 							for idx, key := range keyGroup {
+								if loadedModel.App.Debug {
+									log.Println("CACHING KEY", key)
+								}
 								if idx > 0 {
 									canonicalId = fmt.Sprintf("%v:", canonicalId)
 								}
@@ -519,6 +537,9 @@ func (loadedModel *Model) FindMany(filterMap *wst.Filter, baseContext *EventCont
 									break
 								}
 								canonicalId = fmt.Sprintf("%v%v:%v", canonicalId, key, v)
+							}
+							if loadedModel.App.Debug {
+								log.Println("CACHING CANONICAL ID", canonicalId)
 							}
 							ttl := time.Duration(loadedModel.Config.Cache.Ttl) * time.Second
 							if loadedModel.App.Debug {
@@ -542,6 +563,9 @@ func (loadedModel *Model) FindMany(filterMap *wst.Filter, baseContext *EventCont
 			return nil
 		}()
 		if err != nil {
+			if loadedModel.App.Debug {
+				log.Println("CACHE ERROR:", err)
+			}
 			cursor.Error(err)
 		}
 	}()
