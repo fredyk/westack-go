@@ -2,6 +2,7 @@ package model
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"strings"
@@ -316,7 +317,20 @@ func (loadedModel *Model) mergeRelated(relationDeepLevel byte, documents *wst.A,
 
 						if len(keyGroup) == 1 && keyGroup[0] == keyFrom {
 
-							cacheKeyTo := fmt.Sprintf("%v:%v", keyFrom, document[keyTo])
+							var documentKeyTo = document[keyTo]
+							switch documentKeyTo.(type) {
+							case primitive.ObjectID:
+								documentKeyTo = documentKeyTo.(primitive.ObjectID).Hex()
+							}
+							var includePrefix = ""
+							if targetScope.Include != nil {
+								marshalledTargetInclude, err := json.Marshal(targetScope.Include)
+								if err != nil {
+									return err
+								}
+								includePrefix = fmt.Sprintf("_inc_%s_", marshalledTargetInclude)
+							}
+							cacheKeyTo := fmt.Sprintf("%v%v:%v", includePrefix, keyFrom, documentKeyTo)
 
 							if localCache[cacheKeyTo] != nil {
 								cachedRelatedDocs[documentIdx] = localCache[cacheKeyTo]
