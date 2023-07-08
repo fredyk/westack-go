@@ -19,9 +19,10 @@ var AllowedStages = []string{
 	"$addFields",
 	"$group",
 	"$project",
+	"$search",
 	"$set",
 	"$unset",
-	"$search",
+	"$unwind",
 }
 
 func isManyRelation(relationType string) bool {
