@@ -2,13 +2,14 @@ package wst
 
 import (
 	"fmt"
-	"github.com/fredyk/westack-go/westack/lib/swaggerhelperinterface"
-	"github.com/mailru/easyjson/jlexer"
 	"log"
 	"os"
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/fredyk/westack-go/westack/lib/swaggerhelperinterface"
+	"github.com/mailru/easyjson/jlexer"
 
 	"github.com/goccy/go-json"
 	fiber "github.com/gofiber/fiber/v2"
@@ -242,6 +243,7 @@ func AFromPrimitiveSlice(in *primitive.A) *A {
 }
 
 type Where M
+type AggregationStage M
 
 type IncludeItem struct {
 	Relation string  `json:"relation"`
@@ -252,11 +254,12 @@ type Include []IncludeItem
 type Order []string
 
 type Filter struct {
-	Where   *Where   `json:"where"`
-	Include *Include `json:"include"`
-	Order   *Order   `json:"order"`
-	Skip    int64    `json:"skip"`
-	Limit   int64    `json:"limit"`
+	Where       *Where             `json:"where"`
+	Include     *Include           `json:"include"`
+	Order       *Order             `json:"order"`
+	Skip        int64              `json:"skip"`
+	Limit       int64              `json:"limit"`
+	Aggregation []AggregationStage `json:"aggregation"`
 }
 
 type Stats struct {
