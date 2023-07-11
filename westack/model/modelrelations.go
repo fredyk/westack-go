@@ -2,6 +2,7 @@ package model
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"strings"
@@ -13,6 +14,16 @@ import (
 	wst "github.com/fredyk/westack-go/westack/common"
 	"github.com/fredyk/westack-go/westack/datasource"
 )
+
+var AllowedStages = []string{
+	"$addFields",
+	"$group",
+	"$project",
+	"$search",
+	"$set",
+	"$unset",
+	"$unwind",
+}
 
 func isManyRelation(relationType string) bool {
 	return relationType == "hasMany" || relationType == "hasManyThrough" || relationType == "hasAndBelongsToMany"
@@ -36,6 +47,27 @@ func (loadedModel *Model) ExtractLookupsFromFilter(filterMap *wst.Filter, disabl
 		targetWhere = nil
 	}
 
+	var targetAggregation []wst.AggregationStage
+	if filterMap != nil && filterMap.Aggregation != nil {
+		for _, aggregationStage := range filterMap.Aggregation {
+			var validStageFound = false
+			var firstKeyFound = ""
+			for key, _ := range aggregationStage {
+				firstKeyFound = key
+				for _, allowedStage := range AllowedStages {
+					if key == allowedStage {
+						validStageFound = true
+						break
+					}
+				}
+			}
+			if !validStageFound {
+				return nil, fmt.Errorf("%s aggregation stage not allowed", firstKeyFound)
+			}
+		}
+		targetAggregation = filterMap.Aggregation
+	}
+
 	var targetOrder *wst.Order
 	if filterMap != nil && filterMap.Order != nil {
 		orderValue := *filterMap.Order
@@ -46,16 +78,15 @@ func (loadedModel *Model) ExtractLookupsFromFilter(filterMap *wst.Filter, disabl
 	var targetSkip = filterMap.Skip
 	var targetLimit = filterMap.Limit
 
-	var lookups *wst.A
+	var lookups *wst.A = &wst.A{}
+	for _, aggregationStage := range targetAggregation {
+		*lookups = append(*lookups, wst.CopyMap(wst.M(aggregationStage)))
+	}
 	if targetWhere != nil {
 		if !disableTypeConversions {
 			datasource.ReplaceObjectIds(*targetWhere)
 		}
-		lookups = &wst.A{
-			{"$match": *targetWhere},
-		}
-	} else {
-		lookups = &wst.A{}
+		*lookups = append(*lookups, wst.M{"$match": *targetWhere})
 	}
 
 	if targetOrder != nil && len(*targetOrder) > 0 {
@@ -316,7 +347,20 @@ func (loadedModel *Model) mergeRelated(relationDeepLevel byte, documents *wst.A,
 
 						if len(keyGroup) == 1 && keyGroup[0] == keyFrom {
 
-							cacheKeyTo := fmt.Sprintf("%v:%v", keyFrom, document[keyTo])
+							var documentKeyTo = document[keyTo]
+							switch documentKeyTo.(type) {
+							case primitive.ObjectID:
+								documentKeyTo = documentKeyTo.(primitive.ObjectID).Hex()
+							}
+							var includePrefix = ""
+							if targetScope.Include != nil {
+								marshalledTargetInclude, err := json.Marshal(targetScope.Include)
+								if err != nil {
+									return err
+								}
+								includePrefix = fmt.Sprintf("_inc_%s_", marshalledTargetInclude)
+							}
+							cacheKeyTo := fmt.Sprintf("%v%v:%v", includePrefix, keyFrom, documentKeyTo)
 
 							if localCache[cacheKeyTo] != nil {
 								cachedRelatedDocs[documentIdx] = localCache[cacheKeyTo]
