@@ -408,6 +408,8 @@ func (loadedModel *Model) FindMany(filterMap *wst.Filter, baseContext *EventCont
 			}(dsCursor, context.Background())
 			disabledCache := loadedModel.App.Viper.GetBool("disableCache")
 			sameLevelCache := NewBuildCache()
+			var safeCacheDs *datasource.Datasource
+			documentsToCacheByKey := make(map[string]wst.A)
 			for dsCursor.Next(context.Background()) {
 				var document wst.M
 				err := dsCursor.Decode(&document)
@@ -446,6 +448,13 @@ func (loadedModel *Model) FindMany(filterMap *wst.Filter, baseContext *EventCont
 					}
 					includePrefix = fmt.Sprintf("_inc_%s_", marshalledTargetInclude)
 				}
+				if filterMap != nil && filterMap.Where != nil {
+					marshalledWhere, err := json.Marshal(filterMap.Where)
+					if err != nil {
+						return err
+					}
+					includePrefix += fmt.Sprintf("_whr_%s_", marshalledWhere)
+				}
 				if loadedModel.Config.Cache.Datasource != "" && !disabledCache {
 
 					// Dont cache if include is set
@@ -454,20 +463,23 @@ func (loadedModel *Model) FindMany(filterMap *wst.Filter, baseContext *EventCont
 						return err
 					}
 
-					safeCacheDs := cacheDs.(*datasource.Datasource)
+					safeCacheDs = cacheDs.(*datasource.Datasource)
+					for _, keyGroup := range loadedModel.Config.Cache.Keys {
+						toCache := wst.CopyMap(document)
 
-					toCache := wst.CopyMap(document)
-
-					// Remove fields that are not cacheable
-					if loadedModel.Config.Cache.ExcludeFields != nil {
-						for _, field := range loadedModel.Config.Cache.ExcludeFields {
-							if _, ok := toCache[field]; ok {
-								delete(toCache, field)
+						// Remove fields that are not cacheable
+						if loadedModel.Config.Cache.ExcludeFields != nil {
+							for _, field := range loadedModel.Config.Cache.ExcludeFields {
+								if _, ok := toCache[field]; ok {
+									delete(toCache, field)
+								}
 							}
 						}
-					}
 
-					for _, keyGroup := range loadedModel.Config.Cache.Keys {
+						isUniqueId := false
+						if len(keyGroup) == 1 && keyGroup[0] == "_id" {
+							isUniqueId = true
+						}
 						canonicalId := includePrefix
 						for idx, key := range keyGroup {
 							if idx > 0 {
@@ -489,77 +501,36 @@ func (loadedModel *Model) FindMany(filterMap *wst.Filter, baseContext *EventCont
 							}
 							canonicalId = fmt.Sprintf("%v%v:%v", canonicalId, key, v)
 						}
-						toCache["_redId"] = canonicalId
-						_, err := safeCacheDs.Create(loadedModel.CollectionName, &toCache)
-						if err != nil {
-							return err
-						}
-						if loadedModel.App.Debug {
-							fmt.Printf("[DEBUG] cached %v in memorykv\n", toCache["_redId"])
-						}
-					}
 
-					connectorName := safeCacheDs.SubViper.GetString("connector")
-					switch connectorName {
-					case "redis":
-						return errors.New("redis cache connector not implemented")
-					case "memorykv":
-						db := safeCacheDs.Db.(memorykv.MemoryKvDb)
-						bucket := db.GetBucket(loadedModel.CollectionName)
-						baseKey := includePrefix
-						if loadedModel.App.Debug {
-							log.Println("CACHING", loadedModel.Name)
+						if isUniqueId {
+							err3 := insertCacheEntries(safeCacheDs, loadedModel, wst.M{"_entries": wst.A{toCache}, "_redId": canonicalId})
+							if err3 != nil {
+								return err3
+							}
+							err2 := doExpireCacheKey(safeCacheDs, loadedModel, canonicalId)
+							if err2 != nil {
+								return err2
+							}
+						} else {
+							documentsToCacheByKey[canonicalId] = append(documentsToCacheByKey[canonicalId], toCache)
 						}
-						for _, keyGroup := range loadedModel.Config.Cache.Keys {
-							if loadedModel.App.Debug {
-								log.Println("CACHING GROUP", keyGroup)
-							}
-							canonicalId := baseKey
-							for idx, key := range keyGroup {
-								if loadedModel.App.Debug {
-									log.Println("CACHING KEY", key)
-								}
-								if idx > 0 {
-									canonicalId = fmt.Sprintf("%v:", canonicalId)
-								}
-								v := (document)[key]
-								if key == "_id" && v == nil && document["id"] != nil {
-									v = document["id"]
-								}
-								switch v.(type) {
-								case primitive.ObjectID:
-									v = v.(primitive.ObjectID).Hex()
-									break
-								case *primitive.ObjectID:
-									v = v.(*primitive.ObjectID).Hex()
-									break
-								default:
-									break
-								}
-								canonicalId = fmt.Sprintf("%v%v:%v", canonicalId, key, v)
-							}
-							if loadedModel.App.Debug {
-								log.Println("CACHING CANONICAL ID", canonicalId)
-							}
-							ttl := time.Duration(loadedModel.Config.Cache.Ttl) * time.Second
-							if loadedModel.App.Debug {
-								fmt.Printf("[DEBUG] trying to expire %v in %v seconds\n", canonicalId, ttl)
-							}
-							err := bucket.Expire(canonicalId, ttl)
-							if err != nil {
-								return err
-							}
-							if loadedModel.App.Debug {
-								fmt.Printf("[DEBUG] expiring %v in %v seconds\n", canonicalId, ttl)
-							}
-						}
-					default:
-						return errors.New(fmt.Sprintf("Unsupported cache connector %v", connectorName))
 					}
 
 				}
 
 			}
+
+			for key, documents := range documentsToCacheByKey {
+				err := insertCacheEntries(safeCacheDs, loadedModel, wst.M{"_entries": documents, "_redId": key})
+				if err != nil {
+					return err
+				}
+				err = doExpireCacheKey(safeCacheDs, loadedModel, key)
+				if err != nil {
+					return err
+				}
+			}
+
 			return nil
 		}()
 		if err != nil {
@@ -571,6 +542,49 @@ func (loadedModel *Model) FindMany(filterMap *wst.Filter, baseContext *EventCont
 	}()
 
 	return cursor
+}
+
+func insertCacheEntries(safeCacheDs *datasource.Datasource, loadedModel *Model, toCache wst.M) error {
+	cached, err := safeCacheDs.Create(loadedModel.CollectionName, &toCache)
+	if err != nil {
+		return err
+	}
+	if loadedModel.App.Debug {
+		fmt.Printf("[DEBUG] cached %v(len=%v) in memorykv\n", toCache["_redId"], len(toCache["_entries"].(wst.A)))
+		fmt.Printf("[DEBUG] cached doc %v in memorykv\n", cached)
+	}
+	return nil
+}
+
+func doExpireCacheKey(safeCacheDs *datasource.Datasource, loadedModel *Model, canonicalId string) error {
+	connectorName := safeCacheDs.SubViper.GetString("connector")
+	switch connectorName {
+	case "redis":
+		return errors.New("redis cache connector not implemented")
+	case "memorykv":
+		db := safeCacheDs.Db.(memorykv.MemoryKvDb)
+		bucket := db.GetBucket(loadedModel.CollectionName)
+		if loadedModel.App.Debug {
+			log.Println("CACHING", loadedModel.Name)
+		}
+		if loadedModel.App.Debug {
+			log.Println("CACHING CANONICAL ID", canonicalId)
+		}
+		ttl := time.Duration(loadedModel.Config.Cache.Ttl) * time.Second
+		if loadedModel.App.Debug {
+			fmt.Printf("[DEBUG] trying to expire %v in %v seconds\n", canonicalId, ttl)
+		}
+		err := bucket.Expire(canonicalId, ttl)
+		if err != nil {
+			return err
+		}
+		if loadedModel.App.Debug {
+			fmt.Printf("[DEBUG] expiring %v in %v seconds\n", canonicalId, ttl)
+		}
+	default:
+		return errors.New(fmt.Sprintf("Unsupported cache connector %v", connectorName))
+	}
+	return nil
 }
 
 func (loadedModel *Model) Count(filterMap *wst.Filter, baseContext *EventContext) (int64, error) {

@@ -1,0 +1,36 @@
+{
+  "name": "Order",
+  "plural": "",
+  "base": "PersistedModel",
+  "public": true,
+  "properties": {},
+  "relations": {
+    "customer": {
+      "type": "belongsTo",
+      "model": "Customer",
+      "foreignKey": "customerId"
+    },
+    "store": {
+      "type": "belongsTo",
+      "model": "Store",
+      "foreignKey": "storeId"
+    }
+  },
+  "hidden": [],
+  "casbin": {
+    "requestDefinition": "",
+    "policyDefinition": "",
+    "roleDefinition": "",
+    "policyEffect": "",
+    "matchersDefinition": "",
+    "policies": null
+  },
+  "cache": {
+    "datasource": "memorykv",
+    "keys": [["customerId"], ["storeId"], ["customerId", "storeId"], ["_id"]],
+    "ttl": 10
+  },
+  "mongo": {
+    "collection": ""
+  }
+}
