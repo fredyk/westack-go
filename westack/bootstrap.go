@@ -60,6 +60,7 @@ func (app *WeStack) loadModels() error {
 		var config *model.Config
 		err := wst.LoadFile("./common/models/"+fileInfo.Name(), &config)
 		if err != nil {
+			fmt.Printf("Error while loading model %v: %v\n", fileInfo.Name(), err)
 			panic(err)
 		}
 		if config.Relations == nil {

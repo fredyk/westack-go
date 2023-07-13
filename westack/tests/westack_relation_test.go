@@ -1,7 +1,13 @@
 package tests
 
 import (
+	"fmt"
+	"github.com/goccy/go-json"
+	"io"
+	"math/rand"
+	"net/http"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"go.mongodb.org/mongo-driver/bson"
@@ -127,4 +133,134 @@ func Test_ExtractLookups(t *testing.T) {
 	}, false)
 	assert.NotNil(t, err)
 
+}
+
+func Test_CustomerOrderStore(t *testing.T) {
+	// Create a customer with a random name, using math
+	nameN := 1000000 + rand.Intn(8999999)
+	name := fmt.Sprintf("Customer %v", nameN)
+
+	customer := wst.M{
+		"name": name,
+		"age":  30,
+		"address": wst.M{
+			"street": "Main",
+			"city":   "New York",
+		},
+	}
+	createdCustomer, err := customerModel.Create(customer, systemContext)
+	assert.Nil(t, err)
+	assert.NotNil(t, createdCustomer)
+
+	// Create a store with a random name
+	storeNameN := 1000000 + rand.Intn(8999999)
+	storeName := fmt.Sprintf("Store %v", storeNameN)
+
+	store := wst.M{
+		"name": storeName,
+		"address": wst.M{
+			"street": "Main",
+			"city":   "New York",
+		},
+	}
+	createdStore, err := storeModel.Create(store, systemContext)
+	assert.Nil(t, err)
+	assert.NotNil(t, createdStore)
+
+	// Create an order with amount
+	order := wst.M{
+		"amount":     131.43,
+		"customerId": createdCustomer.Id,
+		"storeId":    createdStore.Id,
+	}
+	createdOrder, err := orderModel.Create(order, systemContext)
+	assert.Nil(t, err)
+	assert.NotNil(t, createdOrder)
+
+	// Create other 10k orders
+	for i := 0; i < 20000; i++ {
+		order := wst.M{
+			"amount":     rand.Float64() * 1000,
+			"customerId": nil,
+			"storeId":    nil,
+		}
+		cratedOrder, err := orderModel.Create(order, systemContext)
+		assert.Nil(t, err)
+		assert.NotNil(t, cratedOrder)
+	}
+
+	// Get the customer including the orders and the store
+	filter := &wst.Filter{
+		Where: &wst.Where{"name": name},
+		Include: &wst.Include{
+			{Relation: "orders", Scope: &wst.Filter{Include: &wst.Include{{Relation: "store"}}}},
+		},
+	}
+	start := time.Now()
+	customersCursor := customerModel.FindMany(filter, systemContext)
+	assert.NotNil(t, customersCursor)
+	customers, err := customersCursor.All()
+	assert.Nil(t, err)
+	assert.NotNil(t, customers)
+	delayed := time.Since(start)
+	assert.Greater(t, delayed.Milliseconds(), int64(6))
+	fmt.Printf("\n===\nDELAYED without cache: %v\n===\n", delayed.Milliseconds())
+
+	assert.Equal(t, 1, len(customers))
+	assert.Equal(t, name, customers[0].ToJSON()["name"])
+	assert.Equal(t, 1, len(customers[0].GetMany("orders")))
+	assert.Equal(t, storeName, customers[0].GetMany("orders")[0].GetOne("store").ToJSON()["name"])
+
+	//// Wait 1 second for the cache to be created
+	//time.Sleep(5 * time.Second)
+
+	// Get memorykv stats with http
+	stats := requestStats(t, err)
+
+	// Check that the cache has been used, present at stats["stats"]["datasorces"]["memorykv"]["Order"]
+	assert.Greater(t, int(stats["stats"].(map[string]interface{})["datasources"].(map[string]interface{})["memorykv"].(map[string]interface{})["Order"].(map[string]interface{})["entries"].(float64)), 0)
+	// Exactly 1 miss, because the cache was empty
+	assert.Equal(t, 1, int(stats["stats"].(map[string]interface{})["datasources"].(map[string]interface{})["memorykv"].(map[string]interface{})["Order"].(map[string]interface{})["misses"].(float64)))
+
+	// Get the customer including the orders and the store, again
+	start = time.Now()
+	customersCursor = customerModel.FindMany(filter, systemContext)
+	assert.NotNil(t, customersCursor)
+	customers, err = customersCursor.All()
+	assert.Nil(t, err)
+	assert.NotNil(t, customers)
+	prevDelayed := delayed
+	delayed = time.Since(start)
+	assert.LessOrEqual(t, delayed.Milliseconds(), prevDelayed.Milliseconds())
+	fmt.Printf("\n===\nDELAYED with cache: %v\n===\n", delayed.Milliseconds())
+
+	assert.Equal(t, 1, len(customers))
+
+	// Request stats again
+	stats = requestStats(t, err)
+
+	// Check that the cache has been used, present at stats["stats"]["datasorces"]["memorykv"]["Order"], with more hits
+	assert.Greater(t, int(stats["stats"].(map[string]interface{})["datasources"].(map[string]interface{})["memorykv"].(map[string]interface{})["Order"].(map[string]interface{})["hits"].(float64)), 7)
+
+	// Wait 11 seconds for the cache to expire
+	time.Sleep(11 * time.Second)
+
+}
+
+func requestStats(t *testing.T, err error) wst.M {
+	resp, err := http.Get("http://localhost:8020/system/memorykv/stats")
+	assert.Nil(t, err)
+	assert.NotNil(t, resp)
+	assert.Equal(t, 200, resp.StatusCode)
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	assert.Nil(t, err)
+	assert.NotNil(t, body)
+
+	fmt.Printf("cache stats response: %v\n", string(body))
+	stats := wst.M{}
+	err = json.Unmarshal(body, &stats)
+	assert.Nil(t, err)
+	assert.NotNil(t, stats)
+	return stats
 }

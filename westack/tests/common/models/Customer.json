@@ -1,0 +1,31 @@
+{
+  "name": "Customer",
+  "plural": "",
+  "base": "PersistedModel",
+  "public": true,
+  "properties": {},
+  "relations": {
+    "orders": {
+      "type": "hasMany",
+      "model": "Order",
+      "foreignKey": "customerId"
+    }
+  },
+  "hidden": [],
+  "casbin": {
+    "requestDefinition": "",
+    "policyDefinition": "",
+    "roleDefinition": "",
+    "policyEffect": "",
+    "matchersDefinition": "",
+    "policies": null
+  },
+  "cache": {
+    "datasource": "",
+    "ttl": 0,
+    "keys": null
+  },
+  "mongo": {
+    "collection": ""
+  }
+}
