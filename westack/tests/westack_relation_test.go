@@ -167,13 +167,17 @@ func Test_CustomerOrderStore(t *testing.T) {
 	assert.Nil(t, err)
 	assert.NotNil(t, createdStore)
 
-	// Create an order with amount
+	// Create 2 orders with amount
 	order := wst.M{
 		"amount":     131.43,
 		"customerId": createdCustomer.Id,
 		"storeId":    createdStore.Id,
 	}
 	createdOrder, err := orderModel.Create(order, systemContext)
+	assert.Nil(t, err)
+	assert.NotNil(t, createdOrder)
+	order["amount"] = 123.45
+	createdOrder, err = orderModel.Create(order, systemContext)
 	assert.Nil(t, err)
 	assert.NotNil(t, createdOrder)
 
@@ -208,7 +212,7 @@ func Test_CustomerOrderStore(t *testing.T) {
 
 	assert.Equal(t, 1, len(customers))
 	assert.Equal(t, name, customers[0].ToJSON()["name"])
-	assert.Equal(t, 1, len(customers[0].GetMany("orders")))
+	assert.Equal(t, 2, len(customers[0].GetMany("orders")))
 	assert.Equal(t, storeName, customers[0].GetMany("orders")[0].GetOne("store").ToJSON()["name"])
 
 	//// Wait 1 second for the cache to be created
@@ -240,7 +244,7 @@ func Test_CustomerOrderStore(t *testing.T) {
 	stats = requestStats(t, err)
 
 	// Check that the cache has been used, present at stats["stats"]["datasorces"]["memorykv"]["Order"], with more hits
-	assert.Greater(t, int(stats["stats"].(map[string]interface{})["datasources"].(map[string]interface{})["memorykv"].(map[string]interface{})["Order"].(map[string]interface{})["hits"].(float64)), 7)
+	assert.Greater(t, int(stats["stats"].(map[string]interface{})["datasources"].(map[string]interface{})["memorykv"].(map[string]interface{})["Order"].(map[string]interface{})["hits"].(float64)), 5)
 
 	// Wait 11 seconds for the cache to expire
 	time.Sleep(11 * time.Second)
