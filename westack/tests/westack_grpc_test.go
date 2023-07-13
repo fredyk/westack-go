@@ -35,6 +35,9 @@ var userId primitive.ObjectID
 var noteId primitive.ObjectID
 var noteModel *model.Model
 var userModel *model.Model
+var customerModel *model.Model
+var orderModel *model.Model
+var storeModel *model.Model
 var systemContext *model.EventContext
 
 func Test_GRPCCallWithQueryParamsOK(t *testing.T) {
@@ -323,6 +326,19 @@ func TestMain(m *testing.M) {
 			fmt.Println("saving user")
 			return nil
 		})
+
+		customerModel, err = server.FindModel("Customer")
+		if err != nil {
+			log.Fatalf("failed to find model: %v", err)
+		}
+		orderModel, err = server.FindModel("Order")
+		if err != nil {
+			log.Fatalf("failed to find model: %v", err)
+		}
+		storeModel, err = server.FindModel("Store")
+		if err != nil {
+			log.Fatalf("failed to find model: %v", err)
+		}
 
 	})
 

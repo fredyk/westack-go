@@ -360,6 +360,13 @@ func (loadedModel *Model) mergeRelated(relationDeepLevel byte, documents *wst.A,
 								}
 								includePrefix = fmt.Sprintf("_inc_%s_", marshalledTargetInclude)
 							}
+							if targetScope.Where != nil {
+								marshalledTargetWhere, err := json.Marshal(targetScope.Where)
+								if err != nil {
+									return err
+								}
+								includePrefix += fmt.Sprintf("_whr_%s_", marshalledTargetWhere)
+							}
 							cacheKeyTo := fmt.Sprintf("%v%v:%v", includePrefix, keyFrom, documentKeyTo)
 
 							if localCache[cacheKeyTo] != nil {

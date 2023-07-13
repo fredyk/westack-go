@@ -20,6 +20,8 @@ type MemoryKvStats struct {
 	ExpirationQueueSize    int64   `json:"expirationQueueSize"`
 	TotalSize              int64   `json:"totalSize"`
 	AvgObjSize             float64 `json:"avgObjSize"`
+	Misses                 int64   `json:"misses"`
+	Hits                   int64   `json:"hits"`
 }
 
 //goland:noinspection GoNameStartsWithPackageName
@@ -30,9 +32,9 @@ type MemoryKvDb interface {
 
 //goland:noinspection GoNameStartsWithPackageName
 type MemoryKvBucket interface {
-	Get(key string) ([]byte, error)
-	Set(key string, value []byte) error
-	SetEx(key string, value []byte, ttl time.Duration) error
+	Get(key string) ([][]byte, error)
+	Set(key string, value [][]byte) error
+	SetEx(key string, value [][]byte, ttl time.Duration) error
 	Delete(key string) error
 	Expire(key string, ttl time.Duration) error
 	Stats() MemoryKvStats
@@ -40,7 +42,7 @@ type MemoryKvBucket interface {
 
 type kvPair struct {
 	key       string
-	value     []byte
+	value     [][]byte
 	expiresAt int64 // unix timestamp in seconds
 }
 
@@ -64,18 +66,6 @@ func (queue *expirationQueue) Add(key string, expiresAt int64) {
 		queue.expirationQueue = append(queue.expirationQueue, kvPair{key: key, value: nil, expiresAt: expiresAt})
 	}
 	expirationLock.Unlock()
-}
-
-func (queue *expirationQueue) Pop() (string, bool) {
-	expirationLock.Lock()
-	if len(queue.expirationQueue) == 0 {
-		expirationLock.Unlock()
-		return "", false
-	}
-	pair := queue.expirationQueue[0]
-	queue.expirationQueue = queue.expirationQueue[1:]
-	expirationLock.Unlock()
-	return pair.key, true
 }
 
 func (queue *expirationQueue) Peek() (string, bool) {
@@ -142,22 +132,26 @@ type MemoryKvBucketImpl struct {
 	name            string
 	data            map[string]kvPair
 	expirationQueue *expirationQueue
+	misses          int64
+	hits            int64
 }
 
 var dataLock sync.RWMutex
 
-func (kvBucket *MemoryKvBucketImpl) Get(key string) ([]byte, error) {
+func (kvBucket *MemoryKvBucketImpl) Get(key string) ([][]byte, error) {
 	dataLock.RLock()
 	pair, ok := kvBucket.data[key]
 	dataLock.RUnlock()
 	if ok {
+		kvBucket.hits++
 		return pair.value, nil
 	} else {
+		kvBucket.misses++
 		return nil, nil
 	}
 }
 
-func (kvBucket *MemoryKvBucketImpl) Set(key string, value []byte) error {
+func (kvBucket *MemoryKvBucketImpl) Set(key string, value [][]byte) error {
 	dataLock.RLock()
 	pair, ok := kvBucket.data[key]
 	dataLock.RUnlock()
@@ -178,7 +172,7 @@ func (kvBucket *MemoryKvBucketImpl) Set(key string, value []byte) error {
 	return nil
 }
 
-func (kvBucket *MemoryKvBucketImpl) SetEx(key string, value []byte, ttl time.Duration) error {
+func (kvBucket *MemoryKvBucketImpl) SetEx(key string, value [][]byte, ttl time.Duration) error {
 	err := kvBucket.Set(key, value)
 	if err != nil {
 		return err
@@ -238,7 +232,10 @@ func (kvBucket *MemoryKvBucketImpl) Stats() MemoryKvStats {
 
 		realPair, ok := kvBucket.data[pair.key]
 		if ok {
-			bytelen := len(realPair.value)
+			bytelen := 0
+			for _, b := range realPair.value {
+				bytelen += len(b)
+			}
 			totalSize += int64(bytelen) + int64(len(pair.key)*2) // key is stored twice, once as data key, once as expiration queue key
 			totalSize += sizeOfPair * 2                          // pair is stored twice, once as data value, once as expiration queue value
 			_avgObjSizeSum += float64(bytelen)
@@ -261,6 +258,8 @@ func (kvBucket *MemoryKvBucketImpl) Stats() MemoryKvStats {
 	}
 	return MemoryKvStats{
 		Entries:                len(kvBucket.data),
+		Misses:                 kvBucket.misses,
+		Hits:                   kvBucket.hits,
 		AvgExpirationTime:      avgExpirationTime,
 		EarliestExpirationTime: earliestExpirationTimeIso8601,
 		LatestExpirationTime:   latestExpirationTimeIso8601,
@@ -270,8 +269,9 @@ func (kvBucket *MemoryKvBucketImpl) Stats() MemoryKvStats {
 	}
 }
 
-func createBucket() MemoryKvBucket {
+func createBucket(name string) MemoryKvBucket {
 	kvBucket := &MemoryKvBucketImpl{
+		name:            name,
 		data:            make(map[string]kvPair),
 		expirationQueue: newExpirationQueue(),
 	}
@@ -325,7 +325,7 @@ func (kvDb *MemoryKvDbImpl) GetBucket(name string) MemoryKvBucket {
 	if ok {
 		return bucket
 	}
-	bucket = createBucket()
+	bucket = createBucket(name)
 	kvDb.buckets[name] = bucket
 	return bucket
 }
