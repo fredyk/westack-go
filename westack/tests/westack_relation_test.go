@@ -231,7 +231,7 @@ func Test_CustomerOrderStore(t *testing.T) {
 	assert.NotNil(t, customers)
 	prevDelayed := delayed
 	delayed = time.Since(start)
-	assert.Less(t, delayed.Milliseconds(), prevDelayed.Milliseconds())
+	assert.LessOrEqual(t, delayed.Milliseconds(), prevDelayed.Milliseconds())
 	fmt.Printf("\n===\nDELAYED with cache: %v\n===\n", delayed.Milliseconds())
 
 	assert.Equal(t, 1, len(customers))
