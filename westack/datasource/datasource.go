@@ -225,14 +225,7 @@ func (ds *Datasource) FindMany(collectionName string, lookups *wst.A) (MongoCurs
 			//return &wst.A{}, nil
 			documents = nil
 		} else {
-			//documents = make(wst.A, 1)
-			documents = make([][]byte, 1)
-			documents[0] = bytes
-			//err = bson.Unmarshal(bytes, &documents[0])
-			//if err != nil {
-			//	return nil, err
-			//}
-			//return &documents, nil
+			documents = bytes
 		}
 		return NewFixedMongoCursor(documents), nil
 
@@ -341,16 +334,22 @@ func findByObjectId(collectionName string, _id interface{}, ds *Datasource, look
 			idAsString = _id.(uuid.UUID).String()
 		}
 		var document wst.M
-		bytes, err := bucket.Get(idAsString)
+		allBytes, err := bucket.Get(idAsString)
 		if err != nil {
 			return nil, err
+		}
+		if len(allBytes) == 0 {
+			return nil, errors.New("document not found")
+		} else if len(allBytes) > 1 {
+			return nil, errors.New("multiple documents found")
+		} else {
+			err = bson.Unmarshal(allBytes[0], &document)
+			if err != nil {
+				return nil, err
+			}
+			return &document, nil
 		}
 
-		err = bson.Unmarshal(bytes, &document)
-		if err != nil {
-			return nil, err
-		}
-		return &document, nil
 	default:
 		return nil, errors.New("invalid connector " + connector)
 	}
@@ -379,27 +378,31 @@ func (ds *Datasource) Create(collectionName string, data *wst.M) (*wst.M, error)
 
 		var id interface{}
 
+		var allBytes [][]byte
+		var idAsStr string
 		if (*data)["_redId"] == nil {
 			id = uuid.New().String()
 			(*data)["_redId"] = id
 		} else {
 			id = (*data)["_redId"]
 		}
-		var idAsStr string
-		switch id.(type) {
-		case string:
-			idAsStr = id.(string)
-		case primitive.ObjectID:
-			idAsStr = id.(primitive.ObjectID).Hex()
-		}
+		for _, doc := range (*data)["_entries"].(wst.A) {
+			switch id.(type) {
+			case string:
+				idAsStr = id.(string)
+			case primitive.ObjectID:
+				idAsStr = id.(primitive.ObjectID).Hex()
+			}
 
-		bytes, err := bson.Marshal(data)
-		if err != nil {
-			return nil, err
+			bytes, err := bson.Marshal(doc)
+			if err != nil {
+				return nil, err
+			}
+			allBytes = append(allBytes, bytes)
 		}
 
 		//dict[id] = data
-		err = dict.GetBucket(collectionName).Set(idAsStr, bytes)
+		err := dict.GetBucket(collectionName).Set(idAsStr, allBytes)
 		if err != nil {
 			return nil, err
 		}

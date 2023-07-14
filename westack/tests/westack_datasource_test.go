@@ -26,7 +26,7 @@ func Test_Datasource_Initialize_ConnectError(t *testing.T) {
 	t.Parallel()
 
 	prevHost := app.DsViper.GetString("db.host")
-	ds := datasource.New("db", app.DsViper, context.Background())
+	ds := datasource.New("db0", app.DsViper, context.Background())
 	ds.SubViper.Set("host", "<invalid host>")
 	ds.Options = &datasource.Options{
 		MongoDB: &datasource.MongoDBDatasourceOptions{
