@@ -406,7 +406,8 @@ func (ds *Datasource) Create(collectionName string, data *wst.M) (*wst.M, error)
 		if err != nil {
 			return nil, err
 		}
-		return findByObjectId(collectionName, id, ds, nil)
+		//return findByObjectId(collectionName, id, ds, nil)
+		return data, nil
 	}
 	return nil, errors.New(fmt.Sprintf("invalid connector %v", connector))
 }
