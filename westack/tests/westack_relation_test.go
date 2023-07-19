@@ -216,7 +216,7 @@ func Test_CustomerOrderStore(t *testing.T) {
 	assert.Equal(t, storeName, customers[0].GetMany("orders")[0].GetOne("store").ToJSON()["name"])
 
 	//// Wait 1 second for the cache to be created
-	//time.Sleep(5 * time.Second)
+	time.Sleep(1 * time.Second)
 
 	// Get memorykv stats with http
 	stats := requestStats(t, err)
