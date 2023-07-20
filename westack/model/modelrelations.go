@@ -360,13 +360,15 @@ func (loadedModel *Model) mergeRelated(relationDeepLevel byte, documents *wst.A,
 								}
 								includePrefix = fmt.Sprintf("_inc_%s_", marshalledTargetInclude)
 							}
-							if targetScope.Where != nil {
-								marshalledTargetWhere, err := json.Marshal(targetScope.Where)
-								if err != nil {
-									return err
-								}
-								includePrefix += fmt.Sprintf("_whr_%s_", marshalledTargetWhere)
+							if targetScope.Where == nil {
+								targetScope.Where = &wst.Where{}
 							}
+							(*targetScope.Where)[keyFrom] = documentKeyTo
+							marshalledTargetWhere, err := json.Marshal(targetScope.Where)
+							if err != nil {
+								return err
+							}
+							includePrefix += fmt.Sprintf("_whr_%s_", marshalledTargetWhere)
 							cacheKeyTo := fmt.Sprintf("%v%v:%v", includePrefix, keyFrom, documentKeyTo)
 
 							if localCache[cacheKeyTo] != nil {
@@ -375,6 +377,9 @@ func (loadedModel *Model) mergeRelated(relationDeepLevel byte, documents *wst.A,
 								var cachedDocs []wst.M
 
 								cacheLookups := &wst.A{wst.M{"$match": wst.M{keyFrom: cacheKeyTo}}}
+								if loadedModel.App.Debug {
+									log.Printf("DEBUG: cacheLookups %v\n", cacheLookups)
+								}
 								cursor, err := safeCacheDs.FindMany(relatedLoadedModel.CollectionName, cacheLookups)
 								if err != nil {
 									return err
