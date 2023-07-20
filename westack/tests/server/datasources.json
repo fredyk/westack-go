@@ -2,7 +2,7 @@
   "db0": {
     "host": "127.0.0.1",
     "port": 27017,
-    "database": "example_db_0",
+    "database": "example_db_00",
     "password": "",
     "name": "db0",
     "username": "",
@@ -13,7 +13,7 @@
   "db1": {
     "host": "127.0.0.1",
     "port": 27017,
-    "database": "example_db_1",
+    "database": "example_db_01",
     "password": "",
     "name": "db1",
     "username": "",
@@ -24,7 +24,7 @@
   "db2": {
     "host": "127.0.0.1",
     "port": 27017,
-    "database": "example_db_2",
+    "database": "example_db_02",
     "password": "",
     "name": "db2",
     "username": "",
