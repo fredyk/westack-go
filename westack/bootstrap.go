@@ -429,6 +429,14 @@ func (app *WeStack) setupModel(loadedModel *model.Model, dataSource *datasource.
 					(*data)["created"] = timeNow
 				}
 
+				for propertyName, propertyConfig := range config.Properties {
+					if propertyConfig.Default != nil {
+						if (*data)[propertyName] == nil {
+							(*data)[propertyName] = propertyConfig.Default
+						}
+					}
+				}
+
 				if config.Base == "User" {
 					username := (*data)["username"]
 					if username != nil && strings.TrimSpace(username.(string)) != "" {
