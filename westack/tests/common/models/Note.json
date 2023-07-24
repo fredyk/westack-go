@@ -3,7 +3,37 @@
   "plural": "",
   "base": "PersistedModel",
   "public": true,
-  "properties": {},
+  "properties": {
+    "defaultString": {
+      "type": "string",
+      "default": "default"
+    },
+    "defaultInt": {
+      "type": "number",
+      "default": 1
+    },
+    "defaultFloat": {
+      "type": "number",
+      "default": 87436874647.8761781676
+    },
+    "defaultBoolean": {
+      "type": "boolean",
+      "default": true
+    },
+    "defaultList": {
+      "type": "list",
+      "itemType": "string",
+      "default": [
+        "default"
+      ]
+    },
+    "defaultMap": {
+      "type": "map",
+      "default": {
+        "defaultKey": "defaultValue"
+      }
+    }
+  },
   "relations": {
     "user": {
       "type": "belongsTo",
