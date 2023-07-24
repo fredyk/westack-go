@@ -1,14 +1,29 @@
 {
+  "Customer": {
+    "dataSource": "db0"
+  },
+  "Empty": {
+    "dataSource": "db0"
+  },
+  "Footer": {
+    "dataSource": "db1"
+  },
   "Note": {
-    "dataSource": "db"
+    "dataSource": "db0"
   },
   "NoteEntry": {
-    "dataSource": "db"
+    "dataSource": "db0"
+  },
+  "Order": {
+    "dataSource": "db1"
+  },
+  "Store": {
+    "dataSource": "db2"
   },
   "role": {
-    "dataSource": "db"
+    "dataSource": "db0"
   },
   "user": {
-    "dataSource": "db"
+    "dataSource": "db0"
   }
 }

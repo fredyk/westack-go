@@ -5,8 +5,11 @@ import (
 	"fmt"
 	"log"
 	"regexp"
+	"runtime"
 	"strconv"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/gofiber/fiber/v2"
 
@@ -82,25 +85,25 @@ func (loadedModel *Model) RemoteMethod(handler func(context *EventContext) error
 	router := *loadedModel.Router
 	switch verb {
 	case "get":
-		toInvoke = asFunction(router.Get)
+		toInvoke = router.Get
 		operation = "Finds"
 	case "options":
-		toInvoke = asFunction(router.Options)
+		toInvoke = router.Options
 		operation = "Gets options for"
 	case "head":
-		toInvoke = asFunction(router.Head)
+		toInvoke = router.Head
 		operation = "Checks"
 	case "post":
-		toInvoke = asFunction(router.Post)
+		toInvoke = router.Post
 		operation = "Creates"
 	case "put":
-		toInvoke = asFunction(router.Put)
+		toInvoke = router.Put
 		operation = "Replaces"
 	case "patch":
-		toInvoke = asFunction(router.Patch)
+		toInvoke = router.Patch
 		operation = "Updates attributes in"
 	case "delete":
-		toInvoke = asFunction(router.Delete)
+		toInvoke = router.Delete
 		operation = "Deletes"
 	}
 
@@ -108,120 +111,57 @@ func (loadedModel *Model) RemoteMethod(handler func(context *EventContext) error
 	fullPath = regexp.MustCompile("//+").ReplaceAllString(fullPath, "/")
 	fullPath = regexp.MustCompile(`:(\w+)`).ReplaceAllString(fullPath, "{$1}")
 
-	if (*loadedModel.App.SwaggerPaths())[fullPath] == nil {
-		(*loadedModel.App.SwaggerPaths())[fullPath] = wst.M{}
-	}
-
 	if description == "" {
 		description = fmt.Sprintf("%v %v.", operation, loadedModel.Config.Plural)
 	}
 
-	pathDef := wst.M{
-		//"description": description,
-		//"consumes": []string{
-		//	"*/*",
-		//},
-		//"produces": []string{
-		//	"application/json",
-		//},
-		"tags": []string{
-			loadedModel.Name,
-		},
-		//"requestBody": requestBody,
-		"summary": description,
-		"security": []fiber.Map{
-			{"bearerAuth": []string{}},
-		},
-		"responses": wst.M{
-			"200": wst.M{
-				"description": "OK",
-				"content": wst.M{
-					"application/json": wst.M{
-						"schema": wst.M{
-							"type": "object",
-						},
-					},
-				},
-				//"$ref": "#/components/schemas/" + loadedModel.Config.Name,
-				//"schema": wst.M{
-				//	"type":                 "object",
-				//	"additionalProperties": true,
-				//},
-			},
-		},
-	}
-
 	pathParams := regexp.MustCompile(`:(\w+)`).FindAllString(path, -1)
 
-	params := make([]wst.M, len(pathParams))
-
-	for idx, param := range pathParams {
-		params[idx] = wst.M{
-			"name":     strings.TrimPrefix(param, ":"),
-			"in":       "path",
-			"required": true,
-			"schema": wst.M{
-				"type": "string",
-			},
-		}
-	}
-
-	(*loadedModel.App.SwaggerPaths())[fullPath][verb] = pathDef
+	pathDef := createOpenAPIPathDef(loadedModel, description, pathParams)
 
 	if verb == "post" || verb == "put" || verb == "patch" {
-		pathDef["requestBody"] = wst.M{
-			"description": "data",
-			"required":    true,
-			//"name":        "data",
-			//"in":          "body",
-			//"schema": wst.M{
-			//	"type": "object",
-			//},
-			"content": wst.M{
-				"application/json": wst.M{
-					"schema": wst.M{
-						"type": "object",
-					},
-				},
-			},
-		}
+		assignOpenAPIRequestBody(pathDef)
 	} else {
-
-		for _, param := range options.Accepts {
-			paramType := param.Type
-			if paramType == "" {
-				panic(fmt.Sprintf("Argument '%v' in the remote method '%v' has an invalid 'type' value: '%v'", param.Arg, options.Name, paramType))
-			}
-			paramDescription := param.Description
-			if paramType == "date" {
-				paramType = "string"
-				paramDescription += " (format: ISO8601)"
-			}
-			params = append(params, wst.M{
-				"name":        param.Arg,
-				"in":          param.Http.Source,
-				"description": paramDescription,
-				"required":    param.Required,
-				"schema": wst.M{
-					"type": paramType,
-				},
-			})
+		params := createOpenAPIAdditionalParams(options)
+		if len(params) > 0 {
+			pathDef["parameters"] = params
 		}
-
 	}
 
-	if len(params) > 0 {
-		pathDef["parameters"] = params
-	}
+	loadedModel.App.SwaggerHelper().AddPathSpec(fullPath, verb, pathDef)
+	// clean up memory
+	pathDef = nil
+	runtime.GC()
 
-	(*loadedModel.App.SwaggerPaths())[fullPath][verb] = pathDef
+	loadedModel.remoteMethodsMap[options.Name] = createRemoteMethodOperationItem(handler, options)
 
-	loadedModel.remoteMethodsMap[options.Name] = &OperationItem{
-		Handler: handler,
-		Options: options,
-	}
+	return toInvoke(path, createFiberHandler(options, loadedModel, verb, path)).Name(loadedModel.Name + "." + options.Name)
+}
 
-	return toInvoke(path, func(ctx *fiber.Ctx) error {
+var activeRequestsPerModel = make(map[string]int)
+var activeRequestsMutex sync.RWMutex
+
+func createFiberHandler(options RemoteMethodOptions, loadedModel *Model, verb string, path string) func(ctx *fiber.Ctx) error {
+	return func(ctx *fiber.Ctx) error {
+		// Limit to 2 concurrent requests per model, new requests will be queued
+		activeRequestsMutex.Lock()
+		if _, ok := activeRequestsPerModel[loadedModel.Name]; !ok {
+			activeRequestsPerModel[loadedModel.Name] = 0
+		}
+		for activeRequestsPerModel[loadedModel.Name] >= 2 {
+			activeRequestsMutex.Unlock()
+			time.Sleep(16 * time.Millisecond)
+			activeRequestsMutex.Lock()
+		}
+		activeRequestsPerModel[loadedModel.Name]++
+		activeRequestsMutex.Unlock()
+
+		defer func() {
+			activeRequestsMutex.Lock()
+			activeRequestsPerModel[loadedModel.Name]--
+			activeRequestsMutex.Unlock()
+		}()
+
 		eventContext := &EventContext{
 			Ctx:    ctx,
 			Remote: &options,
@@ -238,13 +178,64 @@ func (loadedModel *Model) RemoteMethod(handler func(context *EventContext) error
 			return loadedModel.SendError(eventContext.Ctx, err2)
 		}
 		return nil
-	}).Name(loadedModel.Name + "." + options.Name)
+	}
 }
 
-func asFunction(method func(path string, handlers ...fiber.Handler) fiber.Router) func(string, ...fiber.Handler) fiber.Router {
-	return func(path string, handlers ...fiber.Handler) fiber.Router {
-		return method(path, handlers...)
+func createRemoteMethodOperationItem(handler func(context *EventContext) error, options RemoteMethodOptions) *OperationItem {
+	return &OperationItem{
+		Handler: handler,
+		Options: options,
 	}
+}
+
+func createOpenAPIAdditionalParams(options RemoteMethodOptions) []wst.M {
+	var params []wst.M
+	for _, param := range options.Accepts {
+		paramType := param.Type
+		if paramType == "" {
+			panic(fmt.Sprintf("Argument '%v' in the remote method '%v' has an invalid 'type' value: '%v'", param.Arg, options.Name, paramType))
+		}
+		paramDescription := param.Description
+		if paramType == "date" {
+			paramType = "string"
+			paramDescription += " (format: ISO8601)"
+		}
+		params = append(params, wst.M{
+			"name":        param.Arg,
+			"in":          param.Http.Source,
+			"description": paramDescription,
+			"required":    param.Required,
+			"schema": wst.M{
+				"type": paramType,
+			},
+		})
+	}
+	return params
+}
+
+func assignOpenAPIRequestBody(pathDef wst.M) {
+	pathDef["requestBody"] = wst.M{
+		"description": "data",
+		"required":    true,
+		"content": wst.M{
+			"application/json": wst.M{
+				"schema": wst.M{
+					"type": "object",
+				},
+			},
+		},
+	}
+}
+
+func createOpenAPIPathDef(loadedModel *Model, description string, rawPathParams []string) wst.M {
+	pathDef := wst.M{
+		"modelName": loadedModel.Name,
+		"summary":   description,
+	}
+	if len(rawPathParams) > 0 {
+		pathDef["rawPathParams"] = append([]string{}, rawPathParams...)
+	}
+	return pathDef
 }
 
 func (loadedModel *Model) HandleRemoteMethod(name string, eventContext *EventContext) error {
@@ -297,7 +288,7 @@ func (loadedModel *Model) HandleRemoteMethod(name string, eventContext *EventCon
 		var data wst.M
 		//bytes := eventContext.Ctx.Body()
 		//if len(bytes) > 0 {
-		//err := json.Unmarshal(bytes, &data)
+		//Err := json.Unmarshal(bytes, &data)
 		err := eventContext.Ctx.BodyParser(&data)
 		if err != nil {
 			return wst.CreateError(fiber.ErrBadRequest, "INVALID_BODY", fiber.Map{"message": err.Error()}, "ValidationError")
@@ -360,6 +351,7 @@ func (loadedModel *Model) HandleRemoteMethod(name string, eventContext *EventCon
 		return err
 	}
 	if eventContext.Result != nil || eventContext.StatusCode != 0 {
+		eventContext.Handled = true
 		if eventContext.StatusCode == 0 {
 			eventContext.StatusCode = fiber.StatusOK
 		} else if eventContext.StatusCode == fiber.StatusNoContent {
@@ -379,7 +371,23 @@ func (loadedModel *Model) HandleRemoteMethod(name string, eventContext *EventCon
 		case []byte:
 			return eventContext.Ctx.Status(eventContext.StatusCode).Send(eventContext.Result.([]byte))
 		default:
-			fmt.Printf("Unknown type: %T after remote method %v\n", eventContext.Result, name)
+			if resultAsGenerator, ok := eventContext.Result.(ChunkGenerator); ok {
+
+				finalContentType := resultAsGenerator.ContentType()
+				if finalContentType == "" {
+					finalContentType = "application/octet-stream"
+				}
+
+				eventContext.Ctx.Set("Content-Type", finalContentType)
+				eventContext.Ctx.Set("Transfer-Encoding", "chunked")
+				eventContext.Ctx.Response().Header.Set("Transfer-Encoding", "chunked")
+
+				return eventContext.Ctx.SendStream(resultAsGenerator.Reader(eventContext), -1)
+
+			} else {
+				fmt.Printf("Unknown type: %T after remote method %v\n", eventContext.Result, name)
+				eventContext.Handled = false
+			}
 		}
 	}
 	resp := eventContext.Ctx.Response()

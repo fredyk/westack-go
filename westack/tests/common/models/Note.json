@@ -16,16 +16,25 @@
     "invalidRelation1": {
       "type": "belongsTo",
       "model": "InvalidModel"
+    },
+    "footer1": {
+      "type": "hasOne",
+      "model": "Footer"
+    },
+    "footer2": {
+      "type": "belongsTo",
+      "model": "Footer",
+      "foreignKey": "footerId",
+      "primaryKey": "_id"
     }
   },
   "hidden": [],
   "casbin": {
-    "requestDefinition": "",
-    "policyDefinition": "",
-    "roleDefinition": "",
-    "policyEffect": "",
-    "matchersDefinition": "",
-    "policies": null
+    "policies": [
+      "$authenticated,*,create,allow",
+      "$everyone,*,read,allow",
+      "$everyone,*,__get__footer,allow"
+    ]
   },
   "cache": {
     "datasource": "",

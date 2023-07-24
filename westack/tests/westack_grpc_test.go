@@ -6,15 +6,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"net"
 	"net/http"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
-	"github.com/go-redis/redis/v8"
 	"github.com/stretchr/testify/assert"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/bsoncodec"
@@ -36,6 +35,9 @@ var userId primitive.ObjectID
 var noteId primitive.ObjectID
 var noteModel *model.Model
 var userModel *model.Model
+var customerModel *model.Model
+var orderModel *model.Model
+var storeModel *model.Model
 var systemContext *model.EventContext
 
 func Test_GRPCCallWithQueryParamsOK(t *testing.T) {
@@ -103,6 +105,58 @@ func Test_GRPCCallWithQueryParams_WithBadQueryParams(t *testing.T) {
 	if res.StatusCode != 500 {
 		t.Errorf("GRPCCallWithQueryParams Error: %d", res.StatusCode)
 	}
+
+}
+
+func Test_GRPCCallWithBodyParamsOK(t *testing.T) {
+
+	t.Parallel()
+
+	// start client
+	client := http.Client{}
+
+	// test for ok
+	res, err := client.Post("http://localhost:8020/test-grpc-post", "application/json", bufio.NewReader(strings.NewReader(`{"foo":1}`)))
+	assert.Nil(t, err)
+	assert.Equal(t, 200, res.StatusCode)
+
+	// read response
+	body, err := io.ReadAll(res.Body)
+	assert.Nil(t, err)
+
+	// compare response
+	var out pb.ResGrpcTestMessage
+	err = json.Unmarshal(body, &out)
+	assert.Nil(t, err)
+	assert.Equal(t, int32(1), out.Bar)
+
+}
+
+func Test_GRPCCallWithBodyParamsError(t *testing.T) {
+
+	t.Parallel()
+
+	// start client
+	client := http.Client{}
+
+	// test for error
+	res, err := client.Post("http://localhost:8020/test-grpc-post", "application/json", bufio.NewReader(strings.NewReader(`{"foo":"abc"}`)))
+	assert.Nil(t, err)
+	assert.Equal(t, 500, res.StatusCode)
+
+}
+
+func Test_GRPCCallWithBodyParams_WithBadBody(t *testing.T) {
+
+	t.Parallel()
+
+	// start client
+	client := http.Client{}
+
+	// test for error
+	res, err := client.Post("http://localhost:8020/test-grpc-post", "application/json", bufio.NewReader(strings.NewReader(`{"foo":abc}`)))
+	assert.Nil(t, err)
+	assert.Equal(t, 500, res.StatusCode)
 
 }
 
@@ -194,20 +248,17 @@ func TestMain(m *testing.M) {
 		DatasourceOptions: &map[string]*datasource.Options{
 			"db": {
 				MongoDB: &datasource.MongoDBDatasourceOptions{
-					Registry:     FakeMongoDbRegistry(),
-					Monitor:      FakeMongoDbMonitor(),
-					Timeout:      3,
-					RetryOnError: true,
+					Registry: FakeMongoDbRegistry(),
+					Monitor:  FakeMongoDbMonitor(),
+					Timeout:  3,
 				},
+				RetryOnError: true,
 			},
 		},
 	})
 
 	// start a mock grpc server
 	go startMockGrpcServer()
-
-	// start a mock redis server
-	go startMockRedisServer()
 
 	server.Boot(func(app *westack.WeStack) {
 		// for valid connections
@@ -216,6 +267,11 @@ func TestMain(m *testing.M) {
 			pb.NewGrpcTestClient,
 			pb.FooClient.TestFoo,
 		)).Name("Test_TestGrpcGet")
+		app.Server.Post("/test-grpc-post", westack.GRPCCallWithBody[pb.ReqGrpcTestMessage, pb.FooClient, *pb.ResGrpcTestMessage](
+			"localhost:7777",
+			pb.NewGrpcTestClient,
+			pb.FooClient.TestFoo,
+		)).Name("Test_TestGrpcPost")
 		//// for invalid connections
 		//app.Server.Get("/test-grpc-get-invalid", westack.GRPCCallWithQueryParams[pb.ReqGrpcTestMessage, pb.FooClient, *pb.ResGrpcTestMessage](
 		//	"localhost:8020",
@@ -239,6 +295,26 @@ func TestMain(m *testing.M) {
 			if (*ctx.Data)["__overwriteWith"] != nil {
 				ctx.Result = (*ctx.Data)["__overwriteWith"]
 			}
+			if (*ctx.Data)["__overwriteWithInstance"] != nil {
+				ctx.Result, err = noteModel.Build((*ctx.Data)["__overwriteWithInstance"].(wst.M), model.NewBuildCache(), ctx)
+				if err != nil {
+					return err
+				}
+			}
+			if (*ctx.Data)["__overwriteWithInstancePointer"] != nil {
+				v, err := noteModel.Build((*ctx.Data)["__overwriteWithInstancePointer"].(wst.M), model.NewBuildCache(), ctx)
+				if err != nil {
+					return err
+				}
+				ctx.Result = &v
+			}
+			return nil
+		})
+
+		noteModel.Observe("after save", func(ctx *model.EventContext) error {
+			if (*ctx.Data)["__forceAfterError"] == true {
+				return fmt.Errorf("forced error")
+			}
 			return nil
 		})
 
@@ -250,6 +326,19 @@ func TestMain(m *testing.M) {
 			fmt.Println("saving user")
 			return nil
 		})
+
+		customerModel, err = server.FindModel("Customer")
+		if err != nil {
+			log.Fatalf("failed to find model: %v", err)
+		}
+		orderModel, err = server.FindModel("Order")
+		if err != nil {
+			log.Fatalf("failed to find model: %v", err)
+		}
+		storeModel, err = server.FindModel("Store")
+		if err != nil {
+			log.Fatalf("failed to find model: %v", err)
+		}
 
 	})
 
@@ -272,70 +361,6 @@ func TestMain(m *testing.M) {
 		log.Fatalf("failed to stop: %v", err)
 	}
 
-}
-
-func startMockRedisServer() {
-	// create a new redis server
-	redisServer := NewRedisServer(&redis.Options{
-		Addr: ":6306",
-	})
-
-	// start the server
-	err := redisServer.ListenAndServe()
-	if err != nil {
-		log.Fatalf("failed to start redis server: %v", err)
-	}
-}
-
-type RedisServer struct {
-	options *redis.Options
-}
-
-func (s *RedisServer) ListenAndServe() error {
-	netListener, err := net.Listen("tcp", s.options.Addr)
-	if err != nil {
-		return fmt.Errorf("failed to listen: %v", err)
-	}
-	for {
-		conn, err := netListener.Accept()
-		if err != nil {
-			return fmt.Errorf("failed to accept: %v", err)
-		}
-		go func(conn net.Conn) {
-
-			// read the first line
-			reader := bufio.NewReader(conn)
-			line, err := reader.ReadString('\n')
-			if err != nil {
-				log.Printf("failed to read first line: %v", err)
-				return
-			}
-			log.Printf("first line: %s", line)
-
-			// read the rest
-			rest, err := ioutil.ReadAll(reader)
-			if err != nil {
-				log.Printf("failed to read rest: %v", err)
-				return
-			}
-			log.Printf("rest: %s", rest)
-
-			// write response
-			_, err = conn.Write([]byte("+OK\r\n"))
-			if err != nil {
-				log.Printf("failed to write response: %v", err)
-				return
-			}
-
-		}(conn)
-	}
-
-}
-
-func NewRedisServer(options *redis.Options) *RedisServer {
-	return &RedisServer{
-		options: options,
-	}
 }
 
 func FakeMongoDbMonitor() *event.CommandMonitor {

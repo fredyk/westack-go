@@ -1,7 +1,6 @@
 package wst
 
 import (
-	"encoding/json"
 	"fmt"
 	"log"
 	"os"
@@ -9,11 +8,20 @@ import (
 	"strings"
 	"time"
 
+	"github.com/fredyk/westack-go/westack/lib/swaggerhelperinterface"
+	"github.com/mailru/easyjson/jlexer"
+
+	"github.com/goccy/go-json"
 	fiber "github.com/gofiber/fiber/v2"
+	"github.com/mailru/easyjson"
+	"github.com/mailru/easyjson/jwriter"
 	"github.com/spf13/viper"
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/bsoncodec"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
+
+var NilBytes = []byte{'n', 'u', 'l', 'l'}
 
 type M map[string]interface{}
 
@@ -25,7 +33,7 @@ func (m M) GetM(key string) M {
 		if vv, ok := v.(M); ok {
 			return vv
 		} else if vv, ok := v.(map[string]interface{}); ok {
-			var out M = make(M, len(vv))
+			var out = make(M, len(vv))
 			for k, v := range vv {
 				out[k] = v
 			}
@@ -47,7 +55,124 @@ func (m M) GetString(key string) string {
 	return ""
 }
 
+func (m M) MarshalEasyJSON(w *jwriter.Writer) {
+	if m == nil {
+		w.Raw(NilBytes, nil)
+		return
+	}
+	w.RawByte('{')
+	first := true
+	for k, v := range m {
+		if first {
+			first = false
+		} else {
+			w.RawByte(',')
+		}
+		w.String(k)
+		w.RawByte(':')
+		switch v := v.(type) {
+		case nil:
+			w.Raw(NilBytes, nil)
+		case bool:
+			w.Bool(v)
+		case string:
+			w.String(v)
+		case int:
+			w.Int(v)
+		case int8:
+			w.Int8(v)
+		case int16:
+			w.Int16(v)
+		case int32:
+			w.Int32(v)
+		case int64:
+			w.Int64(v)
+		case uint:
+			w.Uint(v)
+		case uint8:
+			w.Uint8(v)
+		case uint16:
+			w.Uint16(v)
+		case uint32:
+			w.Uint32(v)
+		case uint64:
+			w.Uint64(v)
+		case float32:
+			w.Float32(v)
+		case float64:
+			w.Float64(v)
+		case time.Time:
+			w.String(v.Format(time.RFC3339))
+		case primitive.ObjectID:
+			w.String(v.Hex())
+		case primitive.DateTime:
+			// format in time.RFC3339Nano v.(primitive.DateTime).Time()
+			w.String(v.Time().Format(time.RFC3339Nano))
+		default:
+			if vv, ok := v.(easyjson.Marshaler); ok {
+				//fmt.Printf("Found easyjson.Marshaler: %v at %v\n", vv, k)
+				vv.MarshalEasyJSON(w)
+			} else if vv, ok := v.(json.Marshaler); ok {
+				//fmt.Printf("Found json.Marshaler: %v at %v\n", vv, k)
+				bytes, err := vv.MarshalJSON()
+				w.Raw(bytes, err)
+			} else {
+				//fmt.Printf("Found unknown: %v at %v\n", v, k)
+				bytes, err := json.Marshal(v)
+				w.Raw(bytes, err)
+			}
+		}
+	}
+	w.RawByte('}')
+}
+
+func (m *M) UnmarshalEasyJSON(l *jlexer.Lexer) {
+	if l.IsNull() {
+		l.Skip()
+		return
+	}
+	if m == nil {
+		*m = make(M)
+	}
+	inputBytes := l.Raw()
+	err := json.Unmarshal(inputBytes, &m)
+	if err != nil {
+		l.AddError(err)
+		return
+	}
+}
+
 type A []M
+
+func (a A) MarshalEasyJSON(w *jwriter.Writer) {
+	if a == nil {
+		w.Raw(NilBytes, nil)
+		return
+	}
+	w.RawByte('[')
+	first := true
+	for _, v := range a {
+		if first {
+			first = false
+		} else {
+			w.RawByte(',')
+		}
+		bytes, err := easyjson.Marshal(v)
+		w.Raw(bytes, err)
+	}
+	w.RawByte(']')
+}
+
+//func (a A) String() string {
+//	if a == nil {
+//		return ""
+//	}
+//	bytes, err := easyjson.Marshal(a)
+//	if err != nil {
+//		return ""
+//	}
+//	return string(bytes)
+//}
 
 type OperationName string
 
@@ -118,6 +243,7 @@ func AFromPrimitiveSlice(in *primitive.A) *A {
 }
 
 type Where M
+type AggregationStage M
 
 type IncludeItem struct {
 	Relation string  `json:"relation"`
@@ -128,24 +254,30 @@ type Include []IncludeItem
 type Order []string
 
 type Filter struct {
-	Where   *Where   `json:"where"`
-	Include *Include `json:"include"`
-	Order   *Order   `json:"order"`
-	Skip    int64    `json:"skip"`
-	Limit   int64    `json:"limit"`
+	Where       *Where             `json:"where"`
+	Include     *Include           `json:"include"`
+	Order       *Order             `json:"order"`
+	Skip        int64              `json:"skip"`
+	Limit       int64              `json:"limit"`
+	Aggregation []AggregationStage `json:"aggregation"`
 }
 
 type Stats struct {
 	BuildsByModel map[string]map[string]float64
 }
 
+type BsonOptions struct {
+	Registry *bsoncodec.Registry
+}
+
 type IApp struct {
 	Debug          bool
-	SwaggerPaths   func() *map[string]M
+	SwaggerHelper  func() swaggerhelperinterface.SwaggerHelper
 	FindModel      func(modelName string) (interface{}, error)
 	FindDatasource func(datasource string) (interface{}, error)
 	JwtSecretKey   []byte
 	Viper          *viper.Viper
+	Bson           BsonOptions
 }
 
 var RegexpIdEntire = regexp.MustCompile("^([0-9a-f]{24})$")
@@ -154,8 +286,8 @@ var RegexpIpStart = regexp.MustCompile("^[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}\\.
 var regexpTimeZoneReplacing = regexp.MustCompile("([+\\-]\\d{2}):(\\d{2})$")
 var regexpDate1 = regexp.MustCompile("^(\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2})([+\\-:0-9]+)$")
 var regexpDate2 = regexp.MustCompile("^(\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3})([+\\-:0-9]+)$")
-var regexpDate3 = regexp.MustCompile("^(\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2})([Z]+)?$")
-var regexpDate4 = regexp.MustCompile("^(\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3})([Z]+)?$")
+var regexpDate3 = regexp.MustCompile("^(\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2})(Z)?$")
+var regexpDate4 = regexp.MustCompile("^(\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3})(Z)?$")
 
 type WeStackError struct {
 	FiberError *fiber.Error
@@ -229,9 +361,19 @@ func ParseDate(data string) (time.Time, error) {
 	} else if IsDate2(data) {
 		layout := "2006-01-02T15:04:05.000-0700"
 		parsedDate, err = time.Parse(layout, regexpTimeZoneReplacing.ReplaceAllString(data, "$1$2"))
-	} else if IsDate3(data) {
-		layout := "2006-01-02T15:04:05Z"
+	} else if is3, groups := IsDate3(data); is3 {
+		//layout := "2006-01-02T15:04:05Z"
+		var layout string
+		isZ := groups[2] == "Z"
+		if isZ {
+			layout = "2006-01-02T15:04:05Z"
+		} else {
+			layout = "2006-01-02T15:04:05"
+		}
 		parsedDate, err = time.Parse(layout, data)
+		if !isZ && err == nil && parsedDate.Unix() != 0 {
+			parsedDate = parsedDate.In(time.UTC)
+		}
 	} else if IsDate4(data) {
 		layout := "2006-01-02T15:04:05.000Z"
 		parsedDate, err = time.Parse(layout, data)
@@ -243,7 +385,8 @@ func ParseDate(data string) (time.Time, error) {
 }
 
 func IsAnyDate(data string) bool {
-	return IsDate1(data) || IsDate2(data) || IsDate3(data) || IsDate4(data)
+	isDate3, _ := IsDate3(data)
+	return IsDate1(data) || IsDate2(data) || isDate3 || IsDate4(data)
 }
 
 func IsDate1(data string) bool {
@@ -254,8 +397,10 @@ func IsDate2(data string) bool {
 	return regexpDate2.MatchString(data)
 }
 
-func IsDate3(data string) bool {
-	return regexpDate3.MatchString(data)
+func IsDate3(data string) (bool, []string) {
+	matchGroups := regexpDate3.FindStringSubmatch(data)
+	//return regexpDate3.MatchString(data)
+	return len(matchGroups) == 3, matchGroups
 }
 
 func IsDate4(data string) bool {

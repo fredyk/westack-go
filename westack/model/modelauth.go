@@ -112,25 +112,47 @@ func (loadedModel *Model) EnforceEx(token *BearerToken, objId string, action str
 		}
 	}
 	if err != nil {
-		if loadedModel.authCache[bearerUserIdSt] == nil {
-			loadedModel.authCache[bearerUserIdSt] = make(map[string]map[string]bool)
-		}
-		if loadedModel.authCache[bearerUserIdSt][targetObjId] == nil {
-			loadedModel.authCache[bearerUserIdSt][targetObjId] = make(map[string]bool)
-		}
-		loadedModel.authCache[bearerUserIdSt][targetObjId][action] = false
+		updateAuthCache(loadedModel, bearerUserIdSt, targetObjId, action, false)
 		return err, false
 	}
 	if allow {
-		if loadedModel.authCache[bearerUserIdSt] == nil {
-			loadedModel.authCache[bearerUserIdSt] = map[string]map[string]bool{}
-		}
-		if loadedModel.authCache[bearerUserIdSt][targetObjId] == nil {
-			loadedModel.authCache[bearerUserIdSt][targetObjId] = map[string]bool{}
-		}
-		loadedModel.authCache[bearerUserIdSt][targetObjId][action] = true
+		updateAuthCache(loadedModel, bearerUserIdSt, targetObjId, action, true)
 		return nil, true
-
 	}
 	return fiber.ErrUnauthorized, false
+}
+
+func updateAuthCache(loadedModel *Model, bearerUserIdSt string, targetObjId string, action string, allow bool) {
+	cacheLock.Lock()
+	defer cacheLock.Unlock()
+	if loadedModel.authCache[bearerUserIdSt] == nil {
+		addSubjectAuthCacheEntry(loadedModel, bearerUserIdSt)
+	}
+	if loadedModel.authCache[bearerUserIdSt][targetObjId] == nil {
+		addObjectAuthCacheEntry(loadedModel, bearerUserIdSt, targetObjId)
+	}
+	addActionAuthCacheEntry(loadedModel, bearerUserIdSt, targetObjId, action, allow)
+}
+
+var cacheLock = sync.Mutex{}
+
+func addSubjectAuthCacheEntry(loadedModel *Model, bearerUserIdSt string) {
+
+	// Delete after 5 minutes
+	go func() {
+		time.Sleep(5 * time.Minute)
+		cacheLock.Lock()
+		defer cacheLock.Unlock()
+		delete(loadedModel.authCache, bearerUserIdSt)
+	}()
+
+	loadedModel.authCache[bearerUserIdSt] = make(map[string]map[string]bool)
+}
+
+func addObjectAuthCacheEntry(loadedModel *Model, bearerUserIdSt string, targetObjId string) {
+	loadedModel.authCache[bearerUserIdSt][targetObjId] = make(map[string]bool)
+}
+
+func addActionAuthCacheEntry(loadedModel *Model, bearerUserIdSt string, targetObjId string, action string, allow bool) {
+	loadedModel.authCache[bearerUserIdSt][targetObjId][action] = allow
 }

@@ -10,6 +10,11 @@ jobs:
 
   test:
     runs-on: ubuntu-latest
+    env:
+      WST_ADMIN_USERNAME: admin
+      WST_ADMIN_PWD: testadmin
+      PPROF_AUTH_USERNAME: test
+      PPROF_AUTH_PASSWORD: abcd1234.
     steps:
     - uses: actions/checkout@v2
 
@@ -25,7 +30,7 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v2
       with:
-        go-version: 1.19
+        go-version: 1.20.1
 
     - name: Start MongoDB
       run: sudo systemctl start mongod

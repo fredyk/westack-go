@@ -1,23 +1,45 @@
 {
-  "db": {
+  "db0": {
     "host": "127.0.0.1",
     "port": 27017,
-    "database": "example_db_1",
+    "database": "example_db_00",
     "password": "",
-    "name": "db",
+    "name": "db0",
     "username": "",
     "connector": "mongodb",
     "useNewUrlParser": true,
     "allowExtendedOperators": true
   },
-  "redis": {
-    "name": "redis",
-    "url": "localhost:6306",
+  "db1": {
+    "host": "127.0.0.1",
+    "port": 27017,
+    "database": "example_db_01",
+    "password": "",
+    "name": "db1",
+    "username": "",
+    "connector": "mongodb",
+    "useNewUrlParser": true,
+    "allowExtendedOperators": true
+  },
+  "db2": {
+    "host": "127.0.0.1",
+    "port": 27017,
+    "database": "example_db_02",
+    "password": "",
+    "name": "db2",
+    "username": "",
+    "connector": "mongodb",
+    "useNewUrlParser": true,
+    "allowExtendedOperators": true
+  },
+  "memorykv": {
+    "name": "memorykv",
+    "url": "localhost:0",
     "database": "example_db",
     "databaseIndex": 0,
     "password": "",
     "username": "",
-    "connector": "redis"
+    "connector": "memorykv"
   }
 
 }

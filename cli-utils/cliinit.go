@@ -65,12 +65,14 @@ type AppCasbinConfig struct {
 }
 
 type AppConfig struct {
-	Name        string          `json:"name,omitempty"`
-	Version     string          `json:"version,omitempty"`
-	Description string          `json:"description,omitempty"`
-	Casbin      AppCasbinConfig `json:"casbin"`
-	RestApiRoot string          `json:"restApiRoot"`
-	Port        int             `json:"port"`
+	Name                             string                 `json:"name,omitempty"`
+	Version                          string                 `json:"version,omitempty"`
+	Description                      string                 `json:"description,omitempty"`
+	Casbin                           AppCasbinConfig        `json:"casbin"`
+	RestApiRoot                      string                 `json:"restApiRoot"`
+	Port                             int                    `json:"port"`
+	StrictSingleRelatedDocumentCheck bool                   `json:"strictSingleRelatedDocumentCheck"`
+	Env                              map[string]interface{} `json:"env"`
 }
 
 var DefaultConfig = AppConfig{
@@ -85,6 +87,8 @@ var DefaultConfig = AppConfig{
 			OutputDirectory: "./common/models",
 		},
 	},
+	Env:                              make(map[string]interface{}),
+	StrictSingleRelatedDocumentCheck: true,
 }
 
 func initProject(cwd string) error {

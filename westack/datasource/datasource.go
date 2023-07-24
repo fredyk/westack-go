@@ -5,22 +5,17 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"regexp"
-	"strconv"
 	"time"
 
-	"github.com/go-redis/redis/v8"
+	"github.com/fredyk/westack-go/westack/memorykv"
 	"github.com/google/uuid"
-	"github.com/spf13/viper"
 	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/bson/bsoncodec"
 	"go.mongodb.org/mongo-driver/bson/primitive"
-	"go.mongodb.org/mongo-driver/event"
-	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
-	"go.mongodb.org/mongo-driver/mongo/readpref"
 
 	wst "github.com/fredyk/westack-go/westack/common"
+	"github.com/spf13/viper"
+	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
 type OperationError struct {
@@ -28,15 +23,9 @@ type OperationError struct {
 	Message string
 }
 
-type MongoDBDatasourceOptions struct {
-	Registry     *bsoncodec.Registry
-	Monitor      *event.CommandMonitor
-	Timeout      int
-	RetryOnError bool
-}
-
 type Options struct {
-	MongoDB *MongoDBDatasourceOptions
+	RetryOnError bool
+	MongoDB      *MongoDBDatasourceOptions
 }
 
 func (e *OperationError) Error() string {
@@ -59,153 +48,106 @@ type Datasource struct {
 	Options *Options
 
 	ctxCancelFn context.CancelFunc
+	SubViper    *viper.Viper
+}
+
+func getConnectorByName(name string, dsKey string, dsViper *viper.Viper, options *Options) (PersistedConnector, error) {
+	switch name {
+	case "mongodb":
+		var mongoOptions *MongoDBDatasourceOptions
+		if options != nil {
+			mongoOptions = options.MongoDB
+		}
+		return NewMongoDBConnector(dsViper, mongoOptions), nil
+	case "redis":
+		return nil, fmt.Errorf("redis connector not implemented yet")
+	case "memorykv":
+		return NewMemoryKVConnector(dsKey), nil
+	default:
+		return nil, errors.New("invalid connector " + name)
+	}
 }
 
 func (ds *Datasource) Initialize() error {
-	dsViper := ds.Viper
-	var connector = dsViper.GetString(ds.Key + ".connector")
-	switch connector {
-	case "mongodb":
-		mongoCtx, cancelFn := context.WithCancel(ds.Context)
-		if ds.Options != nil && ds.Options.MongoDB != nil {
-			if ds.Options.MongoDB.Timeout > 0 {
-				mongoCtx, cancelFn = context.WithTimeout(mongoCtx, time.Duration(ds.Options.MongoDB.Timeout)*time.Second)
-			}
-		}
+	dsViper := ds.SubViper
+	if dsViper == nil {
+		return fmt.Errorf("could not find datasource %v", ds.Key)
+	}
+	var connectorName = dsViper.GetString("connector")
+	var connector PersistedConnector
+	var err error
+	connector, err = getConnectorByName(connectorName, ds.Key, dsViper, ds.Options)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("Connecting to datasource %v...\n", ds.Key)
+	err = connector.Connect(ds.Context)
+	if err != nil {
+		fmt.Printf("Could not connect to datasource %v: %v\n", ds.Key, err)
+		return err
+	} else {
+		fmt.Printf("DEBUG: Connected to datasource %v\n", ds.Key)
+	}
 
-		var clientOpts *options.ClientOptions
+	fmt.Printf("Pinging datasource %v...\n", ds.Key)
+	err = connector.Ping(ds.Context)
+	if err != nil {
+		fmt.Printf("Could not connect to datasource %v: %v\n", ds.Key, err)
+		return err
+	} else {
+		fmt.Printf("DEBUG: Connected to datasource %v\n", ds.Key)
+		ds.Db = connector.GetClient()
+	}
 
-		url := getDbUrl(dsViper, ds)
+	// Start a goroutine to reconnect to the datasource if it gets disconnected
+	init := time.Now().UnixMilli()
+	go func() {
+		initialCtx := ds.Context
+		for {
+			time.Sleep(time.Second * 5)
 
-		if dsViper.GetString(ds.Key+".username") != "" && dsViper.GetString(ds.Key+".password") != "" {
-			credential := options.Credential{
-				Username: dsViper.GetString(ds.Key + ".username"),
-				Password: dsViper.GetString(ds.Key + ".password"),
-			}
-			clientOpts = options.Client().ApplyURI(url).SetAuth(credential)
-		} else {
-			clientOpts = options.Client().ApplyURI(url)
-		}
-
-		timeoutForOptions := time.Second * 30
-		if ds.Options != nil && ds.Options.MongoDB != nil && ds.Options.MongoDB.Timeout > 0 {
-			timeoutForOptions = time.Duration(ds.Options.MongoDB.Timeout) * time.Second
-		}
-		clientOpts = clientOpts.SetSocketTimeout(timeoutForOptions).SetConnectTimeout(timeoutForOptions).SetServerSelectionTimeout(timeoutForOptions).SetMinPoolSize(1).SetMaxPoolSize(5)
-
-		if ds.Options != nil && ds.Options.MongoDB != nil && ds.Options.MongoDB.Registry != nil {
-			clientOpts = clientOpts.SetRegistry(ds.Options.MongoDB.Registry)
-		}
-
-		if ds.Options != nil && ds.Options.MongoDB != nil && ds.Options.MongoDB.Monitor != nil {
-			clientOpts = clientOpts.SetMonitor(ds.Options.MongoDB.Monitor)
-		}
-
-		fmt.Printf("Connecting to datasource %v...\n", ds.Key)
-		db, err := mongo.Connect(mongoCtx, clientOpts)
-		if err != nil {
-			cancelFn()
-			return err
-		}
-		ds.Db = db
-
-		if ds.Options != nil && ds.Options.MongoDB != nil {
-			if ds.Options.MongoDB.Timeout > 0 {
-				fmt.Printf("DEBUG: Setting timeout to %v seconds\n", ds.Options.MongoDB.Timeout)
-				mongoCtx, cancelFn = context.WithTimeout(context.Background(), time.Duration(ds.Options.MongoDB.Timeout)*time.Second)
-			}
-		}
-		fmt.Printf("Pinging datasource %v...\n", ds.Key)
-		err = ds.Db.(*mongo.Client).Ping(mongoCtx, readpref.SecondaryPreferred())
-		if err != nil {
-			fmt.Printf("Could not connect to datasource %v: %v\n", ds.Key, err)
-			cancelFn()
-			return err
-		} else {
-			fmt.Printf("DEBUG: Connected to datasource %v\n", ds.Key)
-		}
-
-		init := time.Now().UnixMilli()
-		go func() {
-			for {
-				time.Sleep(time.Second * 5)
-
-				mongoCtx, cancelFn = context.WithCancel(mongoCtx)
-				if ds.Options != nil && ds.Options.MongoDB != nil {
-					if ds.Options.MongoDB.Timeout > 0 {
-						mongoCtx, cancelFn = context.WithTimeout(mongoCtx, time.Duration(ds.Options.MongoDB.Timeout)*time.Second)
-					}
-				}
-
-				err := ds.Db.(*mongo.Client).Ping(mongoCtx, readpref.SecondaryPreferred())
+			err := connector.Ping(initialCtx)
+			if err != nil {
+				log.Printf("Reconnecting datasource %v...\n", ds.Key)
+				err := connector.Connect(initialCtx)
 				if err != nil {
-					url = getDbUrl(dsViper, ds)
-					log.Printf("Reconnecting datasource %v...\n", ds.Key)
-					db, err := mongo.Connect(mongoCtx, clientOpts)
+					if ds.Options == nil || !ds.Options.RetryOnError {
+						log.Fatalf("Could not reconnect %v: %v\n", ds.Key, err)
+					}
+				} else {
+					err = connector.Ping(initialCtx)
 					if err != nil {
-						cancelFn()
-						if ds.Options == nil || ds.Options.MongoDB == nil || !ds.Options.MongoDB.RetryOnError {
-							log.Fatalf("Could not reconnect %v: %v\n", url, err)
+						if ds.Options == nil || !ds.Options.RetryOnError {
+							log.Fatalf("Mongo client disconnected after %vms: %v", time.Now().UnixMilli()-init, err)
 						}
 					} else {
-						err = ds.Db.(*mongo.Client).Ping(mongoCtx, readpref.SecondaryPreferred())
-						if err != nil {
-							cancelFn()
-							if ds.Options == nil || ds.Options.MongoDB == nil || !ds.Options.MongoDB.RetryOnError {
-								log.Fatalf("Mongo client disconnected after %vms: %v", time.Now().UnixMilli()-init, err)
-							}
-						} else {
-							log.Printf("successfully reconnected to %v\n", url)
-						}
-
+						log.Printf("successfully reconnected to %v\n", ds.Key)
+						ds.Db = connector.GetClient()
 					}
-					ds.Db = db
 				}
 			}
-		}()
-		break
-	case "redis":
+		}
+	}()
 
-		// Create redis client
-		var rClient *redis.Client = redis.NewClient(&redis.Options{
-			Addr:     dsViper.GetString(ds.Key + ".url"),
-			Password: dsViper.GetString(ds.Key + ".password"),   // no password set
-			DB:       dsViper.GetInt(ds.Key + ".databaseIndex"), // use default DB
-		})
-		ds.Db = rClient
-
-		break
-	//case "memory":
-	//	ds.Db = make(map[interface{}]interface{})
-	//	break
-	default:
-		return errors.New("invalid connector " + connector)
-	}
 	return nil
 }
 
-func getDbUrl(dsViper *viper.Viper, ds *Datasource) string {
-	url := ""
-	if dsViper.GetString(ds.Key+".url") != "" {
-		url = dsViper.GetString(ds.Key + ".url")
-	} else {
-		port := 0
-		if dsViper.GetInt(ds.Key+".port") > 0 {
-			port = dsViper.GetInt(ds.Key + ".port")
-		}
-		url = fmt.Sprintf("mongodb://%v:%v/%v", dsViper.GetString(ds.Key+".host"), port, dsViper.GetString(ds.Key+".database"))
-		log.Printf("Using composed url %v\n", url)
-	}
-	return url
-}
-
-func (ds *Datasource) FindMany(collectionName string, lookups *wst.A) (*wst.A, error) {
-	var connector = ds.Viper.GetString(ds.Key + ".connector")
+// FindMany retrieves data from the specified collection based on the provided lookup conditions using the appropriate
+// data source connector specified in the configuration file.
+// @param collectionName string: the name of the collection from which to retrieve data.
+// @param lookups *wst.A: a pointer to an array of conditions to be used as lookup criteria. If nil, all data in the
+// collection will be returned.
+// @return MongoCursorI: a cursor to the result set that matches the lookup criteria, or an error if an error occurs
+// while attempting to retrieve the data.
+// The cursor needs to be closed outside of the function.
+// Implementations for Redis and memorykv connectors are not yet implemented and will result in an error.
+func (ds *Datasource) FindMany(collectionName string, lookups *wst.A) (MongoCursorI, error) {
+	var connector = ds.SubViper.GetString("connector")
 	switch connector {
 	case "mongodb":
 		var db = ds.Db.(*mongo.Client)
 
-		database := db.Database(ds.Viper.GetString(ds.Key + ".database"))
+		database := db.Database(ds.SubViper.GetString("database"))
 		collection := database.Collection(collectionName)
 
 		pipeline := wst.A{}
@@ -213,29 +155,29 @@ func (ds *Datasource) FindMany(collectionName string, lookups *wst.A) (*wst.A, e
 		if lookups != nil {
 			pipeline = append(pipeline, *lookups...)
 		}
-		allowDiskUse := true
 		ctx := ds.Context
-		cursor, err := collection.Aggregate(ctx, pipeline, &options.AggregateOptions{
-			AllowDiskUse: &allowDiskUse,
-		})
+		cursor, err := collection.Aggregate(ctx, pipeline, options.Aggregate().SetAllowDiskUse(true).SetBatchSize(16))
 		if err != nil {
 			return nil, err
 		}
-		defer func(cursor *mongo.Cursor, ctx context.Context) {
-			err := cursor.Close(ctx)
-			if err != nil {
-				panic(err)
-			}
-		}(cursor, ctx)
-		var documents wst.A
-		err = cursor.All(ds.Context, &documents)
-		if err != nil {
-			return nil, err
-		}
-		return &documents, nil
+		// Close mongo cursor outside of this function
+		//defer func(cursor *mongo.Cursor, ctx context.Context) {
+		//	err := cursor.Close(ctx)
+		//	if err != nil {
+		//		panic(err)
+		//	}
+		//}(cursor, ctx)
+		//var documents wst.A
+		//err = cursor.All(ds.Context, &documents)
+		//if err != nil {
+		//	return nil, err
+		//}
+		//return &documents, nil
+		return cursor, nil
 	case "redis":
-		var rClient = ds.Db.(*redis.Client)
-
+		return nil, fmt.Errorf("redis connector not implemented yet")
+	case "memorykv":
+		db := ds.Db.(memorykv.MemoryKvDb)
 		if lookups == nil || len(*lookups) == 0 {
 			return nil, errors.New("empty query")
 		}
@@ -244,7 +186,7 @@ func (ds *Datasource) FindMany(collectionName string, lookups *wst.A) (*wst.A, e
 
 		var _id interface{}
 		if match, isPresent := potentialMatchStage["$match"]; !isPresent {
-			return nil, errors.New("invalid first stage for redis. First stage must contain $match")
+			return nil, errors.New("invalid first stage for memorykv. First stage must contain $match")
 		} else {
 			if asM, ok := match.(wst.M); !ok {
 				return nil, errors.New(fmt.Sprintf("invalid $match value type %s", asM))
@@ -261,40 +203,44 @@ func (ds *Datasource) FindMany(collectionName string, lookups *wst.A) (*wst.A, e
 			}
 		}
 
-		cmd := rClient.Get(ds.Context, fmt.Sprintf("%v:%v:%v", ds.Viper.GetString(ds.Key+".database"), collectionName, _id))
-		err := cmd.Err()
-
-		if err != nil {
-			if err.Error() == "redis: nil" {
-				return &wst.A{}, nil
-			} else {
-				return nil, err
-			}
+		var idAsString string
+		switch _id.(type) {
+		case string:
+			idAsString = _id.(string)
+		case primitive.ObjectID:
+			idAsString = _id.(primitive.ObjectID).Hex()
+		case uuid.UUID:
+			idAsString = _id.(uuid.UUID).String()
 		}
+		bucket := db.GetBucket(collectionName)
 
-		bytes, err := cmd.Bytes()
-		if err != nil {
-			return nil, err
-		}
+		// fmt.Println("QUERYING CACHE: collection=", collectionName, "id=", idAsString) TODO: check debug
 
-		out := make(wst.A, 1)
-		err = bson.Unmarshal(bytes, &out[0])
+		bytes, err := bucket.Get(idAsString)
+		var documents [][]byte
 		if err != nil {
 			return nil, err
+		} else if bytes == nil {
+			// TODO: Check if we should return an error or not
+			//return &wst.A{}, nil
+			documents = nil
+		} else {
+			documents = bytes
 		}
+		return NewFixedMongoCursor(documents), nil
 
-		return &out, nil
+	default:
+		return nil, errors.New("invalid connector " + connector)
 	}
-	return nil, errors.New(fmt.Sprintf("invalid connector %v", connector))
 }
 
 func (ds *Datasource) Count(collectionName string, lookups *wst.A) (int64, error) {
-	var connector = ds.Viper.GetString(ds.Key + ".connector")
+	var connector = ds.SubViper.GetString("connector")
 	switch connector {
 	case "mongodb":
 		var db = ds.Db.(*mongo.Client)
 
-		database := db.Database(ds.Viper.GetString(ds.Key + ".database"))
+		database := db.Database(ds.SubViper.GetString("database"))
 		collection := database.Collection(collectionName)
 
 		pipeline := wst.A{}
@@ -340,7 +286,7 @@ func (ds *Datasource) Count(collectionName string, lookups *wst.A) (int64, error
 }
 
 func findByObjectId(collectionName string, _id interface{}, ds *Datasource, lookups *wst.A) (*wst.M, error) {
-	var connector = ds.Viper.GetString(ds.Key + ".connector")
+	var connector = ds.SubViper.GetString("connector")
 	switch connector {
 	case "mongodb":
 		wrappedLookups := &wst.A{
@@ -353,54 +299,69 @@ func findByObjectId(collectionName string, _id interface{}, ds *Datasource, look
 		if lookups != nil {
 			*wrappedLookups = append(*wrappedLookups, *lookups...)
 		}
-		results, err := ds.FindMany(collectionName, wrappedLookups)
+		cursor, err := ds.FindMany(collectionName, wrappedLookups)
 		if err != nil {
 			return nil, err
 		}
-		if results != nil && len(*results) > 0 {
-			return &(*results)[0], nil
+		defer func(cursor MongoCursorI, ctx context.Context) {
+			err := cursor.Close(ctx)
+			if err != nil {
+				panic(err)
+			}
+		}(cursor, ds.Context)
+		var results []wst.M
+		err = cursor.All(ds.Context, &results)
+		if err != nil {
+			return nil, err
+		}
+		if results != nil && len(results) > 0 {
+			return &(results)[0], nil
 		} else {
 			return nil, errors.New("document not found")
 		}
-	//case "memory":
-	//	if result, isPresent := ds.Db.(map[interface{}]wst.M)[_id]; isPresent {
-	//		return &result, nil
-	//	} else {
-	//		return ???
-	//	}
 	case "redis":
-		var rClient = ds.Db.(*redis.Client)
-
-		cmd := rClient.Get(ds.Context, fmt.Sprintf("%v:%v:%v", ds.Viper.GetString(ds.Key+".database"), collectionName, _id))
-		err := cmd.Err()
-
+		return nil, fmt.Errorf("redis connector not implemented yet")
+	case "memorykv":
+		db := ds.Db.(memorykv.MemoryKvDb)
+		bucket := db.GetBucket(collectionName)
+		var idAsString string
+		switch _id.(type) {
+		case string:
+			idAsString = _id.(string)
+		case primitive.ObjectID:
+			idAsString = _id.(primitive.ObjectID).Hex()
+		case uuid.UUID:
+			idAsString = _id.(uuid.UUID).String()
+		}
+		var document wst.M
+		allBytes, err := bucket.Get(idAsString)
 		if err != nil {
 			return nil, err
 		}
-
-		bytes, err := cmd.Bytes()
-		if err != nil {
-			return nil, err
+		if len(allBytes) == 0 {
+			return nil, errors.New("document not found")
+		} else if len(allBytes) > 1 {
+			return nil, errors.New("multiple documents found")
+		} else {
+			err = bson.Unmarshal(allBytes[0], &document)
+			if err != nil {
+				return nil, err
+			}
+			return &document, nil
 		}
 
-		var out wst.M
-		err = bson.Unmarshal(bytes, &out)
-		if err != nil {
-			return nil, err
-		}
-
-		return &out, nil
+	default:
+		return nil, errors.New("invalid connector " + connector)
 	}
-	return nil, errors.New(fmt.Sprintf("invalid connector %v", connector))
 }
 
 func (ds *Datasource) Create(collectionName string, data *wst.M) (*wst.M, error) {
-	var connector = ds.Viper.GetString(ds.Key + ".connector")
+	var connector = ds.SubViper.GetString("connector")
 	switch connector {
 	case "mongodb":
 		var db = ds.Db.(*mongo.Client)
 
-		database := db.Database(ds.Viper.GetString(ds.Key + ".database"))
+		database := db.Database(ds.SubViper.GetString("database"))
 		collection := database.Collection(collectionName)
 		if (*data)["_id"] == nil && (*data)["id"] != nil {
 			(*data)["_id"] = (*data)["id"]
@@ -411,56 +372,53 @@ func (ds *Datasource) Create(collectionName string, data *wst.M) (*wst.M, error)
 		}
 		return findByObjectId(collectionName, insertOneResult.InsertedID, ds, nil)
 	case "redis":
-		var rClient = ds.Db.(*redis.Client)
+		return nil, fmt.Errorf("redis connector not implemented yet")
+	case "memorykv":
+		dict := ds.Db.(memorykv.MemoryKvDb)
 
 		var id interface{}
 
+		var allBytes [][]byte
+		var idAsStr string
 		if (*data)["_redId"] == nil {
 			id = uuid.New().String()
 			(*data)["_redId"] = id
 		} else {
 			id = (*data)["_redId"]
 		}
+		for _, doc := range (*data)["_entries"].(wst.A) {
+			switch id.(type) {
+			case string:
+				idAsStr = id.(string)
+			case primitive.ObjectID:
+				idAsStr = id.(primitive.ObjectID).Hex()
+			}
 
-		bytes, err := bson.Marshal(data)
+			bytes, err := bson.Marshal(doc)
+			if err != nil {
+				return nil, err
+			}
+			allBytes = append(allBytes, bytes)
+		}
+
+		//dict[id] = data
+		err := dict.GetBucket(collectionName).Set(idAsStr, allBytes)
 		if err != nil {
 			return nil, err
 		}
-
-		//key := fmt.Sprintf("%v:%v:%v", ds.Viper.GetString(ds.Key+".database"), collectionName, id)
-		key := fmt.Sprintf("%v:%v:%v", ds.Viper.GetString(ds.Key+".database"), collectionName, id)
-
-		statusCmd := rClient.Set(ds.Context, key, bytes, 0)
-		err = statusCmd.Err()
-		if err != nil {
-			return nil, err
-		}
-		return findByObjectId(collectionName, id, ds, nil)
-		//case "memory":
-		//	dict := ds.Db.(map[interface{}]interface{})
-		//
-		//	var id interface{}
-		//	if (*data)["_id"] == nil {
-		//		id = uuid.New()
-		//		(*data)["_id"] = id
-		//	} else {
-		//		id = (*data)["_id"]
-		//	}
-		//
-		//	dict[id] = data
-		//
-		//	return findByObjectId(collectionName, id, ds, nil)
+		//return findByObjectId(collectionName, id, ds, nil)
+		return data, nil
 	}
 	return nil, errors.New(fmt.Sprintf("invalid connector %v", connector))
 }
 
 func (ds *Datasource) UpdateById(collectionName string, id interface{}, data *wst.M) (*wst.M, error) {
-	var connector = ds.Viper.GetString(ds.Key + ".connector")
+	var connector = ds.SubViper.GetString("connector")
 	switch connector {
 	case "mongodb":
 		var db = ds.Db.(*mongo.Client)
 
-		database := db.Database(ds.Viper.GetString(ds.Key + ".database"))
+		database := db.Database(ds.SubViper.GetString("database"))
 		collection := database.Collection(collectionName)
 		delete(*data, "id")
 		delete(*data, "_id")
@@ -473,12 +431,12 @@ func (ds *Datasource) UpdateById(collectionName string, id interface{}, data *ws
 }
 
 func (ds *Datasource) DeleteById(collectionName string, id interface{}) int64 {
-	var connector = ds.Viper.GetString(ds.Key + ".connector")
+	var connector = ds.SubViper.GetString("connector")
 	switch connector {
 	case "mongodb":
 		var db = ds.Db.(*mongo.Client)
 
-		database := db.Database(ds.Viper.GetString(ds.Key + ".database"))
+		database := db.Database(ds.SubViper.GetString("database"))
 		collection := database.Collection(collectionName)
 		if result, err := collection.DeleteOne(ds.Context, wst.M{"_id": id}); err != nil {
 			panic(err)
@@ -490,14 +448,19 @@ func (ds *Datasource) DeleteById(collectionName string, id interface{}) int64 {
 }
 
 func New(dsKey string, dsViper *viper.Viper, parentContext context.Context) *Datasource {
-	name := dsViper.GetString(dsKey + ".name")
+	subViper := dsViper.Sub(dsKey)
+	if subViper == nil {
+		subViper = viper.New()
+	}
+	name := subViper.GetString("name")
 	if name == "" {
 		name = dsKey
 	}
 	ctx, ctxCancelFn := context.WithCancel(parentContext)
 	ds := &Datasource{
-		Name:  name,
-		Viper: dsViper,
+		Name:     name,
+		Viper:    dsViper,
+		SubViper: subViper,
 
 		Key: dsKey,
 
@@ -505,238 +468,4 @@ func New(dsKey string, dsViper *viper.Viper, parentContext context.Context) *Dat
 		ctxCancelFn: ctxCancelFn,
 	}
 	return ds
-}
-
-func ReplaceObjectIds(data interface{}) interface{} {
-
-	if data == nil {
-		return nil
-	}
-
-	var finalData wst.M
-	switch data.(type) {
-	case int, int32, int64, float32, float64, bool, primitive.ObjectID, *primitive.ObjectID, time.Time, primitive.DateTime:
-		return data
-	case string:
-		var newValue interface{}
-		var err error
-		dataSt := data.(string)
-		if wst.RegexpIdEntire.MatchString(dataSt) {
-			newValue, err = primitive.ObjectIDFromHex(dataSt)
-		} else if wst.IsAnyDate(dataSt) {
-			newValue, err = wst.ParseDate(dataSt)
-		}
-		if err != nil {
-			log.Println("WARNING: ", err)
-		}
-		if newValue != nil {
-			return newValue
-		} else {
-			return data
-		}
-	case wst.Where:
-		finalData = wst.M{}
-		for key, value := range data.(wst.Where) {
-			finalData[key] = value
-		}
-		break
-	case *wst.Where:
-		finalData = wst.M{}
-		for key, value := range *data.(*wst.Where) {
-			finalData[key] = value
-		}
-		break
-	case map[string]interface{}:
-		finalData = wst.M{}
-		for key, value := range data.(map[string]interface{}) {
-			finalData[key] = value
-		}
-		break
-	case *map[string]interface{}:
-		finalData = wst.M{}
-		for key, value := range *data.(*map[string]interface{}) {
-			finalData[key] = value
-		}
-		break
-	case wst.M:
-		finalData = data.(wst.M)
-		break
-	case *wst.M:
-		finalData = *data.(*wst.M)
-		break
-	default:
-		log.Println(fmt.Sprintf("WARNING: Invalid input for ReplaceObjectIds() <- %s", data))
-		return data
-	}
-	for key, value := range finalData {
-		if value == nil {
-			continue
-		}
-		var err error
-		var newValue interface{}
-		if key == "$eq" || key == "$ne" || key == "$gt" || key == "$gte" || key == "$lt" || key == "$lte" {
-			if value == "$now" {
-				newValue = time.Now()
-			} else if value == "$today" {
-				newValue = time.Now().Truncate(24 * time.Hour)
-			} else if value == "$yesterday" {
-				newValue = time.Now().Truncate(24 * time.Hour).Add(-24 * time.Hour)
-			} else if value == "$tomorrow" {
-				newValue = time.Now().Truncate(24 * time.Hour).Add(24 * time.Hour)
-			} else {
-				switch value.(type) {
-				case string:
-					if r := regexp.MustCompile(`^\$(\d+)dago$`).FindStringSubmatch(value.(string)); len(r) > 1 {
-						atoi, err := strconv.Atoi(r[1])
-						if err != nil {
-							panic(err)
-						}
-						newValue = time.Now().Add(-time.Duration(atoi) * 24 * time.Hour)
-					} else if r := regexp.MustCompile(`^\$(\d+)wago$`).FindStringSubmatch(value.(string)); len(r) > 1 {
-						atoi, err := strconv.Atoi(r[1])
-						if err != nil {
-							panic(err)
-						}
-						newValue = time.Now().Add(-time.Duration(atoi) * 7 * 24 * time.Hour)
-					} else if r := regexp.MustCompile(`^\$(\d+)mago$`).FindStringSubmatch(value.(string)); len(r) > 1 {
-						atoi, err := strconv.Atoi(r[1])
-						if err != nil {
-							panic(err)
-						}
-						newValue = time.Now().Add(-time.Duration(atoi) * 30 * 24 * time.Hour)
-					} else if r := regexp.MustCompile(`^\$(\d+)yago$`).FindStringSubmatch(value.(string)); len(r) > 1 {
-						atoi, err := strconv.Atoi(r[1])
-						if err != nil {
-							panic(err)
-						}
-						newValue = time.Now().Add(-time.Duration(atoi) * 365 * 24 * time.Hour)
-					} else if r := regexp.MustCompile(`^\$(\d+)Sago$`).FindStringSubmatch(value.(string)); len(r) > 1 {
-						atoi, err := strconv.Atoi(r[1])
-						if err != nil {
-							panic(err)
-						}
-						newValue = time.Now().Add(-time.Duration(atoi) * time.Second)
-					} else if r := regexp.MustCompile(`^\$(\d+)Mago$`).FindStringSubmatch(value.(string)); len(r) > 1 {
-						atoi, err := strconv.Atoi(r[1])
-						if err != nil {
-							panic(err)
-						}
-						newValue = time.Now().Add(-time.Duration(atoi) * time.Minute)
-					} else if r := regexp.MustCompile(`^\$(\d+)Hago$`).FindStringSubmatch(value.(string)); len(r) > 1 {
-						atoi, err := strconv.Atoi(r[1])
-						if err != nil {
-							panic(err)
-						}
-						newValue = time.Now().Add(-time.Duration(atoi) * time.Hour)
-					} else if r := regexp.MustCompile(`^\$(\d+)dfromnow$`).FindStringSubmatch(value.(string)); len(r) > 1 {
-						atoi, err := strconv.Atoi(r[1])
-						if err != nil {
-							panic(err)
-						}
-						newValue = time.Now().Add(time.Duration(atoi) * 24 * time.Hour)
-					} else if r := regexp.MustCompile(`^\$(\d+)wfromnow$`).FindStringSubmatch(value.(string)); len(r) > 1 {
-						atoi, err := strconv.Atoi(r[1])
-						if err != nil {
-							panic(err)
-						}
-						newValue = time.Now().Add(time.Duration(atoi) * 7 * 24 * time.Hour)
-					} else if r := regexp.MustCompile(`^\$(\d+)mfromnow$`).FindStringSubmatch(value.(string)); len(r) > 1 {
-						atoi, err := strconv.Atoi(r[1])
-						if err != nil {
-							panic(err)
-						}
-						newValue = time.Now().Add(time.Duration(atoi) * 30 * 24 * time.Hour)
-					} else if r := regexp.MustCompile(`^\$(\d+)yfromnow$`).FindStringSubmatch(value.(string)); len(r) > 1 {
-						atoi, err := strconv.Atoi(r[1])
-						if err != nil {
-							panic(err)
-						}
-						newValue = time.Now().Add(time.Duration(atoi) * 365 * 24 * time.Hour)
-					} else if r := regexp.MustCompile(`^\$(\d+)Sfromnow$`).FindStringSubmatch(value.(string)); len(r) > 1 {
-						atoi, err := strconv.Atoi(r[1])
-						if err != nil {
-							panic(err)
-						}
-						newValue = time.Now().Add(time.Duration(atoi) * time.Second)
-					} else if r := regexp.MustCompile(`^\$(\d+)Mfromnow$`).FindStringSubmatch(value.(string)); len(r) > 1 {
-						atoi, err := strconv.Atoi(r[1])
-						if err != nil {
-							panic(err)
-						}
-						newValue = time.Now().Add(time.Duration(atoi) * time.Minute)
-					} else if r := regexp.MustCompile(`^\$(\d+)Hfromnow$`).FindStringSubmatch(value.(string)); len(r) > 1 {
-						atoi, err := strconv.Atoi(r[1])
-						if err != nil {
-							panic(err)
-						}
-						newValue = time.Now().Add(time.Duration(atoi) * time.Hour)
-					}
-				}
-			}
-		}
-		if newValue == nil {
-			switch value.(type) {
-			case string, wst.Where, *wst.Where, wst.M, *wst.M, int, int32, int64, float32, float64, bool, primitive.ObjectID, *primitive.ObjectID, time.Time, primitive.DateTime:
-				newValue = ReplaceObjectIds(value)
-				break
-			default:
-				asMap, asMapOk := value.(wst.M)
-				if asMapOk {
-					newValue = ReplaceObjectIds(asMap)
-				} else {
-					asList, asListOk := value.([]interface{})
-					if asListOk {
-						for i, asListItem := range asList {
-							asList[i] = ReplaceObjectIds(asListItem)
-						}
-					} else {
-						_, asStringListOk := value.([]string)
-						if !asStringListOk {
-							asMap, asMapOk := value.(map[string]interface{})
-							if asMapOk {
-								newValue = ReplaceObjectIds(asMap)
-							} else {
-								asList, asMListOk := value.([]wst.M)
-								if asMListOk {
-									for i, asListItem := range asList {
-										asList[i] = ReplaceObjectIds(asListItem).(wst.M)
-									}
-								} else {
-									log.Println(fmt.Sprintf("WARNING: What to do with %v (%s)?", value, value))
-								}
-							}
-						}
-					}
-				}
-			}
-		}
-		if err == nil && newValue != nil {
-			switch data.(type) {
-			case wst.Where:
-				data.(wst.Where)[key] = newValue
-				break
-			case *wst.Where:
-				(*data.(*wst.Where))[key] = newValue
-				break
-			case wst.M:
-				data.(wst.M)[key] = newValue
-				break
-			case *wst.M:
-				(*data.(*wst.M))[key] = newValue
-				break
-			case map[string]interface{}:
-				data.(map[string]interface{})[key] = newValue
-				break
-			case *map[string]interface{}:
-				(*data.(*map[string]interface{}))[key] = newValue
-				break
-			default:
-				log.Println(fmt.Sprintf("WARNING: invalid input ReplaceObjectIds() <- %s", data))
-				break
-			}
-		} else if err != nil {
-			log.Println("WARNING: ", err)
-		}
-	}
-	return data
 }

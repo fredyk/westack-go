@@ -10,6 +10,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/fredyk/westack-go/westack/lib/swaggerhelper"
+	swaggerhelper2 "github.com/fredyk/westack-go/westack/lib/swaggerhelperinterface"
+
 	casbinmodel "github.com/casbin/casbin/v2/model"
 	fileadapter "github.com/casbin/casbin/v2/persist/file-adapter"
 	fiber "github.com/gofiber/fiber/v2"
@@ -39,7 +42,11 @@ func (app *WeStack) loadModels() error {
 		panic("Missing or invalid ./server/model-config.json: " + err.Error())
 	}
 
-	app._swaggerPaths = map[string]wst.M{}
+	app.swaggerHelper = swaggerhelper.NewSwaggerHelper()
+	err = app.swaggerHelper.CreateOpenAPI()
+	if err != nil {
+		return err
+	}
 	var someUserModel *model.Model
 	for _, fileInfo := range fileInfos {
 
@@ -53,6 +60,7 @@ func (app *WeStack) loadModels() error {
 		var config *model.Config
 		err := wst.LoadFile("./common/models/"+fileInfo.Name(), &config)
 		if err != nil {
+			fmt.Printf("Error while loading model %v: %v\n", fileInfo.Name(), err)
 			panic(err)
 		}
 		if config.Relations == nil {
@@ -133,7 +141,7 @@ func (app *WeStack) loadDataSources() {
 			dsName = key
 		}
 		connector := dsViper.GetString(key + ".connector")
-		if connector == "mongodb" /* || connector == "memory"*/ || connector == "redis" {
+		if connector == "mongodb" || connector == "memorykv" {
 			ds := datasource.New(key, dsViper, ctx)
 
 			if app.dataSourceOptions != nil {
@@ -169,7 +177,7 @@ func (app *WeStack) setupModel(loadedModel *model.Model, dataSource *datasource.
 			Plural: "role-mappings",
 			Base:   "PersistedModel",
 			//Datasource: config.Datasource,
-			Public:     false,
+			Public:     true,
 			Properties: nil,
 			Relations: &map[string]*model.Relation{
 				"role": {
@@ -188,6 +196,8 @@ func (app *WeStack) setupModel(loadedModel *model.Model, dataSource *datasource.
 			Casbin: model.CasbinConfig{
 				Policies: []string{
 					"$owner,*,__get__role,allow",
+					"roleManager,*,read,allow",
+					"roleManager,*,write,allow",
 				},
 			},
 		}, app.modelRegistry)
@@ -201,7 +211,10 @@ func (app *WeStack) setupModel(loadedModel *model.Model, dataSource *datasource.
 
 		loadedModel.On("login", func(ctx *model.EventContext) error {
 			data := ctx.Data
-			if (*data)["email"] == nil || strings.TrimSpace((*data)["email"].(string)) == "" {
+			email := data.GetString("email")
+			username := data.GetString("username")
+
+			if email == "" && username == "" {
 				return wst.CreateError(fiber.ErrBadRequest, "USERNAME_EMAIL_REQUIRED", fiber.Map{"message": "username or email is required"}, "ValidationError")
 			}
 
@@ -209,12 +222,15 @@ func (app *WeStack) setupModel(loadedModel *model.Model, dataSource *datasource.
 				return wst.CreateError(fiber.ErrUnauthorized, "LOGIN_FAILED", fiber.Map{"message": "login failed"}, "Error")
 			}
 
-			email := (*data)["email"].(string)
+			var where wst.Where
+			if email != "" {
+				where = wst.Where{"email": email}
+			} else {
+				where = wst.Where{"username": username}
+			}
 			users, err := loadedModel.FindMany(&wst.Filter{
-				Where: &wst.Where{
-					"email": email,
-				},
-			}, ctx)
+				Where: &where,
+			}, ctx).All()
 			if len(users) == 0 {
 				return wst.CreateError(fiber.ErrUnauthorized, "LOGIN_FAILED", fiber.Map{"message": "login failed"}, "Error")
 			}
@@ -252,7 +268,7 @@ func (app *WeStack) setupModel(loadedModel *model.Model, dataSource *datasource.
 							"principalId": firstUser.Id,
 						},
 					},
-				}, Include: &wst.Include{{Relation: "role"}}}, roleContext)
+				}, Include: &wst.Include{{Relation: "role"}}}, roleContext).All()
 				if err != nil {
 					return err
 				}
@@ -375,19 +391,7 @@ func (app *WeStack) setupModel(loadedModel *model.Model, dataSource *datasource.
 		loadedModel.BaseUrl = app.restApiRoot + "/" + plural
 
 		loadedModel.On("findMany", func(ctx *model.EventContext) error {
-			result, err := loadedModel.FindMany(ctx.Filter, ctx)
-			out := make(wst.A, len(result))
-			for idx, item := range result {
-				item.HideProperties()
-				out[idx] = item.ToJSON()
-			}
-
-			if err != nil {
-				return err
-			}
-			ctx.StatusCode = fiber.StatusOK
-			ctx.Result = out
-			return nil
+			return handleFindMany(loadedModel, ctx)
 		})
 		loadedModel.On("count", func(ctx *model.EventContext) error {
 			result, err := loadedModel.Count(ctx.Filter, ctx)
@@ -527,19 +531,40 @@ func (app *WeStack) setupModel(loadedModel *model.Model, dataSource *datasource.
 	}
 }
 
+func handleFindMany(loadedModel *model.Model, ctx *model.EventContext) error {
+	if loadedModel.App.Debug {
+		fmt.Println("DEBUG: handleFindMany")
+	}
+
+	cursor := loadedModel.FindMany(ctx.Filter, ctx)
+
+	//chunkGenerator := model.NewInstanceAChunkGenerator(loadedModel, cursor, "application/json")
+	chunkGenerator := model.NewCursorChunkGenerator(loadedModel, cursor)
+	switch cursor.(type) {
+	case *model.ErrorCursor:
+		return cursor.(*model.ErrorCursor).Error()
+	}
+	if cursor.(*model.ChannelCursor).Err == nil {
+		ctx.StatusCode = fiber.StatusOK
+	}
+	ctx.Result = chunkGenerator
+	return nil
+}
+
 func (app *WeStack) asInterface() *wst.IApp {
 	return &wst.IApp{
 		Debug:        app.debug,
 		JwtSecretKey: app.jwtSecretKey,
 		Viper:        app.Viper,
+		Bson:         app.Bson,
 		FindModel: func(modelName string) (interface{}, error) {
 			return app.FindModel(modelName)
 		},
 		FindDatasource: func(datasource string) (interface{}, error) {
 			return app.FindDatasource(datasource)
 		},
-		SwaggerPaths: func() *map[string]wst.M {
-			return app.SwaggerPaths()
+		SwaggerHelper: func() swaggerhelper2.SwaggerHelper {
+			return app.swaggerHelper
 		},
 	}
 }

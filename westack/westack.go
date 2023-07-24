@@ -4,23 +4,31 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/fredyk/westack-go/westack/lib/swaggerhelperinterface"
+	"github.com/fredyk/westack-go/westack/memorykv"
+	"io"
 	"log"
+	"net/http"
 	"os"
+	"reflect"
 	"runtime/debug"
+	"strconv"
 	"time"
 
-	fiber "github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/compress"
 	"github.com/gofiber/fiber/v2/middleware/recover"
 	"github.com/golang/protobuf/proto"
 	"github.com/spf13/viper"
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/bsoncodec"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"google.golang.org/grpc"
 
 	"github.com/goccy/go-json"
 
 	wst "github.com/fredyk/westack-go/westack/common"
 	"github.com/fredyk/westack-go/westack/datasource"
-	"github.com/fredyk/westack-go/westack/lib"
 	"github.com/fredyk/westack-go/westack/model"
 	"github.com/fredyk/westack-go/westack/utils"
 )
@@ -35,6 +43,7 @@ type WeStack struct {
 	Viper   *viper.Viper
 	DsViper *viper.Viper
 	Options Options
+	Bson    wst.BsonOptions
 
 	port              int32
 	datasources       *map[string]*datasource.Datasource
@@ -43,9 +52,9 @@ type WeStack struct {
 	restApiRoot       string
 	roleMappingModel  *model.Model
 	dataSourceOptions *map[string]*datasource.Options
-	_swaggerPaths     map[string]wst.M
 	init              time.Time
 	jwtSecretKey      []byte
+	swaggerHelper     swaggerhelperinterface.SwaggerHelper
 }
 
 func (app *WeStack) FindModel(modelName string) (*model.Model, error) {
@@ -150,11 +159,79 @@ func (app *WeStack) Boot(customRoutesCallbacks ...func(app *WeStack)) {
 	app.loadModelsDynamicRoutes()
 	app.loadNotFoundRoutes()
 
+	app.Server.Get("/system/memorykv/stats", func(c *fiber.Ctx) error {
+		allStats := make(map[string]map[string]memorykv.MemoryKvStats)
+		var totalSizeKiB float64
+		for _, ds := range *app.datasources {
+			if ds.SubViper.GetString("connector") == "memorykv" {
+				kvDbStats := ds.Db.(memorykv.MemoryKvDb).Stats()
+				allStats[ds.Name] = kvDbStats
+				for _, kvStats := range kvDbStats {
+					totalSizeKiB += float64(kvStats.TotalSize) / 1024.0
+				}
+			}
+		}
+		return c.JSON(fiber.Map{"stats": wst.M{
+			"totalSizeKiB": totalSizeKiB,
+			"datasources":  allStats,
+		}})
+	})
+
 	app.Server.Get("/swagger/doc.json", swaggerDocsHandler(app))
 
+	var swaggerUIStatic []byte
+	var swaggerContentEncoding = "deflate"
 	app.Server.Get("/swagger/*", func(ctx *fiber.Ctx) error {
-		return ctx.Type("html", "utf-8").Send(lib.SwaggerUIStatic)
+		if swaggerUIStatic == nil {
+			request, err := http.NewRequest("GET", "https://swagger-ui.fhcreations.com/", nil)
+			if err != nil {
+				return err
+			}
+			request.Header.Set("Accept", "text/html")
+			request.Header.Set("Accept-Encoding", "gzip, deflate, br")
+			//request.Header.Set("Accept-Language", "en-US,en;q=0.9")
+			//request.Header.Set("Cache-Control", "no-cache")
+
+			response, err := http.DefaultClient.Do(request)
+
+			for _, v := range response.Header["Content-Encoding"] {
+				swaggerContentEncoding = v
+			}
+
+			var reader io.Reader
+			//// decompress
+			//switch swaggerContentEncoding {
+			//case "gzip":
+			//	reader, err = gzip.NewReader(response.Body)
+			//	if err != nil {
+			//		break
+			//	}
+			//case "br":
+			//	reader = brotli.NewReader(response.Body)
+			//case "deflate", "":
+			reader = response.Body
+			//}
+			swaggerUIStatic, err = io.ReadAll(reader)
+			if err != nil {
+				return err
+			}
+
+			fmt.Printf("DEBUG: Fetched swagger ui static html (%v bytes)\n", len(swaggerUIStatic))
+			fmt.Printf("DEBUG: Swagger Content-Encoding: %v\n", swaggerContentEncoding)
+		}
+
+		ctx.Status(fiber.StatusOK).Set("Content-Type", "text/html; charset=utf-8")
+		ctx.Set("Content-Encoding", swaggerContentEncoding)
+
+		return ctx.Send(swaggerUIStatic)
 	})
+
+	// Free up memory
+	err = app.swaggerHelper.Dump()
+	if err != nil {
+		fmt.Printf("Error while dumping swagger helper: %v\n", err)
+	}
+
 }
 
 func (app *WeStack) Start() error {
@@ -269,10 +346,36 @@ func New(options ...Options) *WeStack {
 	if finalOptions.Port == 0 {
 		finalOptions.Port = appViper.GetInt32("port")
 	}
+	if os.Getenv("PORT") != "" {
+		portFromEnv, err := strconv.Atoi(os.Getenv("PORT"))
+		if err != nil {
+			log.Fatalf("Invalid PORT environment variable: %v", err)
+		}
+		if finalOptions.debug {
+			log.Printf("DEBUG: PORT environment variable is set to %v", portFromEnv)
+		}
+		finalOptions.Port = int32(portFromEnv)
+	}
+
+	var bsonRegistry *bsoncodec.Registry
+	if finalOptions.DatasourceOptions != nil {
+		for _, v := range *finalOptions.DatasourceOptions {
+			if v.MongoDB != nil && v.MongoDB.Registry != nil {
+				bsonRegistry = v.MongoDB.Registry
+				break
+			}
+		}
+	}
+	if bsonRegistry == nil {
+		bsonRegistry = bson.NewRegistryBuilder().RegisterCodec(reflect.TypeOf(primitive.ObjectID{}), &bsoncodec.TimeCodec{}).Build()
+	}
 	app := WeStack{
 		Server:  server,
 		Viper:   appViper,
 		Options: finalOptions,
+		Bson: wst.BsonOptions{
+			Registry: bsonRegistry,
+		},
 
 		modelRegistry:     &modelRegistry,
 		datasources:       &datasources,

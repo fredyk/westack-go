@@ -51,8 +51,8 @@ func (modelInstance *Instance) ToJSON() wst.M {
 					result[relationName] = relatedInstance
 					break
 				case isManyRelation(relationConfig.Type):
-					aux := make(wst.A, len(rawRelatedData.([]Instance)))
-					for idx, v := range rawRelatedData.([]Instance) {
+					aux := make(wst.A, len(rawRelatedData.(InstanceA)))
+					for idx, v := range rawRelatedData.(InstanceA) {
 						aux[idx] = v.ToJSON()
 					}
 					result[relationName] = aux
@@ -70,7 +70,7 @@ func (modelInstance *Instance) Get(relationName string) interface{} {
 	switch (*modelInstance.Model.Config.Relations)[relationName].Type {
 	case "hasMany", "hasAndBelongsToMany":
 		if result == nil {
-			result = make([]Instance, 0)
+			result = make(InstanceA, 0)
 		}
 		break
 	}
@@ -85,8 +85,8 @@ func (modelInstance *Instance) GetOne(relationName string) *Instance {
 	return result.(*Instance)
 }
 
-func (modelInstance *Instance) GetMany(relationName string) []Instance {
-	return modelInstance.Get(relationName).([]Instance)
+func (modelInstance *Instance) GetMany(relationName string) InstanceA {
+	return modelInstance.Get(relationName).(InstanceA)
 }
 
 func (modelInstance *Instance) HideProperties() {
@@ -96,12 +96,18 @@ func (modelInstance *Instance) HideProperties() {
 	}
 }
 
-func (modelInstance *Instance) Transform(out interface{}) error {
-	err := bson.Unmarshal(modelInstance.bytes, out)
-	if err != nil {
-		return err
+func (modelInstance *Instance) Transform(out interface{}) (err error) {
+	err = modelInstance.requireBytes()
+	if err == nil {
+		//Err = bson.Unmarshal(modelInstance.bytes, out)
+		err = bson.UnmarshalWithRegistry(modelInstance.Model.App.Bson.Registry, modelInstance.bytes, out)
+		//Err = json.Unmarshal(modelInstance.bytes, out)
+		//Err = easyjson.Unmarshal(modelInstance.bytes, out)
+		if err != nil && modelInstance.Model.App.Debug {
+			fmt.Printf("Error while unmarshalling instance: %s", err)
+		}
 	}
-	return nil
+	return
 }
 
 func (modelInstance *Instance) UncheckedTransform(out interface{}) interface{} {
@@ -196,7 +202,10 @@ func (modelInstance *Instance) UpdateAttributes(data interface{}, baseContext *E
 				v := eventContext.Result.(Instance)
 				return &v, nil
 			case wst.M:
-				v := modelInstance.Model.Build(eventContext.Result.(wst.M), targetBaseContext)
+				v, err := modelInstance.Model.Build(eventContext.Result.(wst.M), NewBuildCache(), targetBaseContext)
+				if err != nil {
+					return nil, err
+				}
 				return &v, nil
 			default:
 				return nil, fmt.Errorf("invalid eventContext.Result type, expected *Instance, Instance or wst.M; found %T", eventContext.Result)
@@ -248,11 +257,7 @@ func (modelInstance *Instance) Reload(eventContext *EventContext) error {
 		}
 	}
 	modelInstance.data = newInstance.data
-	_bytes, err := bson.Marshal(modelInstance.data)
-	if err != nil {
-		return err
-	}
-	modelInstance.bytes = _bytes
+	modelInstance.bytes = nil
 	return nil
 }
 
@@ -435,6 +440,46 @@ func (modelInstance *Instance) GetA(path string) *wst.A {
 	}
 }
 
+func (modelInstance *Instance) requireBytes() (err error) {
+	if modelInstance.bytes == nil {
+		//if len(modelInstance.bytes) == 0 {
+		//// register encoder for primitive.ObjectID
+		//bson.DefaultRegistry.RegisterEncoder(primitive.ObjectID{}, bson.ObjectIDEncoder{})
+		//bson.NewRegistryBuilder().Build()
+		//bson.MarshalWithRegistry(bson.NewRegistryBuilder().RegisterTypeEncoder(reflect.TypeOf(primitive.ObjectID{}), bson.ObjectIDEncoder{}).Build(), modelInstance.data)
+		//// register decoder for primitive.ObjectID
+		//bson.DefaultRegistry.RegisterDecoder(primitive.ObjectID{}, bson.ObjectIDDecoder{})
+
+		//modelInstance.bytes, Err = bson.Marshal(modelInstance.data)
+		if modelInstance.Model.App.Debug {
+			log.Printf("DEBUG: marshalling at requireBytes(): %v\n", modelInstance.data)
+		}
+		//modelInstance.bytes, Err = bson.MarshalWithRegistry(modelInstance.Model.App.Bson.Registry, modelInstance.data)
+		modelInstance.bytes, err = modelInstance.MarshalBSON()
+		//modelInstance.bytes, Err = easyjson.Marshal(modelInstance.data)
+	}
+	if err != nil && modelInstance.Model.App.Debug {
+		log.Printf("ERROR: while marshalling Instance: %v\n", err)
+	}
+	return err
+}
+
+// Inherit easyjson
+
+func (modelInstance *Instance) MarshalBSON() (out []byte, err error) {
+	// marshal modelInstance.data
+	toMarshal := modelInstance.data
+	if modelInstance.Model.App.Debug {
+		log.Printf("DEBUG: marshalling Instance: %v\n", toMarshal)
+	}
+	//bytes, Err := easyjson.Marshal(toMarshal)
+	//w.Raw(bytes, Err)
+	//if modelInstance.Model.App.Debug {
+	//	log.Printf("DEBUG: marshalled Instance: %v\n", len(bytes))
+	//}
+	return bson.MarshalWithRegistry(modelInstance.Model.App.Bson.Registry, toMarshal)
+}
+
 func (instances InstanceA) ToJSON() []wst.M {
 	result := make([]wst.M, len(instances))
 	for idx, instance := range instances {
@@ -442,3 +487,30 @@ func (instances InstanceA) ToJSON() []wst.M {
 	}
 	return result
 }
+
+//func (instances InstanceA) MarshalBSON() (out []byte, Err error) {
+//	// marshal bson as array of modelInstance.data
+//	//toMarshal := make([]wst.M, len(instances))
+//	//for idx, instance := range instances {
+//	//	toMarshal[idx] = instance.data
+//	//}
+//	if instances[0].Model.App.Debug {
+//		log.Printf("DEBUG: marshalling InstanceA: %v\n", instances)
+//	}
+//	//
+//	for idx, instance := range instances {
+//		if idx == 0 {
+//			out, Err = bson.MarshalWithRegistry(instance.Model.App.Bson.Registry, instance.data)
+//			if Err != nil {
+//				return
+//			}
+//		} else {
+//			aux, Err := bson.MarshalWithRegistry(instance.Model.App.Bson.Registry, instance.data)
+//			if Err != nil {
+//				return nil, Err
+//			}
+//			out = append(out, aux...)
+//		}
+//	}
+//	return
+//}

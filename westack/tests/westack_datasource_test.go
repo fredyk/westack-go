@@ -3,13 +3,16 @@ package tests
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 
 	"github.com/fredyk/westack-go/westack/datasource"
 )
 
-func Test_Datasource_Initialize_InvalidConnector(t *testing.T) {
+func Test_Datasource_Initialize_InvalidDatasource(t *testing.T) {
+
+	t.Parallel()
 
 	ds := datasource.New("test2020", app.DsViper, context.Background())
 	err := ds.Initialize()
@@ -20,9 +23,11 @@ func Test_Datasource_Initialize_InvalidConnector(t *testing.T) {
 
 func Test_Datasource_Initialize_ConnectError(t *testing.T) {
 
+	t.Parallel()
+
 	prevHost := app.DsViper.GetString("db.host")
-	app.DsViper.Set("db.host", "<invalid host>")
-	ds := datasource.New("db", app.DsViper, context.Background())
+	ds := datasource.New("db0", app.DsViper, context.Background())
+	ds.SubViper.Set("host", "<invalid host>")
 	ds.Options = &datasource.Options{
 		MongoDB: &datasource.MongoDBDatasourceOptions{
 			Timeout: 3,
@@ -32,8 +37,17 @@ func Test_Datasource_Initialize_ConnectError(t *testing.T) {
 	assert.NotNil(t, err)
 	assert.Regexp(t, "no such host", err.Error(), "error message should be 'no such host'")
 
-	app.DsViper.Set("db.host", prevHost)
+	ds.SubViper.Set("host", prevHost)
 	err = ds.Initialize()
 	assert.Nil(t, err)
+
+}
+
+func Test_Datasource_Ping(t *testing.T) {
+
+	t.Parallel()
+
+	// Simply wait 5.2 seconds to cover datasource ping interval
+	time.Sleep(5200 * time.Millisecond)
 
 }
