@@ -202,3 +202,79 @@ func Test_EnforceExError(t *testing.T) {
 	_, err := noteModel.EnforceEx(nil, "", "create", &model.EventContext{})
 	assert.NotNil(t, err)
 }
+
+func Test_CreateWithDefaultStringValue(t *testing.T) {
+
+	t.Parallel()
+
+	created, err := noteModel.Create(wst.M{}, systemContext)
+	assert.Nil(t, err)
+	assert.Equal(t, "default", created.GetString("defaultString"))
+}
+
+func Test_CreateWithDefaultIntValue(t *testing.T) {
+
+	t.Parallel()
+
+	created, err := noteModel.Create(wst.M{}, systemContext)
+	assert.Nil(t, err)
+	assert.Equal(t, int64(1), created.GetInt("defaultInt"))
+}
+
+func Test_CreateWithDefaultFloatValue(t *testing.T) {
+
+	t.Parallel()
+
+	created, err := noteModel.Create(wst.M{}, systemContext)
+	assert.Nil(t, err)
+	assert.Equal(t, 87436874647.8761781676, created.GetFloat64("defaultFloat"))
+}
+
+func Test_CreateWithDefaultBooleanValue(t *testing.T) {
+
+	t.Parallel()
+
+	created, err := noteModel.Create(wst.M{}, systemContext)
+	assert.Nil(t, err)
+	assert.Equal(t, true, created.GetBoolean("defaultBoolean", false))
+}
+
+func Test_CreateWithDefaultListValue(t *testing.T) {
+
+	t.Parallel()
+
+	created, err := noteModel.Create(wst.M{}, systemContext)
+	assert.Nil(t, err)
+	assert.Contains(t, created.ToJSON(), "defaultList")
+	assert.IsType(t, primitive.A{}, created.ToJSON()["defaultList"])
+	assert.Equal(t, primitive.A{"default"}, created.ToJSON()["defaultList"].(primitive.A))
+}
+
+func Test_CreateWithDefaultMapValue(t *testing.T) {
+
+	t.Parallel()
+
+	created, err := noteModel.Create(wst.M{}, systemContext)
+	assert.Nil(t, err)
+	assert.Contains(t, created.ToJSON(), "defaultMap")
+	assert.IsType(t, wst.M{}, created.ToJSON()["defaultMap"])
+	assert.Contains(t, created.ToJSON()["defaultMap"].(wst.M), "defaultKey")
+	assert.Equal(t, wst.M{"defaultKey": "defaultValue"}, created.ToJSON()["defaultMap"].(wst.M))
+}
+
+func Test_CreateWithDefaultTimeValue(t *testing.T) {
+
+	t.Parallel()
+
+	probablyTime := time.Now()
+	lowerNanos := probablyTime.UnixNano()
+	// Should be 15 milliseconds after at most
+	upperNanos := probablyTime.UnixNano() + 15000000
+	created, err := noteModel.Create(wst.M{}, systemContext)
+	assert.Nil(t, err)
+	assert.Contains(t, created.ToJSON(), "defaultTimeNow")
+	assert.IsType(t, primitive.DateTime(0), created.ToJSON()["defaultTimeNow"])
+	assert.GreaterOrEqual(t, created.ToJSON()["defaultTimeNow"].(primitive.DateTime).Time().UnixNano(), lowerNanos)
+	assert.LessOrEqual(t, created.ToJSON()["defaultTimeNow"].(primitive.DateTime).Time().UnixNano(), upperNanos)
+
+}
