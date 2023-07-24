@@ -418,21 +418,25 @@ func (app *WeStack) setupModel(loadedModel *model.Model, dataSource *datasource.
 		loadedModel.Observe("before save", func(ctx *model.EventContext) error {
 			data := ctx.Data
 
-			if (*data)["modified"] == nil {
+			if _, ok := (*data)["modified"]; !ok {
 				timeNow := time.Now()
 				(*data)["modified"] = timeNow
 			}
 
 			if ctx.IsNewInstance {
-				if (*data)["created"] == nil {
+				if _, ok := (*data)["created"]; !ok {
 					timeNow := time.Now()
 					(*data)["created"] = timeNow
 				}
 
 				for propertyName, propertyConfig := range config.Properties {
-					if propertyConfig.Default != nil {
-						if (*data)[propertyName] == nil {
-							(*data)[propertyName] = propertyConfig.Default
+					defaultValue := propertyConfig.Default
+					if defaultValue != nil {
+						if _, ok := (*data)[propertyName]; !ok {
+							if defaultValue == "null" {
+								defaultValue = nil
+							}
+							(*data)[propertyName] = defaultValue
 						}
 					}
 				}
