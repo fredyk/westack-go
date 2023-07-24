@@ -261,3 +261,20 @@ func Test_CreateWithDefaultMapValue(t *testing.T) {
 	assert.Contains(t, created.ToJSON()["defaultMap"].(wst.M), "defaultKey")
 	assert.Equal(t, wst.M{"defaultKey": "defaultValue"}, created.ToJSON()["defaultMap"].(wst.M))
 }
+
+func Test_CreateWithDefaultTimeValue(t *testing.T) {
+
+	t.Parallel()
+
+	probablyTime := time.Now()
+	lowerNanos := probablyTime.UnixNano()
+	// Should be 15 milliseconds after at most
+	upperNanos := probablyTime.UnixNano() + 15000000
+	created, err := noteModel.Create(wst.M{}, systemContext)
+	assert.Nil(t, err)
+	assert.Contains(t, created.ToJSON(), "defaultTimeNow")
+	assert.IsType(t, primitive.DateTime(0), created.ToJSON()["defaultTimeNow"])
+	assert.GreaterOrEqual(t, created.ToJSON()["defaultTimeNow"].(primitive.DateTime).Time().UnixNano(), lowerNanos)
+	assert.LessOrEqual(t, created.ToJSON()["defaultTimeNow"].(primitive.DateTime).Time().UnixNano(), upperNanos)
+
+}
