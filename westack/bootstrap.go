@@ -76,7 +76,7 @@ func (app *WeStack) loadModels() error {
 		dataSource := (*app.datasources)[configFromGlobal.Datasource]
 
 		if dataSource == nil {
-			panic(fmt.Sprintf("ERROR: Missing or invalid datasource file for %v", dataSource))
+			panic(fmt.Sprintf("ERROR: Missing or invalid datasource entry %v for model %v declared at model-config.json", configFromGlobal.Datasource, config.Name))
 		}
 
 		loadedModel := model.New(config, app.modelRegistry)
