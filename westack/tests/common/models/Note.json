@@ -35,7 +35,15 @@
     },
     "defaultTimeNow": {
       "type": "date",
-      "default": "now"
+      "default": "$now"
+    },
+    "defaultTimeHourAgo": {
+      "type": "date",
+      "default": "-3600s"
+    },
+    "defaultTimeHourFromNow": {
+      "type": "date",
+      "default": "+3600s"
     }
   },
   "relations": {

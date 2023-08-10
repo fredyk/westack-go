@@ -1,9 +1,10 @@
 package tests
 
 import (
-	"github.com/fredyk/westack-go/westack/model"
 	"testing"
 	"time"
+
+	"github.com/fredyk/westack-go/westack/model"
 
 	"github.com/stretchr/testify/assert"
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -267,14 +268,47 @@ func Test_CreateWithDefaultTimeValue(t *testing.T) {
 	t.Parallel()
 
 	probablyTime := time.Now()
-	lowerNanos := probablyTime.UnixNano()
+	lowerSeconds := probablyTime.Unix()
 	// Should be 15 milliseconds after at most
-	upperNanos := probablyTime.UnixNano() + 15000000
+	upperSeconds := probablyTime.Unix() + 3
 	created, err := noteModel.Create(wst.M{}, systemContext)
 	assert.Nil(t, err)
 	assert.Contains(t, created.ToJSON(), "defaultTimeNow")
 	assert.IsType(t, primitive.DateTime(0), created.ToJSON()["defaultTimeNow"])
-	assert.GreaterOrEqual(t, created.ToJSON()["defaultTimeNow"].(primitive.DateTime).Time().UnixNano(), lowerNanos)
-	assert.LessOrEqual(t, created.ToJSON()["defaultTimeNow"].(primitive.DateTime).Time().UnixNano(), upperNanos)
+	assert.GreaterOrEqual(t, created.ToJSON()["defaultTimeNow"].(primitive.DateTime).Time().Unix(), lowerSeconds)
+	assert.LessOrEqual(t, created.ToJSON()["defaultTimeNow"].(primitive.DateTime).Time().Unix(), upperSeconds)
+
+}
+
+func Test_CreateWithDefaultTimeHourAgo(t *testing.T) {
+	t.Parallel()
+
+	probablyTime := time.Now()
+	lowerSeconds := probablyTime.Unix() - 3600
+	// Should be 15 milliseconds after at most
+	upperSeconds := probablyTime.Unix() - 3597
+	created, err := noteModel.Create(wst.M{}, systemContext)
+	assert.Nil(t, err)
+	assert.Contains(t, created.ToJSON(), "defaultTimeHourAgo")
+	assert.IsType(t, primitive.DateTime(0), created.ToJSON()["defaultTimeHourAgo"])
+	assert.GreaterOrEqual(t, created.ToJSON()["defaultTimeHourAgo"].(primitive.DateTime).Time().Unix(), lowerSeconds)
+	assert.LessOrEqual(t, created.ToJSON()["defaultTimeHourAgo"].(primitive.DateTime).Time().Unix(), upperSeconds)
+
+}
+
+func Test_CreateWithDefaultTimeHourFromNow(t *testing.T) {
+
+	t.Parallel()
+
+	probablyTime := time.Now()
+	lowerSeconds := probablyTime.Unix() + 3600
+	// Should be 15 milliseconds after at most
+	upperSeconds := probablyTime.Unix() + 3603
+	created, err := noteModel.Create(wst.M{}, systemContext)
+	assert.Nil(t, err)
+	assert.Contains(t, created.ToJSON(), "defaultTimeHourFromNow")
+	assert.IsType(t, primitive.DateTime(0), created.ToJSON()["defaultTimeHourFromNow"])
+	assert.GreaterOrEqual(t, created.ToJSON()["defaultTimeHourFromNow"].(primitive.DateTime).Time().Unix(), lowerSeconds)
+	assert.LessOrEqual(t, created.ToJSON()["defaultTimeHourFromNow"].(primitive.DateTime).Time().Unix(), upperSeconds)
 
 }

@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -417,6 +418,7 @@ func (app *WeStack) setupModel(loadedModel *model.Model, dataSource *datasource.
 
 		loadedModel.Observe("before save", func(ctx *model.EventContext) error {
 			data := ctx.Data
+			intervalPattern := regexp.MustCompile(`^[-+]\d+s$`)
 
 			if _, ok := (*data)["modified"]; !ok {
 				timeNow := time.Now()
@@ -435,6 +437,26 @@ func (app *WeStack) setupModel(loadedModel *model.Model, dataSource *datasource.
 						if _, ok := (*data)[propertyName]; !ok {
 							if defaultValue == "null" {
 								defaultValue = nil
+							}
+							if propertyConfig.Type == "date" {
+								if defaultValue == "$now" {
+									(*data)[propertyName] = time.Now()
+									continue
+								}
+								if match := intervalPattern.MatchString(defaultValue.(string)); match {
+									secondsString := defaultValue.(string)[1 : len(defaultValue.(string))-1]
+									seconds, err := strconv.Atoi(secondsString)
+									if err != nil {
+										return err
+									}
+
+									adjustment := 1
+									if defaultValue.(string)[0] == '-' {
+										adjustment = -1
+									}
+
+									defaultValue = time.Now().Add(time.Duration(adjustment*seconds) * time.Second)
+								}
 							}
 							(*data)[propertyName] = defaultValue
 						}
