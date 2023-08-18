@@ -78,13 +78,27 @@ func (loadedModel *Model) ExtractLookupsFromFilter(filterMap *wst.Filter, disabl
 								// In adition, extract the first part of the "foo.bar", and check if foo is a valid relation of the loadedModel
 								parts := strings.Split(fieldValue.(string), ".")
 								relationName := strings.ReplaceAll(parts[0], "$", "")
-								if _, ok := (*loadedModel.Config.Relations)[relationName]; !ok {
-									// return nil, fmt.Errorf("relation %v not found for model %v", relationName, loadedModel.Name)
+								if relation, ok := (*loadedModel.Config.Relations)[relationName]; !ok {
 									return nil, wst.CreateError(fiber.ErrBadRequest,
 										"BAD_RELATION",
 										fiber.Map{"message": fmt.Sprintf("relation %v not found for model %v", relationName, loadedModel.Name)},
 										"ValidationError",
 									)
+								} else {
+									// ensure that the relation is in the same datasource
+
+									relatedModel, err := loadedModel.App.FindModel(relation.Model)
+									if err != nil {
+										return nil, err
+									}
+
+									if relatedModel.(*Model).Datasource.Name != loadedModel.Datasource.Name {
+										return nil, wst.CreateError(fiber.ErrBadRequest,
+											"BAD_RELATION",
+											fiber.Map{"message": fmt.Sprintf("related model %v at relation %v belongs to another datasource", relatedModel.(*Model).Name, relationName)},
+											"ValidationError",
+										)
+									}
 								}
 
 							} else {
@@ -357,12 +371,21 @@ func recursiveExtractFields(targetWhere wst.M, fieldsToExclude map[string]bool, 
 
 func recursiveExtractExpression(key string, value interface{}, fieldsToExclude map[string]bool, mode string) []interface{} {
 	newList := make([]interface{}, 0)
-	for _, andValue := range value.([]interface{}) {
-		var andValueAsM wst.M = make(wst.M, 0)
-		for k, v := range andValue.(map[string]interface{}) {
-			andValueAsM[k] = v
+	var asInterfaceList []interface{}
+	switch value.(type) {
+	case []interface{}:
+		asInterfaceList = value.([]interface{})
+	case []wst.M:
+		for _, v := range value.([]wst.M) {
+			asInterfaceList = append(asInterfaceList, v)
 		}
-		newVal := recursiveExtractFields(andValueAsM, fieldsToExclude, mode)
+	case []map[string]interface{}:
+		for _, v := range value.([]map[string]interface{}) {
+			asInterfaceList = append(asInterfaceList, v)
+		}
+	}
+	for _, andValue := range asInterfaceList {
+		newVal := recursiveExtractFields(andValue.(wst.M), fieldsToExclude, mode)
 		if len(newVal) > 0 {
 			newList = append(newList, newVal)
 		}
