@@ -47,17 +47,84 @@ func (loadedModel *Model) ExtractLookupsFromFilter(filterMap *wst.Filter, disabl
 		targetWhere = nil
 	}
 
-	var targetAggregation []wst.AggregationStage
+	var targetAggregationBeforeLookups []wst.AggregationStage
+	var targetAggregationAfterLookups []wst.AggregationStage
+	var newFoundFields = make(map[string]bool)
 	if filterMap != nil && filterMap.Aggregation != nil {
 		for _, aggregationStage := range filterMap.Aggregation {
 			var validStageFound = false
 			var firstKeyFound = ""
 			for key, _ := range aggregationStage {
 				firstKeyFound = key
-				for _, allowedStage := range AllowedStages {
-					if key == allowedStage {
-						validStageFound = true
-						break
+				if !validStageFound {
+					for _, allowedStage := range AllowedStages {
+						if key == allowedStage {
+							validStageFound = true
+							break
+						}
+					}
+				}
+				switch key {
+				case "$addFields", "$project", "$set":
+					fieldCount := 0
+					// Check wether it affects a nested relation or not
+					for fieldName, fieldValue := range aggregationStage[key].(map[string]interface{}) {
+						var placeToInsert string // "BEFORE" or "AFTER"
+						switch fieldValue.(type) {
+						case string:
+							if strings.Contains(fieldValue.(string), ".") {
+								// Nested relation
+								placeToInsert = "AFTER"
+								// In adition, extract the first part of the "foo.bar", and check if foo is a valid relation of the loadedModel
+								parts := strings.Split(fieldValue.(string), ".")
+								relationName := strings.ReplaceAll(parts[0], "$", "")
+								if relation, ok := (*loadedModel.Config.Relations)[relationName]; !ok {
+									return nil, wst.CreateError(fiber.ErrBadRequest,
+										"BAD_RELATION",
+										fiber.Map{"message": fmt.Sprintf("relation %v not found for model %v", relationName, loadedModel.Name)},
+										"ValidationError",
+									)
+								} else {
+									// ensure that the relation is in the same datasource
+
+									relatedModel, err := loadedModel.App.FindModel(relation.Model)
+									if err != nil {
+										return nil, err
+									}
+
+									if relatedModel.(*Model).Datasource.Name != loadedModel.Datasource.Name {
+										return nil, wst.CreateError(fiber.ErrBadRequest,
+											"BAD_RELATION",
+											fiber.Map{"message": fmt.Sprintf("related model %v at relation %v belongs to another datasource", relatedModel.(*Model).Name, relationName)},
+											"ValidationError",
+										)
+									}
+								}
+
+							} else {
+								// Not nested relation
+								placeToInsert = "BEFORE"
+							}
+						default:
+							// Not nested relation
+							placeToInsert = "BEFORE"
+						}
+						if fieldCount == 0 {
+							switch placeToInsert {
+							case "BEFORE":
+								targetAggregationBeforeLookups = append(targetAggregationBeforeLookups, wst.AggregationStage{})
+							case "AFTER":
+								newFoundFields[fieldName] = true
+								targetAggregationAfterLookups = append(targetAggregationAfterLookups, wst.AggregationStage{})
+							}
+						}
+						switch placeToInsert {
+						case "BEFORE":
+							targetAggregationBeforeLookups[len(targetAggregationBeforeLookups)-1][key] = aggregationStage[key]
+						case "AFTER":
+							targetAggregationAfterLookups[len(targetAggregationAfterLookups)-1][key] = aggregationStage[key]
+						}
+						fieldCount++
 					}
 				}
 			}
@@ -65,7 +132,6 @@ func (loadedModel *Model) ExtractLookupsFromFilter(filterMap *wst.Filter, disabl
 				return nil, fmt.Errorf("%s aggregation stage not allowed", firstKeyFound)
 			}
 		}
-		targetAggregation = filterMap.Aggregation
 	}
 
 	var targetOrder *wst.Order
@@ -79,14 +145,22 @@ func (loadedModel *Model) ExtractLookupsFromFilter(filterMap *wst.Filter, disabl
 	var targetLimit = filterMap.Limit
 
 	var lookups *wst.A = &wst.A{}
-	for _, aggregationStage := range targetAggregation {
+	for _, aggregationStage := range targetAggregationBeforeLookups {
 		*lookups = append(*lookups, wst.CopyMap(wst.M(aggregationStage)))
 	}
+	var targetMatchBeforeLookups wst.M
+	var targetMatchAfterLookups wst.M
 	if targetWhere != nil {
+		targetWhereAsM := wst.M(*targetWhere)
 		if !disableTypeConversions {
 			datasource.ReplaceObjectIds(*targetWhere)
 		}
-		*lookups = append(*lookups, wst.M{"$match": *targetWhere})
+		targetMatchBeforeLookups = wst.M{"$match": recursiveExtractFields(targetWhereAsM, newFoundFields, "EXCLUDE")}
+		*lookups = append(*lookups, targetMatchBeforeLookups)
+		aux := recursiveExtractFields(targetWhereAsM, newFoundFields, "INCLUDE")
+		if len(aux) > 0 {
+			targetMatchAfterLookups = wst.M{"$match": aux}
+		}
 	}
 
 	if targetOrder != nil && len(*targetOrder) > 0 {
@@ -238,10 +312,85 @@ func (loadedModel *Model) ExtractLookupsFromFilter(filterMap *wst.Filter, disabl
 			}
 		}
 
-	} else {
-
 	}
+	for _, aggregationStage := range targetAggregationAfterLookups {
+		*lookups = append(*lookups, wst.CopyMap(wst.M(aggregationStage)))
+	}
+	if len(targetMatchAfterLookups) > 0 {
+		*lookups = append(*lookups, targetMatchAfterLookups)
+	}
+	if loadedModel.App.Debug {
+		marshalled, err := json.MarshalIndent(lookups, "", "  ")
+		if err != nil {
+			return nil, err
+		}
+		log.Printf("DEBUG: lookups %v\n", string(marshalled))
+	}
+
 	return lookups, nil
+}
+
+func recursiveExtractFields(targetWhere wst.M, fieldsToExclude map[string]bool, mode string) wst.M {
+	result := wst.M{}
+	// Some posible wheres:
+	// targetWhere = {"foo": "bar"}
+	// targetWhere = {"$and": [{"foo1": "bar1"}, {"foo2": "bar2"}]}
+	// targetWhere = {"foo": {$exists: true}}
+	// and lots of other mongo expressions
+	// mode: "INCLUDE" || "EXCLUDE"
+	for key, value := range targetWhere {
+		switch key {
+		case "$and":
+			newAnd := recursiveExtractExpression(key, value, fieldsToExclude, mode)
+			if len(newAnd) > 0 {
+				result["$and"] = newAnd
+			}
+		case "$or":
+			newOr := recursiveExtractExpression(key, value, fieldsToExclude, mode)
+			if len(newOr) > 0 {
+				result["$or"] = newOr
+			}
+		default:
+			/*if !fieldsToExclude[key] {
+				result[key] = value
+			}*/
+			switch mode {
+			case "INCLUDE":
+				if fieldsToExclude[key] {
+					result[key] = value
+				}
+			case "EXCLUDE":
+				if !fieldsToExclude[key] {
+					result[key] = value
+				}
+			}
+		}
+	}
+	return result
+}
+
+func recursiveExtractExpression(key string, value interface{}, fieldsToExclude map[string]bool, mode string) []interface{} {
+	newList := make([]interface{}, 0)
+	var asInterfaceList []interface{}
+	switch value.(type) {
+	case []interface{}:
+		asInterfaceList = value.([]interface{})
+	case []wst.M:
+		for _, v := range value.([]wst.M) {
+			asInterfaceList = append(asInterfaceList, v)
+		}
+	case []map[string]interface{}:
+		for _, v := range value.([]map[string]interface{}) {
+			asInterfaceList = append(asInterfaceList, v)
+		}
+	}
+	for _, andValue := range asInterfaceList {
+		newVal := recursiveExtractFields(andValue.(wst.M), fieldsToExclude, mode)
+		if len(newVal) > 0 {
+			newList = append(newList, newVal)
+		}
+	}
+	return newList
 }
 
 /*

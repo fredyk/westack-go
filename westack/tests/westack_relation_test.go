@@ -2,12 +2,13 @@ package tests
 
 import (
 	"fmt"
-	"github.com/goccy/go-json"
 	"io"
 	"math/rand"
 	"net/http"
 	"testing"
 	"time"
+
+	"github.com/goccy/go-json"
 
 	"github.com/stretchr/testify/assert"
 	"go.mongodb.org/mongo-driver/bson"
@@ -108,7 +109,7 @@ func Test_ExtractLookups(t *testing.T) {
 	assert.Equal(t, "$$userId", (*lookups)[0]["$lookup"].(wst.M)["pipeline"].(wst.A)[0]["$match"].(wst.M)["$expr"].(wst.M)["$and"].(wst.A)[0]["$eq"].([]string)[1])
 	assert.Equal(t, false, (*lookups)[0]["$lookup"].(wst.M)["pipeline"].(wst.A)[1]["$project"].(wst.M)["password"])
 	//fmt.Printf("pipeline: %v\n", (*lookups)[0]["$lookup"].(wst.M)["pipeline"].(wst.A))
-	assert.Equal(t, "John", (*lookups)[0]["$lookup"].(wst.M)["pipeline"].(wst.A)[2]["$match"].(wst.Where)["name"])
+	assert.Equal(t, "John", (*lookups)[0]["$lookup"].(wst.M)["pipeline"].(wst.A)[2]["$match"].(wst.M)["name"])
 
 	assert.Contains(t, (*lookups)[1], "$unwind")
 	assert.Equal(t, "$user", (*lookups)[1]["$unwind"].(wst.M)["path"])
@@ -248,6 +249,103 @@ func Test_CustomerOrderStore(t *testing.T) {
 
 	// Wait 11 seconds for the cache to expire
 	time.Sleep(11 * time.Second)
+
+}
+
+func Test_Aggregations(t *testing.T) {
+
+	t.Parallel()
+
+	// Check this aggregation:
+	/*
+		Aggregation: [
+			{
+				$addFields: {
+					"userUsername": "$user.username"
+				}
+			}
+		],
+		Where: {
+			userUsername: {$gt: ""}
+		}
+	*/
+
+	firstUser, err := userModel.FindOne(nil, systemContext)
+	assert.Nil(t, err)
+	assert.NotNil(t, firstUser)
+
+	note, err := noteModel.Create(wst.M{
+		"title":  "Note 1",
+		"userId": firstUser.Id,
+	}, systemContext)
+	assert.Nil(t, err)
+	assert.NotNil(t, note)
+
+	// Get the note including the user
+	filter := &wst.Filter{
+		Where: &wst.Where{"userUsername": wst.M{"$gt": ""}, "_id": note.Id},
+		Aggregation: []wst.AggregationStage{
+			{
+				"$addFields": map[string]interface{}{
+					"userUsername": "$user.username",
+				},
+			},
+		},
+		Include: &wst.Include{
+			{
+				Relation: "user",
+				Scope: &wst.Filter{
+					Where: &wst.Where{"username": firstUser.ToJSON()["username"]},
+				},
+			},
+		},
+	}
+
+	notesCursor := noteModel.FindMany(filter, systemContext)
+	assert.NotNil(t, notesCursor)
+	notes, err := notesCursor.All()
+	assert.Nil(t, err)
+	assert.NotNil(t, notes)
+	assert.Equal(t, 1, len(notes))
+	assert.Equal(t, "Note 1", notes[0].ToJSON()["title"])
+	assert.Equal(t, firstUser.ToJSON()["username"], notes[0].ToJSON()["userUsername"])
+
+}
+
+func Test_AggregationsWithInvalidDatasource(t *testing.T) {
+
+	t.Parallel()
+
+	filter := &wst.Filter{
+		Aggregation: []wst.AggregationStage{
+			{
+				"$addFields": map[string]interface{}{
+					"footer2Title": "$footer2.title",
+				},
+			},
+		},
+		Include: &wst.Include{
+			{
+				Relation: "footer2",
+			},
+		},
+	}
+
+	notesCursor := noteModel.FindMany(filter, systemContext)
+	assert.NotNil(t, notesCursor)
+	notes, err := notesCursor.All()
+	assert.NotNil(t, err)
+
+	assert.Nil(t, notes)
+
+	// check that type of error is westack error *wst.WeStackError
+	assert.Equal(t, "*wst.WeStackError", fmt.Sprintf("%T", err))
+
+	// check that the error code is 400
+	assert.Equal(t, 400, err.(*wst.WeStackError).FiberError.Code)
+
+	// check that the error message is "Invalid datasource"
+	assert.Equal(t, "related model Footer at relation footer2 belongs to another datasource", err.(*wst.WeStackError).Details["message"])
 
 }
 

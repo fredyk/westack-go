@@ -38,6 +38,7 @@ var userModel *model.Model
 var customerModel *model.Model
 var orderModel *model.Model
 var storeModel *model.Model
+var footerModel *model.Model
 var systemContext *model.EventContext
 
 func Test_GRPCCallWithQueryParamsOK(t *testing.T) {
@@ -336,6 +337,10 @@ func TestMain(m *testing.M) {
 			log.Fatalf("failed to find model: %v", err)
 		}
 		storeModel, err = server.FindModel("Store")
+		if err != nil {
+			log.Fatalf("failed to find model: %v", err)
+		}
+		footerModel, err = server.FindModel("Footer")
 		if err != nil {
 			log.Fatalf("failed to find model: %v", err)
 		}
