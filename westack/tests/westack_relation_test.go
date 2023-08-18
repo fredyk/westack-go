@@ -2,12 +2,13 @@ package tests
 
 import (
 	"fmt"
-	"github.com/goccy/go-json"
 	"io"
 	"math/rand"
 	"net/http"
 	"testing"
 	"time"
+
+	"github.com/goccy/go-json"
 
 	"github.com/stretchr/testify/assert"
 	"go.mongodb.org/mongo-driver/bson"
@@ -248,6 +249,64 @@ func Test_CustomerOrderStore(t *testing.T) {
 
 	// Wait 11 seconds for the cache to expire
 	time.Sleep(11 * time.Second)
+
+}
+
+func Test_Aggregations(t *testing.T) {
+
+	// Check this aggregation:
+	/*
+		Aggregation: [
+			{
+				$addFields: {
+					"userUsername": "$user.username"
+				}
+			}
+		],
+		Where: {
+			userUsername: {$gt: ""}
+		}
+	*/
+
+	firstUser, err := userModel.FindOne(nil, systemContext)
+	assert.Nil(t, err)
+	assert.NotNil(t, firstUser)
+
+	note, err := noteModel.Create(wst.M{
+		"title":  "Note 1",
+		"userId": firstUser.Id,
+	}, systemContext)
+	assert.Nil(t, err)
+	assert.NotNil(t, note)
+
+	// Get the note including the user
+	filter := &wst.Filter{
+		Where: &wst.Where{"userUsername": wst.M{"$gt": ""}, "_id": note.Id},
+		Aggregation: []wst.AggregationStage{
+			{
+				"$addFields": map[string]interface{}{
+					"userUsername": "$user.username",
+				},
+			},
+		},
+		Include: &wst.Include{
+			{
+				Relation: "user",
+				Scope: &wst.Filter{
+					Where: &wst.Where{"username": firstUser.ToJSON()["username"]},
+				},
+			},
+		},
+	}
+
+	notesCursor := noteModel.FindMany(filter, systemContext)
+	assert.NotNil(t, notesCursor)
+	notes, err := notesCursor.All()
+	assert.Nil(t, err)
+	assert.NotNil(t, notes)
+	assert.Equal(t, 1, len(notes))
+	assert.Equal(t, "Note 1", notes[0].ToJSON()["title"])
+	assert.Equal(t, firstUser.ToJSON()["username"], notes[0].ToJSON()["userUsername"])
 
 }
 
