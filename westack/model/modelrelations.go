@@ -385,7 +385,16 @@ func recursiveExtractExpression(key string, value interface{}, fieldsToExclude m
 		}
 	}
 	for _, andValue := range asInterfaceList {
-		newVal := recursiveExtractFields(andValue.(wst.M), fieldsToExclude, mode)
+		var asM wst.M
+		if v, ok := andValue.(wst.M); ok {
+			asM = v
+		} else if v, ok = andValue.(map[string]interface{}); ok {
+			asM = make(wst.M, 0)
+			for k, v := range v {
+				asM[k] = v
+			}
+		}
+		newVal := recursiveExtractFields(asM, fieldsToExclude, mode)
 		if len(newVal) > 0 {
 			newList = append(newList, newVal)
 		}
