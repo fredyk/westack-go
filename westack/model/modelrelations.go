@@ -66,7 +66,8 @@ func (loadedModel *Model) ExtractLookupsFromFilter(filterMap *wst.Filter, disabl
 				}
 				switch key {
 				case "$addFields", "$project", "$set":
-					fieldCount := 0
+					fieldCountForBefore := 0
+					fieldCountForAfter := 0
 					// Check wether it affects a nested relation or not
 					for fieldName, fieldValue := range aggregationStage[key].(map[string]interface{}) {
 						var placeToInsert string // "BEFORE" or "AFTER"
@@ -109,22 +110,21 @@ func (loadedModel *Model) ExtractLookupsFromFilter(filterMap *wst.Filter, disabl
 							// Not nested relation
 							placeToInsert = "BEFORE"
 						}
-						if fieldCount == 0 {
-							switch placeToInsert {
-							case "BEFORE":
+						switch placeToInsert {
+						case "BEFORE":
+							if fieldCountForBefore == 0 {
 								targetAggregationBeforeLookups = append(targetAggregationBeforeLookups, wst.AggregationStage{})
-							case "AFTER":
+							}
+							targetAggregationBeforeLookups[len(targetAggregationBeforeLookups)-1][key] = aggregationStage[key]
+							fieldCountForBefore++
+						case "AFTER":
+							if fieldCountForAfter == 0 {
 								newFoundFields[fieldName] = true
 								targetAggregationAfterLookups = append(targetAggregationAfterLookups, wst.AggregationStage{})
 							}
-						}
-						switch placeToInsert {
-						case "BEFORE":
-							targetAggregationBeforeLookups[len(targetAggregationBeforeLookups)-1][key] = aggregationStage[key]
-						case "AFTER":
 							targetAggregationAfterLookups[len(targetAggregationAfterLookups)-1][key] = aggregationStage[key]
+							fieldCountForAfter++
 						}
-						fieldCount++
 					}
 				}
 			}
