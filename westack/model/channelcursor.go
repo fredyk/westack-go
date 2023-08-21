@@ -1,8 +1,11 @@
 package model
 
+import wst "github.com/fredyk/westack-go/westack/common"
+
 type ChannelCursor struct {
-	channel chan *Instance
-	Err     error
+	channel      chan *Instance
+	Err          error
+	UsedPipeline *wst.A
 }
 
 func (cursor *ChannelCursor) Next() (result *Instance, err error) {
