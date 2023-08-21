@@ -2,6 +2,7 @@ package tests
 
 import (
 	"fmt"
+	"github.com/fredyk/westack-go/westack/model"
 	"io"
 	"math/rand"
 	"net/http"
@@ -299,6 +300,8 @@ func Test_Aggregations(t *testing.T) {
 				},
 			},
 		},
+		Skip:  0,
+		Limit: 30,
 	}
 
 	notesCursor := noteModel.FindMany(filter, systemContext)
@@ -309,6 +312,106 @@ func Test_Aggregations(t *testing.T) {
 	assert.Equal(t, 1, len(notes))
 	assert.Equal(t, "Note 1", notes[0].ToJSON()["title"])
 	assert.Equal(t, firstUser.ToJSON()["username"], notes[0].ToJSON()["userUsername"])
+
+}
+
+func Test_AggregationsLimitAfterLookups(t *testing.T) {
+
+	t.Parallel()
+
+	firstUser, err := userModel.FindOne(nil, systemContext)
+	assert.Nil(t, err)
+	assert.NotNil(t, firstUser)
+
+	// we are adding a field that does not exist in the model, so skip and limit should be applied after the stage
+	filter := &wst.Filter{
+		Where: &wst.Where{"userUsername": wst.M{"$gt": ""}},
+		Aggregation: []wst.AggregationStage{
+			{
+				"$addFields": map[string]interface{}{
+					"userUsername": "$user.username",
+				},
+			},
+		},
+		Include: &wst.Include{
+			{
+				Relation: "user",
+				Scope: &wst.Filter{
+					Where: &wst.Where{"username": firstUser.ToJSON()["username"]},
+				},
+			},
+		},
+		Skip:  60,
+		Limit: 30,
+	}
+
+	notesCursor := noteModel.FindMany(filter, systemContext)
+	assert.NotNil(t, notesCursor)
+	_, err = notesCursor.All()
+	assert.Nil(t, err)
+
+	// check that the limit was applied after the stage
+	pipeline := notesCursor.(*model.ChannelCursor).UsedPipeline
+	// find index for $stage
+	lookupIndex := -1
+	for i, stage := range *pipeline {
+		if stage["$lookup"] != nil {
+			lookupIndex = i
+			break
+		}
+	}
+	assert.GreaterOrEqual(t, lookupIndex, 0)
+	assert.EqualValues(t, 60, (*pipeline)[lookupIndex+4]["$skip"]) // +1 is $unwind. +2 is addFields, +3 is $match, +4 is $skip
+	assert.EqualValues(t, 30, (*pipeline)[lookupIndex+5]["$limit"])
+}
+
+func Test_AggregationsLimitBeforeLookups(t *testing.T) {
+
+	t.Parallel()
+
+	firstUser, err := userModel.FindOne(nil, systemContext)
+	assert.Nil(t, err)
+	assert.NotNil(t, firstUser)
+
+	// this time, we are not adding new fields so skip and limit should be applied before the $lookup stage
+	filter := &wst.Filter{
+		Aggregation: []wst.AggregationStage{
+			{
+				"$addFields": map[string]interface{}{
+					"foo": "bar",
+				},
+			},
+		},
+		Include: &wst.Include{
+			{
+				Relation: "user",
+				Scope: &wst.Filter{
+					Where: &wst.Where{"username": firstUser.ToJSON()["username"]},
+				},
+			},
+		},
+		Skip:  90,
+		Limit: 30,
+	}
+
+	notesCursor := noteModel.FindMany(filter, systemContext)
+	assert.NotNil(t, notesCursor)
+	_, err = notesCursor.All()
+	assert.Nil(t, err)
+
+	// check that the limit was applied before the $lookup stage
+	pipeline := notesCursor.(*model.ChannelCursor).UsedPipeline
+	// find index for $lookup
+	lookupIndex := -1
+	for i, stage := range *pipeline {
+		if stage["$lookup"] != nil {
+			lookupIndex = i
+			break
+		}
+	}
+	assert.GreaterOrEqual(t, lookupIndex, 0)
+	assert.EqualValues(t, 90, (*pipeline)[lookupIndex-2]["$skip"]) // -3 is $match
+	assert.EqualValues(t, 30, (*pipeline)[lookupIndex-1]["$limit"])
 
 }
 
