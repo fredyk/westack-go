@@ -66,7 +66,8 @@ func (loadedModel *Model) ExtractLookupsFromFilter(filterMap *wst.Filter, disabl
 				}
 				switch key {
 				case "$addFields", "$project", "$set":
-					fieldCount := 0
+					fieldCountForBefore := 0
+					fieldCountForAfter := 0
 					// Check wether it affects a nested relation or not
 					for fieldName, fieldValue := range aggregationStage[key].(map[string]interface{}) {
 						var placeToInsert string // "BEFORE" or "AFTER"
@@ -109,22 +110,21 @@ func (loadedModel *Model) ExtractLookupsFromFilter(filterMap *wst.Filter, disabl
 							// Not nested relation
 							placeToInsert = "BEFORE"
 						}
-						if fieldCount == 0 {
-							switch placeToInsert {
-							case "BEFORE":
+						switch placeToInsert {
+						case "BEFORE":
+							if fieldCountForBefore == 0 {
 								targetAggregationBeforeLookups = append(targetAggregationBeforeLookups, wst.AggregationStage{})
-							case "AFTER":
+							}
+							targetAggregationBeforeLookups[len(targetAggregationBeforeLookups)-1][key] = aggregationStage[key]
+							fieldCountForBefore++
+						case "AFTER":
+							if fieldCountForAfter == 0 {
 								newFoundFields[fieldName] = true
 								targetAggregationAfterLookups = append(targetAggregationAfterLookups, wst.AggregationStage{})
 							}
-						}
-						switch placeToInsert {
-						case "BEFORE":
-							targetAggregationBeforeLookups[len(targetAggregationBeforeLookups)-1][key] = aggregationStage[key]
-						case "AFTER":
 							targetAggregationAfterLookups[len(targetAggregationAfterLookups)-1][key] = aggregationStage[key]
+							fieldCountForAfter++
 						}
-						fieldCount++
 					}
 				}
 			}
@@ -148,18 +148,20 @@ func (loadedModel *Model) ExtractLookupsFromFilter(filterMap *wst.Filter, disabl
 	for _, aggregationStage := range targetAggregationBeforeLookups {
 		*lookups = append(*lookups, wst.CopyMap(wst.M(aggregationStage)))
 	}
-	var targetMatchBeforeLookups wst.M
 	var targetMatchAfterLookups wst.M
 	if targetWhere != nil {
 		targetWhereAsM := wst.M(*targetWhere)
 		if !disableTypeConversions {
 			datasource.ReplaceObjectIds(*targetWhere)
 		}
-		targetMatchBeforeLookups = wst.M{"$match": recursiveExtractFields(targetWhereAsM, newFoundFields, "EXCLUDE")}
-		*lookups = append(*lookups, targetMatchBeforeLookups)
-		aux := recursiveExtractFields(targetWhereAsM, newFoundFields, "INCLUDE")
-		if len(aux) > 0 {
-			targetMatchAfterLookups = wst.M{"$match": aux}
+		var extractedMatch wst.M
+		newFoundFields, extractedMatch = recursiveExtractFields(targetWhereAsM, newFoundFields, "EXCLUDE")
+		if len(extractedMatch) > 0 {
+			*lookups = append(*lookups, wst.M{"$match": extractedMatch})
+		}
+		newFoundFields, extractedMatch = recursiveExtractFields(targetWhereAsM, newFoundFields, "INCLUDE")
+		if len(extractedMatch) > 0 {
+			targetMatchAfterLookups = wst.M{"$match": extractedMatch}
 		}
 	}
 
@@ -345,47 +347,55 @@ func (loadedModel *Model) ExtractLookupsFromFilter(filterMap *wst.Filter, disabl
 	return lookups, nil
 }
 
-func recursiveExtractFields(targetWhere wst.M, fieldsToExclude map[string]bool, mode string) wst.M {
-	result := wst.M{}
+func recursiveExtractFields(targetWhere wst.M, specialFields map[string]bool, mode string) (outSpecialFields map[string]bool, result wst.M) {
+	outSpecialFields = make(map[string]bool)
+	result = wst.M{}
 	// Some posible wheres:
 	// targetWhere = {"foo": "bar"}
 	// targetWhere = {"$and": [{"foo1": "bar1"}, {"foo2": "bar2"}]}
 	// targetWhere = {"foo": {$exists: true}}
 	// and lots of other mongo expressions
 	// mode: "INCLUDE" || "EXCLUDE"
+	// Copy specialFields to avoid modifying the original map
+	for key, value := range specialFields {
+		outSpecialFields[key] = value
+	}
 	for key, value := range targetWhere {
 		switch key {
 		case "$and":
-			newAnd := recursiveExtractExpression(key, value, fieldsToExclude, mode)
+			var newAnd []interface{}
+			outSpecialFields, newAnd = recursiveExtractExpression(key, value, outSpecialFields, mode)
 			if len(newAnd) > 0 {
 				result["$and"] = newAnd
 			}
 		case "$or":
-			newOr := recursiveExtractExpression(key, value, fieldsToExclude, mode)
+			var newOr []interface{}
+			outSpecialFields, newOr = recursiveExtractExpression(key, value, outSpecialFields, mode)
 			if len(newOr) > 0 {
 				result["$or"] = newOr
 			}
 		default:
-			/*if !fieldsToExclude[key] {
-				result[key] = value
-			}*/
+			// check if key is a nested field
+			if strings.Contains(key, ".") {
+				outSpecialFields[key] = true
+			}
 			switch mode {
 			case "INCLUDE":
-				if fieldsToExclude[key] {
+				if outSpecialFields[key] {
 					result[key] = value
 				}
 			case "EXCLUDE":
-				if !fieldsToExclude[key] {
+				if !outSpecialFields[key] {
 					result[key] = value
 				}
 			}
 		}
 	}
-	return result
+	return
 }
 
-func recursiveExtractExpression(key string, value interface{}, fieldsToExclude map[string]bool, mode string) []interface{} {
-	newList := make([]interface{}, 0)
+func recursiveExtractExpression(key string, value interface{}, specialFields map[string]bool, mode string) (outSpecialFields map[string]bool, newList []interface{}) {
+	newList = make([]interface{}, 0)
 	var asInterfaceList []interface{}
 	switch value.(type) {
 	case []interface{}:
@@ -409,12 +419,13 @@ func recursiveExtractExpression(key string, value interface{}, fieldsToExclude m
 				asM[k] = v
 			}
 		}
-		newVal := recursiveExtractFields(asM, fieldsToExclude, mode)
+		var newVal wst.M
+		outSpecialFields, newVal = recursiveExtractFields(asM, specialFields, mode)
 		if len(newVal) > 0 {
 			newList = append(newList, newVal)
 		}
 	}
-	return newList
+	return
 }
 
 /*
