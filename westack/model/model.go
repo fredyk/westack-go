@@ -390,6 +390,7 @@ func (loadedModel *Model) FindMany(filterMap *wst.Filter, baseContext *EventCont
 
 	var results = make(chan *Instance)
 	var cursor = NewChannelCursor(results).(*ChannelCursor)
+	cursor.UsedPipeline = lookups
 	//var cursor = newMongoCursor(context.Background(), dsCursor).(*MongoCursor)
 
 	go func() {
