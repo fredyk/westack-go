@@ -315,6 +315,57 @@ func Test_Aggregations(t *testing.T) {
 
 }
 
+func Test_AggregationsWithDirectNestedQuery(t *testing.T) {
+
+	t.Parallel()
+
+	var randomeUserName string
+	// assign randomUserName with safe random string
+	var randomN int64
+	rnd := rand.New(rand.NewSource(time.Now().UnixNano()))
+	randomN = 100000000 + rnd.Int63n(899999999)
+	randomeUserName = fmt.Sprintf("testuser%d", randomN)
+	randomUser, err := userModel.Create(wst.M{
+		"username": randomeUserName,
+		"password": "abcd1234.",
+	}, systemContext)
+	assert.Nil(t, err)
+
+	var randomNoteTitle string
+	// assign randomNoteTitle with safe random string
+	randomN = 100000000 + rnd.Int63n(899999999)
+	randomNoteTitle = fmt.Sprintf("testnote%d", randomN)
+
+	note, err := noteModel.Create(wst.M{
+		"title":  randomNoteTitle,
+		"userId": randomUser.Id,
+	}, systemContext)
+	assert.Nil(t, err)
+	assert.NotNil(t, note)
+
+	filter := &wst.Filter{
+		Where: &wst.Where{
+			"title":         note.GetString("title"),
+			"user.username": randomUser.ToJSON()["username"],
+		},
+		Include: &wst.Include{
+			{
+				Relation: "user",
+			},
+		},
+	}
+
+	notesCursor := noteModel.FindMany(filter, systemContext)
+	assert.NotNil(t, notesCursor)
+	notes, err := notesCursor.All()
+	assert.Nil(t, err)
+	assert.NotNil(t, notes)
+	assert.Equal(t, 1, len(notes))
+	assert.Equal(t, note.GetString("title"), notes[0].GetString("title"))
+	assert.Equal(t, randomUser.ToJSON()["username"], notes[0].GetOne("user").ToJSON()["username"])
+
+}
+
 func Test_AggregationsLimitAfterLookups(t *testing.T) {
 
 	t.Parallel()
