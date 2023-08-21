@@ -184,6 +184,20 @@ func (loadedModel *Model) ExtractLookupsFromFilter(filterMap *wst.Filter, disabl
 		})
 	}
 
+	if len(targetMatchAfterLookups) == 0 {
+		// skip and limit before lookups, buf after first match
+		if targetSkip > 0 {
+			*lookups = append(*lookups, wst.M{
+				"$skip": targetSkip,
+			})
+		}
+		if targetLimit > 0 {
+			*lookups = append(*lookups, wst.M{
+				"$limit": targetLimit,
+			})
+		}
+	}
+
 	var targetInclude *wst.Include
 	if filterMap != nil && filterMap.Include != nil {
 		includeAsInterfaces := *filterMap.Include
@@ -307,17 +321,17 @@ func (loadedModel *Model) ExtractLookupsFromFilter(filterMap *wst.Filter, disabl
 	}
 	if len(targetMatchAfterLookups) > 0 {
 		*lookups = append(*lookups, targetMatchAfterLookups)
-	}
-
-	if targetSkip > 0 {
-		*lookups = append(*lookups, wst.M{
-			"$skip": targetSkip,
-		})
-	}
-	if targetLimit > 0 {
-		*lookups = append(*lookups, wst.M{
-			"$limit": targetLimit,
-		})
+		// skip and limit after lookups and match
+		if targetSkip > 0 {
+			*lookups = append(*lookups, wst.M{
+				"$skip": targetSkip,
+			})
+		}
+		if targetLimit > 0 {
+			*lookups = append(*lookups, wst.M{
+				"$limit": targetLimit,
+			})
+		}
 	}
 
 	if loadedModel.App.Debug {
