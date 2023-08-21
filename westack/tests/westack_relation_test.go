@@ -271,13 +271,25 @@ func Test_Aggregations(t *testing.T) {
 		}
 	*/
 
-	firstUser, err := userModel.FindOne(nil, systemContext)
+	var randomUserName string
+	// assign randomUserName with safe random string
+	var randomN int64
+	rnd := rand.New(rand.NewSource(time.Now().UnixNano()))
+	randomN = 100000000 + rnd.Int63n(899999999)
+	randomUserName = fmt.Sprintf("testuser%d", randomN)
+	randomUser, err := userModel.Create(wst.M{
+		"username":  randomUserName,
+		"password":  "abcd1234.",
+		"firstName": "John",
+		"lastName":  "Doe",
+	}, systemContext)
 	assert.Nil(t, err)
-	assert.NotNil(t, firstUser)
+	assert.NotNil(t, randomUser)
 
+	noteTitle := "Note 1"
 	note, err := noteModel.Create(wst.M{
-		"title":  "Note 1",
-		"userId": firstUser.Id,
+		"title":  noteTitle,
+		"userId": randomUser.Id,
 	}, systemContext)
 	assert.Nil(t, err)
 	assert.NotNil(t, note)
@@ -289,6 +301,9 @@ func Test_Aggregations(t *testing.T) {
 			{
 				"$addFields": map[string]interface{}{
 					"userUsername": "$user.username",
+					"fullUserName": map[string]interface{}{
+						"$concat": []string{"$user.firstName", " ", "$user.lastName"},
+					},
 				},
 			},
 		},
@@ -296,7 +311,7 @@ func Test_Aggregations(t *testing.T) {
 			{
 				Relation: "user",
 				Scope: &wst.Filter{
-					Where: &wst.Where{"username": firstUser.ToJSON()["username"]},
+					Where: &wst.Where{"username": randomUserName},
 				},
 			},
 		},
@@ -310,8 +325,61 @@ func Test_Aggregations(t *testing.T) {
 	assert.Nil(t, err)
 	assert.NotNil(t, notes)
 	assert.Equal(t, 1, len(notes))
-	assert.Equal(t, "Note 1", notes[0].ToJSON()["title"])
-	assert.Equal(t, firstUser.ToJSON()["username"], notes[0].ToJSON()["userUsername"])
+	assert.Equal(t, noteTitle, notes[0].ToJSON()["title"])
+	assert.Equal(t, randomUserName, notes[0].ToJSON()["userUsername"])
+	assert.Equal(t, "John Doe", notes[0].ToJSON()["fullUserName"])
+
+}
+
+func Test_AggregationsWithDirectNestedQuery(t *testing.T) {
+
+	t.Parallel()
+
+	var randomeUserName string
+	// assign randomUserName with safe random string
+	var randomN int64
+	rnd := rand.New(rand.NewSource(time.Now().UnixNano()))
+	randomN = 100000000 + rnd.Int63n(899999999)
+	randomeUserName = fmt.Sprintf("testuser%d", randomN)
+	randomUser, err := userModel.Create(wst.M{
+		"username": randomeUserName,
+		"password": "abcd1234.",
+	}, systemContext)
+	assert.Nil(t, err)
+	assert.NotNil(t, randomUser)
+
+	var randomNoteTitle string
+	// assign randomNoteTitle with safe random string
+	randomN = 100000000 + rnd.Int63n(899999999)
+	randomNoteTitle = fmt.Sprintf("testnote%d", randomN)
+
+	note, err := noteModel.Create(wst.M{
+		"title":  randomNoteTitle,
+		"userId": randomUser.Id,
+	}, systemContext)
+	assert.Nil(t, err)
+	assert.NotNil(t, note)
+
+	filter := &wst.Filter{
+		Where: &wst.Where{
+			"title":         note.GetString("title"),
+			"user.username": randomUser.ToJSON()["username"],
+		},
+		Include: &wst.Include{
+			{
+				Relation: "user",
+			},
+		},
+	}
+
+	notesCursor := noteModel.FindMany(filter, systemContext)
+	assert.NotNil(t, notesCursor)
+	notes, err := notesCursor.All()
+	assert.Nil(t, err)
+	assert.NotNil(t, notes)
+	assert.Equal(t, 1, len(notes))
+	assert.Equal(t, note.GetString("title"), notes[0].GetString("title"))
+	assert.Equal(t, randomUser.ToJSON()["username"], notes[0].GetOne("user").ToJSON()["username"])
 
 }
 
