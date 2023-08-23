@@ -216,9 +216,9 @@ func Test_RemoteAssignRole(t *testing.T) {
 	assert.Contains(t, jwtPayload.Roles, desiredRoles[1])
 
 	// Invoke remote method to assign role, but with a non-admin user. This should fail with 401
-	desiredRoles = []string{fmt.Sprintf("role-3-%v", createRandomInt()), fmt.Sprintf("role-4-%v", createRandomInt())}
+	newDesiredRoles := []string{fmt.Sprintf("role-3-%v", createRandomInt()), fmt.Sprintf("role-4-%v", createRandomInt())}
 	resp, err := invokeApi(t, "PUT", url, wst.M{
-		"roles": desiredRoles,
+		"roles": newDesiredRoles,
 	}, wst.M{
 		"Authorization": fmt.Sprintf("Bearer %v", userBearer),
 		"Content-Type":  "application/json",
@@ -226,5 +226,24 @@ func Test_RemoteAssignRole(t *testing.T) {
 	assert.NotNil(t, err)
 	assert.Contains(t, resp, "error")
 	assert.EqualValues(t, 401, resp["error"].(map[string]interface{})["status"])
+
+	// Login again
+	userToken, err = loginUser(user["username"].(string), password, t)
+	assert.Nil(t, err)
+	if !assert.Contains(t, userToken, "id") {
+		t.Fatal("Missing id in result token")
+	}
+	userBearer = userToken["id"].(string)
+
+	//Decode the payload of the userBearer token as a JWT
+	jwtPayload, err = extractJWTPayload(t, userBearer, err)
+	assert.Nil(t, err)
+	assert.Equal(t, 2, len(jwtPayload.Roles))
+	// The new roles should not be present
+	assert.NotContainsf(t, jwtPayload.Roles, newDesiredRoles[0], "Role %v should not be present", newDesiredRoles[0])
+	assert.NotContainsf(t, jwtPayload.Roles, newDesiredRoles[1], "Role %v should not be present", newDesiredRoles[1])
+	// The old roles should still be present
+	assert.Containsf(t, jwtPayload.Roles, desiredRoles[0], "Role %v should be present", desiredRoles[0])
+	assert.Containsf(t, jwtPayload.Roles, desiredRoles[1], "Role %v should be present", desiredRoles[1])
 
 }
