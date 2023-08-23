@@ -1,7 +1,6 @@
 package tests
 
 import (
-	"bytes"
 	"fmt"
 	"github.com/goccy/go-json"
 	"github.com/stretchr/testify/assert"
@@ -38,14 +37,6 @@ func createUserThroughNetwork(t *testing.T) wst.M {
 	assert.Nilf(t, err, "Error: %v, received bytes: %v <--", err, string(out))
 
 	return parsed
-}
-
-func jsonToReader(m wst.M) io.Reader {
-	out, err := json.Marshal(m)
-	if err != nil {
-		panic(err)
-	}
-	return bytes.NewReader(out)
 }
 
 func createNoteForUser(userId string, token string, footerId string, t *testing.T) (note wst.M, err error) {
@@ -85,7 +76,10 @@ func Test_FindMany(t *testing.T) {
 	var err error
 
 	user := createUserThroughNetwork(t)
-	token := loginUser(user["email"].(string), "abcd1234.", t)
+	token, err := loginUser(user["email"].(string), "abcd1234.", t)
+	assert.Nilf(t, err, "Error while logging in: %v", err)
+	assert.NotNilf(t, token, "Token is nil: %v", token)
+	assert.Contains(t, token, "id")
 
 	footer, err := createFooter2ForUser(token["id"].(string), user["id"].(string), t)
 	assert.Nilf(t, err, "Error while creating footer: %v", err)
@@ -215,36 +209,58 @@ func Test_EmptyArray(t *testing.T) {
 
 }
 
-func loginUser(email string, password string, t *testing.T) wst.M {
+func loginUser(email string, password string, t *testing.T) (wst.M, error) {
+	res, err := loginAsUsernameOrEmail(email, password, "email", t)
+	if err != nil {
+		// try to login as username
+		res, err = loginAsUsernameOrEmail(email, password, "username", t)
+		if err != nil {
+			return res, err
+		}
+		return res, nil
+	}
+	return res, nil
+}
+
+func loginAsUsernameOrEmail(email string, password string, mode string, t *testing.T) (wst.M, error) {
 	request, err := http.NewRequest("POST", "http://localhost:8019/api/v1/users/login", jsonToReader(wst.M{
-		"email":    email,
+		mode:       email,
 		"password": password,
 	}))
 	if err != nil {
-		t.Errorf("Error: %v", err)
+		return nil, err
 	}
 
 	request.Header.Set("Content-Type", "application/json")
 
 	response, err := http.DefaultClient.Do(request)
 	if err != nil {
-		t.Errorf("Error: %v", err)
+		return nil, err
 	}
 
 	var out []byte
 	var parsed wst.M
 
+	if response.StatusCode != 200 {
+		// read response body bytes
+		out, err = io.ReadAll(response.Body)
+		if err != nil {
+			return nil, err
+		}
+		return nil, fmt.Errorf("Received %d %s bytes <-- %v, %v\n", response.StatusCode, response.Status, len(out), string(out))
+	}
+
 	// read response body bytes
 	out, err = io.ReadAll(response.Body)
 	if err != nil {
-		t.Errorf("Error: %v", err)
+		return nil, err
 	}
 
 	// parse response body bytes
 	err = json.Unmarshal(out, &parsed)
 	if err != nil {
-		t.Errorf("Error: %v", err)
+		return nil, err
 	}
 
-	return parsed
+	return parsed, nil
 }
