@@ -163,7 +163,10 @@ func Test_FindMany(t *testing.T) {
 
 func Test_Count(t *testing.T) {
 
-	t.Parallel()
+	// This test is not parallel, because it is counting the number of notes in the database and creating a new note
+	// to check if the count is increased by one.
+	// If this test is run in parallel, the count will be increased by more than one and the test will fail.
+	// t.Parallel()
 
 	// Count notes
 	count, err := noteModel.Count(nil, systemContext)
