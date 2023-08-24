@@ -376,6 +376,7 @@ func TestMain(m *testing.M) {
 		log.Fatalf("failed to stop: %v", err)
 	}
 
+	fmt.Printf("exit code: %d\n", exitCode)
 	os.Exit(exitCode)
 
 }
