@@ -121,8 +121,48 @@ func (connector *MongoDBConnector) FindMany(collectionName string, lookups *wst.
 }
 
 func (connector *MongoDBConnector) Count(collectionName string, lookups *wst.A) (int64, error) {
-	//TODO implement me
-	panic("implement me")
+	var db = connector.db
+
+	database := db.Database(connector.dsViper.GetString("database"))
+	collection := database.Collection(collectionName)
+
+	pipeline := wst.A{}
+
+	if lookups != nil {
+		pipeline = append(pipeline, *lookups...)
+	}
+	pipeline = append(pipeline, wst.M{
+		"$group": wst.M{
+			"_id": 1,
+			"_n":  wst.M{"$sum": 1},
+		},
+	})
+	allowDiskUse := true
+	ctx := connector.context
+	cursor, err := collection.Aggregate(ctx, pipeline, &options.AggregateOptions{
+		AllowDiskUse: &allowDiskUse,
+	})
+	if err != nil {
+		fmt.Printf("error %v\n", err)
+		return 0, err
+	}
+	defer func(cursor *mongo.Cursor, ctx context.Context) {
+		err := cursor.Close(ctx)
+		if err != nil {
+			panic(err)
+		}
+	}(cursor, ctx)
+	var documents []struct {
+		Count int64 `bson:"_n"`
+	}
+	err = cursor.All(ctx, &documents)
+	if err != nil {
+		return 0, err
+	}
+	if len(documents) == 0 {
+		return 0, nil
+	}
+	return documents[0].Count, nil
 }
 
 func (connector *MongoDBConnector) Create(collectionName string, data *wst.M) (*wst.M, error) {

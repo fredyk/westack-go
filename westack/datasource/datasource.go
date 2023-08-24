@@ -15,7 +15,6 @@ import (
 	wst "github.com/fredyk/westack-go/westack/common"
 	"github.com/spf13/viper"
 	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
 type OperationError struct {
@@ -154,54 +153,12 @@ func (ds *Datasource) FindMany(collectionName string, lookups *wst.A) (MongoCurs
 }
 
 func (ds *Datasource) Count(collectionName string, lookups *wst.A) (int64, error) {
-	var connector = ds.SubViper.GetString("connector")
-	switch connector {
-	case "mongodb":
-		var db = ds.Db.(*mongo.Client)
-
-		database := db.Database(ds.SubViper.GetString("database"))
-		collection := database.Collection(collectionName)
-
-		pipeline := wst.A{}
-
-		if lookups != nil {
-			pipeline = append(pipeline, *lookups...)
-		}
-		pipeline = append(pipeline, wst.M{
-			"$group": wst.M{
-				"_id": 1,
-				"_n":  wst.M{"$sum": 1},
-			},
-		})
-		allowDiskUse := true
-		ctx := ds.Context
-		cursor, err := collection.Aggregate(ctx, pipeline, &options.AggregateOptions{
-			AllowDiskUse: &allowDiskUse,
-		})
-		if err != nil {
-			fmt.Printf("error %v\n", err)
-			return 0, err
-		}
-		defer func(cursor *mongo.Cursor, ctx context.Context) {
-			err := cursor.Close(ctx)
-			if err != nil {
-				panic(err)
-			}
-		}(cursor, ctx)
-		var documents []struct {
-			Count int64 `bson:"_n"`
-		}
-		err = cursor.All(ds.Context, &documents)
-		if err != nil {
-			return 0, err
-		}
-		if len(documents) == 0 {
-			return 0, nil
-		}
-		return documents[0].Count, nil
-
+	connector := ds.connectorInstance
+	count, err := connector.Count(collectionName, lookups)
+	if err != nil {
+		return 0, err
 	}
-	return 0, errors.New(fmt.Sprintf("invalid connector %v", connector))
+	return count, nil
 }
 
 func findByObjectId(collectionName string, _id interface{}, ds *Datasource, lookups *wst.A) (*wst.M, error) {
