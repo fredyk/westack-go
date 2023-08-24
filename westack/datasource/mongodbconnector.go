@@ -3,6 +3,7 @@ package datasource
 import (
 	"context"
 	"fmt"
+	wst "github.com/fredyk/westack-go/westack/common"
 	"github.com/spf13/viper"
 	"go.mongodb.org/mongo-driver/bson/bsoncodec"
 	"go.mongodb.org/mongo-driver/event"
@@ -23,12 +24,17 @@ type MongoDBConnector struct {
 	db      *mongo.Client
 	options *MongoDBDatasourceOptions
 	dsViper *viper.Viper
+	context context.Context
 }
 
 // MongoDBConnector implements the PersistedConnector interface
 
 func (connector *MongoDBConnector) GetName() string {
 	return "mongodb"
+}
+
+func (connector *MongoDBConnector) SetConfig(dsViper *viper.Viper) {
+	connector.dsViper = dsViper
 }
 
 func (connector *MongoDBConnector) Connect(parentContext context.Context) error {
@@ -76,8 +82,61 @@ func (connector *MongoDBConnector) Connect(parentContext context.Context) error 
 		return err
 	}
 	connector.db = db
+	connector.context = mongoCtx
 
 	return nil
+}
+
+func (connector *MongoDBConnector) FindMany(collectionName string, lookups *wst.A) (MongoCursorI, error) {
+	var mongoClient = connector.db
+
+	database := mongoClient.Database(connector.dsViper.GetString("database"))
+	collection := database.Collection(collectionName)
+
+	pipeline := wst.A{}
+
+	if lookups != nil {
+		pipeline = append(pipeline, *lookups...)
+	}
+	ctx := connector.context
+	cursor, err := collection.Aggregate(ctx, pipeline, options.Aggregate().SetAllowDiskUse(true).SetBatchSize(16))
+	if err != nil {
+		return nil, err
+	}
+	// Close mongo cursor outside of this function
+	//defer func(cursor *mongo.Cursor, ctx context.Context) {
+	//	err := cursor.Close(ctx)
+	//	if err != nil {
+	//		panic(err)
+	//	}
+	//}(cursor, ctx)
+	//var documents wst.A
+	//err = cursor.All(ds.Context, &documents)
+	//if err != nil {
+	//	return nil, err
+	//}
+	//return &documents, nil
+	return cursor, nil
+}
+
+func (connector *MongoDBConnector) Count(collectionName string, lookups *wst.A) (int64, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (connector *MongoDBConnector) Create(collectionName string, data *wst.M) (*wst.M, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (connector *MongoDBConnector) UpdateById(collectionName string, id interface{}, data *wst.M) (*wst.M, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (connector *MongoDBConnector) DeleteById(collectionName string, id interface{}) int64 {
+	//TODO implement me
+	panic("implement me")
 }
 
 func (connector *MongoDBConnector) Disconnect() error {
@@ -118,10 +177,9 @@ func getDbUrl(dsViper *viper.Viper) string {
 }
 
 // NewMongoDBConnector Factory method for MongoDBConnector
-func NewMongoDBConnector(dsViper *viper.Viper, mongoOptions *MongoDBDatasourceOptions) PersistedConnector {
+func NewMongoDBConnector(mongoOptions *MongoDBDatasourceOptions) PersistedConnector {
 
 	return &MongoDBConnector{
 		options: mongoOptions,
-		dsViper: dsViper,
 	}
 }
