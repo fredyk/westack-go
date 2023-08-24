@@ -28,6 +28,7 @@ type MemoryKvStats struct {
 type MemoryKvDb interface {
 	GetBucket(name string) MemoryKvBucket
 	Stats() map[string]MemoryKvStats
+	Purge() error
 }
 
 //goland:noinspection GoNameStartsWithPackageName
@@ -38,6 +39,7 @@ type MemoryKvBucket interface {
 	Delete(key string) error
 	Expire(key string, ttl time.Duration) error
 	Stats() MemoryKvStats
+	Flush() error
 }
 
 type kvPair struct {
@@ -207,6 +209,13 @@ func (kvBucket *MemoryKvBucketImpl) Delete(key string) error {
 	return nil
 }
 
+func (kvBucket *MemoryKvBucketImpl) Flush() error {
+	dataLock.Lock()
+	kvBucket.data = make(map[string]kvPair)
+	dataLock.Unlock()
+	return nil
+}
+
 func (kvBucket *MemoryKvBucketImpl) Stats() MemoryKvStats {
 	dataLock.RLock()
 	defer dataLock.RUnlock()
@@ -267,6 +276,17 @@ func (kvBucket *MemoryKvBucketImpl) Stats() MemoryKvStats {
 		TotalSize:              totalSize,
 		AvgObjSize:             avgObjSize,
 	}
+}
+
+func (kvDb *MemoryKvDbImpl) Purge() error {
+	for _, bucket := range kvDb.buckets {
+		err := bucket.Flush()
+		if err != nil {
+			return err
+		}
+	}
+	kvDb.buckets = make(map[string]MemoryKvBucket)
+	return nil
 }
 
 func createBucket(name string) MemoryKvBucket {

@@ -10,7 +10,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
-var AuthMutex = sync.Mutex{}
+var AuthMutex = sync.RWMutex{}
 
 func (loadedModel *Model) EnforceEx(token *BearerToken, objId string, action string, eventContext *EventContext) (error, bool) {
 
@@ -30,11 +30,15 @@ func (loadedModel *Model) EnforceEx(token *BearerToken, objId string, action str
 	if token == nil || token.User == nil {
 		bearerUserIdSt = "_EVERYONE_"
 		targetObjId = "*"
+		AuthMutex.RLock()
 		if result, isPresent := loadedModel.authCache[bearerUserIdSt][targetObjId][action]; isPresent {
 			if loadedModel.App.Debug || !result {
 				log.Printf("DEBUG: Cache hit for %v.%v ---> %v\n", loadedModel.Name, action, result)
 			}
+			AuthMutex.RUnlock()
 			return nil, result
+		} else {
+			AuthMutex.RUnlock()
 		}
 
 	} else {

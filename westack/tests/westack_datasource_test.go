@@ -47,7 +47,7 @@ func Test_Datasource_Ping(t *testing.T) {
 
 	t.Parallel()
 
-	// Simply wait 5.2 seconds to cover datasource ping interval
-	time.Sleep(5200 * time.Millisecond)
+	// Simply wait 3.2 seconds to cover datasource ping interval
+	time.Sleep(3200 * time.Millisecond)
 
 }
