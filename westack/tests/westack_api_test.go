@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/goccy/go-json"
 	"github.com/stretchr/testify/assert"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"io"
 	"math/rand"
 	"net/http"
@@ -157,6 +158,34 @@ func Test_FindMany(t *testing.T) {
 	}
 
 	assert.Greaterf(t, len(parsed), 0, "parsed: %v\n", parsed)
+
+}
+
+func Test_Count(t *testing.T) {
+
+	// This test is not parallel, because it is counting the number of notes in the database and creating a new note
+	// to check if the count is increased by one.
+	// If this test is run in parallel, the count will be increased by more than one and the test will fail.
+	// t.Parallel()
+
+	// Count notes
+	count, err := noteModel.Count(nil, systemContext)
+	assert.Nil(t, err)
+	assert.GreaterOrEqual(t, count, int64(0))
+
+	// Create a note
+	note, err := noteModel.Create(wst.M{
+		"title": "Test Note",
+	}, systemContext)
+	assert.Nil(t, err)
+	assert.NotNil(t, note)
+	assert.NotEqualValuesf(t, primitive.NilObjectID, note.Id, "Note ID is nil: %v", note.Id)
+	assert.Equal(t, "Test Note", note.GetString("title"))
+
+	// Count notes again
+	newCount, err := noteModel.Count(nil, systemContext)
+	assert.Nil(t, err)
+	assert.EqualValuesf(t, count+1, newCount, "Count is not increased: %v", newCount)
 
 }
 

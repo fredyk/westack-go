@@ -9,6 +9,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"os"
 	"reflect"
 	"strings"
 	"testing"
@@ -29,6 +30,11 @@ import (
 
 	pb "github.com/fredyk/westack-go/westack/tests/proto"
 )
+
+type InstanceFromTests struct {
+	id    primitive.ObjectID
+	model *model.Model
+}
 
 var server *westack.WeStack
 var userId primitive.ObjectID
@@ -356,15 +362,22 @@ func TestMain(m *testing.M) {
 
 	time.Sleep(1 * time.Second)
 
-	m.Run()
+	exitCode := m.Run()
 
 	// after all tests
+	err = revertAllTests()
+	if err != nil {
+		log.Fatalf("failed to revert all tests: %v", err)
+	}
 
 	// teardown
 	err = server.Stop()
 	if err != nil {
 		log.Fatalf("failed to stop: %v", err)
 	}
+
+	fmt.Printf("exit code: %d\n", exitCode)
+	os.Exit(exitCode)
 
 }
 
@@ -393,4 +406,27 @@ func FakeMongoDbRegistry() *bsoncodec.Registry {
 	}))
 
 	return registryBuilder.Build()
+}
+
+func revertAllTests() error {
+	sharedDeleteManyWhere := &wst.Where{
+		"_id": wst.M{
+			"$ne": nil,
+		},
+	}
+	for _, toDeleteMap := range []*model.Model{
+		noteModel,
+		userModel,
+		customerModel,
+		orderModel,
+		storeModel,
+		footerModel,
+	} {
+		deleteManyResult, err := toDeleteMap.DeleteMany(sharedDeleteManyWhere, systemContext)
+		if err != nil {
+			return err
+		}
+		fmt.Printf("Deleted %d instances from model %s\n", deleteManyResult.DeletedCount, toDeleteMap.Name)
+	}
+	return nil
 }

@@ -245,7 +245,12 @@ func (app *WeStack) Middleware(handler fiber.Handler) {
 
 func (app *WeStack) Stop() error {
 	log.Println("Stopping server")
-	// TODO: close datasources
+	for _, ds := range *app.datasources {
+		err := ds.Close()
+		if err != nil {
+			return err
+		}
+	}
 	err := app.Server.Shutdown()
 	if err != nil {
 		return err
