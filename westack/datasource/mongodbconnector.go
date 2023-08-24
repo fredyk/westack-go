@@ -227,19 +227,19 @@ func (connector *MongoDBConnector) UpdateById(collectionName string, id interfac
 	return connector.findByObjectId(collectionName, id, nil)
 }
 
-func (connector *MongoDBConnector) DeleteById(collectionName string, id interface{}) int64 {
+func (connector *MongoDBConnector) DeleteById(collectionName string, id interface{}) (result DeleteResult, err error) {
 	var db = connector.db
 
 	database := db.Database(connector.dsViper.GetString("database"))
 	collection := database.Collection(collectionName)
-	if result, err := collection.DeleteOne(connector.context, wst.M{"_id": id}); err != nil {
-		panic(err)
-	} else {
-		return result.DeletedCount
+	mongoResult, err := collection.DeleteOne(connector.context, wst.M{"_id": id})
+	if err != nil {
+		return result, err
 	}
+	return DeleteResult{DeletedCount: mongoResult.DeletedCount}, nil
 }
 
-func (connector *MongoDBConnector) DeleteMany(collectionName string, whereLookups *wst.A) (result DeleteManyResult, err error) {
+func (connector *MongoDBConnector) DeleteMany(collectionName string, whereLookups *wst.A) (result DeleteResult, err error) {
 	db := connector.db
 	database := db.Database(connector.dsViper.GetString("database"))
 	collection := database.Collection(collectionName)
@@ -251,14 +251,13 @@ func (connector *MongoDBConnector) DeleteMany(collectionName string, whereLookup
 	}
 	mongoResult, err := collection.DeleteMany(ctx, mongoFilter)
 	if err != nil {
-		return DeleteManyResult{}, err
+		return result, err
 	}
-	return DeleteManyResult{DeletedCount: mongoResult.DeletedCount}, nil
+	return DeleteResult{DeletedCount: mongoResult.DeletedCount}, nil
 }
 
 func (connector *MongoDBConnector) Disconnect() error {
-	//TODO implement me
-	panic("implement me")
+	return connector.db.Disconnect(connector.context)
 }
 
 func (connector *MongoDBConnector) Ping(parentCtx context.Context) error {

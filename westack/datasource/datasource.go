@@ -11,25 +11,9 @@ import (
 	"github.com/spf13/viper"
 )
 
-type OperationError struct {
-	Code    int
-	Message string
-}
-
 type Options struct {
 	RetryOnError bool
 	MongoDB      *MongoDBDatasourceOptions
-}
-
-func (e *OperationError) Error() string {
-	return fmt.Sprintf("%v %v", e.Code, e.Message)
-}
-
-func NewError(code int, message string) *OperationError {
-	res := &OperationError{
-		code, message,
-	}
-	return res
 }
 
 type Datasource struct {
@@ -53,8 +37,6 @@ func getConnectorByName(name string, dsKey string, dsViper *viper.Viper, options
 			mongoOptions = options.MongoDB
 		}
 		return NewMongoDBConnector(mongoOptions), nil
-	case "redis":
-		return nil, fmt.Errorf("redis connector not implemented yet")
 	case "memorykv":
 		return NewMemoryKVConnector(dsKey), nil
 	default:
@@ -64,9 +46,6 @@ func getConnectorByName(name string, dsKey string, dsViper *viper.Viper, options
 
 func (ds *Datasource) Initialize() error {
 	dsViper := ds.SubViper
-	if dsViper == nil {
-		return fmt.Errorf("could not find datasource %v", ds.Key)
-	}
 	var connectorName = dsViper.GetString("connector")
 	var connector PersistedConnector
 	var err error
@@ -87,10 +66,10 @@ func (ds *Datasource) Initialize() error {
 	fmt.Printf("Pinging datasource %v...\n", ds.Key)
 	err = connector.Ping(ds.Context)
 	if err != nil {
-		fmt.Printf("Could not connect to datasource %v: %v\n", ds.Key, err)
+		fmt.Printf("Could not ping datasource %v: %v\n", ds.Key, err)
 		return err
 	} else {
-		fmt.Printf("DEBUG: Connected to datasource %v\n", ds.Key)
+		fmt.Printf("DEBUG: Ping result OK for datasource %v\n", ds.Key)
 		ds.Db = connector.GetClient()
 	}
 
@@ -145,10 +124,6 @@ func (ds *Datasource) Count(collectionName string, lookups *wst.A) (int64, error
 	return ds.connectorInstance.Count(collectionName, lookups)
 }
 
-func findByObjectId(collectionName string, _id interface{}, ds *Datasource, lookups *wst.A) (*wst.M, error) {
-	return ds.connectorInstance.findByObjectId(collectionName, _id, lookups)
-}
-
 func (ds *Datasource) Create(collectionName string, data *wst.M) (*wst.M, error) {
 	return ds.connectorInstance.Create(collectionName, data)
 }
@@ -157,7 +132,7 @@ func (ds *Datasource) UpdateById(collectionName string, id interface{}, data *ws
 	return ds.connectorInstance.UpdateById(collectionName, id, data)
 }
 
-func (ds *Datasource) DeleteById(collectionName string, id interface{}) int64 {
+func (ds *Datasource) DeleteById(collectionName string, id interface{}) (DeleteResult, error) {
 	return ds.connectorInstance.DeleteById(collectionName, id)
 }
 
@@ -173,7 +148,7 @@ func (ds *Datasource) DeleteById(collectionName string, id interface{}) int64 {
 // ]
 // and is used to filter the documents to delete.
 // It cannot be nil or empty.
-func (ds *Datasource) DeleteMany(collectionName string, whereLookups *wst.A) (result DeleteManyResult, err error) {
+func (ds *Datasource) DeleteMany(collectionName string, whereLookups *wst.A) (result DeleteResult, err error) {
 	if whereLookups == nil {
 		return result, errors.New("whereLookups cannot be nil")
 	}
@@ -195,6 +170,17 @@ func (ds *Datasource) DeleteMany(collectionName string, whereLookups *wst.A) (re
 
 	return ds.connectorInstance.DeleteMany(collectionName, whereLookups)
 
+}
+
+func (ds *Datasource) Close() error {
+	err := ds.connectorInstance.Disconnect()
+	if err != nil {
+		fmt.Printf("ERROR: Could not close datasource %v: %v\n", ds.Key, err)
+		return err
+	}
+	ds.ctxCancelFn()
+	fmt.Printf("INFO: Closed datasource %v\n", ds.Key)
+	return nil
 }
 
 func New(dsKey string, dsViper *viper.Viper, parentContext context.Context) *Datasource {
