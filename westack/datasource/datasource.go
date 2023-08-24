@@ -155,21 +155,7 @@ func (ds *Datasource) Create(collectionName string, data *wst.M) (*wst.M, error)
 }
 
 func (ds *Datasource) UpdateById(collectionName string, id interface{}, data *wst.M) (*wst.M, error) {
-	var connector = ds.SubViper.GetString("connector")
-	switch connector {
-	case "mongodb":
-		var db = ds.Db.(*mongo.Client)
-
-		database := db.Database(ds.SubViper.GetString("database"))
-		collection := database.Collection(collectionName)
-		delete(*data, "id")
-		delete(*data, "_id")
-		if _, err := collection.UpdateOne(ds.Context, wst.M{"_id": id}, wst.M{"$set": *data}); err != nil {
-			panic(err)
-		}
-		return findByObjectId(collectionName, id, ds, nil)
-	}
-	return nil, errors.New(fmt.Sprintf("invalid connector %v", connector))
+	return ds.connectorInstance.UpdateById(collectionName, id, data)
 }
 
 func (ds *Datasource) DeleteById(collectionName string, id interface{}) int64 {
