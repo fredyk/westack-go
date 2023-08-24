@@ -47,8 +47,9 @@ type Datasource struct {
 	Context context.Context
 	Options *Options
 
-	ctxCancelFn context.CancelFunc
-	SubViper    *viper.Viper
+	ctxCancelFn       context.CancelFunc
+	SubViper          *viper.Viper
+	connectorInstance PersistedConnector
 }
 
 func getConnectorByName(name string, dsKey string, dsViper *viper.Viper, options *Options) (PersistedConnector, error) {
@@ -58,7 +59,7 @@ func getConnectorByName(name string, dsKey string, dsViper *viper.Viper, options
 		if options != nil {
 			mongoOptions = options.MongoDB
 		}
-		return NewMongoDBConnector(dsViper, mongoOptions), nil
+		return NewMongoDBConnector(mongoOptions), nil
 	case "redis":
 		return nil, fmt.Errorf("redis connector not implemented yet")
 	case "memorykv":
@@ -80,6 +81,7 @@ func (ds *Datasource) Initialize() error {
 	if err != nil {
 		return err
 	}
+	connector.SetConfig(dsViper)
 	fmt.Printf("Connecting to datasource %v...\n", ds.Key)
 	err = connector.Connect(ds.Context)
 	if err != nil {
@@ -129,6 +131,7 @@ func (ds *Datasource) Initialize() error {
 		}
 	}()
 
+	ds.connectorInstance = connector
 	return nil
 }
 
@@ -142,96 +145,12 @@ func (ds *Datasource) Initialize() error {
 // The cursor needs to be closed outside of the function.
 // Implementations for Redis and memorykv connectors are not yet implemented and will result in an error.
 func (ds *Datasource) FindMany(collectionName string, lookups *wst.A) (MongoCursorI, error) {
-	var connector = ds.SubViper.GetString("connector")
-	switch connector {
-	case "mongodb":
-		var db = ds.Db.(*mongo.Client)
-
-		database := db.Database(ds.SubViper.GetString("database"))
-		collection := database.Collection(collectionName)
-
-		pipeline := wst.A{}
-
-		if lookups != nil {
-			pipeline = append(pipeline, *lookups...)
-		}
-		ctx := ds.Context
-		cursor, err := collection.Aggregate(ctx, pipeline, options.Aggregate().SetAllowDiskUse(true).SetBatchSize(16))
-		if err != nil {
-			return nil, err
-		}
-		// Close mongo cursor outside of this function
-		//defer func(cursor *mongo.Cursor, ctx context.Context) {
-		//	err := cursor.Close(ctx)
-		//	if err != nil {
-		//		panic(err)
-		//	}
-		//}(cursor, ctx)
-		//var documents wst.A
-		//err = cursor.All(ds.Context, &documents)
-		//if err != nil {
-		//	return nil, err
-		//}
-		//return &documents, nil
-		return cursor, nil
-	case "redis":
-		return nil, fmt.Errorf("redis connector not implemented yet")
-	case "memorykv":
-		db := ds.Db.(memorykv.MemoryKvDb)
-		if lookups == nil || len(*lookups) == 0 {
-			return nil, errors.New("empty query")
-		}
-
-		potentialMatchStage := (*lookups)[0]
-
-		var _id interface{}
-		if match, isPresent := potentialMatchStage["$match"]; !isPresent {
-			return nil, errors.New("invalid first stage for memorykv. First stage must contain $match")
-		} else {
-			if asM, ok := match.(wst.M); !ok {
-				return nil, errors.New(fmt.Sprintf("invalid $match value type %s", asM))
-			} else {
-				if len(asM) == 0 {
-					return nil, errors.New("empty $match")
-				} else {
-					for _, v := range asM {
-						//key := fmt.Sprintf("%v:%v:%v", ds.Viper.GetString(ds.Keys+".database"), collectionName, k)
-						_id = v
-						break
-					}
-				}
-			}
-		}
-
-		var idAsString string
-		switch _id.(type) {
-		case string:
-			idAsString = _id.(string)
-		case primitive.ObjectID:
-			idAsString = _id.(primitive.ObjectID).Hex()
-		case uuid.UUID:
-			idAsString = _id.(uuid.UUID).String()
-		}
-		bucket := db.GetBucket(collectionName)
-
-		// fmt.Println("QUERYING CACHE: collection=", collectionName, "id=", idAsString) TODO: check debug
-
-		bytes, err := bucket.Get(idAsString)
-		var documents [][]byte
-		if err != nil {
-			return nil, err
-		} else if bytes == nil {
-			// TODO: Check if we should return an error or not
-			//return &wst.A{}, nil
-			documents = nil
-		} else {
-			documents = bytes
-		}
-		return NewFixedMongoCursor(documents), nil
-
-	default:
-		return nil, errors.New("invalid connector " + connector)
+	connector := ds.connectorInstance
+	cursor, err := connector.FindMany(collectionName, lookups)
+	if err != nil {
+		return nil, err
 	}
+	return cursor, nil
 }
 
 func (ds *Datasource) Count(collectionName string, lookups *wst.A) (int64, error) {
