@@ -414,10 +414,6 @@ func revertAllTests() error {
 			"$ne": nil,
 		},
 	}
-	deleteManyResult, err := orderModel.DeleteMany(sharedDeleteManyWhere, systemContext)
-	if err != nil {
-		return err
-	}
 	for _, toDeleteMap := range []*model.Model{
 		noteModel,
 		userModel,
@@ -426,7 +422,7 @@ func revertAllTests() error {
 		storeModel,
 		footerModel,
 	} {
-		deleteManyResult, err = toDeleteMap.DeleteMany(sharedDeleteManyWhere, systemContext)
+		deleteManyResult, err := toDeleteMap.DeleteMany(sharedDeleteManyWhere, systemContext)
 		if err != nil {
 			return err
 		}

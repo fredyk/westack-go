@@ -829,20 +829,17 @@ func (loadedModel *Model) DeleteById(id interface{}) (int64, error) {
 
 func (loadedModel *Model) DeleteMany(where *wst.Where, systemContext *EventContext) (result datasource.DeleteManyResult, err error) {
 	if where == nil {
-		err = errors.New("where cannot be nil")
-		return
+		return result, errors.New("where cannot be nil")
 	}
 	if len(*where) == 0 {
-		err = errors.New("where cannot be empty")
-		return
+		return result, errors.New("where cannot be empty")
 	}
 	whereLookups := &wst.A{
 		{
 			"$match": wst.M(*where),
 		},
 	}
-	result, err = loadedModel.Datasource.DeleteMany(loadedModel.CollectionName, whereLookups)
-	return
+	return loadedModel.Datasource.DeleteMany(loadedModel.CollectionName, whereLookups)
 }
 
 type RemoteMethodOptionsHttp struct {
