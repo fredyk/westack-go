@@ -228,8 +228,15 @@ func (connector *MongoDBConnector) UpdateById(collectionName string, id interfac
 }
 
 func (connector *MongoDBConnector) DeleteById(collectionName string, id interface{}) int64 {
-	//TODO implement me
-	panic("implement me")
+	var db = connector.db
+
+	database := db.Database(connector.dsViper.GetString("database"))
+	collection := database.Collection(collectionName)
+	if result, err := collection.DeleteOne(connector.context, wst.M{"_id": id}); err != nil {
+		panic(err)
+	} else {
+		return result.DeletedCount
+	}
 }
 
 func (connector *MongoDBConnector) DeleteMany(collectionName string, whereLookups *wst.A) (result DeleteManyResult, err error) {
