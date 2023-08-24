@@ -6,8 +6,8 @@ import (
 	"github.com/spf13/viper"
 )
 
-// DeleteManyResult is the result of a DeleteMany operation.
-type DeleteManyResult struct {
+// DeleteResult is the result of a DeleteMany operation.
+type DeleteResult struct {
 	// DeletedCount is the number of documents deleted.
 	DeletedCount int64
 }
@@ -30,9 +30,9 @@ type PersistedConnector interface {
 	// UpdateById Updates a document in the datasource
 	UpdateById(collectionName string, id interface{}, data *wst.M) (*wst.M, error)
 	// DeleteById Deletes a document in the datasource
-	DeleteById(collectionName string, id interface{}) int64
+	DeleteById(collectionName string, id interface{}) (DeleteResult, error)
 	// DeleteMany Deletes many documents in the datasource
-	DeleteMany(collectionName string, whereLookups *wst.A) (DeleteManyResult, error)
+	DeleteMany(collectionName string, whereLookups *wst.A) (DeleteResult, error)
 	// Disconnect Disconnects from the datasource
 	Disconnect() error
 	// Ping Pings the datasource

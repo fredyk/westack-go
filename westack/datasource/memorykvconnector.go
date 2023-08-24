@@ -165,19 +165,19 @@ func (connector *MemoryKVConnector) UpdateById(collectionName string, id interfa
 	panic("implement me")
 }
 
-func (connector *MemoryKVConnector) DeleteById(collectionName string, id interface{}) int64 {
+func (connector *MemoryKVConnector) DeleteById(collectionName string, id interface{}) (DeleteResult, error) {
 	//TODO implement me
 	panic("implement me")
 }
 
-func (connector *MemoryKVConnector) DeleteMany(collectionName string, whereLookups *wst.A) (DeleteManyResult, error) {
+func (connector *MemoryKVConnector) DeleteMany(collectionName string, whereLookups *wst.A) (DeleteResult, error) {
 	//TODO implement me
 	panic("implement me")
 }
 
 func (connector *MemoryKVConnector) Disconnect() error {
-	//TODO implement me
-	panic("implement me")
+	// Clear memory of buckets
+	return connector.db.Purge()
 }
 
 func (connector *MemoryKVConnector) Ping(parentCtx context.Context) error {

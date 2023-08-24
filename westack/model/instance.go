@@ -216,12 +216,10 @@ func (modelInstance *Instance) UpdateAttributes(data interface{}, baseContext *E
 	for key := range *modelInstance.Model.Config.Relations {
 		delete(finalData, key)
 	}
-	document, err := modelInstance.Model.Datasource.UpdateById(modelInstance.Model.CollectionName, modelInstance.Id, &finalData)
+	_, err := modelInstance.Model.Datasource.UpdateById(modelInstance.Model.CollectionName, modelInstance.Id, &finalData)
 
 	if err != nil {
 		return nil, err
-	} else if document == nil {
-		return nil, datasource.NewError(400, "Could not update document")
 	} else {
 		err := modelInstance.Reload(eventContext)
 		modelInstance.HideProperties()
