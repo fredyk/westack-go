@@ -827,6 +827,24 @@ func (loadedModel *Model) DeleteById(id interface{}) (int64, error) {
 	}
 }
 
+func (loadedModel *Model) DeleteMany(where *wst.Where, systemContext *EventContext) (result datasource.DeleteManyResult, err error) {
+	if where == nil {
+		err = errors.New("where cannot be nil")
+		return
+	}
+	if len(*where) == 0 {
+		err = errors.New("where cannot be empty")
+		return
+	}
+	whereLookups := &wst.A{
+		{
+			"$match": wst.M(*where),
+		},
+	}
+	result, err = loadedModel.Datasource.DeleteMany(loadedModel.CollectionName, whereLookups)
+	return
+}
+
 type RemoteMethodOptionsHttp struct {
 	Path string
 	Verb string

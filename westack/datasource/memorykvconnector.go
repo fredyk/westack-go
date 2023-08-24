@@ -107,6 +107,11 @@ func (connector *MemoryKVConnector) DeleteById(collectionName string, id interfa
 	panic("implement me")
 }
 
+func (connector *MemoryKVConnector) DeleteMany(collectionName string, whereLookups *wst.A) (DeleteManyResult, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
 func (connector *MemoryKVConnector) Disconnect() error {
 	//TODO implement me
 	panic("implement me")

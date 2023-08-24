@@ -5,6 +5,7 @@ import (
 	"fmt"
 	wst "github.com/fredyk/westack-go/westack/common"
 	"github.com/spf13/viper"
+	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/bsoncodec"
 	"go.mongodb.org/mongo-driver/event"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -137,6 +138,23 @@ func (connector *MongoDBConnector) UpdateById(collectionName string, id interfac
 func (connector *MongoDBConnector) DeleteById(collectionName string, id interface{}) int64 {
 	//TODO implement me
 	panic("implement me")
+}
+
+func (connector *MongoDBConnector) DeleteMany(collectionName string, whereLookups *wst.A) (result DeleteManyResult, err error) {
+	db := connector.db
+	database := db.Database(connector.dsViper.GetString("database"))
+	collection := database.Collection(collectionName)
+
+	ctx := connector.context
+	var mongoFilter bson.D
+	for key, value := range (*whereLookups)[0]["$match"].(wst.M) {
+		mongoFilter = append(mongoFilter, bson.E{Key: key, Value: value})
+	}
+	mongoResult, err := collection.DeleteMany(ctx, mongoFilter)
+	if err != nil {
+		return DeleteManyResult{}, err
+	}
+	return DeleteManyResult{DeletedCount: mongoResult.DeletedCount}, nil
 }
 
 func (connector *MongoDBConnector) Disconnect() error {

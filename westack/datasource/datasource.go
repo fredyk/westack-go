@@ -366,6 +366,43 @@ func (ds *Datasource) DeleteById(collectionName string, id interface{}) int64 {
 	return 0
 }
 
+// whereLookups is in the form of
+// [
+//
+//	{
+//	  "$match": {
+//	    "name": "John"
+//	  }
+//	}
+//
+// ]
+// and is used to filter the documents to delete.
+// It cannot be nil or empty.
+func (ds *Datasource) DeleteMany(collectionName string, whereLookups *wst.A) (result DeleteManyResult, err error) {
+	if whereLookups == nil {
+		return result, errors.New("whereLookups cannot be nil")
+	}
+	if len(*whereLookups) != 1 {
+		return result, errors.New("whereLookups must have exactly one element as a $match stage")
+	}
+	if (*whereLookups)[0] == nil {
+		return result, errors.New("whereLookups cannot have nil elements")
+	}
+	if (*whereLookups)[0]["$match"] == nil {
+		return result, errors.New("first element of whereLookups must be a $match stage")
+	}
+	if len((*whereLookups)[0]) != 1 {
+		return result, errors.New("first element of whereLookups must be a single $match stage")
+	}
+	if len((*whereLookups)[0]["$match"].(wst.M)) == 0 {
+		return result, errors.New("first element of whereLookups must be a single and non-empty $match stage")
+	}
+
+	connector := ds.connectorInstance
+	return connector.DeleteMany(collectionName, whereLookups)
+
+}
+
 func New(dsKey string, dsViper *viper.Viper, parentContext context.Context) *Datasource {
 	subViper := dsViper.Sub(dsKey)
 	if subViper == nil {
