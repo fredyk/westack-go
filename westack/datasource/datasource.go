@@ -9,7 +9,6 @@ import (
 
 	wst "github.com/fredyk/westack-go/westack/common"
 	"github.com/spf13/viper"
-	"go.mongodb.org/mongo-driver/mongo"
 )
 
 type OperationError struct {
@@ -159,20 +158,7 @@ func (ds *Datasource) UpdateById(collectionName string, id interface{}, data *ws
 }
 
 func (ds *Datasource) DeleteById(collectionName string, id interface{}) int64 {
-	var connector = ds.SubViper.GetString("connector")
-	switch connector {
-	case "mongodb":
-		var db = ds.Db.(*mongo.Client)
-
-		database := db.Database(ds.SubViper.GetString("database"))
-		collection := database.Collection(collectionName)
-		if result, err := collection.DeleteOne(ds.Context, wst.M{"_id": id}); err != nil {
-			panic(err)
-		} else {
-			return result.DeletedCount
-		}
-	}
-	return 0
+	return ds.connectorInstance.DeleteById(collectionName, id)
 }
 
 // whereLookups is in the form of
@@ -207,8 +193,7 @@ func (ds *Datasource) DeleteMany(collectionName string, whereLookups *wst.A) (re
 		return result, errors.New("first element of whereLookups must be a single and non-empty $match stage")
 	}
 
-	connector := ds.connectorInstance
-	return connector.DeleteMany(collectionName, whereLookups)
+	return ds.connectorInstance.DeleteMany(collectionName, whereLookups)
 
 }
 
