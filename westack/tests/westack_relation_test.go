@@ -6,6 +6,7 @@ import (
 	"io"
 	"math/rand"
 	"net/http"
+	"sync"
 	"testing"
 	"time"
 
@@ -183,17 +184,28 @@ func Test_CustomerOrderStore(t *testing.T) {
 	assert.Nil(t, err)
 	assert.NotNil(t, createdOrder)
 
+	// Create a waiting group using sync.WaitGroup
+	var wg sync.WaitGroup
 	// Create other 10k orders
-	for i := 0; i < 10000; i++ {
-		order := wst.M{
-			"amount":     rand.Float64() * 1000,
-			"customerId": nil,
-			"storeId":    nil,
-		}
-		cratedOrder, err := orderModel.Create(order, systemContext)
-		assert.Nil(t, err)
-		assert.NotNil(t, cratedOrder)
+	orderCountToCreate := 10000
+	wg.Add(orderCountToCreate)
+	creationInit := time.Now()
+	for i := 0; i < orderCountToCreate; i++ {
+		go func() {
+			order := wst.M{
+				"amount":     rand.Float64() * 1000,
+				"customerId": nil,
+				"storeId":    nil,
+			}
+			cratedOrder, err := orderModel.Create(order, systemContext)
+			assert.Nil(t, err)
+			assert.NotNil(t, cratedOrder)
+			wg.Done()
+		}()
 	}
+	wg.Wait()
+	creationDelay := time.Since(creationInit)
+	fmt.Printf("\n===\nCREATION DELAY: %v ms for %d orders\n===\n", creationDelay.Milliseconds(), orderCountToCreate)
 
 	// Get the customer including the orders and the store
 	filter := &wst.Filter{
