@@ -2,6 +2,7 @@ package datasource
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	wst "github.com/fredyk/westack-go/westack/common"
 	"github.com/spf13/viper"
@@ -118,6 +119,39 @@ func (connector *MongoDBConnector) FindMany(collectionName string, lookups *wst.
 	//}
 	//return &documents, nil
 	return cursor, nil
+}
+
+func (connector *MongoDBConnector) findObjectById(collectionName string, _id interface{}, lookups *wst.A) (*wst.M, error) {
+	wrappedLookups := &wst.A{
+		{
+			"$match": wst.M{
+				"_id": _id,
+			},
+		},
+	}
+	if lookups != nil {
+		*wrappedLookups = append(*wrappedLookups, *lookups...)
+	}
+	cursor, err := connector.FindMany(collectionName, wrappedLookups)
+	if err != nil {
+		return nil, err
+	}
+	defer func(cursor MongoCursorI, ctx context.Context) {
+		err := cursor.Close(ctx)
+		if err != nil {
+			panic(err)
+		}
+	}(cursor, connector.context)
+	var results []wst.M
+	err = cursor.All(connector.context, &results)
+	if err != nil {
+		return nil, err
+	}
+	if results != nil && len(results) > 0 {
+		return &(results)[0], nil
+	} else {
+		return nil, errors.New("document not found")
+	}
 }
 
 func (connector *MongoDBConnector) Count(collectionName string, lookups *wst.A) (int64, error) {

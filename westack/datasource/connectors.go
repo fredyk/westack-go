@@ -21,6 +21,8 @@ type PersistedConnector interface {
 	Connect(parentContext context.Context) error
 	// FindMany Finds many documents in the datasource
 	FindMany(collectionName string, lookups *wst.A) (MongoCursorI, error)
+	// findObjectById Finds a document in the datasource
+	findObjectById(collectionName string, _id interface{}, lookups *wst.A) (*wst.M, error)
 	// Count Counts documents in the datasource
 	Count(collectionName string, lookups *wst.A) (int64, error)
 	// Create Creates a document in the datasource

@@ -162,73 +162,12 @@ func (ds *Datasource) Count(collectionName string, lookups *wst.A) (int64, error
 }
 
 func findByObjectId(collectionName string, _id interface{}, ds *Datasource, lookups *wst.A) (*wst.M, error) {
-	var connector = ds.SubViper.GetString("connector")
-	switch connector {
-	case "mongodb":
-		wrappedLookups := &wst.A{
-			{
-				"$match": wst.M{
-					"_id": _id,
-				},
-			},
-		}
-		if lookups != nil {
-			*wrappedLookups = append(*wrappedLookups, *lookups...)
-		}
-		cursor, err := ds.FindMany(collectionName, wrappedLookups)
-		if err != nil {
-			return nil, err
-		}
-		defer func(cursor MongoCursorI, ctx context.Context) {
-			err := cursor.Close(ctx)
-			if err != nil {
-				panic(err)
-			}
-		}(cursor, ds.Context)
-		var results []wst.M
-		err = cursor.All(ds.Context, &results)
-		if err != nil {
-			return nil, err
-		}
-		if results != nil && len(results) > 0 {
-			return &(results)[0], nil
-		} else {
-			return nil, errors.New("document not found")
-		}
-	case "redis":
-		return nil, fmt.Errorf("redis connector not implemented yet")
-	case "memorykv":
-		db := ds.Db.(memorykv.MemoryKvDb)
-		bucket := db.GetBucket(collectionName)
-		var idAsString string
-		switch _id.(type) {
-		case string:
-			idAsString = _id.(string)
-		case primitive.ObjectID:
-			idAsString = _id.(primitive.ObjectID).Hex()
-		case uuid.UUID:
-			idAsString = _id.(uuid.UUID).String()
-		}
-		var document wst.M
-		allBytes, err := bucket.Get(idAsString)
-		if err != nil {
-			return nil, err
-		}
-		if len(allBytes) == 0 {
-			return nil, errors.New("document not found")
-		} else if len(allBytes) > 1 {
-			return nil, errors.New("multiple documents found")
-		} else {
-			err = bson.Unmarshal(allBytes[0], &document)
-			if err != nil {
-				return nil, err
-			}
-			return &document, nil
-		}
-
-	default:
-		return nil, errors.New("invalid connector " + connector)
+	connector := ds.connectorInstance
+	data, err := connector.findObjectById(collectionName, _id, lookups)
+	if err != nil {
+		return nil, err
 	}
+	return data, nil
 }
 
 func (ds *Datasource) Create(collectionName string, data *wst.M) (*wst.M, error) {
