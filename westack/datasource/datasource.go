@@ -15,7 +15,6 @@ import (
 	wst "github.com/fredyk/westack-go/westack/common"
 	"github.com/spf13/viper"
 	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
 type OperationError struct {
@@ -154,54 +153,12 @@ func (ds *Datasource) FindMany(collectionName string, lookups *wst.A) (MongoCurs
 }
 
 func (ds *Datasource) Count(collectionName string, lookups *wst.A) (int64, error) {
-	var connector = ds.SubViper.GetString("connector")
-	switch connector {
-	case "mongodb":
-		var db = ds.Db.(*mongo.Client)
-
-		database := db.Database(ds.SubViper.GetString("database"))
-		collection := database.Collection(collectionName)
-
-		pipeline := wst.A{}
-
-		if lookups != nil {
-			pipeline = append(pipeline, *lookups...)
-		}
-		pipeline = append(pipeline, wst.M{
-			"$group": wst.M{
-				"_id": 1,
-				"_n":  wst.M{"$sum": 1},
-			},
-		})
-		allowDiskUse := true
-		ctx := ds.Context
-		cursor, err := collection.Aggregate(ctx, pipeline, &options.AggregateOptions{
-			AllowDiskUse: &allowDiskUse,
-		})
-		if err != nil {
-			fmt.Printf("error %v\n", err)
-			return 0, err
-		}
-		defer func(cursor *mongo.Cursor, ctx context.Context) {
-			err := cursor.Close(ctx)
-			if err != nil {
-				panic(err)
-			}
-		}(cursor, ctx)
-		var documents []struct {
-			Count int64 `bson:"_n"`
-		}
-		err = cursor.All(ds.Context, &documents)
-		if err != nil {
-			return 0, err
-		}
-		if len(documents) == 0 {
-			return 0, nil
-		}
-		return documents[0].Count, nil
-
+	connector := ds.connectorInstance
+	count, err := connector.Count(collectionName, lookups)
+	if err != nil {
+		return 0, err
 	}
-	return 0, errors.New(fmt.Sprintf("invalid connector %v", connector))
+	return count, nil
 }
 
 func findByObjectId(collectionName string, _id interface{}, ds *Datasource, lookups *wst.A) (*wst.M, error) {
@@ -364,6 +321,43 @@ func (ds *Datasource) DeleteById(collectionName string, id interface{}) int64 {
 		}
 	}
 	return 0
+}
+
+// whereLookups is in the form of
+// [
+//
+//	{
+//	  "$match": {
+//	    "name": "John"
+//	  }
+//	}
+//
+// ]
+// and is used to filter the documents to delete.
+// It cannot be nil or empty.
+func (ds *Datasource) DeleteMany(collectionName string, whereLookups *wst.A) (result DeleteManyResult, err error) {
+	if whereLookups == nil {
+		return result, errors.New("whereLookups cannot be nil")
+	}
+	if len(*whereLookups) != 1 {
+		return result, errors.New("whereLookups must have exactly one element as a $match stage")
+	}
+	if (*whereLookups)[0] == nil {
+		return result, errors.New("whereLookups cannot have nil elements")
+	}
+	if (*whereLookups)[0]["$match"] == nil {
+		return result, errors.New("first element of whereLookups must be a $match stage")
+	}
+	if len((*whereLookups)[0]) != 1 {
+		return result, errors.New("first element of whereLookups must be a single $match stage")
+	}
+	if len((*whereLookups)[0]["$match"].(wst.M)) == 0 {
+		return result, errors.New("first element of whereLookups must be a single and non-empty $match stage")
+	}
+
+	connector := ds.connectorInstance
+	return connector.DeleteMany(collectionName, whereLookups)
+
 }
 
 func New(dsKey string, dsViper *viper.Viper, parentContext context.Context) *Datasource {

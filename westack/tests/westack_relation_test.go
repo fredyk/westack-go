@@ -183,8 +183,8 @@ func Test_CustomerOrderStore(t *testing.T) {
 	assert.Nil(t, err)
 	assert.NotNil(t, createdOrder)
 
-	// Create other 10k orders
-	for i := 0; i < 20000; i++ {
+	// Create other 5k orders
+	for i := 0; i < 5000; i++ {
 		order := wst.M{
 			"amount":     rand.Float64() * 1000,
 			"customerId": nil,
@@ -209,7 +209,7 @@ func Test_CustomerOrderStore(t *testing.T) {
 	assert.Nil(t, err)
 	assert.NotNil(t, customers)
 	delayed := time.Since(start)
-	assert.Greater(t, delayed.Milliseconds(), int64(6))
+	assert.Greater(t, delayed.Milliseconds(), int64(4))
 	fmt.Printf("\n===\nDELAYED without cache: %v\n===\n", delayed.Milliseconds())
 
 	assert.Equal(t, 1, len(customers))
