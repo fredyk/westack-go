@@ -88,7 +88,7 @@ func (connector *MemoryKVConnector) FindMany(collectionName string, lookups *wst
 	return NewFixedMongoCursor(documents), nil
 }
 
-func (connector *MemoryKVConnector) findObjectById(collectionName string, _id interface{}, lookups *wst.A) (*wst.M, error) {
+func (connector *MemoryKVConnector) findByObjectId(collectionName string, _id interface{}, lookups *wst.A) (*wst.M, error) {
 	db := connector.db
 	bucket := db.GetBucket(collectionName)
 	var idAsString string

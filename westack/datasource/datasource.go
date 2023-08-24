@@ -163,7 +163,7 @@ func (ds *Datasource) Count(collectionName string, lookups *wst.A) (int64, error
 
 func findByObjectId(collectionName string, _id interface{}, ds *Datasource, lookups *wst.A) (*wst.M, error) {
 	connector := ds.connectorInstance
-	data, err := connector.findObjectById(collectionName, _id, lookups)
+	data, err := connector.findByObjectId(collectionName, _id, lookups)
 	if err != nil {
 		return nil, err
 	}
