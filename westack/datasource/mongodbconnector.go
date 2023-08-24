@@ -121,7 +121,7 @@ func (connector *MongoDBConnector) FindMany(collectionName string, lookups *wst.
 	return cursor, nil
 }
 
-func (connector *MongoDBConnector) findObjectById(collectionName string, _id interface{}, lookups *wst.A) (*wst.M, error) {
+func (connector *MongoDBConnector) findByObjectId(collectionName string, _id interface{}, lookups *wst.A) (*wst.M, error) {
 	wrappedLookups := &wst.A{
 		{
 			"$match": wst.M{
