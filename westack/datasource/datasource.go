@@ -7,36 +7,13 @@ import (
 	"log"
 	"time"
 
-	"github.com/fredyk/westack-go/westack/memorykv"
-	"github.com/google/uuid"
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/bson/primitive"
-
 	wst "github.com/fredyk/westack-go/westack/common"
 	"github.com/spf13/viper"
-	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
 )
-
-type OperationError struct {
-	Code    int
-	Message string
-}
 
 type Options struct {
 	RetryOnError bool
 	MongoDB      *MongoDBDatasourceOptions
-}
-
-func (e *OperationError) Error() string {
-	return fmt.Sprintf("%v %v", e.Code, e.Message)
-}
-
-func NewError(code int, message string) *OperationError {
-	res := &OperationError{
-		code, message,
-	}
-	return res
 }
 
 type Datasource struct {
@@ -47,8 +24,9 @@ type Datasource struct {
 	Context context.Context
 	Options *Options
 
-	ctxCancelFn context.CancelFunc
-	SubViper    *viper.Viper
+	ctxCancelFn       context.CancelFunc
+	SubViper          *viper.Viper
+	connectorInstance PersistedConnector
 }
 
 func getConnectorByName(name string, dsKey string, dsViper *viper.Viper, options *Options) (PersistedConnector, error) {
@@ -58,9 +36,7 @@ func getConnectorByName(name string, dsKey string, dsViper *viper.Viper, options
 		if options != nil {
 			mongoOptions = options.MongoDB
 		}
-		return NewMongoDBConnector(dsViper, mongoOptions), nil
-	case "redis":
-		return nil, fmt.Errorf("redis connector not implemented yet")
+		return NewMongoDBConnector(mongoOptions), nil
 	case "memorykv":
 		return NewMemoryKVConnector(dsKey), nil
 	default:
@@ -70,9 +46,6 @@ func getConnectorByName(name string, dsKey string, dsViper *viper.Viper, options
 
 func (ds *Datasource) Initialize() error {
 	dsViper := ds.SubViper
-	if dsViper == nil {
-		return fmt.Errorf("could not find datasource %v", ds.Key)
-	}
 	var connectorName = dsViper.GetString("connector")
 	var connector PersistedConnector
 	var err error
@@ -80,6 +53,7 @@ func (ds *Datasource) Initialize() error {
 	if err != nil {
 		return err
 	}
+	connector.SetConfig(dsViper)
 	fmt.Printf("Connecting to datasource %v...\n", ds.Key)
 	err = connector.Connect(ds.Context)
 	if err != nil {
@@ -92,10 +66,10 @@ func (ds *Datasource) Initialize() error {
 	fmt.Printf("Pinging datasource %v...\n", ds.Key)
 	err = connector.Ping(ds.Context)
 	if err != nil {
-		fmt.Printf("Could not connect to datasource %v: %v\n", ds.Key, err)
+		fmt.Printf("Could not ping datasource %v: %v\n", ds.Key, err)
 		return err
 	} else {
-		fmt.Printf("DEBUG: Connected to datasource %v\n", ds.Key)
+		fmt.Printf("DEBUG: Ping result OK for datasource %v\n", ds.Key)
 		ds.Db = connector.GetClient()
 	}
 
@@ -129,6 +103,7 @@ func (ds *Datasource) Initialize() error {
 		}
 	}()
 
+	ds.connectorInstance = connector
 	return nil
 }
 
@@ -142,309 +117,70 @@ func (ds *Datasource) Initialize() error {
 // The cursor needs to be closed outside of the function.
 // Implementations for Redis and memorykv connectors are not yet implemented and will result in an error.
 func (ds *Datasource) FindMany(collectionName string, lookups *wst.A) (MongoCursorI, error) {
-	var connector = ds.SubViper.GetString("connector")
-	switch connector {
-	case "mongodb":
-		var db = ds.Db.(*mongo.Client)
-
-		database := db.Database(ds.SubViper.GetString("database"))
-		collection := database.Collection(collectionName)
-
-		pipeline := wst.A{}
-
-		if lookups != nil {
-			pipeline = append(pipeline, *lookups...)
-		}
-		ctx := ds.Context
-		cursor, err := collection.Aggregate(ctx, pipeline, options.Aggregate().SetAllowDiskUse(true).SetBatchSize(16))
-		if err != nil {
-			return nil, err
-		}
-		// Close mongo cursor outside of this function
-		//defer func(cursor *mongo.Cursor, ctx context.Context) {
-		//	err := cursor.Close(ctx)
-		//	if err != nil {
-		//		panic(err)
-		//	}
-		//}(cursor, ctx)
-		//var documents wst.A
-		//err = cursor.All(ds.Context, &documents)
-		//if err != nil {
-		//	return nil, err
-		//}
-		//return &documents, nil
-		return cursor, nil
-	case "redis":
-		return nil, fmt.Errorf("redis connector not implemented yet")
-	case "memorykv":
-		db := ds.Db.(memorykv.MemoryKvDb)
-		if lookups == nil || len(*lookups) == 0 {
-			return nil, errors.New("empty query")
-		}
-
-		potentialMatchStage := (*lookups)[0]
-
-		var _id interface{}
-		if match, isPresent := potentialMatchStage["$match"]; !isPresent {
-			return nil, errors.New("invalid first stage for memorykv. First stage must contain $match")
-		} else {
-			if asM, ok := match.(wst.M); !ok {
-				return nil, errors.New(fmt.Sprintf("invalid $match value type %s", asM))
-			} else {
-				if len(asM) == 0 {
-					return nil, errors.New("empty $match")
-				} else {
-					for _, v := range asM {
-						//key := fmt.Sprintf("%v:%v:%v", ds.Viper.GetString(ds.Keys+".database"), collectionName, k)
-						_id = v
-						break
-					}
-				}
-			}
-		}
-
-		var idAsString string
-		switch _id.(type) {
-		case string:
-			idAsString = _id.(string)
-		case primitive.ObjectID:
-			idAsString = _id.(primitive.ObjectID).Hex()
-		case uuid.UUID:
-			idAsString = _id.(uuid.UUID).String()
-		}
-		bucket := db.GetBucket(collectionName)
-
-		// fmt.Println("QUERYING CACHE: collection=", collectionName, "id=", idAsString) TODO: check debug
-
-		bytes, err := bucket.Get(idAsString)
-		var documents [][]byte
-		if err != nil {
-			return nil, err
-		} else if bytes == nil {
-			// TODO: Check if we should return an error or not
-			//return &wst.A{}, nil
-			documents = nil
-		} else {
-			documents = bytes
-		}
-		return NewFixedMongoCursor(documents), nil
-
-	default:
-		return nil, errors.New("invalid connector " + connector)
-	}
+	return ds.connectorInstance.FindMany(collectionName, lookups)
 }
 
 func (ds *Datasource) Count(collectionName string, lookups *wst.A) (int64, error) {
-	var connector = ds.SubViper.GetString("connector")
-	switch connector {
-	case "mongodb":
-		var db = ds.Db.(*mongo.Client)
-
-		database := db.Database(ds.SubViper.GetString("database"))
-		collection := database.Collection(collectionName)
-
-		pipeline := wst.A{}
-
-		if lookups != nil {
-			pipeline = append(pipeline, *lookups...)
-		}
-		pipeline = append(pipeline, wst.M{
-			"$group": wst.M{
-				"_id": 1,
-				"_n":  wst.M{"$sum": 1},
-			},
-		})
-		allowDiskUse := true
-		ctx := ds.Context
-		cursor, err := collection.Aggregate(ctx, pipeline, &options.AggregateOptions{
-			AllowDiskUse: &allowDiskUse,
-		})
-		if err != nil {
-			fmt.Printf("error %v\n", err)
-			return 0, err
-		}
-		defer func(cursor *mongo.Cursor, ctx context.Context) {
-			err := cursor.Close(ctx)
-			if err != nil {
-				panic(err)
-			}
-		}(cursor, ctx)
-		var documents []struct {
-			Count int64 `bson:"_n"`
-		}
-		err = cursor.All(ds.Context, &documents)
-		if err != nil {
-			return 0, err
-		}
-		if len(documents) == 0 {
-			return 0, nil
-		}
-		return documents[0].Count, nil
-
-	}
-	return 0, errors.New(fmt.Sprintf("invalid connector %v", connector))
-}
-
-func findByObjectId(collectionName string, _id interface{}, ds *Datasource, lookups *wst.A) (*wst.M, error) {
-	var connector = ds.SubViper.GetString("connector")
-	switch connector {
-	case "mongodb":
-		wrappedLookups := &wst.A{
-			{
-				"$match": wst.M{
-					"_id": _id,
-				},
-			},
-		}
-		if lookups != nil {
-			*wrappedLookups = append(*wrappedLookups, *lookups...)
-		}
-		cursor, err := ds.FindMany(collectionName, wrappedLookups)
-		if err != nil {
-			return nil, err
-		}
-		defer func(cursor MongoCursorI, ctx context.Context) {
-			err := cursor.Close(ctx)
-			if err != nil {
-				panic(err)
-			}
-		}(cursor, ds.Context)
-		var results []wst.M
-		err = cursor.All(ds.Context, &results)
-		if err != nil {
-			return nil, err
-		}
-		if results != nil && len(results) > 0 {
-			return &(results)[0], nil
-		} else {
-			return nil, errors.New("document not found")
-		}
-	case "redis":
-		return nil, fmt.Errorf("redis connector not implemented yet")
-	case "memorykv":
-		db := ds.Db.(memorykv.MemoryKvDb)
-		bucket := db.GetBucket(collectionName)
-		var idAsString string
-		switch _id.(type) {
-		case string:
-			idAsString = _id.(string)
-		case primitive.ObjectID:
-			idAsString = _id.(primitive.ObjectID).Hex()
-		case uuid.UUID:
-			idAsString = _id.(uuid.UUID).String()
-		}
-		var document wst.M
-		allBytes, err := bucket.Get(idAsString)
-		if err != nil {
-			return nil, err
-		}
-		if len(allBytes) == 0 {
-			return nil, errors.New("document not found")
-		} else if len(allBytes) > 1 {
-			return nil, errors.New("multiple documents found")
-		} else {
-			err = bson.Unmarshal(allBytes[0], &document)
-			if err != nil {
-				return nil, err
-			}
-			return &document, nil
-		}
-
-	default:
-		return nil, errors.New("invalid connector " + connector)
-	}
+	return ds.connectorInstance.Count(collectionName, lookups)
 }
 
 func (ds *Datasource) Create(collectionName string, data *wst.M) (*wst.M, error) {
-	var connector = ds.SubViper.GetString("connector")
-	switch connector {
-	case "mongodb":
-		var db = ds.Db.(*mongo.Client)
-
-		database := db.Database(ds.SubViper.GetString("database"))
-		collection := database.Collection(collectionName)
-		if (*data)["_id"] == nil && (*data)["id"] != nil {
-			(*data)["_id"] = (*data)["id"]
-		}
-		insertOneResult, err := collection.InsertOne(ds.Context, data)
-		if err != nil {
-			return nil, err
-		}
-		return findByObjectId(collectionName, insertOneResult.InsertedID, ds, nil)
-	case "redis":
-		return nil, fmt.Errorf("redis connector not implemented yet")
-	case "memorykv":
-		dict := ds.Db.(memorykv.MemoryKvDb)
-
-		var id interface{}
-
-		var allBytes [][]byte
-		var idAsStr string
-		if (*data)["_redId"] == nil {
-			id = uuid.New().String()
-			(*data)["_redId"] = id
-		} else {
-			id = (*data)["_redId"]
-		}
-		for _, doc := range (*data)["_entries"].(wst.A) {
-			switch id.(type) {
-			case string:
-				idAsStr = id.(string)
-			case primitive.ObjectID:
-				idAsStr = id.(primitive.ObjectID).Hex()
-			}
-
-			bytes, err := bson.Marshal(doc)
-			if err != nil {
-				return nil, err
-			}
-			allBytes = append(allBytes, bytes)
-		}
-
-		//dict[id] = data
-		err := dict.GetBucket(collectionName).Set(idAsStr, allBytes)
-		if err != nil {
-			return nil, err
-		}
-		//return findByObjectId(collectionName, id, ds, nil)
-		return data, nil
-	}
-	return nil, errors.New(fmt.Sprintf("invalid connector %v", connector))
+	return ds.connectorInstance.Create(collectionName, data)
 }
 
 func (ds *Datasource) UpdateById(collectionName string, id interface{}, data *wst.M) (*wst.M, error) {
-	var connector = ds.SubViper.GetString("connector")
-	switch connector {
-	case "mongodb":
-		var db = ds.Db.(*mongo.Client)
-
-		database := db.Database(ds.SubViper.GetString("database"))
-		collection := database.Collection(collectionName)
-		delete(*data, "id")
-		delete(*data, "_id")
-		if _, err := collection.UpdateOne(ds.Context, wst.M{"_id": id}, wst.M{"$set": *data}); err != nil {
-			panic(err)
-		}
-		return findByObjectId(collectionName, id, ds, nil)
-	}
-	return nil, errors.New(fmt.Sprintf("invalid connector %v", connector))
+	return ds.connectorInstance.UpdateById(collectionName, id, data)
 }
 
-func (ds *Datasource) DeleteById(collectionName string, id interface{}) int64 {
-	var connector = ds.SubViper.GetString("connector")
-	switch connector {
-	case "mongodb":
-		var db = ds.Db.(*mongo.Client)
+func (ds *Datasource) DeleteById(collectionName string, id interface{}) (DeleteResult, error) {
+	return ds.connectorInstance.DeleteById(collectionName, id)
+}
 
-		database := db.Database(ds.SubViper.GetString("database"))
-		collection := database.Collection(collectionName)
-		if result, err := collection.DeleteOne(ds.Context, wst.M{"_id": id}); err != nil {
-			panic(err)
-		} else {
-			return result.DeletedCount
-		}
+// whereLookups is in the form of
+// [
+//
+//	{
+//	  "$match": {
+//	    "name": "John"
+//	  }
+//	}
+//
+// ]
+// and is used to filter the documents to delete.
+// It cannot be nil or empty.
+func (ds *Datasource) DeleteMany(collectionName string, whereLookups *wst.A) (result DeleteResult, err error) {
+	if whereLookups == nil {
+		return result, errors.New("whereLookups cannot be nil")
 	}
-	return 0
+	if len(*whereLookups) != 1 {
+		return result, errors.New("whereLookups must have exactly one element as a $match stage")
+	}
+	if (*whereLookups)[0] == nil {
+		return result, errors.New("whereLookups cannot have nil elements")
+	}
+	if (*whereLookups)[0]["$match"] == nil {
+		return result, errors.New("first element of whereLookups must be a $match stage")
+	}
+	if len((*whereLookups)[0]) != 1 {
+		return result, errors.New("first element of whereLookups must be a single $match stage")
+	}
+	if len((*whereLookups)[0]["$match"].(wst.M)) == 0 {
+		return result, errors.New("first element of whereLookups must be a single and non-empty $match stage")
+	}
+
+	return ds.connectorInstance.DeleteMany(collectionName, whereLookups)
+
+}
+
+func (ds *Datasource) Close() error {
+	err := ds.connectorInstance.Disconnect()
+	if err != nil {
+		fmt.Printf("ERROR: Could not close datasource %v: %v\n", ds.Key, err)
+		return err
+	}
+	ds.ctxCancelFn()
+	fmt.Printf("INFO: Closed datasource %v\n", ds.Key)
+	return nil
 }
 
 func New(dsKey string, dsViper *viper.Viper, parentContext context.Context) *Datasource {
