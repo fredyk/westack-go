@@ -186,8 +186,8 @@ func Test_CustomerOrderStore(t *testing.T) {
 
 	// Create a waiting group using sync.WaitGroup
 	var wg sync.WaitGroup
-	// Create other 10k orders
-	orderCountToCreate := 10000
+	// Create other 11k orders
+	orderCountToCreate := 11000
 	wg.Add(orderCountToCreate)
 	creationInit := time.Now()
 	for i := 0; i < orderCountToCreate; i++ {

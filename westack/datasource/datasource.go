@@ -7,11 +7,6 @@ import (
 	"log"
 	"time"
 
-	"github.com/fredyk/westack-go/westack/memorykv"
-	"github.com/google/uuid"
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/bson/primitive"
-
 	wst "github.com/fredyk/westack-go/westack/common"
 	"github.com/spf13/viper"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -144,87 +139,19 @@ func (ds *Datasource) Initialize() error {
 // The cursor needs to be closed outside of the function.
 // Implementations for Redis and memorykv connectors are not yet implemented and will result in an error.
 func (ds *Datasource) FindMany(collectionName string, lookups *wst.A) (MongoCursorI, error) {
-	connector := ds.connectorInstance
-	cursor, err := connector.FindMany(collectionName, lookups)
-	if err != nil {
-		return nil, err
-	}
-	return cursor, nil
+	return ds.connectorInstance.FindMany(collectionName, lookups)
 }
 
 func (ds *Datasource) Count(collectionName string, lookups *wst.A) (int64, error) {
-	connector := ds.connectorInstance
-	count, err := connector.Count(collectionName, lookups)
-	if err != nil {
-		return 0, err
-	}
-	return count, nil
+	return ds.connectorInstance.Count(collectionName, lookups)
 }
 
 func findByObjectId(collectionName string, _id interface{}, ds *Datasource, lookups *wst.A) (*wst.M, error) {
-	connector := ds.connectorInstance
-	data, err := connector.findByObjectId(collectionName, _id, lookups)
-	if err != nil {
-		return nil, err
-	}
-	return data, nil
+	return ds.connectorInstance.findByObjectId(collectionName, _id, lookups)
 }
 
 func (ds *Datasource) Create(collectionName string, data *wst.M) (*wst.M, error) {
-	var connector = ds.SubViper.GetString("connector")
-	switch connector {
-	case "mongodb":
-		var db = ds.Db.(*mongo.Client)
-
-		database := db.Database(ds.SubViper.GetString("database"))
-		collection := database.Collection(collectionName)
-		if (*data)["_id"] == nil && (*data)["id"] != nil {
-			(*data)["_id"] = (*data)["id"]
-		}
-		insertOneResult, err := collection.InsertOne(ds.Context, data)
-		if err != nil {
-			return nil, err
-		}
-		return findByObjectId(collectionName, insertOneResult.InsertedID, ds, nil)
-	case "redis":
-		return nil, fmt.Errorf("redis connector not implemented yet")
-	case "memorykv":
-		dict := ds.Db.(memorykv.MemoryKvDb)
-
-		var id interface{}
-
-		var allBytes [][]byte
-		var idAsStr string
-		if (*data)["_redId"] == nil {
-			id = uuid.New().String()
-			(*data)["_redId"] = id
-		} else {
-			id = (*data)["_redId"]
-		}
-		for _, doc := range (*data)["_entries"].(wst.A) {
-			switch id.(type) {
-			case string:
-				idAsStr = id.(string)
-			case primitive.ObjectID:
-				idAsStr = id.(primitive.ObjectID).Hex()
-			}
-
-			bytes, err := bson.Marshal(doc)
-			if err != nil {
-				return nil, err
-			}
-			allBytes = append(allBytes, bytes)
-		}
-
-		//dict[id] = data
-		err := dict.GetBucket(collectionName).Set(idAsStr, allBytes)
-		if err != nil {
-			return nil, err
-		}
-		//return findByObjectId(collectionName, id, ds, nil)
-		return data, nil
-	}
-	return nil, errors.New(fmt.Sprintf("invalid connector %v", connector))
+	return ds.connectorInstance.Create(collectionName, data)
 }
 
 func (ds *Datasource) UpdateById(collectionName string, id interface{}, data *wst.M) (*wst.M, error) {

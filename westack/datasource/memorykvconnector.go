@@ -124,8 +124,40 @@ func (connector *MemoryKVConnector) Count(collectionName string, lookups *wst.A)
 }
 
 func (connector *MemoryKVConnector) Create(collectionName string, data *wst.M) (*wst.M, error) {
-	//TODO implement me
-	panic("implement me")
+	db := connector.db
+
+	var id interface{}
+
+	var allBytes [][]byte
+	var idAsStr string
+	if (*data)["_redId"] == nil {
+		id = uuid.New().String()
+		(*data)["_redId"] = id
+	} else {
+		id = (*data)["_redId"]
+	}
+	for _, doc := range (*data)["_entries"].(wst.A) {
+		switch id.(type) {
+		case string:
+			idAsStr = id.(string)
+		case primitive.ObjectID:
+			idAsStr = id.(primitive.ObjectID).Hex()
+		}
+
+		bytes, err := bson.Marshal(doc)
+		if err != nil {
+			return nil, err
+		}
+		allBytes = append(allBytes, bytes)
+	}
+
+	//db[id] = data
+	err := db.GetBucket(collectionName).Set(idAsStr, allBytes)
+	if err != nil {
+		return nil, err
+	}
+	//return findByObjectId(collectionName, id, ds, nil)
+	return data, nil
 }
 
 func (connector *MemoryKVConnector) UpdateById(collectionName string, id interface{}, data *wst.M) (*wst.M, error) {
