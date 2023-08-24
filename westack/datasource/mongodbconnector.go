@@ -200,8 +200,18 @@ func (connector *MongoDBConnector) Count(collectionName string, lookups *wst.A) 
 }
 
 func (connector *MongoDBConnector) Create(collectionName string, data *wst.M) (*wst.M, error) {
-	//TODO implement me
-	panic("implement me")
+	var db = connector.db
+
+	database := db.Database(connector.dsViper.GetString("database"))
+	collection := database.Collection(collectionName)
+	if (*data)["_id"] == nil && (*data)["id"] != nil {
+		(*data)["_id"] = (*data)["id"]
+	}
+	insertOneResult, err := collection.InsertOne(connector.context, data)
+	if err != nil {
+		return nil, err
+	}
+	return connector.findByObjectId(collectionName, insertOneResult.InsertedID, nil)
 }
 
 func (connector *MongoDBConnector) UpdateById(collectionName string, id interface{}, data *wst.M) (*wst.M, error) {
