@@ -183,8 +183,8 @@ func Test_CustomerOrderStore(t *testing.T) {
 	assert.Nil(t, err)
 	assert.NotNil(t, createdOrder)
 
-	// Create other 5k orders
-	for i := 0; i < 5000; i++ {
+	// Create other 10k orders
+	for i := 0; i < 10000; i++ {
 		order := wst.M{
 			"amount":     rand.Float64() * 1000,
 			"customerId": nil,
