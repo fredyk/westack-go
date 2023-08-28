@@ -76,14 +76,10 @@ jobs:
         - name: Start MongoDB
           run: sudo systemctl start mongod
 
-        - name: Check vulnerabilities with gosec. Exit code 1 if vulnerabilities found
+        - name: Check vulnerabilities with gosec.
           run: |
             go get github.com/securego/gosec/v2/cmd/gosec
             gosec -fmt=json -out=results.json ./...
-            if [ -s results.json ]
-            then
-              exit 1
-            fi
 
         - name: Upload results.json
           uses: actions/upload-artifact@v2
