@@ -89,12 +89,12 @@ jobs:
               echo "Gosec found issues"
               # Set output variable
               # echo "::set-output name=issues_found::true"
-              echo "issues_found=true" >> $GITHUB_ISSUES 
+              echo "issues_found=true" >> $GITHUB_STATE 
             else
               echo "Gosec found no issues"
               # Set output variable
               # echo "::set-output name=issues_found::false"
-              echo "issues_found=false" >> $GITHUB_ISSUES
+              echo "issues_found=false" >> $GITHUB_STATE
             fi
             exit 0
 
@@ -104,10 +104,10 @@ jobs:
               name: results.json
               path: results.json
 
-        - name: Exit if Gosec found issues in $GITHUB_ISSUES
+        - name: Exit if Gosec found issues in $GITHUB_STATE
           run: |
-            if [ -f $GITHUB_ISSUES ]; then
-              issues_found=$(cat $GITHUB_ISSUES | grep issues_found | cut -d= -f2)
+            if [ -f $GITHUB_STATE ]; then
+              issues_found=$(cat $GITHUB_STATE | grep issues_found | cut -d= -f2)
               if [ "$issues_found" = "true" ]; then
                 echo "Gosec found issues"
                 exit 1
