@@ -18,7 +18,7 @@ func Test_CreateWithMap(t *testing.T) {
 	created, err := noteModel.Create(map[string]interface{}{
 		"title": "Test",
 	}, systemContext)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Equal(t, "Test", created.GetString("title"))
 }
 
@@ -29,7 +29,7 @@ func Test_CreateWithMapPointer(t *testing.T) {
 	created, err := noteModel.Create(&map[string]interface{}{
 		"date": time.Now(),
 	}, systemContext)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Equal(t, time.Now().Minute(), created.ToJSON()["date"].(primitive.DateTime).Time().Minute())
 }
 
@@ -42,7 +42,7 @@ func Test_CreateWithStruct(t *testing.T) {
 	}{
 		SomeInt: 1,
 	}, systemContext)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Equal(t, int64(1), created.GetInt("someInt"))
 }
 
@@ -53,7 +53,7 @@ func Test_CreateWithM(t *testing.T) {
 	created, err := noteModel.Create(wst.M{
 		"someFloat": 1.1,
 	}, systemContext)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Equal(t, 1.1, created.GetFloat64("someFloat"))
 }
 
@@ -64,7 +64,7 @@ func Test_CreateWithMPointer(t *testing.T) {
 	created, err := noteModel.Create(&wst.M{
 		"someBoolean": true,
 	}, systemContext)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Equal(t, true, created.GetBoolean("someBoolean", false))
 }
 
@@ -77,7 +77,7 @@ func Test_CreateWithInstance(t *testing.T) {
 	}, model.NewBuildCache(), systemContext)
 	assert.Nil(t, err2)
 	created, err := noteModel.Create(build, systemContext)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Equal(t, "bar", created.GetString("foo"))
 }
 
@@ -88,9 +88,9 @@ func Test_CreateWithInstancePointer(t *testing.T) {
 	v, err := noteModel.Build(wst.M{
 		"foo2": "bar2",
 	}, model.NewBuildCache(), systemContext)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	created, err := noteModel.Create(&v, systemContext)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Equal(t, "bar2", created.GetString("foo2"))
 }
 
@@ -103,7 +103,7 @@ func Test_CreateWithBadStruct(t *testing.T) {
 	}{
 		SomeInt: make(chan int),
 	}, systemContext)
-	assert.NotNil(t, err)
+	assert.Error(t, err)
 }
 
 func Test_CreateWithInvalidInput(t *testing.T) {
@@ -111,7 +111,7 @@ func Test_CreateWithInvalidInput(t *testing.T) {
 	t.Parallel()
 
 	_, err := noteModel.Create(1, systemContext)
-	assert.NotNil(t, err)
+	assert.Error(t, err)
 }
 
 func Test_CreateWithOverrideResultAsM(t *testing.T) {
@@ -123,7 +123,7 @@ func Test_CreateWithOverrideResultAsM(t *testing.T) {
 			"overrided1": true,
 		},
 	}, systemContext)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Equal(t, true, created.GetBoolean("overrided1", false))
 }
 
@@ -138,7 +138,7 @@ func Test_CreateWithOverrideResultAsInstance(t *testing.T) {
 			},
 		},
 	}, systemContext)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 }
 
 func Test_CreateWithOverrideResultAsInstancePointer(t *testing.T) {
@@ -152,7 +152,7 @@ func Test_CreateWithOverrideResultAsInstancePointer(t *testing.T) {
 			},
 		},
 	}, systemContext)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 }
 
 func Test_CreateWithOverrideResultError(t *testing.T) {
@@ -162,7 +162,7 @@ func Test_CreateWithOverrideResultError(t *testing.T) {
 	_, err := noteModel.Create(wst.M{
 		"__forceError": true,
 	}, systemContext)
-	assert.NotNil(t, err)
+	assert.Error(t, err)
 }
 
 func Test_CreateWithOverrideInvalid(t *testing.T) {
@@ -172,7 +172,7 @@ func Test_CreateWithOverrideInvalid(t *testing.T) {
 	_, err := noteModel.Create(wst.M{
 		"__overwriteWith": 1,
 	}, systemContext)
-	assert.NotNil(t, err)
+	assert.Error(t, err)
 }
 
 func Test_CreateWithInvalidBsonInput(t *testing.T) {
@@ -192,13 +192,13 @@ func Test_CreateWithForcingError(t *testing.T) {
 	_, err := noteModel.Create(wst.M{
 		"__forceAfterError": true,
 	}, systemContext)
-	assert.NotNil(t, err)
+	assert.Error(t, err)
 }
 
 func Test_EnforceExError(t *testing.T) {
 
 	t.Parallel()
 
-	_, err := noteModel.EnforceEx(nil, "", "create", &model.EventContext{})
-	assert.NotNil(t, err)
+	err, _ := noteModel.EnforceEx(nil, "", "create", &model.EventContext{})
+	assert.Error(t, err)
 }

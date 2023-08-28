@@ -5,6 +5,8 @@ import (
 	"crypto/rand"
 	"encoding/json"
 	"fmt"
+	"github.com/fredyk/westack-go/westack/datasource"
+	"github.com/fredyk/westack-go/westack/model"
 	"io"
 	"log"
 	"math/big"
@@ -23,9 +25,130 @@ import (
 var app *westack.WeStack
 
 func init() {
-	app = westack.New(westack.Options{})
+	app = westack.New(westack.Options{
+		DatasourceOptions: &map[string]*datasource.Options{
+			"db": {
+				MongoDB: &datasource.MongoDBDatasourceOptions{
+					Registry: FakeMongoDbRegistry(),
+					Monitor:  FakeMongoDbMonitor(),
+					//Timeout:  3,
+				},
+				RetryOnError: true,
+			},
+		},
+	})
+	var err error
 	app.Boot(func(app *westack.WeStack) {
 
+		// Some hooks
+		noteModel, err = app.FindModel("Note")
+		if err != nil {
+			log.Fatalf("failed to find model: %v", err)
+		}
+		noteModel.Observe("before save", func(ctx *model.EventContext) error {
+			if ctx.IsNewInstance {
+				(*ctx.Data)["__test"] = true
+				(*ctx.Data)["__testDate"] = time.Now()
+			}
+			if (*ctx.Data)["__forceError"] == true {
+				return fmt.Errorf("forced error")
+			}
+			if (*ctx.Data)["__overwriteWith"] != nil {
+				ctx.Result = (*ctx.Data)["__overwriteWith"]
+			}
+			if (*ctx.Data)["__overwriteWithInstance"] != nil {
+				ctx.Result, err = noteModel.Build((*ctx.Data)["__overwriteWithInstance"].(wst.M), model.NewBuildCache(), ctx)
+				if err != nil {
+					return err
+				}
+			}
+			if (*ctx.Data)["__overwriteWithInstancePointer"] != nil {
+				v, err := noteModel.Build((*ctx.Data)["__overwriteWithInstancePointer"].(wst.M), model.NewBuildCache(), ctx)
+				if err != nil {
+					return err
+				}
+				ctx.Result = &v
+			}
+			return nil
+		})
+
+		noteModel.Observe("after save", func(ctx *model.EventContext) error {
+			if (*ctx.Data)["__forceAfterError"] == true {
+				return fmt.Errorf("forced error")
+			}
+			return nil
+		})
+
+		userModel, err = app.FindModel("user")
+		if err != nil {
+			log.Fatalf("failed to find model: %v", err)
+		}
+		userModel.Observe("before save", func(ctx *model.EventContext) error {
+			fmt.Println("saving user")
+			return nil
+		})
+
+		customerModel, err = app.FindModel("Customer")
+		if err != nil {
+			log.Fatalf("failed to find model: %v", err)
+		}
+		orderModel, err = app.FindModel("Order")
+		if err != nil {
+			log.Fatalf("failed to find model: %v", err)
+		}
+		storeModel, err = app.FindModel("Store")
+		if err != nil {
+			log.Fatalf("failed to find model: %v", err)
+		}
+		footerModel, err = app.FindModel("Footer")
+		if err != nil {
+			log.Fatalf("failed to find model: %v", err)
+		}
+
+		noteModel.Observe("before load", func(ctx *model.EventContext) error {
+			if ctx.BaseContext.Remote != nil {
+				if ctx.BaseContext.Ctx.Query("mockResultTest124401") == "true" {
+					// set the result as *model.InstanceA
+					inst, err := noteModel.Build(wst.M{
+						"title": "mocked124401",
+					}, model.NewBuildCache(), ctx)
+					if err != nil {
+						return err
+					}
+					ctx.Result = &model.InstanceA{
+						inst,
+					}
+				} else if ctx.BaseContext.Ctx.Query("mockResultTest124402") == "true" {
+					// set the result as model.InstanceA
+					inst, err := noteModel.Build(wst.M{
+						"title": "mocked124402",
+					}, model.NewBuildCache(), ctx)
+					if err != nil {
+						return err
+					}
+					ctx.Result = model.InstanceA{
+						inst,
+					}
+				} else if ctx.BaseContext.Ctx.Query("mockResultTest124403") == "true" {
+					// set the result as []*model.InstanceA
+					inst, err := noteModel.Build(wst.M{
+						"title": "mocked124403",
+					}, model.NewBuildCache(), ctx)
+					if err != nil {
+						return err
+					}
+					ctx.Result = []*model.Instance{
+						&inst,
+					}
+				} else if ctx.BaseContext.Ctx.Query("mockResultTest124404") == "true" {
+					// set the result as wst.A
+					ctx.Result = wst.A{
+						{"title": "mocked124404"},
+					}
+				}
+			}
+			return nil
+		})
 	})
 	go func() {
 		err := app.Start()

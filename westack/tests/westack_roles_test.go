@@ -19,7 +19,7 @@ func Test_NewUserAndRole(t *testing.T) {
 		Password: fmt.Sprintf("pwd-%v", randN),
 		Roles:    []string{fmt.Sprintf("role-%v", randN)},
 	}, systemContext)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.NotNil(t, user.Id)
 }
 
@@ -29,7 +29,7 @@ func Test_NewUserAndRoleWithExistingRole(t *testing.T) {
 	role, err := roleModel.Create(wst.M{
 		"name": fmt.Sprintf("role-%v", randN),
 	}, systemContext)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.NotNil(t, role.Id)
 
 	user, err := westack.UpsertUserWithRoles(app, westack.UserWithRoles{
@@ -37,7 +37,7 @@ func Test_NewUserAndRoleWithExistingRole(t *testing.T) {
 		Password: fmt.Sprintf("pwd-%v", randN),
 		Roles:    []string{fmt.Sprintf("role-%v", randN)},
 	}, systemContext)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.NotNil(t, user.Id)
 }
 
@@ -47,7 +47,7 @@ func Test_NewUserAndRoleWithExistingUser(t *testing.T) {
 		"username": fmt.Sprintf("user-%v", randN),
 		"password": fmt.Sprintf("pwd-%v", randN),
 	}, systemContext)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.NotNil(t, user.Id)
 
 	user, err = westack.UpsertUserWithRoles(app, westack.UserWithRoles{
@@ -55,7 +55,7 @@ func Test_NewUserAndRoleWithExistingUser(t *testing.T) {
 		Password: fmt.Sprintf("pwd-%v", randN),
 		Roles:    []string{fmt.Sprintf("role-%v", randN)},
 	}, systemContext)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.NotNil(t, user.Id)
 }
 
@@ -65,14 +65,14 @@ func Test_NewUserAndRoleWithExistingUserAndRole(t *testing.T) {
 	role, err := roleModel.Create(wst.M{
 		"name": fmt.Sprintf("role-%v", randN),
 	}, systemContext)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.NotNil(t, role.Id)
 
 	user, err := userModel.Create(wst.M{
 		"username": fmt.Sprintf("user-%v", randN),
 		"password": fmt.Sprintf("pwd-%v", randN),
 	}, systemContext)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.NotNil(t, user.Id)
 
 	user, err = westack.UpsertUserWithRoles(app, westack.UserWithRoles{
@@ -80,7 +80,7 @@ func Test_NewUserAndRoleWithExistingUserAndRole(t *testing.T) {
 		Password: fmt.Sprintf("pwd-%v", randN),
 		Roles:    []string{fmt.Sprintf("role-%v", randN)},
 	}, systemContext)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.NotNil(t, user.Id)
 }
 
@@ -90,14 +90,14 @@ func Test_NewUserAndRoleWithExistingUserAndRoleAndUserRolesAndRoleMapping(t *tes
 	role, err := roleModel.Create(wst.M{
 		"name": fmt.Sprintf("role-%v", randN),
 	}, systemContext)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.NotNil(t, role.Id)
 
 	user, err := userModel.Create(wst.M{
 		"username": fmt.Sprintf("user-%v", randN),
 		"password": fmt.Sprintf("pwd-%v", randN),
 	}, systemContext)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.NotNil(t, user.Id)
 
 	roleMappingModel, err := app.FindModel("RoleMapping")
@@ -106,7 +106,7 @@ func Test_NewUserAndRoleWithExistingUserAndRoleAndUserRolesAndRoleMapping(t *tes
 		"roleId":      role.Id,
 		"principalId": user.Id,
 	}, systemContext)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.NotNil(t, userRole.Id)
 
 	user, err = westack.UpsertUserWithRoles(app, westack.UserWithRoles{
@@ -114,7 +114,7 @@ func Test_NewUserAndRoleWithExistingUserAndRoleAndUserRolesAndRoleMapping(t *tes
 		Password: fmt.Sprintf("pwd-%v", randN),
 		Roles:    []string{fmt.Sprintf("role-%v", randN)},
 	}, systemContext)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.NotNil(t, user.Id)
 }
 
@@ -125,7 +125,7 @@ func Test_NewUserAndRoleEmptyUsername(t *testing.T) {
 		Password: fmt.Sprintf("pwd-%v", randN),
 		Roles:    []string{fmt.Sprintf("role-%v", randN)},
 	}, systemContext)
-	assert.NotNil(t, err)
+	assert.Error(t, err)
 	assert.Nil(t, user)
 }
 
@@ -136,7 +136,7 @@ func Test_NewUserAndRoleEmptyPassword(t *testing.T) {
 		Password: "",
 		Roles:    []string{fmt.Sprintf("role-%v", randN)},
 	}, systemContext)
-	assert.NotNil(t, err)
+	assert.Error(t, err)
 	assert.Nil(t, user)
 }
 
@@ -147,7 +147,7 @@ func Test_NewUserAndRoleEmptyRoles(t *testing.T) {
 		Password: fmt.Sprintf("pwd-%v", randN),
 		Roles:    []string{},
 	}, systemContext)
-	assert.NotNil(t, err)
+	assert.Error(t, err)
 	assert.Nil(t, user)
 }
 
