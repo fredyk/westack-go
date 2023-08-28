@@ -177,7 +177,10 @@ func (modelInstance *Instance) UpdateAttributes(data interface{}, baseContext *E
 		deepLevel++
 	}
 	if !baseContext.DisableTypeConversions {
-		datasource.ReplaceObjectIds(finalData)
+		_, err := datasource.ReplaceObjectIds(finalData)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	eventContext := &EventContext{

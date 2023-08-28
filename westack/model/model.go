@@ -735,7 +735,10 @@ func (loadedModel *Model) Create(data interface{}, baseContext *EventContext) (*
 		}
 	}
 	if !baseContext.DisableTypeConversions {
-		datasource.ReplaceObjectIds(finalData)
+		_, err := datasource.ReplaceObjectIds(finalData)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	eventContext := &EventContext{
