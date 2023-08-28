@@ -10,6 +10,9 @@ on:
 jobs:
     merge_and_push:
         runs-on: ubuntu-latest
+        strategy:
+          matrix:
+            go: [ '1.19', '1.20.1', '1.20.6' ]
         env:
           WST_ADMIN_USERNAME: admin
           WST_ADMIN_PWD: testadmin
@@ -60,9 +63,11 @@ jobs:
             git merge --no-edit --no-ff --allow-unrelated-histories ${{ github.event.pull_request.head.sha }}
 
         - name: Set up Go
-          uses: actions/setup-go@v2
+          uses: actions/setup-go@v4
           with:
-            go-version: 1.20.6
+            go-version: ${{ matrix.go }}
+            check-latest: true
+            cache-dependency-path: ${{ github.workspace }}/go.sum
 
         - name: Setup Gosec Security Scanner
           timeout-minutes: 15
