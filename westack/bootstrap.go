@@ -146,6 +146,10 @@ func (app *WeStack) loadDataSources() {
 
 			if app.dataSourceOptions != nil {
 				ds.Options = (*app.dataSourceOptions)[dsName]
+				if ds.Options == nil {
+					ds.Options = &datasource.Options{}
+				}
+				ds.Options.RetryOnError = dsViper.GetBool(key + ".retryOnError")
 			}
 
 			err := ds.Initialize()
@@ -317,7 +321,7 @@ func (app *WeStack) setupModel(loadedModel *model.Model, dataSource *datasource.
 		}
 	}
 
-	f, err := os.OpenFile(fmt.Sprintf("%v/%v.policies.csv", basePoliciesDirectory, loadedModel.Name), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	f, err := os.OpenFile(fmt.Sprintf("%v/%v.policies.csv", basePoliciesDirectory, loadedModel.Name), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
 	if err != nil {
 		panic(err)
 	}

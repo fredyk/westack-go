@@ -15,6 +15,8 @@ on:
       - main
       - alpha
       - beta
+      - update-dependencies
+      - update-dependency-*
 
 jobs:
 
@@ -38,10 +40,14 @@ jobs:
         run: |
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git config --global user.name "github-actions[bot]"
-          # Merge master, abort if there are conflicts
           git merge origin/master --allow-unrelated-histories --no-edit -X theirs || git merge --abort
           # Beta
           git merge origin/beta --allow-unrelated-histories --no-edit -X theirs || git merge --abort
+          # if pull_request, also merge it using event sha
+          if [ -n "$GITHUB_HEAD_REF" ]; then
+            echo "Merging pull request $GITHUB_HEAD_REF: ${{ github.event.pull_request.head.sha }}"
+            git merge --allow-unrelated-histories --no-edit -X theirs ${{ github.event.pull_request.head.sha }}
+          fi
 
       - name: Set up Go
         uses: actions/setup-go@v4
