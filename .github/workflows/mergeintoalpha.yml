@@ -62,12 +62,14 @@ jobs:
           with:
             go-version: 1.20.6
 
-        - name: Run Gosec Security Scanner
+        - name: Setup Gosec Security Scanner
+          timeout-minutes: 15
           run: |
             go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
-            go install github.com/securego/gosec/v2/cmd/gosec@latest              
-            # gosec -fmt=json -out=results.json ./...
-            # Indent output
+            go install github.com/securego/gosec/v2/cmd/gosec@latest 
+
+        - name: Run Gosec Security Scanner
+          run: |
             golangci-lint run --timeout 10m --disable-all --enable=gosec --out-format=json ./... > results.json
             result=$?
             if [ $result -ne 0 ]; then
