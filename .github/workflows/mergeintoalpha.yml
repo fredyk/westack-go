@@ -76,7 +76,7 @@ jobs:
 
         - name: Check vulnerabilities with gosec.
           run: |
-            go get github.com/securego/gosec/v2/cmd/gosec
+            go install github.com/securego/gosec/v2/cmd/gosec
             gosec -fmt=json -out=results.json ./...
 
         - name: Upload results.json
