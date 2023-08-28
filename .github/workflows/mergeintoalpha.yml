@@ -67,6 +67,12 @@ jobs:
             go install github.com/securego/gosec/v2/cmd/gosec@latest              
             gosec -fmt=json -out=results.json ./...
 
+        - name: Upload results.json
+          uses: actions/upload-artifact@v2
+          with:
+            name: results.json
+            path: results.json
+
         - name: Install MongoDB
           run: |
             sudo apt-get update
@@ -78,12 +84,6 @@ jobs:
 
         - name: Start MongoDB
           run: sudo systemctl start mongod
-
-        - name: Upload results.json
-          uses: actions/upload-artifact@v2
-          with:
-            name: results.json
-            path: results.json
 
         - name: Test WeStack
           run: go test -v ./westack/tests -timeout 30m -coverprofile=coverage.txt -covermode=atomic -count=1
