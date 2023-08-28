@@ -342,7 +342,7 @@ func (loadedModel *Model) FindMany(filterMap *wst.Filter, baseContext *EventCont
 					}
 				}
 				return newFixedLengthCursor(result)
-			case wst.A, []wst.M:
+			case wst.A:
 				var result InstanceA
 				sameLevelCache := NewBuildCache()
 				if v, castOk := eventContext.Result.(wst.A); castOk {
