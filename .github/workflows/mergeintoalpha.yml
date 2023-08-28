@@ -76,10 +76,10 @@ jobs:
         - name: Start MongoDB
           run: sudo systemctl start mongod
 
-        - name: Check vulnerabilities with gosec.
-          run: |
-            go install github.com/securego/gosec/v2/cmd/gosec
-            gosec -fmt=json -out=results.json ./...
+        - name: Run Gosec Security Scanner
+          uses: securego/gosec@master
+          with:
+            args: ./... -fmt=json -out=results.json
 
         - name: Upload results.json
           uses: actions/upload-artifact@v2
