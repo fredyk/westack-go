@@ -94,7 +94,7 @@ func (sH *swaggerHelper) CreateOpenAPI() error {
 		}
 	}
 	// Save
-	err2 := os.WriteFile("data/swagger.json", swagger, 0644)
+	err2 := os.WriteFile("data/swagger.json", swagger, 0600)
 	return err2
 }
 
@@ -120,7 +120,7 @@ func (sH *swaggerHelper) Dump() error {
 		return err
 	}
 	// Save
-	err2 := os.WriteFile("data/swagger.json", swagger, 0644)
+	err2 := os.WriteFile("data/swagger.json", swagger, 0600)
 	// Free up memory
 	swagger = nil
 	sH.free()

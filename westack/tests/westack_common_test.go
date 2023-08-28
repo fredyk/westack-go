@@ -105,7 +105,7 @@ func Test_LoadFile_InvalidJson(t *testing.T) {
 
 	var m wst.M
 	// write the json:
-	err := os.WriteFile("invalid.json", []byte("invalid json"), 0644)
+	err := os.WriteFile("invalid.json", []byte("invalid json"), 0600)
 	if err != nil {
 		t.Errorf("Error writing file: %v", err)
 		return
