@@ -2,7 +2,6 @@ package tests
 
 import (
 	"fmt"
-	"math/rand"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -12,7 +11,7 @@ import (
 )
 
 func Test_NewUserAndRole(t *testing.T) {
-	randN := 1e6 + rand.Intn(8999999)
+	randN := createRandomInt()
 	user, err := westack.UpsertUserWithRoles(app, westack.UserWithRoles{
 		Username: fmt.Sprintf("user-%v", randN),
 		Password: fmt.Sprintf("pwd-%v", randN),
@@ -23,7 +22,7 @@ func Test_NewUserAndRole(t *testing.T) {
 }
 
 func Test_NewUserAndRoleWithExistingRole(t *testing.T) {
-	randN := 1e6 + rand.Intn(8999999)
+	randN := createRandomInt()
 	roleModel := app.FindModelsWithClass("Role")[0]
 	role, err := roleModel.Create(wst.M{
 		"name": fmt.Sprintf("role-%v", randN),
@@ -41,7 +40,7 @@ func Test_NewUserAndRoleWithExistingRole(t *testing.T) {
 }
 
 func Test_NewUserAndRoleWithExistingUser(t *testing.T) {
-	randN := 1e6 + rand.Intn(8999999)
+	randN := createRandomInt()
 	user, err := userModel.Create(wst.M{
 		"username": fmt.Sprintf("user-%v", randN),
 		"password": fmt.Sprintf("pwd-%v", randN),
@@ -59,7 +58,7 @@ func Test_NewUserAndRoleWithExistingUser(t *testing.T) {
 }
 
 func Test_NewUserAndRoleWithExistingUserAndRole(t *testing.T) {
-	randN := 1e6 + rand.Intn(8999999)
+	randN := createRandomInt()
 	roleModel := app.FindModelsWithClass("Role")[0]
 	role, err := roleModel.Create(wst.M{
 		"name": fmt.Sprintf("role-%v", randN),
@@ -84,7 +83,7 @@ func Test_NewUserAndRoleWithExistingUserAndRole(t *testing.T) {
 }
 
 func Test_NewUserAndRoleWithExistingUserAndRoleAndUserRolesAndRoleMapping(t *testing.T) {
-	randN := 1e6 + rand.Intn(8999999)
+	randN := createRandomInt()
 	roleModel := app.FindModelsWithClass("Role")[0]
 	role, err := roleModel.Create(wst.M{
 		"name": fmt.Sprintf("role-%v", randN),
@@ -118,7 +117,7 @@ func Test_NewUserAndRoleWithExistingUserAndRoleAndUserRolesAndRoleMapping(t *tes
 }
 
 func Test_NewUserAndRoleEmptyUsername(t *testing.T) {
-	randN := 1e6 + rand.Intn(8999999)
+	randN := createRandomInt()
 	user, err := westack.UpsertUserWithRoles(app, westack.UserWithRoles{
 		Username: "",
 		Password: fmt.Sprintf("pwd-%v", randN),
@@ -129,7 +128,7 @@ func Test_NewUserAndRoleEmptyUsername(t *testing.T) {
 }
 
 func Test_NewUserAndRoleEmptyPassword(t *testing.T) {
-	randN := 1e6 + rand.Intn(8999999)
+	randN := createRandomInt()
 	user, err := westack.UpsertUserWithRoles(app, westack.UserWithRoles{
 		Username: fmt.Sprintf("user-%v", randN),
 		Password: "",
@@ -140,7 +139,7 @@ func Test_NewUserAndRoleEmptyPassword(t *testing.T) {
 }
 
 func Test_NewUserAndRoleEmptyRoles(t *testing.T) {
-	randN := 1e6 + rand.Intn(8999999)
+	randN := createRandomInt()
 	user, err := westack.UpsertUserWithRoles(app, westack.UserWithRoles{
 		Username: fmt.Sprintf("user-%v", randN),
 		Password: fmt.Sprintf("pwd-%v", randN),

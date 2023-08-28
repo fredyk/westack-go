@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"github.com/fredyk/westack-go/westack/model"
 	"io"
-	"math/rand"
 	"net/http"
 	"sync"
 	"testing"
@@ -140,7 +139,7 @@ func Test_ExtractLookups(t *testing.T) {
 
 func Test_CustomerOrderStore(t *testing.T) {
 	// Create a customer with a random name, using math
-	nameN := 1000000 + rand.Intn(8999999)
+	nameN := createRandomInt()
 	name := fmt.Sprintf("Customer %v", nameN)
 
 	customer := wst.M{
@@ -156,7 +155,7 @@ func Test_CustomerOrderStore(t *testing.T) {
 	assert.NotNil(t, createdCustomer)
 
 	// Create a store with a random name
-	storeNameN := 1000000 + rand.Intn(8999999)
+	storeNameN := createRandomInt()
 	storeName := fmt.Sprintf("Store %v", storeNameN)
 
 	store := wst.M{
@@ -193,7 +192,7 @@ func Test_CustomerOrderStore(t *testing.T) {
 	for i := 0; i < orderCountToCreate; i++ {
 		go func() {
 			order := wst.M{
-				"amount":     rand.Float64() * 1000,
+				"amount":     createRandomFloat(0, 1000.0),
 				"customerId": nil,
 				"storeId":    nil,
 			}
@@ -285,10 +284,7 @@ func Test_Aggregations(t *testing.T) {
 
 	var randomUserName string
 	// assign randomUserName with safe random string
-	var randomN int64
-	rnd := rand.New(rand.NewSource(time.Now().UnixNano()))
-	randomN = 100000000 + rnd.Int63n(899999999)
-	randomUserName = fmt.Sprintf("testuser%d", randomN)
+	randomUserName = fmt.Sprintf("testuser%d", createRandomInt())
 	randomUser, err := userModel.Create(wst.M{
 		"username":  randomUserName,
 		"password":  "abcd1234.",
@@ -349,10 +345,7 @@ func Test_AggregationsWithDirectNestedQuery(t *testing.T) {
 
 	var randomeUserName string
 	// assign randomUserName with safe random string
-	var randomN int64
-	rnd := rand.New(rand.NewSource(time.Now().UnixNano()))
-	randomN = 100000000 + rnd.Int63n(899999999)
-	randomeUserName = fmt.Sprintf("testuser%d", randomN)
+	randomeUserName = fmt.Sprintf("testuser%d", createRandomInt())
 	randomUser, err := userModel.Create(wst.M{
 		"username": randomeUserName,
 		"password": "abcd1234.",
@@ -362,8 +355,7 @@ func Test_AggregationsWithDirectNestedQuery(t *testing.T) {
 
 	var randomNoteTitle string
 	// assign randomNoteTitle with safe random string
-	randomN = 100000000 + rnd.Int63n(899999999)
-	randomNoteTitle = fmt.Sprintf("testnote%d", randomN)
+	randomNoteTitle = fmt.Sprintf("testnote%d", createRandomInt())
 
 	note, err := noteModel.Create(wst.M{
 		"title":  randomNoteTitle,
