@@ -579,8 +579,16 @@ func handleFindMany(loadedModel *model.Model, ctx *model.EventContext) error {
 	case *model.ErrorCursor:
 		return cursor.(*model.ErrorCursor).Error()
 	}
-	if cursor.(*model.ChannelCursor).Err == nil {
-		ctx.StatusCode = fiber.StatusOK
+	// Check if it is a *model.ChannelCursor, then check if it has an error
+	if v, ok := cursor.(*model.ChannelCursor); ok {
+		if v.Err == nil {
+			ctx.StatusCode = fiber.StatusOK
+		}
+	} else {
+		if _, ok := cursor.(*model.FixedLengthCursor); ok {
+			// No error
+			ctx.StatusCode = fiber.StatusOK
+		}
 	}
 	ctx.Result = chunkGenerator
 	return nil

@@ -236,9 +236,13 @@ func Test_CustomerOrderStore(t *testing.T) {
 	stats := requestStats(t, err)
 
 	// Check that the cache has been used, present at stats["stats"]["datasorces"]["memorykv"]["Order"]
-	assert.Greater(t, int(stats["stats"].(map[string]interface{})["datasources"].(map[string]interface{})["memorykv"].(map[string]interface{})["Order"].(map[string]interface{})["entries"].(float64)), 0)
+	allStats := stats["stats"].(map[string]interface{})
+	datasourcesStats := allStats["datasources"].(map[string]interface{})
+	memoryKvStats := datasourcesStats["memorykv"].(map[string]interface{})
+	orderStats := memoryKvStats["Order"].(map[string]interface{})
+	assert.Greater(t, int(orderStats["entries"].(float64)), 0)
 	// Exactly 1 miss, because the cache was empty
-	assert.Equal(t, 1, int(stats["stats"].(map[string]interface{})["datasources"].(map[string]interface{})["memorykv"].(map[string]interface{})["Order"].(map[string]interface{})["misses"].(float64)))
+	assert.Equal(t, 1, int(orderStats["misses"].(float64)))
 
 	// Get the customer including the orders and the store, again
 	start = time.Now()
@@ -533,7 +537,9 @@ func Test_AggregationsWithInvalidDatasource(t *testing.T) {
 }
 
 func requestStats(t *testing.T, err error) wst.M {
-	resp, err := http.Get("http://localhost:8020/system/memorykv/stats")
+	req, err := http.NewRequest("GET", "/system/memorykv/stats", nil)
+	assert.Nil(t, err)
+	resp, err := app.Server.Test(req)
 	assert.Nil(t, err)
 	assert.NotNil(t, resp)
 	assert.Equal(t, 200, resp.StatusCode)

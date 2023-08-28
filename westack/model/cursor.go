@@ -32,12 +32,12 @@ func newErrorCursor(err error) Cursor {
 	}
 }
 
-type fixedLengthCursor struct {
+type FixedLengthCursor struct {
 	instances InstanceA
 	index     int
 }
 
-func (cursor *fixedLengthCursor) Next() (result *Instance, err error) {
+func (cursor *FixedLengthCursor) Next() (result *Instance, err error) {
 	if cursor.index >= len(cursor.instances) {
 		return result, nil
 	}
@@ -46,16 +46,16 @@ func (cursor *fixedLengthCursor) Next() (result *Instance, err error) {
 	return
 }
 
-func (cursor *fixedLengthCursor) All() (result InstanceA, err error) {
+func (cursor *FixedLengthCursor) All() (result InstanceA, err error) {
 	return cursor.instances, nil
 }
 
-func (cursor *fixedLengthCursor) Close() error {
+func (cursor *FixedLengthCursor) Close() error {
 	return nil
 }
 
 func newFixedLengthCursor(instances InstanceA) Cursor {
-	return &fixedLengthCursor{
+	return &FixedLengthCursor{
 		instances: instances,
 		index:     0,
 	}
