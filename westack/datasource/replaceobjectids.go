@@ -37,7 +37,19 @@ func ReplaceObjectIds(data interface{}) interface{} {
 
 	var finalData wst.M
 	switch data.(type) {
-	case int, int32, int64, float32, float64, bool, primitive.ObjectID, *primitive.ObjectID, time.Time, primitive.DateTime:
+	case int:
+		return data
+	case int32:
+		return data
+	case float64:
+		return data
+	case bool:
+		return data
+	case primitive.ObjectID:
+		return data
+	case time.Time:
+		return data
+	case primitive.DateTime:
 		return data
 	case string:
 		var newValue interface{}
@@ -59,24 +71,6 @@ func ReplaceObjectIds(data interface{}) interface{} {
 	case wst.Where:
 		finalData = wst.M{}
 		for key, value := range data.(wst.Where) {
-			finalData[key] = value
-		}
-		break
-	case *wst.Where:
-		finalData = wst.M{}
-		for key, value := range *data.(*wst.Where) {
-			finalData[key] = value
-		}
-		break
-	case map[string]interface{}:
-		finalData = wst.M{}
-		for key, value := range data.(map[string]interface{}) {
-			finalData[key] = value
-		}
-		break
-	case *map[string]interface{}:
-		finalData = wst.M{}
-		for key, value := range *data.(*map[string]interface{}) {
 			finalData[key] = value
 		}
 		break
@@ -237,20 +231,11 @@ func ReplaceObjectIds(data interface{}) interface{} {
 			case wst.Where:
 				data.(wst.Where)[key] = newValue
 				break
-			case *wst.Where:
-				(*data.(*wst.Where))[key] = newValue
-				break
 			case wst.M:
 				data.(wst.M)[key] = newValue
 				break
 			case *wst.M:
 				(*data.(*wst.M))[key] = newValue
-				break
-			case map[string]interface{}:
-				data.(map[string]interface{})[key] = newValue
-				break
-			case *map[string]interface{}:
-				(*data.(*map[string]interface{}))[key] = newValue
 				break
 			default:
 				log.Println(fmt.Sprintf("WARNING: invalid input ReplaceObjectIds() <- %s", data))
