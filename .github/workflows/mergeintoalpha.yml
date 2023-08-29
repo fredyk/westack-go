@@ -66,6 +66,7 @@ jobs:
             sudo apt-get install -y jq
 
         - name: Run Gosec Security Scanner
+          id: golangci_lint
           run: |
             pwd
             ls -la
@@ -79,12 +80,14 @@ jobs:
               echo "Gosec found issues"
               # Set output variable
               # echo "::set-output name=issues_found::true"
-              echo "issues_found=true" >> $GITHUB_STATE 
+              echo "issues_found=true" >> $GITHUB_OUTPUT 
+              # $GITHUB_OUTPUT is not being saved between steps
+                # https://github.community/t/using-environment-variables-between-steps/17058/2
             else
               echo "Gosec found no issues"
               # Set output variable
               # echo "::set-output name=issues_found::false"
-              echo "issues_found=false" >> $GITHUB_STATE
+              echo "issues_found=false" >> $GITHUB_OUTPUT
             fi
             exit 0
 
@@ -94,22 +97,15 @@ jobs:
               name: results.json
               path: results.json
 
-        - name: Exit if Gosec found issues in $GITHUB_STATE
+        - name: Exit if Gosec found issues
           run: |
-            if [ -f $GITHUB_STATE ]; then
-              issues_found=$(cat $GITHUB_STATE | grep issues_found | cut -d= -f2)
-              # if [ "$issues_found" = "true" ]; then
-              # Check if contains true, not equal to true. For example it can ben "true\n"
-              if [[ $issues_found == *"true"* ]]; then
-                echo "Gosec found issues"
-                exit 1
-              else
-                echo "Gosec found no issues at $GITHUB_STATE"
-                echo "DEBUG: Contents: $(cat $GITHUB_STATE)"
-                echo "DEBUG: Variable: '$issues_found'"  
-              fi
+            # Check ${{ steps.golangci_lint.outputs.issues_found }}
+            issues_found="${{ steps.golangci_lint.outputs.issues_found }}"
+            if [ "$issues_found" = "true" ]; then
+              echo "Gosec found issues"
+              exit 1
             else
-              echo "Gosec found no issues"
+              echo "Gosec found no issues at '${{ steps.golangci_lint.outputs.issues_found }}'"
             fi
 
         - name: Install MongoDB
