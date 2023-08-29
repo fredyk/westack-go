@@ -144,7 +144,7 @@ jobs:
         - name: Process coverage.summary.txt
           run: |
             # Parse coverage_lines to get coverage percentage. If any percentage is below 24.2, exit with error
-            coverage_lines=$(cat coverage.summary.txt)
+            coverage_lines=$(cat coverage.summary.txt | grep -v "coverage: \[no statements\]" | grep -v "coverage: \[no tests to run\]")
             echo "$coverage_lines" | while read -r line; do
               echo "$line"
               coverage=$(echo "$line" | sed 's/.*coverage: \([0-9]*\.[0-9]*\).*/\1/')
