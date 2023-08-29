@@ -116,7 +116,21 @@ jobs:
           run: sudo systemctl start mongod
 
         - name: Test WeStack
-          run: go test -v ./westack/tests -timeout 30m -coverprofile=coverage.txt -covermode=atomic -count=1
+          run: |
+            # Try to restore from cache
+            if [ -d ${{ github.workspace }}/.cache/go-build ]; then
+              echo "Restoring from cache"
+              cp -r ${{ github.workspace }}/.cache/go-build ${{ github.workspace }}/go/pkg
+              # also mods
+              cp -r ${{ github.workspace }}/.cache/mod ${{ github.workspace }}/go/pkg
+            fi
+            go mod download
+            go test -v ./westack/tests -timeout 30m -coverprofile=coverage.txt -covermode=atomic -count=1
+            # Cache go-build
+            mkdir -p ${{ github.workspace }}/.cache
+            cp -r ${{ github.workspace }}/go/pkg ${{ github.workspace }}/.cache/go-build
+            # also mods
+            cp -r ${{ github.workspace }}/go/pkg ${{ github.workspace }}/.cache/mod
 
         - name: Upload coverage.txt
           uses: actions/upload-artifact@v2
