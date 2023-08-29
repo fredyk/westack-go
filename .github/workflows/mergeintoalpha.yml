@@ -40,6 +40,18 @@ jobs:
             git config --global user.name "github-actions[bot]"
             git merge --no-edit --no-ff --allow-unrelated-histories ${{ github.event.pull_request.head.sha }}
 
+        - name: Cache Go packages
+          uses: actions/cache@v3
+          with:
+            path: |
+              ~/.cache/go-build
+              /opt/hostedtoolcache/go/${{ matrix.go }}/x64/pkg/mod
+            key: ${{ runner.os }}-go-${{ matrix.go }}-${{ hashFiles('**/go.sum') }}
+            restore-keys: |
+              ${{ runner.os }}-go-${{ matrix.go }}-
+              ${{ runner.os }}-go-
+              ${{ runner.os }}-
+
         - name: Set up Go
           uses: actions/setup-go@v4
           with:
