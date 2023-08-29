@@ -27,7 +27,7 @@ jobs:
 
         - name: Checkout alpha
           run: |
-            git fetch # origin alpha:alpha
+            git fetch
             git checkout -b alpha origin/alpha
             git pull
 
@@ -46,15 +46,6 @@ jobs:
 
         - name: Setup Golangci-lint with cache
           timeout-minutes: 15
-#          uses: actions/cache@v2
-#          with:
-#              path: ${{ github.workspace }}/.cache/golangci-lint
-#              key: ${{ runner.os }}-golangci-lint-${{ hashFiles('**/go.sum') }}
-#              restore-keys: |
-#                ${{ runner.os }}-golangci-lint-
-#              args: |
-#                go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
-#                go install github.com/securego/gosec/v2/cmd/gosec@latest
           run: |
             go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
             go install github.com/securego/gosec/v2/cmd/gosec@latest
@@ -67,26 +58,18 @@ jobs:
             golangci-lint run --timeout 10m --disable-all --enable=gosec --out-format=json ./... > results.json || true
             result=0
             detailed_issues=""
-            # Parse results.json
             if [ -f results.json ]; then
               result=$(cat results.json | jq '.Issues | length')
               detailed_issues=$(cat results.json | jq '.Issues')
             fi
             if [ $result -ne 0 ]; then
               echo "Gosec found issues"
-              # Set output variable
               echo "issues_found=true" >> $GITHUB_OUTPUT
-              # echo "detailed_issues=$detailed_issues" >> $GITHUB_OUTPUT
-              # Error: Unable to process file command 'output' successfully.
-              # Error: Invalid format '  {'
-              # Escape curly braces, parentheses and double quotes
               detailed_issues=$(echo $detailed_issues | sed 's/{/\\{/g' | sed 's/}/\\}/g' | sed 's/(/\\(/g' | sed 's/)/\\)/g' | sed 's/"/\\"/g')
               echo "detailed_issues=$detailed_issues" >> $GITHUB_OUTPUT
 
             else
               echo "Gosec found no issues"
-              # Set output variable
-              # echo "::set-output name=issues_found::false"
               echo "issues_found=false" >> $GITHUB_OUTPUT
             fi
             exit 0
@@ -99,10 +82,8 @@ jobs:
 
         - name: Exit if Gosec found issues
           run: |
-            # Check ${{ steps.golangci_lint.outputs.issues_found }}
             issues_found="${{ steps.golangci_lint.outputs.issues_found }}"
             if [ "$issues_found" = "true" ]; then
-              # Read results.json, only print Issues. To stderr
               cat results.json | jq '.Issues' 1>&2
               exit 1
             else
@@ -123,20 +104,13 @@ jobs:
 
         - name: Test WeStack
           run: |
-            # Try to restore from cache
             if [ -d ${{ github.workspace }}/.cache/go-build ]; then
               echo "Restoring from cache"
               cp -r ${{ github.workspace }}/.cache/go-build ${{ github.workspace }}/go/pkg
-              # also mods
               cp -r ${{ github.workspace }}/.cache/mod ${{ github.workspace }}/go/pkg
             fi
             go mod download
-            go test -v ./westack/tests -timeout 30m -coverprofile=coverage.txt -covermode=atomic -count=1
-            # # Cache go-build
-            # mkdir -p ${{ github.workspace }}/.cache
-            # cp -r ${{ github.workspace }}/go/pkg ${{ github.workspace }}/.cache/go-build
-            # # also mods
-            # cp -r ${{ github.workspace }}/go/pkg ${{ github.workspace }}/.cache/mod
+            go test -v ./westack/tests -timeout 5m -coverprofile=coverage.txt -covermode=atomic -count=1
             # Where is go???
             echo "Go is at $(which go)"
 
