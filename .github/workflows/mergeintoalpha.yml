@@ -229,5 +229,5 @@ jobs:
         - name: Delete temporary branch
           run: |
               git checkout master
-              git branch -D ${{ jobs.run_tests.steps.create_temp_branch.outputs.random_branch }}
-              git push origin --delete ${{ jobs.run_tests.steps.create_temp_branch.outputs.random_branch }}
+              git branch -D ${{ steps.create_temp_branch.outputs.random_branch }}
+              git push origin --delete ${{ steps.create_temp_branch.outputs.random_branch }}
