@@ -152,7 +152,7 @@ jobs:
               sudo echo "  path: /var/log/mongodb/mongod.log" >> /etc/mongod.conf
               sudo echo "net:" >> /etc/mongod.conf
               sudo echo "  port: 27017" >> /etc/mongod.conf
-              sudo echo "  bindIp:
+              sudo echo "  bindIp: 127.0.0.1" >> /etc/mongod.conf
 
         - name: Start MongoDB
           run: |
