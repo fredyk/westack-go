@@ -98,10 +98,18 @@ jobs:
           run: |
             if [ -f $GITHUB_STATE ]; then
               issues_found=$(cat $GITHUB_STATE | grep issues_found | cut -d= -f2)
-              if [ "$issues_found" = "true" ]; then
+              # if [ "$issues_found" = "true" ]; then
+              # Check if contains true, not equal to true
+              if [[ ! $issues_found =~ "true" ]]; then
                 echo "Gosec found issues"
                 exit 1
+              else
+                echo "Gosec found no issues at $GITHUB_STATE"
+                echo "DEBUG: Contents: $(cat $GITHUB_STATE)"
+                echo "DEBUG: Variable: '$issues_found'"  
               fi
+            else
+              echo "Gosec found no issues"
             fi
           
 
