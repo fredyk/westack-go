@@ -107,7 +107,7 @@ jobs:
 #            sudo systemctl status mongod
 
         - name: Run MongoDB in background using action
-          uses: supercharge/mongodb-github-action@v2.0.0
+          uses: supercharge/mongodb-github-action@v1.10.0
           with:
               mongodb-version: '4.4.9'
               mongodb-port: 27017
