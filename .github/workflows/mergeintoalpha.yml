@@ -104,8 +104,8 @@ jobs:
             # Check ${{ steps.golangci_lint.outputs.issues_found }}
             issues_found="${{ steps.golangci_lint.outputs.issues_found }}"
             if [ "$issues_found" = "true" ]; then
-              # Read results.json, only print Issues
-              cat results.json | jq '.Issues'
+              # Read results.json, only print Issues. To stderr
+              cat results.json | jq '.Issues' 1>&2
               exit 1
             else
               echo "Gosec found no issues at '${{ steps.golangci_lint.outputs.issues_found }}'"
