@@ -153,16 +153,14 @@ jobs:
               fi
             done
 
-        - name: Create temporary branch with random name from /dev/urandom
-          id: create_temp_branch
+        - name: Create temporary branch with random name
           run: |
-              random_branch=temp-branch-$(head /dev/urandom | tr -dc A-Za-z0-9 | head -c 13 ; echo '')
-              echo $random_branch >> $GITHUB_OUTPUT
-              git checkout -b $random_branch
+              git checkout -b temp-branch-${{ github.run_id }}
 
         - name: Push temporary branch
           run: |
-              git push origin ${{ steps.create_temp_branch.outputs.random_branch }}
+              git fetch
+              git push origin temp-branch-${{ github.run_id }} --force
 
   #        - name: Create tag
   #          run: git tag -a v${{ steps.latest_tag.outputs.tag }}-alpha-${{ steps.date.outputs.date }} -m "v${{ steps.latest_tag.outputs.tag }}-alpha-${{ steps.date.outputs.date }}"
@@ -227,5 +225,5 @@ jobs:
         - name: Delete temporary branch
           run: |
               git checkout master
-              git branch -D ${{ steps.create_temp_branch.outputs.random_branch }}
-              git push origin --delete ${{ steps.create_temp_branch.outputs.random_branch }}
+              git branch -D temp-branch-${{ github.run_id }}
+              git push origin --delete temp-branch-${{ github.run_id }}
