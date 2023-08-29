@@ -82,7 +82,13 @@ jobs:
               echo "Gosec found issues"
               # Set output variable
               echo "issues_found=true" >> $GITHUB_OUTPUT
-              echo "detailed_issues=$detailed_issues" >> $GITHUB_OUTPUT              
+              # echo "detailed_issues=$detailed_issues" >> $GITHUB_OUTPUT
+              # Error: Unable to process file command 'output' successfully.
+              # Error: Invalid format '  {'
+              # Escape curly braces
+              detailed_issues=$(echo $detailed_issues | sed 's/{/\\{/g' | sed 's/}/\\}/g')
+              echo "detailed_issues=$detailed_issues" >> $GITHUB_OUTPUT
+
             else
               echo "Gosec found no issues"
               # Set output variable
