@@ -2,13 +2,14 @@ package tests
 
 import (
 	"bytes"
+	"crypto/rand"
 	"fmt"
 	wst "github.com/fredyk/westack-go/westack/common"
 	"github.com/goccy/go-json"
 	"github.com/golang-jwt/jwt"
 	"github.com/stretchr/testify/assert"
 	"io"
-	"math/rand"
+	"math/big"
 	"net/http"
 	"strings"
 	"testing"
@@ -35,7 +36,18 @@ func extractJWTPayload(t *testing.T, bearer string, err error) (payload, error) 
 }
 
 func createRandomInt() int {
-	return 1e9 + rand.Intn(899999999)
+	n, _ := rand.Int(rand.Reader, big.NewInt(899999999))
+	return 1e9 + int(n.Int64())
+}
+
+func createRandomFloat(min float64, max float64) float64 {
+	var maxInt int64 = 1 << (52 - 1)
+	// First create a random int between 0 and 2**32-1
+	n, _ := rand.Int(rand.Reader, big.NewInt(maxInt))
+	// Then convert it to a float64 between 0 and 1
+	f := float64(n.Int64()) / float64(1<<64-1)
+	// Then scale it to the desired range
+	return min + f*(max-min)
 }
 
 func invokeApi(t *testing.T, method string, url string, body wst.M, headers wst.M) (result wst.M, err error) {
