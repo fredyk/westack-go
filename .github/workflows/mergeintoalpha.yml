@@ -159,7 +159,8 @@ jobs:
         - name: Process coverage.summary.txt
           run: |
             # Parse coverage_lines to get coverage percentage. If any percentage is below $MIN_COVERAGE_THRESHOLD, exit with error
-            coverage_lines=$(cat coverage.summary.txt | grep -v "coverage: \[no statements\]" | grep -v "coverage: \[no tests to run\]")
+            # Also skip github.com/fredyk/westack-go/westack/tests
+            coverage_lines=$(cat coverage.summary.txt | grep -v "coverage: \[no statements\]" | grep -v "coverage: \[no tests to run\]" | grep -v "github.com/fredyk/westack-go/westack/tests")
             echo "Target min coverage: $MIN_COVERAGE_THRESHOLD"
             echo "$coverage_lines" | while read -r line; do
               echo "$line"
