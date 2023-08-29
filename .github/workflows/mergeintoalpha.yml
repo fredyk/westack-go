@@ -10,15 +10,16 @@ jobs:
     run_tests:
       runs-on: ubuntu-latest
       strategy:
-#          max-parallel: 1
         matrix:
           go: [ '1.20.1', '1.20.6' ]
+          mongodb-version: ['4.2', '4.4', '5.0', '6.0']
       env:
         WST_ADMIN_USERNAME: admin
         WST_ADMIN_PWD: testadmin
         PPROF_AUTH_USERNAME: test
         PPROF_AUTH_PASSWORD: abcd1234.
         GITHUB_TOKEN: ${{ secrets.PULL_REQUEST_TOKEN }}
+        MIN_COVERAGE_THRESHOLD: 66.8
       steps:
         - name: Checkout master
           uses: actions/checkout@v3
@@ -36,6 +37,18 @@ jobs:
             git config --global user.email "github-actions[bot]@users.noreply.github.com"
             git config --global user.name "github-actions[bot]"
             git merge --no-edit --no-ff --allow-unrelated-histories ${{ github.event.pull_request.head.sha }}
+
+        - name: Cache Go packages
+          uses: actions/cache@v3
+          with:
+            path: |
+              ~/.cache/go-build
+              /opt/hostedtoolcache/go/${{ matrix.go }}/x64/pkg/mod
+            key: ${{ runner.os }}-go-${{ matrix.go }}-${{ hashFiles('**/go.sum') }}
+            restore-keys: |
+              ${{ runner.os }}-go-${{ matrix.go }}-
+              ${{ runner.os }}-go-
+              ${{ runner.os }}-
 
         - name: Set up Go
           uses: actions/setup-go@v4
@@ -75,7 +88,7 @@ jobs:
             exit 0
 
         - name: Upload results.json
-          uses: actions/upload-artifact@v2
+          uses: actions/upload-artifact@v3
           with:
               name: results.json
               path: results.json
@@ -90,17 +103,10 @@ jobs:
               echo "Gosec found no issues at '${{ steps.golangci_lint.outputs.issues_found }}'"
             fi
 
-        - name: Install MongoDB
-          run: |
-            sudo apt-get update
-            sudo apt-get install -y dirmngr gnupg apt-transport-https ca-certificates software-properties-common
-            wget -qO - https://www.mongodb.org/static/pgp/server-6.0.asc | sudo apt-key add -
-            echo "deb [ arch=amd64,arm64 ] https://repo.mongodb.org/apt/ubuntu focal/mongodb-org/6.0 multiverse" | sudo tee /etc/apt/sources.list.d/mongodb-org-6.0.list
-            sudo apt-get update
-            sudo apt-get install -y mongodb-org
-
         - name: Start MongoDB
-          run: sudo systemctl start mongod
+          uses: supercharge/mongodb-github-action@1.10.0
+          with:
+            mongodb-version: ${{ matrix.mongodb-version }}
 
         - name: Test WeStack
           run: |
@@ -110,10 +116,8 @@ jobs:
               cp -r ${{ github.workspace }}/.cache/mod ${{ github.workspace }}/go/pkg
             fi
             go mod download
-            # go test -v ./westack/tests -timeout 5m -coverprofile=coverage.txt
             cd westack/tests
             go test -timeout 5m -c -coverpkg=../../../westack-go/... -covermode=atomic github.com/fredyk/westack-go/westack/tests -o output.test
-            # Test and print "Output" to stdout. Skip empty "Output" and null "Output". Skip empty lines
             go tool test2json -t ./output.test -test.v -test.paniconexit0 -test.coverprofile ../../coverage.txt | jq -r 'select(.Output != "" and .Output != null) | .Output' | sed '/^$/d' | tee ../../test_output.txt 
             cd ../..
             # Select from test_output.txt only lines containing "coverage: "
@@ -122,33 +126,47 @@ jobs:
             echo "Go is at $(which go)"
 
         - name: Upload coverage.txt
-          uses: actions/upload-artifact@v2
+          uses: actions/upload-artifact@v3
           with:
               name: coverage.txt
               path: coverage.txt
 
         - name: Upload coverage.summary.txt
-          uses: actions/upload-artifact@v2
+          uses: actions/upload-artifact@v3
           with:
               name: coverage.summary.txt
               path: coverage.summary.txt
 
         - name: Upload test_output.txt
-          uses: actions/upload-artifact@v2
+          uses: actions/upload-artifact@v3
           with:
               name: test_output.txt
               path: test_output.txt
 
+        - name: Process tests output
+          run: |
+            # Select from test_output.txt only lines containing " FAIL: "
+            all_failed_tests=$(cat test_output.txt | grep ' FAIL: ' | sed '/^$/d')
+            if [ -n "$all_failed_tests" ]; then
+              echo "Tests failed:"
+              echo $all_failed_tests
+              exit 1
+            else
+              echo "All tests passed"
+            fi
+
         - name: Process coverage.summary.txt
           run: |
-            # Parse coverage_lines to get coverage percentage. If any percentage is below 24.2, exit with error
-            coverage_lines=$(cat coverage.summary.txt | grep -v "coverage: \[no statements\]" | grep -v "coverage: \[no tests to run\]")
+            # Parse coverage_lines to get coverage percentage. If any percentage is below $MIN_COVERAGE_THRESHOLD, exit with error
+            # Also skip github.com/fredyk/westack-go/westack/tests
+            coverage_lines=$(cat coverage.summary.txt | grep -v "coverage: \[no statements\]" | grep -v "coverage: \[no tests to run\]" | grep -v "github.com/fredyk/westack-go/westack/tests")
+            echo "Target min coverage: $MIN_COVERAGE_THRESHOLD"
             echo "$coverage_lines" | while read -r line; do
               echo "$line"
               coverage=$(echo "$line" | sed 's/.*coverage: \([0-9]*\.[0-9]*\).*/\1/')
               echo "coverage: $coverage"
-              if (( $(echo "$coverage < 24.2" | bc -l) )); then
-                echo "Coverage is below 24.2"
+              if (( $(echo "$coverage < $MIN_COVERAGE_THRESHOLD" | bc -l) )); then
+                echo "Coverage is below $MIN_COVERAGE_THRESHOLD"
                 exit 1
               fi
             done
