@@ -216,6 +216,7 @@ jobs:
 
         - name: Push
           run: |
+            git fetch
             git push origin alpha
             git push -u origin v-${{ steps.latest_tag.outputs.tag }}-alpha
 
