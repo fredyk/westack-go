@@ -290,8 +290,3 @@ func Test_WeStackDelete(t *testing.T) {
 //	}
 //	os.Exit(code)
 //}
-
-func Test_AlwaysFail(t *testing.T) {
-	t.Parallel()
-	assert.Equal(t, 1, 2)
-}
