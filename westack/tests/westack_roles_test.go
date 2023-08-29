@@ -2,7 +2,6 @@ package tests
 
 import (
 	"fmt"
-	"math/rand"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -23,7 +22,7 @@ func Test_NewUserAndRole(t *testing.T) {
 }
 
 func Test_NewUserAndRoleWithExistingRole(t *testing.T) {
-	randN := 1e6 + rand.Intn(8999999)
+	randN := createRandomInt()
 	roleModel := app.FindModelsWithClass("Role")[0]
 	role, err := roleModel.Create(wst.M{
 		"name": fmt.Sprintf("role-%v", randN),
@@ -41,7 +40,7 @@ func Test_NewUserAndRoleWithExistingRole(t *testing.T) {
 }
 
 func Test_NewUserAndRoleWithExistingUser(t *testing.T) {
-	randN := 1e6 + rand.Intn(8999999)
+	randN := createRandomInt()
 	user, err := userModel.Create(wst.M{
 		"username": fmt.Sprintf("user-%v", randN),
 		"password": fmt.Sprintf("pwd-%v", randN),
