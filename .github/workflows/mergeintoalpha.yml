@@ -109,12 +109,12 @@ jobs:
               details="${details//\\(/(}"
               details="${details//\\)/)}"
               echo "Details: $details"
-              # Unescape double quotes
-              details="${details//\"/}"
-              # Write to file pretty printed
-              echo $details | jq '.' > gosec_issues.json
+              # Write to file
+              echo $details > gosec_issues.json
               echo "Gosec found issues:"
               cat gosec_issues.json
+              # Read pretty printed
+              cat gosec_issues.json | jq
               exit 1
             else
               echo "Gosec found no issues at '${{ steps.golangci_lint.outputs.issues_found }}'"
