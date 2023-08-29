@@ -70,17 +70,17 @@ jobs:
             ls -la
             golangci-lint run --timeout 10m --disable-all --enable=gosec --out-format=json ./... > results.json || true
             result=0
+            detailed_issues=""
             # Parse results.json
             if [ -f results.json ]; then
               result=$(cat results.json | jq '.Issues | length')
+              detailed_issues=$(cat results.json | jq '.Issues')
             fi
             if [ $result -ne 0 ]; then
               echo "Gosec found issues"
               # Set output variable
-              # echo "::set-output name=issues_found::true"
-              echo "issues_found=true" >> $GITHUB_OUTPUT 
-              # $GITHUB_OUTPUT is not being saved between steps
-                # https://github.community/t/using-environment-variables-between-steps/17058/2
+              echo "issues_found=true" >> $GITHUB_OUTPUT
+              echo "detailed_issues=$detailed_issues" >> $GITHUB_OUTPUT              
             else
               echo "Gosec found no issues"
               # Set output variable
@@ -100,7 +100,7 @@ jobs:
             # Check ${{ steps.golangci_lint.outputs.issues_found }}
             issues_found="${{ steps.golangci_lint.outputs.issues_found }}"
             if [ "$issues_found" = "true" ]; then
-              echo "Gosec found issues"
+              echo "Gosec found issues: '${{ steps.golangci_lint.outputs.detailed_issues }}'"
               exit 1
             else
               echo "Gosec found no issues at '${{ steps.golangci_lint.outputs.issues_found }}'"

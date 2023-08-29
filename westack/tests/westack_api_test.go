@@ -1,13 +1,11 @@
 package tests
 
 import (
-	"bytes"
 	"fmt"
 	"github.com/goccy/go-json"
 	"github.com/stretchr/testify/assert"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"io"
-	"math/rand"
 	"net/http"
 	"testing"
 
@@ -15,7 +13,7 @@ import (
 )
 
 func createUserThroughNetwork(t *testing.T) wst.M {
-	randUserN := 100000000 + rand.Intn(899999999)
+	randUserN := createRandomInt()
 	request, err := http.NewRequest("POST", "http://localhost:8019/api/v1/users", jsonToReader(wst.M{
 		"username": fmt.Sprintf("user%v", randUserN),
 		"email":    fmt.Sprintf("user.%v@example.com", randUserN),
@@ -39,14 +37,6 @@ func createUserThroughNetwork(t *testing.T) wst.M {
 	assert.Nilf(t, err, "Error: %v, received bytes: %v <--", err, string(out))
 
 	return parsed
-}
-
-func jsonToReader(m wst.M) io.Reader {
-	out, err := json.Marshal(m)
-	if err != nil {
-		panic(err)
-	}
-	return bytes.NewReader(out)
 }
 
 func createNoteForUser(userId string, token string, footerId string, t *testing.T) (note wst.M, err error) {
