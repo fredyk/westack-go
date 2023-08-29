@@ -20,7 +20,7 @@ jobs:
 
           - name: Checkout alpha
             run: |
-              git fetch origin alpha:alpha
+              git fetch # origin alpha:alpha
               git checkout -b alpha origin/alpha
               git pull
 
