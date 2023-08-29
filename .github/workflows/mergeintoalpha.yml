@@ -34,7 +34,7 @@ jobs:
         runs-on: ubuntu-latest
         needs: [merge_pr]
         strategy:
-          max-parallel: 1
+#          max-parallel: 1
           matrix:
             go: [ '1.20.1', '1.20.6' ]
         env:
@@ -63,7 +63,7 @@ jobs:
 
         - name: Run Gosec Security Scanner
           run: |
-            golangci-lint run --timeout 10m --disable-all --enable=gosec --out-format=json ./... > results.json 2>&1 || true
+            golangci-lint run --timeout 10m --disable-all --enable=gosec --out-format=json ./... > results.json || true
             result=0
             # Parse results.json
             if [ -f results.json ]; then
