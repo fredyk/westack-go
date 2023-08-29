@@ -101,13 +101,7 @@ jobs:
               if [ $issues_found == "true" ]; then
                 echo "Gosec found issues"
                 exit 1
-              else
-                echo "Gosec found no issues at $GITHUB_STATE"
-                echo "DEBUG: Contents: $(cat $GITHUB_STATE)"
-                echo "DEBUG: Variable: '$issues_found'"  
               fi
-            else
-              echo "Gosec found no issues"
             fi
 
         - name: Install MongoDB
