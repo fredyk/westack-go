@@ -48,18 +48,18 @@ jobs:
 
         - name: Setup Golangci-lint with cache
           timeout-minutes: 15
-          uses: actions/cache@v2
-          with:
-              path: ${{ github.workspace }}/.cache/golangci-lint
-              key: ${{ runner.os }}-golangci-lint-${{ hashFiles('**/go.sum') }}
-              restore-keys: |
-                ${{ runner.os }}-golangci-lint-
-#          run: |
-#            go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
-#            go install github.com/securego/gosec/v2/cmd/gosec@latest
-              args: |
-                go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
-                go install github.com/securego/gosec/v2/cmd/gosec@latest
+#          uses: actions/cache@v2
+#          with:
+#              path: ${{ github.workspace }}/.cache/golangci-lint
+#              key: ${{ runner.os }}-golangci-lint-${{ hashFiles('**/go.sum') }}
+#              restore-keys: |
+#                ${{ runner.os }}-golangci-lint-
+#              args: |
+#                go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+#                go install github.com/securego/gosec/v2/cmd/gosec@latest
+          run: |
+            go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+            go install github.com/securego/gosec/v2/cmd/gosec@latest
 
         - name: Install jq
           run: |
