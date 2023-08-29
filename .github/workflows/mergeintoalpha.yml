@@ -92,17 +92,74 @@ jobs:
               echo "Gosec found no issues at '${{ steps.golangci_lint.outputs.issues_found }}'"
             fi
 
-        - name: Install MongoDB
+#        - name: Install MongoDB without cache
+#          run: |
+#            sudo apt-get update
+#            sudo apt-get install -y dirmngr gnupg apt-transport-https ca-certificates software-properties-common
+#            wget -qO - https://www.mongodb.org/static/pgp/server-6.0.asc | sudo apt-key add -
+#            echo "deb [ arch=amd64,arm64 ] https://repo.mongodb.org/apt/ubuntu focal/mongodb-org/6.0 multiverse" | sudo tee /etc/apt/sources.list.d/mongodb-org-6.0.list
+#            sudo apt-get update
+#            sudo apt-get install -y mongodb-org
+
+        - name: Install MongoDB binaries with cache
+          uses: actions/cache@v2
+          with:
+              path: /opt/mongodb
+              key: mongodb
+              restore-keys: |
+                mongodb-
+
+        - name: Create MongoDB data directory
           run: |
-            sudo apt-get update
-            sudo apt-get install -y dirmngr gnupg apt-transport-https ca-certificates software-properties-common
-            wget -qO - https://www.mongodb.org/static/pgp/server-6.0.asc | sudo apt-key add -
-            echo "deb [ arch=amd64,arm64 ] https://repo.mongodb.org/apt/ubuntu focal/mongodb-org/6.0 multiverse" | sudo tee /etc/apt/sources.list.d/mongodb-org-6.0.list
-            sudo apt-get update
-            sudo apt-get install -y mongodb-org
+            sudo mkdir -p /var/lib/mongodb
+            sudo chown -R $USER /var/lib/mongodb
+
+        - name: Create MongoDB log directory
+          run: |
+              sudo mkdir -p /var/log/mongodb
+              sudo chown -R $USER /var/log/mongodb
+
+        - name: Create symlinks for MongoDB
+          run: |
+              sudo ln -s /opt/mongodb/bin/mongod /usr/bin/mongod
+              sudo ln -s /opt/mongodb/bin/mongo /usr/bin/mongo
+
+        - name: Create service file for MongoDB
+          run: |
+              sudo touch /etc/systemd/system/mongod.service
+              sudo chmod 666 /etc/systemd/system/mongod.service
+              sudo echo "[Unit]" >> /etc/systemd/system/mongod.service
+              sudo echo "Description=MongoDB Database" >> /etc/systemd/system/mongod.service
+              sudo echo "After=network.target" >> /etc/systemd/system/mongod.service
+              sudo echo "" >> /etc/systemd/system/mongod.service
+              sudo echo "[Service]" >> /etc/systemd/system/mongod.service
+              sudo echo "User=$USER" >> /etc/systemd/system/mongod.service
+              sudo echo "ExecStart=/usr/bin/mongod --config /etc/mongod.conf" >> /etc/systemd/system/mongod.service
+              sudo echo "" >> /etc/systemd/system/mongod.service
+              sudo echo "[Install]" >> /etc/systemd/system/mongod.service
+              sudo echo "WantedBy=multi-user.target" >> /etc/systemd/system/mongod.service
+              sudo chmod 644 /etc/systemd/system/mongod.service
+
+        - name: Create config file for MongoDB
+          run: |
+              sudo touch /etc/mongod.conf
+              sudo chmod 666 /etc/mongod.conf
+              sudo echo "storage:" >> /etc/mongod.conf
+              sudo echo "  dbPath: /var/lib/mongodb" >> /etc/mongod.conf
+              sudo echo "  journal:" >> /etc/mongod.conf
+              sudo echo "    enabled: true" >> /etc/mongod.conf
+              sudo echo "systemLog:" >> /etc/mongod.conf
+              sudo echo "  destination: file" >> /etc/mongod.conf
+              sudo echo "  logAppend: true" >> /etc/mongod.conf
+              sudo echo "  path: /var/log/mongodb/mongod.log" >> /etc/mongod.conf
+              sudo echo "net:" >> /etc/mongod.conf
+              sudo echo "  port: 27017" >> /etc/mongod.conf
+              sudo echo "  bindIp:
 
         - name: Start MongoDB
-          run: sudo systemctl start mongod
+          run: |
+            sudo systemctl start mongod
+            sudo systemctl status mongod
 
         - name: Test WeStack
           run: |
