@@ -115,8 +115,8 @@ jobs:
               echo $details > gosec_issues.json
               echo "Gosec found issues:"
               cat gosec_issues.json
-              # Read pretty printed
-              cat gosec_issues.json | jq
+              # Read pretty printed, unescaping double quotes before
+              cat gosec_issues.json | sed 's/\\"/"/g' | jq
               exit 1
             else
               echo "Gosec found no issues at '${{ steps.golangci_lint.outputs.issues_found }}'"
