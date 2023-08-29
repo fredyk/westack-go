@@ -140,7 +140,7 @@ func Test_ExtractLookups(t *testing.T) {
 
 func Test_CustomerOrderStore(t *testing.T) {
 	// Create a customer with a random name, using math
-	nameN := 1000000 + rand.Intn(8999999)
+	nameN := createRandomInt()
 	name := fmt.Sprintf("Customer %v", nameN)
 
 	customer := wst.M{
@@ -156,7 +156,7 @@ func Test_CustomerOrderStore(t *testing.T) {
 	assert.NotNil(t, createdCustomer)
 
 	// Create a store with a random name
-	storeNameN := 1000000 + rand.Intn(8999999)
+	storeNameN := createRandomInt()
 	storeName := fmt.Sprintf("Store %v", storeNameN)
 
 	store := wst.M{
@@ -193,7 +193,7 @@ func Test_CustomerOrderStore(t *testing.T) {
 	for i := 0; i < orderCountToCreate; i++ {
 		go func() {
 			order := wst.M{
-				"amount":     rand.Float64() * 1000,
+				"amount":     createRandomFloat(0, 1000.0),
 				"customerId": nil,
 				"storeId":    nil,
 			}

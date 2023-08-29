@@ -10,3 +10,4 @@
 /westack/tests/data/swagger.json
 /examples/westack-go-example/data/swagger.json
 /examples/westack-go-example/common/models/*.policies.csv
+/results.json
