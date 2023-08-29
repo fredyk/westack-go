@@ -96,7 +96,7 @@ jobs:
           run: |
             if [ -f $GITHUB_STATE ]; then
               issues_found=$(cat $GITHUB_STATE | grep issues_found | cut -d= -f2)
-              if [[ $issues_found == *"true"* ]]; then
+              if [ $issues_found == "true" ]; then
                 echo "Gosec found issues"
                 exit 1
               else
