@@ -120,7 +120,6 @@ jobs:
             go mod download
             cd westack/tests
             go test -timeout 5m -c -coverpkg=../../../westack-go/... -covermode=atomic github.com/fredyk/westack-go/westack/tests -o output.test
-            # Test and print "Output" to stdout. Skip empty "Output" and null "Output". Skip empty lines
             go tool test2json -t ./output.test -test.v -test.paniconexit0 -test.coverprofile ../../coverage.txt | jq -r 'select(.Output != "" and .Output != null) | .Output' | sed '/^$/d' | tee ../../test_output.txt 
             cd ../..
             # Select from test_output.txt only lines containing "coverage: "
