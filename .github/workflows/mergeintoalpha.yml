@@ -149,12 +149,13 @@ jobs:
           run: |
             # Select from test_output.txt only lines containing " FAIL: "
             all_failed_tests=$(cat test_output.txt | grep ' FAIL: ')
-            if [ -n "$all_failed_tests" ]; then
-              echo "Tests failed:"
-              echo $all_failed_tests
-              exit 1
-            else
+            echo "Tests failed:"
+            echo $all_failed_tests
+            # Use -z to check if string is empty
+            if [ -z "$all_failed_tests" ]; then
               echo "Tests passed"
+            else
+              exit 1
             fi
 
         - name: Process coverage.summary.txt
