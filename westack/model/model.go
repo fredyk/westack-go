@@ -342,7 +342,7 @@ func (loadedModel *Model) FindMany(filterMap *wst.Filter, baseContext *EventCont
 					}
 				}
 				return newFixedLengthCursor(result)
-			case wst.A, []wst.M:
+			case wst.A:
 				var result InstanceA
 				sameLevelCache := NewBuildCache()
 				if v, castOk := eventContext.Result.(wst.A); castOk {
@@ -735,7 +735,10 @@ func (loadedModel *Model) Create(data interface{}, baseContext *EventContext) (*
 		}
 	}
 	if !baseContext.DisableTypeConversions {
-		datasource.ReplaceObjectIds(finalData)
+		_, err := datasource.ReplaceObjectIds(finalData)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	eventContext := &EventContext{
@@ -775,9 +778,6 @@ func (loadedModel *Model) Create(data interface{}, baseContext *EventContext) (*
 
 	if err != nil {
 		return nil, err
-	} else if document == nil {
-		// how to test this???
-		return nil, datasource.NewError(fiber.StatusBadRequest, "Could not create document")
 	} else {
 		result, err := loadedModel.Build(*document, NewBuildCache(), eventContext)
 		if err != nil {
@@ -796,7 +796,7 @@ func (loadedModel *Model) Create(data interface{}, baseContext *EventContext) (*
 
 }
 
-func (loadedModel *Model) DeleteById(id interface{}) (int64, error) {
+func (loadedModel *Model) DeleteById(id interface{}) (datasource.DeleteResult, error) {
 
 	var finalId interface{}
 	switch id.(type) {
@@ -819,12 +819,22 @@ func (loadedModel *Model) DeleteById(id interface{}) (int64, error) {
 		}
 	}
 	//TODO: Invoke hook for __operation__before_delete and __operation__after_delete
-	deletedCount := loadedModel.Datasource.DeleteById(loadedModel.CollectionName, finalId)
-	if deletedCount > 0 {
-		return deletedCount, nil
-	} else {
-		return 0, datasource.NewError(fiber.StatusNotFound, "Document not found")
+	return loadedModel.Datasource.DeleteById(loadedModel.CollectionName, finalId)
+}
+
+func (loadedModel *Model) DeleteMany(where *wst.Where, systemContext *EventContext) (result datasource.DeleteResult, err error) {
+	if where == nil {
+		return result, errors.New("where cannot be nil")
 	}
+	if len(*where) == 0 {
+		return result, errors.New("where cannot be empty")
+	}
+	whereLookups := &wst.A{
+		{
+			"$match": wst.M(*where),
+		},
+	}
+	return loadedModel.Datasource.DeleteMany(loadedModel.CollectionName, whereLookups)
 }
 
 type RemoteMethodOptionsHttp struct {

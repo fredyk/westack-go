@@ -6,19 +6,199 @@ on:
     types: [opened, synchronize, reopened]
 
 jobs:
-    merge_and_push:
-        runs-on: ubuntu-latest
-        env:
-          WST_ADMIN_USERNAME: admin
-          WST_ADMIN_PWD: testadmin
-          PPROF_AUTH_USERNAME: test
-          PPROF_AUTH_PASSWORD: abcd1234.
-          GITHUB_TOKEN: ${{ secrets.PULL_REQUEST_TOKEN }}
-        steps:
+
+    run_tests:
+      runs-on: ubuntu-latest
+      strategy:
+        matrix:
+          go: [ '1.20.1', '1.20.6' ]
+          mongodb-version: ['4.2', '4.4', '5.0', '6.0']
+      env:
+        WST_ADMIN_USERNAME: admin
+        WST_ADMIN_PWD: testadmin
+        PPROF_AUTH_USERNAME: test
+        PPROF_AUTH_PASSWORD: abcd1234.
+        GITHUB_TOKEN: ${{ secrets.PULL_REQUEST_TOKEN }}
+        MIN_COVERAGE_THRESHOLD: 66.8
+      steps:
         - name: Checkout master
-          uses: actions/checkout@v2
+          uses: actions/checkout@v3
           with:
-              ref: master
+            ref: master
+
+        - name: Checkout alpha
+          run: |
+            git fetch
+            git checkout -b alpha origin/alpha
+            git pull
+
+        - name: Merge PR
+          run: |
+            git config --global user.email "github-actions[bot]@users.noreply.github.com"
+            git config --global user.name "github-actions[bot]"
+            git merge --no-edit --no-ff --allow-unrelated-histories ${{ github.event.pull_request.head.sha }}
+
+        - name: Cache Go packages
+          uses: actions/cache@v3
+          with:
+            path: |
+              ~/.cache/go-build
+              /opt/hostedtoolcache/go/${{ matrix.go }}/x64/pkg/mod
+            key: ${{ runner.os }}-go-${{ matrix.go }}-${{ hashFiles('**/go.sum') }}
+            restore-keys: |
+              ${{ runner.os }}-go-${{ matrix.go }}-
+              ${{ runner.os }}-go-
+              ${{ runner.os }}-
+
+        - name: Set up Go
+          uses: actions/setup-go@v4
+          with:
+            go-version: ${{ matrix.go }}
+            check-latest: true
+            cache-dependency-path: ${{ github.workspace }}/go.sum
+
+        - name: Setup Golangci-lint with cache
+          timeout-minutes: 15
+          run: |
+            go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+            go install github.com/securego/gosec/v2/cmd/gosec@latest
+
+        - name: Run Gosec Security Scanner
+          id: golangci_lint
+          run: |
+            pwd
+            ls -la
+            golangci-lint run --timeout 10m --disable-all --enable=gosec --out-format=json ./... > results.json || true
+            result=0
+            detailed_issues=""
+            if [ -f results.json ]; then
+              result=$(cat results.json | jq '.Issues | length')
+              detailed_issues=$(cat results.json | jq '.Issues')
+            fi
+            if [ $result -ne 0 ]; then
+              echo "Gosec found issues"
+              echo "issues_found=true" >> $GITHUB_OUTPUT
+              detailed_issues=$(echo $detailed_issues | sed 's/{/\\{/g' | sed 's/}/\\}/g' | sed 's/(/\\(/g' | sed 's/)/\\)/g' | sed 's/"/\\"/g')
+              echo "detailed_issues=$detailed_issues" >> $GITHUB_OUTPUT
+
+            else
+              echo "Gosec found no issues"
+              echo "issues_found=false" >> $GITHUB_OUTPUT
+            fi
+            exit 0
+
+        - name: Upload results.json
+          uses: actions/upload-artifact@v3
+          with:
+              name: results.json
+              path: results.json
+
+        - name: Exit if Gosec found issues
+          run: |
+            issues_found="${{ steps.golangci_lint.outputs.issues_found }}"
+            if [ "$issues_found" = "true" ]; then
+              cat results.json | jq '.Issues' 1>&2
+              exit 1
+            else
+              echo "Gosec found no issues at '${{ steps.golangci_lint.outputs.issues_found }}'"
+            fi
+
+        - name: Start MongoDB
+          uses: supercharge/mongodb-github-action@1.10.0
+          with:
+            mongodb-version: ${{ matrix.mongodb-version }}
+
+        - name: Test WeStack
+          run: |
+            if [ -d ${{ github.workspace }}/.cache/go-build ]; then
+              echo "Restoring from cache"
+              cp -r ${{ github.workspace }}/.cache/go-build ${{ github.workspace }}/go/pkg
+              cp -r ${{ github.workspace }}/.cache/mod ${{ github.workspace }}/go/pkg
+            fi
+            go mod download
+            cd westack/tests
+            go test -timeout 5m -c -coverpkg=../../../westack-go/... -covermode=atomic github.com/fredyk/westack-go/westack/tests -o output.test
+            go tool test2json -t ./output.test -test.v -test.paniconexit0 -test.coverprofile ../../coverage.txt | jq -r 'select(.Output != "" and .Output != null) | .Output' | sed '/^$/d' | tee ../../test_output.txt 
+            cd ../..
+            # Select from test_output.txt only lines containing "coverage: "
+            cat test_output.txt | grep "coverage: " > coverage.summary.txt
+            # Where is go???
+            echo "Go is at $(which go)"
+
+        - name: Upload coverage.txt
+          uses: actions/upload-artifact@v3
+          with:
+              name: coverage.txt
+              path: coverage.txt
+
+        - name: Upload coverage.summary.txt
+          uses: actions/upload-artifact@v3
+          with:
+              name: coverage.summary.txt
+              path: coverage.summary.txt
+
+        - name: Upload test_output.txt
+          uses: actions/upload-artifact@v3
+          with:
+              name: test_output.txt
+              path: test_output.txt
+
+        - name: Process tests output
+          run: |
+            # Select from test_output.txt only lines containing " FAIL: "
+            all_failed_tests=$(cat test_output.txt | grep ' FAIL: ' | sed '/^$/d')
+            if [ -n "$all_failed_tests" ]; then
+              echo "Tests failed:"
+              echo $all_failed_tests
+              exit 1
+            else
+              echo "All tests passed"
+            fi
+
+        - name: Process coverage.summary.txt
+          run: |
+            # Parse coverage_lines to get coverage percentage. If any percentage is below $MIN_COVERAGE_THRESHOLD, exit with error
+            # Also skip github.com/fredyk/westack-go/westack/tests
+            coverage_lines=$(cat coverage.summary.txt | grep -v "coverage: \[no statements\]" | grep -v "coverage: \[no tests to run\]" | grep -v "github.com/fredyk/westack-go/westack/tests")
+            echo "Target min coverage: $MIN_COVERAGE_THRESHOLD"
+            echo "$coverage_lines" | while read -r line; do
+              echo "$line"
+              coverage=$(echo "$line" | sed 's/.*coverage: \([0-9]*\.[0-9]*\).*/\1/')
+              echo "coverage: $coverage"
+              if (( $(echo "$coverage < $MIN_COVERAGE_THRESHOLD" | bc -l) )); then
+                echo "Coverage is below $MIN_COVERAGE_THRESHOLD"
+                exit 1
+              fi
+            done
+
+        - name: Create temporary branch with random name
+          run: |
+              git checkout -b temp-branch-${{ github.run_id }}
+
+        - name: Push temporary branch
+          run: |
+              git fetch
+              git push origin temp-branch-${{ github.run_id }} --force
+
+  #        - name: Create tag
+  #          run: git tag -a v${{ steps.latest_tag.outputs.tag }}-alpha-${{ steps.date.outputs.date }} -m "v${{ steps.latest_tag.outputs.tag }}-alpha-${{ steps.date.outputs.date }}"
+    push_to_alpha:
+      runs-on: ubuntu-latest
+      needs: [run_tests]
+      env:
+        GITHUB_TOKEN: ${{ secrets.PULL_REQUEST_TOKEN }}
+      steps:
+
+        - name: Checkout master
+          uses: actions/checkout@v3
+          with:
+            ref: master
+
+        - name: Fetch
+          run: |
+              git fetch
+              git checkout -b temp-branch-${{ github.run_id }} origin/temp-branch-${{ github.run_id }}
+              git pull
 
         - name: Create go tag with date
           id: date
@@ -46,51 +226,24 @@ jobs:
             echo "Tagging new as: $new_tag"
             echo "::set-output name=tag::${new_tag}"
 
-        - name: Checkout alpha
-          run: |
-            git checkout -b alpha origin/alpha
-            git pull
-
-        - name: Merge PR
-          run: |
-            git config --global user.email "github-actions[bot]@users.noreply.github.com"
-            git config --global user.name "github-actions[bot]"
-            git merge --no-edit --no-ff --allow-unrelated-histories ${{ github.event.pull_request.head.sha }}
-
-        - name: Install MongoDB
-          run: |
-            sudo apt-get update
-            sudo apt-get install -y dirmngr gnupg apt-transport-https ca-certificates software-properties-common
-            wget -qO - https://www.mongodb.org/static/pgp/server-6.0.asc | sudo apt-key add -
-            echo "deb [ arch=amd64,arm64 ] https://repo.mongodb.org/apt/ubuntu focal/mongodb-org/6.0 multiverse" | sudo tee /etc/apt/sources.list.d/mongodb-org-6.0.list
-            sudo apt-get update
-            sudo apt-get install -y mongodb-org
-
-        - name: Set up Go
-          uses: actions/setup-go@v2
-          with:
-            go-version: 1.20.1
-
-        - name: Start MongoDB
-          run: sudo systemctl start mongod
-
-        - name: Test WeStack
-          run: go test -v ./westack/tests
-
-#        - name: Create tag
-#          run: git tag -a v${{ steps.latest_tag.outputs.tag }}-alpha-${{ steps.date.outputs.date }} -m "v${{ steps.latest_tag.outputs.tag }}-alpha-${{ steps.date.outputs.date }}"
-
         - name: Create a new branch
           run: |
             git checkout -b v-${{ steps.latest_tag.outputs.tag }}-alpha HEAD
 
         - name: Push
           run: |
-            git push origin alpha
-            git push -u origin v-${{ steps.latest_tag.outputs.tag }}-alpha
-#            git push --tags
+            git fetch
+            # Push local temp branch to remote alpha branch
+            git push origin temp-branch-${{ github.run_id }}:alpha
+            git push origin temp-branch-${{ github.run_id }}:v-${{ steps.latest_tag.outputs.tag }}-alpha
 
         - name: Comments on the pull request and closes it
           run: |
             curl -X POST -H "Authorization: token ${{ secrets.PULL_REQUEST_TOKEN }}" -H "Content-Type: application/json" -d '{"body": "This PR has been merged into alpha and tagged as ${{ steps.latest_tag.outputs.tag }}-alpha-${{ steps.date.outputs.date }}. Thanks for your contribution!"}' https://api.github.com/repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments
             curl -X PATCH -H "Authorization: token ${{ secrets.PULL_REQUEST_TOKEN }}" -H "Content-Type: application/json" -d '{"state": "closed"}' https://api.github.com/repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}
+
+        - name: Delete temporary branch
+          run: |
+              git checkout master
+              git branch -D temp-branch-${{ github.run_id }}
+              git push origin --delete temp-branch-${{ github.run_id }}
