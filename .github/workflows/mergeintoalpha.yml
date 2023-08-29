@@ -104,8 +104,8 @@ jobs:
             if [ "$issues_found" = "true" ]; then
               details="${{ steps.golangci_lint.outputs.detailed_issues }}"
               # Unescape curly braces, both opening and closing. Also parentheses
-              details="${details//\\{/}"
-              details="${details//\\}/}"
+              details="${details//\\{/{}"
+              details="${details//\\}/}}"
               details="${details//\\(/(}"
               details="${details//\\)/)}"
               echo "Details: $details"
