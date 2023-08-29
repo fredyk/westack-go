@@ -89,33 +89,7 @@ func (connector *MemoryKVConnector) FindMany(collectionName string, lookups *wst
 }
 
 func (connector *MemoryKVConnector) findByObjectId(collectionName string, _id interface{}, lookups *wst.A) (*wst.M, error) {
-	db := connector.db
-	bucket := db.GetBucket(collectionName)
-	var idAsString string
-	switch _id.(type) {
-	case string:
-		idAsString = _id.(string)
-	case primitive.ObjectID:
-		idAsString = _id.(primitive.ObjectID).Hex()
-	case uuid.UUID:
-		idAsString = _id.(uuid.UUID).String()
-	}
-	var document wst.M
-	allBytes, err := bucket.Get(idAsString)
-	if err != nil {
-		return nil, err
-	}
-	if len(allBytes) == 0 {
-		return nil, errors.New("document not found")
-	} else if len(allBytes) > 1 {
-		return nil, errors.New("multiple documents found")
-	} else {
-		err = bson.Unmarshal(allBytes[0], &document)
-		if err != nil {
-			return nil, err
-		}
-		return &document, nil
-	}
+	panic("Not implemented")
 }
 
 func (connector *MemoryKVConnector) Count(collectionName string, lookups *wst.A) (int64, error) {
