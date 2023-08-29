@@ -22,6 +22,7 @@ jobs:
         PPROF_AUTH_USERNAME: test
         PPROF_AUTH_PASSWORD: abcd1234.
         GITHUB_TOKEN: ${{ secrets.PULL_REQUEST_TOKEN }}
+        MIN_COVERAGE_THRESHOLD: 66.8
       steps:
         - name: Checkout master
           uses: actions/checkout@v3
@@ -162,14 +163,14 @@ jobs:
 
         - name: Process coverage.summary.txt
           run: |
-            # Parse coverage_lines to get coverage percentage. If any percentage is below 24.2, exit with error
+            # Parse coverage_lines to get coverage percentage. If any percentage is below $MIN_COVERAGE_THRESHOLD, exit with error
             coverage_lines=$(cat coverage.summary.txt | grep -v "coverage: \[no statements\]" | grep -v "coverage: \[no tests to run\]")
             echo "$coverage_lines" | while read -r line; do
               echo "$line"
               coverage=$(echo "$line" | sed 's/.*coverage: \([0-9]*\.[0-9]*\).*/\1/')
               echo "coverage: $coverage"
-              if (( $(echo "$coverage < 24.2" | bc -l) )); then
-                echo "Coverage is below 24.2"
+              if (( $(echo "$coverage < $MIN_COVERAGE_THRESHOLD" | bc -l) )); then
+                echo "Coverage is below $MIN_COVERAGE_THRESHOLD"
                 exit 1
               fi
             done
