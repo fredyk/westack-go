@@ -226,22 +226,18 @@ jobs:
             echo "Tagging new as: $new_tag"
             echo "::set-output name=tag::${new_tag}"
 
-        - name: Create a new branch
-          run: |
-            git checkout -b v-${{ steps.latest_tag.outputs.tag }}-alpha HEAD
-
         - name: Push
           run: |
             git fetch
             # Push local temp branch to remote alpha branch
             git checkout -b alpha origin/alpha
             git pull
-            git merge --no-edit --no-ff --allow-unrelated-histories temp-branch-${{ github.run_id }}
+            git merge --no-edit temp-branch-${{ github.run_id }}
             git push origin alpha
             git checkout -b v-${{ steps.latest_tag.outputs.tag }}-alpha HEAD
             git branch --set-upstream-to=origin/v-${{ steps.latest_tag.outputs.tag }}-alpha v-${{ steps.latest_tag.outputs.tag }}-alpha || true
             git pull || true
-            git merge --no-edit --no-ff --allow-unrelated-histories temp-branch-${{ github.run_id }}
+            git merge --no-edit temp-branch-${{ github.run_id }}
             git push origin v-${{ steps.latest_tag.outputs.tag }}-alpha
 
         - name: Comments on the pull request and closes it
