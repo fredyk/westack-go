@@ -120,6 +120,14 @@ jobs:
               name: coverage.txt
               path: coverage.txt
 
+        - name: Create temporary branch with random name
+          run: |
+              git checkout -b temp-branch-${{ github.run_id }}
+
+        - name: Push temporary branch
+          run: |
+              git push origin temp-branch-${{ github.run_id }}
+
   #        - name: Create tag
   #          run: git tag -a v${{ steps.latest_tag.outputs.tag }}-alpha-${{ steps.date.outputs.date }} -m "v${{ steps.latest_tag.outputs.tag }}-alpha-${{ steps.date.outputs.date }}"
     push_to_alpha:
@@ -128,6 +136,17 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.PULL_REQUEST_TOKEN }}
       steps:
+
+        - name: Checkout master
+          uses: actions/checkout@v3
+          with:
+            ref: master
+
+        - name: Fetch
+          run: |
+              git fetch
+              git checkout -b temp-branch-${{ github.run_id }} origin/temp-branch-${{ github.run_id }}
+              git pull
 
         - name: Create go tag with date
           id: date
@@ -168,3 +187,9 @@ jobs:
           run: |
             curl -X POST -H "Authorization: token ${{ secrets.PULL_REQUEST_TOKEN }}" -H "Content-Type: application/json" -d '{"body": "This PR has been merged into alpha and tagged as ${{ steps.latest_tag.outputs.tag }}-alpha-${{ steps.date.outputs.date }}. Thanks for your contribution!"}' https://api.github.com/repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments
             curl -X PATCH -H "Authorization: token ${{ secrets.PULL_REQUEST_TOKEN }}" -H "Content-Type: application/json" -d '{"state": "closed"}' https://api.github.com/repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}
+
+        - name: Delete temporary branch
+          run: |
+              git checkout master
+              git branch -D temp-branch-${{ github.run_id }}
+              git push origin --delete temp-branch-${{ github.run_id }}
