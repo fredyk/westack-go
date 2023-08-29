@@ -128,11 +128,13 @@ jobs:
             fi
             go mod download
             go test -v ./westack/tests -timeout 30m -coverprofile=coverage.txt -covermode=atomic -count=1
-            # Cache go-build
-            mkdir -p ${{ github.workspace }}/.cache
-            cp -r ${{ github.workspace }}/go/pkg ${{ github.workspace }}/.cache/go-build
-            # also mods
-            cp -r ${{ github.workspace }}/go/pkg ${{ github.workspace }}/.cache/mod
+#            # Cache go-build
+#            mkdir -p ${{ github.workspace }}/.cache
+#            cp -r ${{ github.workspace }}/go/pkg ${{ github.workspace }}/.cache/go-build
+#            # also mods
+#            cp -r ${{ github.workspace }}/go/pkg ${{ github.workspace }}/.cache/mod
+            # Where is go???
+            echo "Go is at $(which go)"
 
         - name: Upload coverage.txt
           uses: actions/upload-artifact@v2
