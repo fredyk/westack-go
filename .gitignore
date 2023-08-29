@@ -11,3 +11,7 @@
 /examples/westack-go-example/data/swagger.json
 /examples/westack-go-example/common/models/*.policies.csv
 /results.json
+/westack/tests/output.test
+/coverage.summary.txt
+/coverage.txt
+/test_output.txt
