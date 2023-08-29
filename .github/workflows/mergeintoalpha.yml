@@ -104,19 +104,8 @@ jobs:
             # Check ${{ steps.golangci_lint.outputs.issues_found }}
             issues_found="${{ steps.golangci_lint.outputs.issues_found }}"
             if [ "$issues_found" = "true" ]; then
-              details="${{ steps.golangci_lint.outputs.detailed_issues }}"
-              # Unescape curly braces, both opening and closing. Also parentheses
-              details="${details//\\{/{}"
-              details="${details//\\}/}}"
-              details="${details//\\(/(}"
-              details="${details//\\)/)}"
-              echo "Details: $details"
-              # Write to file
-              echo $details > gosec_issues.json
-              echo "Gosec found issues:"
-              cat gosec_issues.json
-              # Read pretty printed, unescaping double quotes before
-              cat gosec_issues.json | sed 's/\\"/"/g' | jq
+              # Read results.json, only print Issues
+              cat results.json | jq '.Issues'
               exit 1
             else
               echo "Gosec found no issues at '${{ steps.golangci_lint.outputs.issues_found }}'"
