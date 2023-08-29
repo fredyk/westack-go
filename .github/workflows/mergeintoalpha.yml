@@ -6,41 +6,36 @@ on:
     types: [opened, synchronize, reopened]
 
 jobs:
-    merge_pr:
-        runs-on: ubuntu-latest
-        env:
-          GITHUB_TOKEN: ${{ secrets.PULL_REQUEST_TOKEN }}
-        steps:
-          - name: Checkout master
-            uses: actions/checkout@v3
-            with:
-              ref: master
-
-          - name: Checkout alpha
-            run: |
-              git fetch # origin alpha:alpha
-              git checkout -b alpha origin/alpha
-              git pull
-
-          - name: Merge PR
-            run: |
-              git config --global user.email "github-actions[bot]@users.noreply.github.com"
-              git config --global user.name "github-actions[bot]"
-              git merge --no-edit --no-ff --allow-unrelated-histories ${{ github.event.pull_request.head.sha }}
 
     run_tests:
-        runs-on: ubuntu-latest
-        needs: [merge_pr]
-        strategy:
+      runs-on: ubuntu-latest
+      strategy:
 #          max-parallel: 1
-          matrix:
-            go: [ '1.20.1', '1.20.6' ]
-        env:
-          WST_ADMIN_USERNAME: admin
-          WST_ADMIN_PWD: testadmin
-          PPROF_AUTH_USERNAME: test
-          PPROF_AUTH_PASSWORD: abcd1234.
-        steps:
+        matrix:
+          go: [ '1.20.1', '1.20.6' ]
+      env:
+        WST_ADMIN_USERNAME: admin
+        WST_ADMIN_PWD: testadmin
+        PPROF_AUTH_USERNAME: test
+        PPROF_AUTH_PASSWORD: abcd1234.
+        GITHUB_TOKEN: ${{ secrets.PULL_REQUEST_TOKEN }}
+      steps:
+        - name: Checkout master
+          uses: actions/checkout@v3
+          with:
+            ref: master
+
+        - name: Checkout alpha
+          run: |
+            git fetch # origin alpha:alpha
+            git checkout -b alpha origin/alpha
+            git pull
+
+        - name: Merge PR
+          run: |
+            git config --global user.email "github-actions[bot]@users.noreply.github.com"
+            git config --global user.name "github-actions[bot]"
+            git merge --no-edit --no-ff --allow-unrelated-histories ${{ github.event.pull_request.head.sha }}
 
         - name: Set up Go
           uses: actions/setup-go@v4
@@ -49,8 +44,14 @@ jobs:
             check-latest: true
             cache-dependency-path: ${{ github.workspace }}/go.sum
 
-        - name: Setup Gosec Security Scanner
+        - name: Setup Golangci-lint with cache
           timeout-minutes: 15
+          uses: actions/cache@v2
+          with:
+              path: ${{ github.workspace }}/.cache/golangci-lint
+              key: ${{ runner.os }}-golangci-lint-${{ hashFiles('**/go.sum') }}
+              restore-keys: |
+                ${{ runner.os }}-golangci-lint-
           run: |
             go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
             go install github.com/securego/gosec/v2/cmd/gosec@latest
@@ -120,8 +121,8 @@ jobs:
               name: coverage.txt
               path: coverage.txt
 
-#        - name: Create tag
-#          run: git tag -a v${{ steps.latest_tag.outputs.tag }}-alpha-${{ steps.date.outputs.date }} -m "v${{ steps.latest_tag.outputs.tag }}-alpha-${{ steps.date.outputs.date }}"
+  #        - name: Create tag
+  #          run: git tag -a v${{ steps.latest_tag.outputs.tag }}-alpha-${{ steps.date.outputs.date }} -m "v${{ steps.latest_tag.outputs.tag }}-alpha-${{ steps.date.outputs.date }}"
     push_to_alpha:
       runs-on: ubuntu-latest
       needs: [run_tests]
