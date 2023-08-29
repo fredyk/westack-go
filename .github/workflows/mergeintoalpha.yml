@@ -164,7 +164,7 @@ jobs:
         - name: Process tests output
           run: |
             # Select from test_output.txt only lines containing "---FAIL: "
-            all_failed_tests=$(cat test_output.txt | grep "--- FAIL: ")
+            all_failed_tests=$(cat test_output.txt | grep '--- FAIL: ')
             failed_tests=$(echo "$all_failed_tests" | wc -l)            
             echo "failed_tests=$failed_tests" >> $GITHUB_OUTPUT
             if [ $failed_tests -ne 0 ]; then
