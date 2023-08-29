@@ -11,15 +11,15 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.PULL_REQUEST_TOKEN }}
         steps:
-#          - name: Checkout master
-#            uses: actions/checkout@v2
-#            with:
-#              ref: master
-
           - name: Checkout alpha
-            run: |
-              git checkout -b alpha origin/alpha
-              git pull
+            uses: actions/checkout@v2
+            with:
+              ref: alpha
+
+#          - name: Checkout alpha
+#            run: |
+#              git checkout -b alpha origin/alpha
+#              git pull
 
           - name: Merge PR
             run: |
