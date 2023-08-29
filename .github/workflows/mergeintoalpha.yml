@@ -6,8 +6,30 @@ on:
     types: [opened, synchronize, reopened]
 
 jobs:
-    merge_and_push:
+    merge_pr:
         runs-on: ubuntu-latest
+        env:
+          GITHUB_TOKEN: ${{ secrets.PULL_REQUEST_TOKEN }}
+        steps:
+#          - name: Checkout master
+#            uses: actions/checkout@v2
+#            with:
+#              ref: master
+
+          - name: Checkout alpha
+            run: |
+              git checkout -b alpha origin/alpha
+              git pull
+
+          - name: Merge PR
+            run: |
+              git config --global user.email "github-actions[bot]@users.noreply.github.com"
+              git config --global user.name "github-actions[bot]"
+              git merge --no-edit --no-ff --allow-unrelated-histories ${{ github.event.pull_request.head.sha }}
+
+    run_tests:
+        runs-on: ubuntu-latest
+        needs: [merge_pr]
         strategy:
           matrix:
             go: [ '1.20.1', '1.20.6' ]
@@ -16,49 +38,7 @@ jobs:
           WST_ADMIN_PWD: testadmin
           PPROF_AUTH_USERNAME: test
           PPROF_AUTH_PASSWORD: abcd1234.
-          GITHUB_TOKEN: ${{ secrets.PULL_REQUEST_TOKEN }}
         steps:
-        - name: Checkout master
-          uses: actions/checkout@v2
-          with:
-              ref: master
-
-        - name: Create go tag with date
-          id: date
-          run: echo "::set-output name=date::$(date +'%Y%m%d%H%M')"
-
-        - name: Fetch all tags
-          run: git fetch --prune --unshallow --tags
-
-        - name: Find latest tag with regex v\d+\.\d+\.\d+$ and fallback to 0.0.0, skipping -alpha and -beta
-          id: latest_tag
-          run: |
-            latest_tag=$(git describe --tags --match "v[0-9]*.[0-9]*.[0-9]*" --abbrev=0 | grep -v -E "alpha|beta" || echo "v0.0.0")
-            major=$(echo $latest_tag | cut -d. -f1)
-            major=${major#v}
-            minor=$(echo $latest_tag | cut -d. -f2)
-            patch=$(echo $latest_tag | cut -d. -f3)
-            patch=${patch%-*}
-            patch=${patch%-*}
-            latest_tag=${major}.${minor}.${patch}
-            echo "Found latest tag: $latest_tag"
-            major=$((major + 1))
-            minor="0"
-            patch="0"
-            new_tag=${major}.${minor}.${patch}
-            echo "Tagging new as: $new_tag"
-            echo "::set-output name=tag::${new_tag}"
-
-        - name: Checkout alpha
-          run: |
-            git checkout -b alpha origin/alpha
-            git pull
-
-        - name: Merge PR
-          run: |
-            git config --global user.email "github-actions[bot]@users.noreply.github.com"
-            git config --global user.name "github-actions[bot]"
-            git merge --no-edit --no-ff --allow-unrelated-histories ${{ github.event.pull_request.head.sha }}
 
         - name: Set up Go
           uses: actions/setup-go@v4
@@ -138,6 +118,38 @@ jobs:
 
 #        - name: Create tag
 #          run: git tag -a v${{ steps.latest_tag.outputs.tag }}-alpha-${{ steps.date.outputs.date }} -m "v${{ steps.latest_tag.outputs.tag }}-alpha-${{ steps.date.outputs.date }}"
+    push_to_alpha:
+      runs-on: ubuntu-latest
+      needs: [run_tests]
+      env:
+        GITHUB_TOKEN: ${{ secrets.PULL_REQUEST_TOKEN }}
+      steps:
+
+        - name: Create go tag with date
+          id: date
+          run: echo "::set-output name=date::$(date +'%Y%m%d%H%M')"
+
+        - name: Fetch all tags
+          run: git fetch --prune --unshallow --tags
+
+        - name: Find latest tag with regex v\d+\.\d+\.\d+$ and fallback to 0.0.0, skipping -alpha and -beta
+          id: latest_tag
+          run: |
+            latest_tag=$(git describe --tags --match "v[0-9]*.[0-9]*.[0-9]*" --abbrev=0 | grep -v -E "alpha|beta" || echo "v0.0.0")
+            major=$(echo $latest_tag | cut -d. -f1)
+            major=${major#v}
+            minor=$(echo $latest_tag | cut -d. -f2)
+            patch=$(echo $latest_tag | cut -d. -f3)
+            patch=${patch%-*}
+            patch=${patch%-*}
+            latest_tag=${major}.${minor}.${patch}
+            echo "Found latest tag: $latest_tag"
+            major=$((major + 1))
+            minor="0"
+            patch="0"
+            new_tag=${major}.${minor}.${patch}
+            echo "Tagging new as: $new_tag"
+            echo "::set-output name=tag::${new_tag}"
 
         - name: Create a new branch
           run: |
