@@ -10,7 +10,6 @@ jobs:
     run_tests:
       runs-on: ubuntu-latest
       strategy:
-#          max-parallel: 1
         matrix:
           go: [ '1.20.1', '1.20.6' ]
           mongodb-version: ['4.2', '4.4', '5.0', '6.0']
@@ -104,20 +103,6 @@ jobs:
               echo "Gosec found no issues at '${{ steps.golangci_lint.outputs.issues_found }}'"
             fi
 
-#        - name: Install MongoDB without cache
-#          run: |
-#            sudo apt-get update
-#            sudo apt-get install -y dirmngr gnupg apt-transport-https ca-certificates software-properties-common
-#            wget -qO - https://www.mongodb.org/static/pgp/server-6.0.asc | sudo apt-key add -
-#            echo "deb [ arch=amd64,arm64 ] https://repo.mongodb.org/apt/ubuntu focal/mongodb-org/6.0 multiverse" | sudo tee /etc/apt/sources.list.d/mongodb-org-6.0.list
-#            sudo apt-get update
-#            sudo apt-get install -y mongodb-org
-
-#        - name: Start MongoDB
-#          run: |
-#            sudo systemctl start mongod
-#            sudo systemctl status mongod
-
         - name: Start MongoDB
           uses: supercharge/mongodb-github-action@1.10.0
           with:
@@ -133,7 +118,6 @@ jobs:
             go mod download
             cd westack/tests
             go test -timeout 5m -c -coverpkg=../../../westack-go/... -covermode=atomic github.com/fredyk/westack-go/westack/tests -o output.test
-            # Test and print "Output" to stdout. Skip empty "Output" and null "Output". Skip empty lines
             go tool test2json -t ./output.test -test.v -test.paniconexit0 -test.coverprofile ../../coverage.txt | jq -r 'select(.Output != "" and .Output != null) | .Output' | sed '/^$/d' | tee ../../test_output.txt 
             cd ../..
             # Select from test_output.txt only lines containing "coverage: "
@@ -162,21 +146,20 @@ jobs:
         - name: Process tests output
           run: |
             # Select from test_output.txt only lines containing " FAIL: "
-            all_failed_tests=$(cat test_output.txt | grep ' FAIL: ')
-            failed_tests=$(echo "$all_failed_tests" | wc -l)            
-            echo "failed_tests=$failed_tests" >> $GITHUB_OUTPUT
-            if [ $failed_tests -ne 0 ]; then
+            all_failed_tests=$(cat test_output.txt | grep ' FAIL: ' | sed '/^$/d')
+            if [ -n "$all_failed_tests" ]; then
               echo "Tests failed:"
               echo $all_failed_tests
               exit 1
             else
-              echo "Tests passed"
+              echo "All tests passed"
             fi
 
         - name: Process coverage.summary.txt
           run: |
             # Parse coverage_lines to get coverage percentage. If any percentage is below $MIN_COVERAGE_THRESHOLD, exit with error
-            coverage_lines=$(cat coverage.summary.txt | grep -v "coverage: \[no statements\]" | grep -v "coverage: \[no tests to run\]")
+            # Also skip github.com/fredyk/westack-go/westack/tests
+            coverage_lines=$(cat coverage.summary.txt | grep -v "coverage: \[no statements\]" | grep -v "coverage: \[no tests to run\]" | grep -v "github.com/fredyk/westack-go/westack/tests")
             echo "Target min coverage: $MIN_COVERAGE_THRESHOLD"
             echo "$coverage_lines" | while read -r line; do
               echo "$line"
