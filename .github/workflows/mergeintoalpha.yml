@@ -89,7 +89,7 @@ jobs:
             exit 0
 
         - name: Upload results.json
-          uses: actions/upload-artifact@v2
+          uses: actions/upload-artifact@v3
           with:
               name: results.json
               path: results.json
@@ -142,19 +142,19 @@ jobs:
             echo "Go is at $(which go)"
 
         - name: Upload coverage.txt
-          uses: actions/upload-artifact@v2
+          uses: actions/upload-artifact@v3
           with:
               name: coverage.txt
               path: coverage.txt
 
         - name: Upload coverage.summary.txt
-          uses: actions/upload-artifact@v2
+          uses: actions/upload-artifact@v3
           with:
               name: coverage.summary.txt
               path: coverage.summary.txt
 
         - name: Upload test_output.txt
-          uses: actions/upload-artifact@v2
+          uses: actions/upload-artifact@v3
           with:
               name: test_output.txt
               path: test_output.txt
