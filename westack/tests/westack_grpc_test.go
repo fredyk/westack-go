@@ -190,7 +190,7 @@ func Test_GRPCCallWithBodyParams_WithBadBody(t *testing.T) {
 
 func startMockGrpcServer() {
 	// create a listener on TCP port 7777
-	lis, err := net.Listen("tcp", ":7777")
+	lis, err := net.Listen("tcp", "localhost:7777")
 	if err != nil {
 		log.Fatalf("failed to listen: %v", err)
 	}
