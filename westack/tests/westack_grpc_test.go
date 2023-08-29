@@ -9,6 +9,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"os"
 	"reflect"
 	"strings"
 	"testing"
@@ -30,6 +31,11 @@ import (
 	pb "github.com/fredyk/westack-go/westack/tests/proto"
 )
 
+type InstanceFromTests struct {
+	id    primitive.ObjectID
+	model *model.Model
+}
+
 var server *westack.WeStack
 var userId primitive.ObjectID
 var noteId primitive.ObjectID
@@ -38,6 +44,7 @@ var userModel *model.Model
 var customerModel *model.Model
 var orderModel *model.Model
 var storeModel *model.Model
+var footerModel *model.Model
 var systemContext *model.EventContext
 
 func Test_GRPCCallWithQueryParamsOK(t *testing.T) {
@@ -117,17 +124,17 @@ func Test_GRPCCallWithBodyParamsOK(t *testing.T) {
 
 	// test for ok
 	res, err := client.Post("http://localhost:8020/test-grpc-post", "application/json", bufio.NewReader(strings.NewReader(`{"foo":1}`)))
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Equal(t, 200, res.StatusCode)
 
 	// read response
 	body, err := io.ReadAll(res.Body)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 
 	// compare response
 	var out pb.ResGrpcTestMessage
 	err = json.Unmarshal(body, &out)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Equal(t, int32(1), out.Bar)
 
 }
@@ -141,7 +148,7 @@ func Test_GRPCCallWithBodyParamsError(t *testing.T) {
 
 	// test for error
 	res, err := client.Post("http://localhost:8020/test-grpc-post", "application/json", bufio.NewReader(strings.NewReader(`{"foo":"abc"}`)))
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Equal(t, 500, res.StatusCode)
 
 }
@@ -155,7 +162,7 @@ func Test_GRPCCallWithBodyParams_WithBadBody(t *testing.T) {
 
 	// test for error
 	res, err := client.Post("http://localhost:8020/test-grpc-post", "application/json", bufio.NewReader(strings.NewReader(`{"foo":abc}`)))
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Equal(t, 500, res.StatusCode)
 
 }
@@ -183,7 +190,7 @@ func Test_GRPCCallWithBodyParams_WithBadBody(t *testing.T) {
 
 func startMockGrpcServer() {
 	// create a listener on TCP port 7777
-	lis, err := net.Listen("tcp", ":7777")
+	lis, err := net.Listen("tcp", "localhost:7777")
 	if err != nil {
 		log.Fatalf("failed to listen: %v", err)
 	}
@@ -224,6 +231,256 @@ func Test_ResGrpcTestMessage(t *testing.T) {
 	// just invoke the method to increase coverage
 	in.ProtoMessage()
 
+}
+
+func Test_SpecialFilterNow(t *testing.T) {
+
+	t.Parallel()
+
+	// Create a note for checking the filter
+	randomTitle := fmt.Sprintf("Test_SpecialFilterNow_%d", createRandomInt())
+	note, err := noteModel.Create(wst.M{
+		"title": randomTitle,
+	}, systemContext)
+	assert.NoError(t, err)
+	assert.NotNil(t, note)
+	assert.Contains(t, note.ToJSON(), "id")
+
+	notes, err := testSpecialDatePlaceholder(t, "$lte", "$now")
+	assert.NoError(t, err)
+	assert.NotEmptyf(t, notes, "There should be at least one note")
+	assert.Contains(t, reduceByKey(notes, "title"), randomTitle)
+
+}
+
+func Test_SpecialFilterToday(t *testing.T) {
+
+	t.Parallel()
+
+	// Create a note for checking the filter
+	randomTitle := fmt.Sprintf("Test_SpecialFilterToday_%d", createRandomInt())
+	note, err := noteModel.Create(wst.M{
+		// Created 24 hours ago
+		"created": time.Now().Add(-24 * time.Hour),
+		"title":   randomTitle,
+	}, systemContext)
+	assert.NoError(t, err)
+	assert.NotNil(t, note)
+	assert.Contains(t, note.ToJSON(), "id")
+
+	notes, err := testSpecialDatePlaceholder(t, "$lte", "$today")
+	assert.NoError(t, err)
+	assert.NotEmptyf(t, notes, "There should be at least one note")
+	assert.Contains(t, reduceByKey(notes, "title"), randomTitle)
+
+}
+
+func Test_SpecialFilterYesterday(t *testing.T) {
+
+	t.Parallel()
+
+	// Create a note for checking the filter
+	randomTitle := fmt.Sprintf("Test_SpecialFilterYesterday_%d", createRandomInt())
+	note, err := noteModel.Create(wst.M{
+		// Created 48 hours ago
+		"created": time.Now().Add(-48 * time.Hour),
+		"title":   randomTitle,
+	}, systemContext)
+	assert.NoError(t, err)
+	assert.NotNil(t, note)
+	assert.Contains(t, note.ToJSON(), "id")
+
+	notes, err := testSpecialDatePlaceholder(t, "$lte", "$yesterday")
+	assert.NoError(t, err)
+	assert.NotEmptyf(t, notes, "There should be at least one note")
+	assert.Contains(t, reduceByKey(notes, "title"), randomTitle)
+
+}
+
+func Test_SpecialFilter7DaysAgo(t *testing.T) {
+
+	t.Parallel()
+
+	// Create a note for checking the filter
+	randomTitle := fmt.Sprintf("Test_SpecialFilter7DaysAgo_%d", createRandomInt())
+	note, err := noteModel.Create(wst.M{
+		// Created 8 days ago
+		"created": time.Now().Add(-8 * 24 * time.Hour),
+		"title":   randomTitle,
+	}, systemContext)
+	assert.NoError(t, err)
+	assert.NotNil(t, note)
+	assert.Contains(t, note.ToJSON(), "id")
+
+	notes, err := testSpecialDatePlaceholder(t, "$lte", "$7dago")
+	assert.NoError(t, err)
+	assert.NotEmptyf(t, notes, "There should be at least one note")
+	assert.Contains(t, reduceByKey(notes, "title"), randomTitle)
+
+}
+
+func Test_SpecialFilter4WeeksAgo(t *testing.T) {
+
+	t.Parallel()
+
+	// Create a note for checking the filter
+	randomTitle := fmt.Sprintf("Test_SpecialFilter4WeeksAgo_%d", createRandomInt())
+	note, err := noteModel.Create(wst.M{
+		// Created 5 weeks ago
+		"created": time.Now().Add(-5 * 7 * 24 * time.Hour),
+		"title":   randomTitle,
+	}, systemContext)
+	assert.NoError(t, err)
+	assert.NotNil(t, note)
+	assert.Contains(t, note.ToJSON(), "id")
+
+	notes, err := testSpecialDatePlaceholder(t, "$lte", "$4wago")
+	assert.NoError(t, err)
+	assert.NotEmptyf(t, notes, "There should be at least one note")
+	assert.Contains(t, reduceByKey(notes, "title"), randomTitle)
+
+}
+
+func Test_SpecialFilter3MonthsAgo(t *testing.T) {
+
+	t.Parallel()
+
+	// Create a note for checking the filter
+	randomTitle := fmt.Sprintf("Test_SpecialFilter3MonthsAgo_%d", createRandomInt())
+	note, err := noteModel.Create(wst.M{
+		// Created 4 months ago
+		"created": time.Now().Add(-4 * 30 * 24 * time.Hour),
+		"title":   randomTitle,
+	}, systemContext)
+	assert.NoError(t, err)
+	assert.NotNil(t, note)
+	assert.Contains(t, note.ToJSON(), "id")
+
+	notes, err := testSpecialDatePlaceholder(t, "$lte", "$3Mago")
+	assert.NoError(t, err)
+	assert.NotEmptyf(t, notes, "There should be at least one note")
+	assert.Contains(t, reduceByKey(notes, "title"), randomTitle)
+
+}
+
+func Test_SpecialFilter2YearsAgo(t *testing.T) {
+
+	t.Parallel()
+
+	// Create a note for checking the filter
+	randomTitle := fmt.Sprintf("Test_SpecialFilter2YearsAgo_%d", createRandomInt())
+	note, err := noteModel.Create(wst.M{
+		// Created 3 years ago
+		"created": time.Now().Add(-3 * 365 * 24 * time.Hour),
+		"title":   randomTitle,
+	}, systemContext)
+	assert.NoError(t, err)
+	assert.NotNil(t, note)
+	assert.Contains(t, note.ToJSON(), "id")
+
+	notes, err := testSpecialDatePlaceholder(t, "$lte", "$2yago")
+	assert.NoError(t, err)
+	assert.NotEmptyf(t, notes, "There should be at least one note")
+	assert.Contains(t, reduceByKey(notes, "title"), randomTitle)
+
+}
+
+func Test_SpecialFilter15SecondsAgo(t *testing.T) {
+
+	t.Parallel()
+
+	// Create a note for checking the filter
+	randomTitle := fmt.Sprintf("Test_SpecialFilter15SecondsAgo_%d", createRandomInt())
+	note, err := noteModel.Create(wst.M{
+		// Created 16 seconds ago
+		"created": time.Now().Add(-16 * time.Second),
+		"title":   randomTitle,
+	}, systemContext)
+	assert.NoError(t, err)
+	assert.NotNil(t, note)
+	assert.Contains(t, note.ToJSON(), "id")
+
+	notes, err := testSpecialDatePlaceholder(t, "$lte", "$15Sago")
+	assert.NoError(t, err)
+	assert.NotEmptyf(t, notes, "There should be at least one note")
+	assert.Contains(t, reduceByKey(notes, "title"), randomTitle)
+
+}
+
+func Test_SpecialFilter10MinutesAgo(t *testing.T) {
+
+	t.Parallel()
+
+	// Create a note for checking the filter
+	randomTitle := fmt.Sprintf("Test_SpecialFilter10MinutesAgo_%d", createRandomInt())
+	note, err := noteModel.Create(wst.M{
+		// Created 11 minutes ago
+		"created": time.Now().Add(-11 * time.Minute),
+		"title":   randomTitle,
+	}, systemContext)
+	assert.NoError(t, err)
+	assert.NotNil(t, note)
+	assert.Contains(t, note.ToJSON(), "id")
+
+	notes, err := testSpecialDatePlaceholder(t, "$lte", "$10Mago")
+	assert.NoError(t, err)
+	assert.NotEmptyf(t, notes, "There should be at least one note")
+	assert.Contains(t, reduceByKey(notes, "title"), randomTitle)
+
+}
+
+func Test_SpecialFilter5HoursAgo(t *testing.T) {
+
+	t.Parallel()
+
+	// Create a note for checking the filter
+	randomTitle := fmt.Sprintf("Test_SpecialFilter5HoursAgo_%d", createRandomInt())
+	note, err := noteModel.Create(wst.M{
+		// Created 6 hours ago
+		"created": time.Now().Add(-6 * time.Hour),
+		"title":   randomTitle,
+	}, systemContext)
+	assert.NoError(t, err)
+	assert.NotNil(t, note)
+	assert.Contains(t, note.ToJSON(), "id")
+
+	notes, err := testSpecialDatePlaceholder(t, "$lte", "$5Hago")
+	assert.NoError(t, err)
+	assert.NotEmptyf(t, notes, "There should be at least one note")
+	assert.Contains(t, reduceByKey(notes, "title"), randomTitle)
+
+}
+
+func Test_SpecialFilterTomorrow(t *testing.T) {
+
+	t.Parallel()
+
+	// Create a note for checking the filter
+	randomTitle := fmt.Sprintf("Test_SpecialFilterTomorrow_%d", createRandomInt())
+	note, err := noteModel.Create(wst.M{
+		"title": randomTitle,
+	}, systemContext)
+	assert.NoError(t, err)
+	assert.NotNil(t, note)
+	assert.Contains(t, note.ToJSON(), "id")
+
+	notes, err := testSpecialDatePlaceholder(t, "$lte", "$tomorrow")
+	assert.NoError(t, err)
+	assert.NotEmptyf(t, notes, "There should be at least one note")
+	assert.Contains(t, reduceByKey(notes, "title"), randomTitle)
+
+}
+
+func testSpecialDatePlaceholder(t *testing.T, specialDateKey string, specialDatePlaceholder string) (wst.A, error) {
+	req, err := http.NewRequest("GET", "/api/v1/notes?filter={\"where\":{\"created\":{\""+specialDateKey+"\":\""+specialDatePlaceholder+"\"}}}", nil)
+	assert.NoError(t, err)
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := app.Server.Test(req, -1)
+	assert.NoError(t, err)
+	assert.Equal(t, 200, resp.StatusCode)
+	var out wst.A
+	err = json.NewDecoder(resp.Body).Decode(&out)
+	return out, err
 }
 
 // before all tests
@@ -279,67 +536,6 @@ func TestMain(m *testing.M) {
 		//	pb.FooClient.TestFoo,
 		//)).Name("Test_TestGrpcGetInvalid")
 
-		// Some hooks
-		noteModel, err = server.FindModel("Note")
-		if err != nil {
-			log.Fatalf("failed to find model: %v", err)
-		}
-		noteModel.Observe("before save", func(ctx *model.EventContext) error {
-			if ctx.IsNewInstance {
-				(*ctx.Data)["__test"] = true
-				(*ctx.Data)["__testDate"] = time.Now()
-			}
-			if (*ctx.Data)["__forceError"] == true {
-				return fmt.Errorf("forced error")
-			}
-			if (*ctx.Data)["__overwriteWith"] != nil {
-				ctx.Result = (*ctx.Data)["__overwriteWith"]
-			}
-			if (*ctx.Data)["__overwriteWithInstance"] != nil {
-				ctx.Result, err = noteModel.Build((*ctx.Data)["__overwriteWithInstance"].(wst.M), model.NewBuildCache(), ctx)
-				if err != nil {
-					return err
-				}
-			}
-			if (*ctx.Data)["__overwriteWithInstancePointer"] != nil {
-				v, err := noteModel.Build((*ctx.Data)["__overwriteWithInstancePointer"].(wst.M), model.NewBuildCache(), ctx)
-				if err != nil {
-					return err
-				}
-				ctx.Result = &v
-			}
-			return nil
-		})
-
-		noteModel.Observe("after save", func(ctx *model.EventContext) error {
-			if (*ctx.Data)["__forceAfterError"] == true {
-				return fmt.Errorf("forced error")
-			}
-			return nil
-		})
-
-		userModel, err = server.FindModel("user")
-		if err != nil {
-			log.Fatalf("failed to find model: %v", err)
-		}
-		userModel.Observe("before save", func(ctx *model.EventContext) error {
-			fmt.Println("saving user")
-			return nil
-		})
-
-		customerModel, err = server.FindModel("Customer")
-		if err != nil {
-			log.Fatalf("failed to find model: %v", err)
-		}
-		orderModel, err = server.FindModel("Order")
-		if err != nil {
-			log.Fatalf("failed to find model: %v", err)
-		}
-		storeModel, err = server.FindModel("Store")
-		if err != nil {
-			log.Fatalf("failed to find model: %v", err)
-		}
-
 	})
 
 	go func() {
@@ -351,15 +547,22 @@ func TestMain(m *testing.M) {
 
 	time.Sleep(1 * time.Second)
 
-	m.Run()
+	exitCode := m.Run()
 
 	// after all tests
+	err = revertAllTests()
+	if err != nil {
+		log.Fatalf("failed to revert all tests: %v", err)
+	}
 
 	// teardown
 	err = server.Stop()
 	if err != nil {
 		log.Fatalf("failed to stop: %v", err)
 	}
+
+	fmt.Printf("exit code: %d\n", exitCode)
+	os.Exit(exitCode)
 
 }
 
@@ -388,4 +591,27 @@ func FakeMongoDbRegistry() *bsoncodec.Registry {
 	}))
 
 	return registryBuilder.Build()
+}
+
+func revertAllTests() error {
+	sharedDeleteManyWhere := &wst.Where{
+		"_id": wst.M{
+			"$ne": nil,
+		},
+	}
+	for _, toDeleteMap := range []*model.Model{
+		noteModel,
+		userModel,
+		customerModel,
+		orderModel,
+		storeModel,
+		footerModel,
+	} {
+		deleteManyResult, err := toDeleteMap.DeleteMany(sharedDeleteManyWhere, systemContext)
+		if err != nil {
+			return err
+		}
+		fmt.Printf("Deleted %d instances from model %s\n", deleteManyResult.DeletedCount, toDeleteMap.Name)
+	}
+	return nil
 }

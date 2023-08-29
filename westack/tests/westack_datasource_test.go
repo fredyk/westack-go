@@ -16,7 +16,7 @@ func Test_Datasource_Initialize_InvalidDatasource(t *testing.T) {
 
 	ds := datasource.New("test2020", app.DsViper, context.Background())
 	err := ds.Initialize()
-	assert.NotNil(t, err)
+	assert.Error(t, err)
 	assert.Regexp(t, "invalid connector", err.Error(), "error message should be 'invalid connector'")
 
 }
@@ -34,12 +34,12 @@ func Test_Datasource_Initialize_ConnectError(t *testing.T) {
 		},
 	}
 	err := ds.Initialize()
-	assert.NotNil(t, err)
+	assert.Error(t, err)
 	assert.Regexp(t, "no such host", err.Error(), "error message should be 'no such host'")
 
 	ds.SubViper.Set("host", prevHost)
 	err = ds.Initialize()
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 
 }
 
@@ -47,7 +47,7 @@ func Test_Datasource_Ping(t *testing.T) {
 
 	t.Parallel()
 
-	// Simply wait 5.2 seconds to cover datasource ping interval
-	time.Sleep(5200 * time.Millisecond)
+	// Simply wait 3.2 seconds to cover datasource ping interval
+	time.Sleep(3200 * time.Millisecond)
 
 }
