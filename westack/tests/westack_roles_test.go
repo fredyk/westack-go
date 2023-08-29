@@ -12,7 +12,7 @@ import (
 )
 
 func Test_NewUserAndRole(t *testing.T) {
-	randN := 1e6 + rand.Intn(8999999)
+	randN := createRandomInt()
 	user, err := westack.UpsertUserWithRoles(app, westack.UserWithRoles{
 		Username: fmt.Sprintf("user-%v", randN),
 		Password: fmt.Sprintf("pwd-%v", randN),
