@@ -317,7 +317,7 @@ func (app *WeStack) setupModel(loadedModel *model.Model, dataSource *datasource.
 		}
 	}
 
-	f, err := os.OpenFile(fmt.Sprintf("%v/%v.policies.csv", basePoliciesDirectory, loadedModel.Name), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	f, err := os.OpenFile(fmt.Sprintf("%v/%v.policies.csv", basePoliciesDirectory, loadedModel.Name), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
 	if err != nil {
 		panic(err)
 	}
@@ -545,8 +545,16 @@ func handleFindMany(loadedModel *model.Model, ctx *model.EventContext) error {
 	case *model.ErrorCursor:
 		return cursor.(*model.ErrorCursor).Error()
 	}
-	if cursor.(*model.ChannelCursor).Err == nil {
-		ctx.StatusCode = fiber.StatusOK
+	// Check if it is a *model.ChannelCursor, then check if it has an error
+	if v, ok := cursor.(*model.ChannelCursor); ok {
+		if v.Err == nil {
+			ctx.StatusCode = fiber.StatusOK
+		}
+	} else {
+		if _, ok := cursor.(*model.FixedLengthCursor); ok {
+			// No error
+			ctx.StatusCode = fiber.StatusOK
+		}
 	}
 	ctx.Result = chunkGenerator
 	return nil
