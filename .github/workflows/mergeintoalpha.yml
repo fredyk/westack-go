@@ -61,6 +61,8 @@ jobs:
 
         - name: Run Gosec Security Scanner
           run: |
+            pwd
+            ls -la
             golangci-lint run --timeout 10m --disable-all --enable=gosec --out-format=json ./... > results.json || true
             result=0
             # Parse results.json
