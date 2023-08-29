@@ -109,7 +109,6 @@ jobs:
             else
               echo "Gosec found no issues"
             fi
-          
 
         - name: Install MongoDB
           run: |
