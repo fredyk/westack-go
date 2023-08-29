@@ -107,9 +107,10 @@ jobs:
             issues_found="${{ steps.golangci_lint.outputs.issues_found }}"
             if [ "$issues_found" = "true" ]; then
               details="${{ steps.golangci_lint.outputs.detailed_issues }}"
-              # Unescape curly braces
-              details=$(echo $details | sed 's/\\{/{/g' | sed 's/\\}/}/g')
-              # json pretty print
+              # Unescape curly braces, both opening and closing
+              details="${details//\\{/}"
+              echo "Details: $details"
+              # json pretty print using jq
               details=$(echo $details | jq .)
               echo "Gosec found issues:"
               echo $details
