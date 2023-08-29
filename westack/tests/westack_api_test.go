@@ -6,7 +6,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"io"
-	"math/rand"
 	"net/http"
 	"testing"
 
@@ -14,7 +13,7 @@ import (
 )
 
 func createUserThroughNetwork(t *testing.T) wst.M {
-	randUserN := 100000000 + rand.Intn(899999999)
+	randUserN := createRandomInt()
 	request, err := http.NewRequest("POST", "http://localhost:8019/api/v1/users", jsonToReader(wst.M{
 		"username": fmt.Sprintf("user%v", randUserN),
 		"email":    fmt.Sprintf("user.%v@example.com", randUserN),
