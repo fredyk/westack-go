@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"github.com/fredyk/westack-go/westack/model"
 	"io"
-	"math/rand"
 	"net/http"
 	"sync"
 	"testing"
@@ -285,10 +284,7 @@ func Test_Aggregations(t *testing.T) {
 
 	var randomUserName string
 	// assign randomUserName with safe random string
-	var randomN int64
-	rnd := rand.New(rand.NewSource(time.Now().UnixNano()))
-	randomN = 100000000 + rnd.Int63n(899999999)
-	randomUserName = fmt.Sprintf("testuser%d", randomN)
+	randomUserName = fmt.Sprintf("testuser%d", createRandomInt())
 	randomUser, err := userModel.Create(wst.M{
 		"username":  randomUserName,
 		"password":  "abcd1234.",
@@ -349,10 +345,7 @@ func Test_AggregationsWithDirectNestedQuery(t *testing.T) {
 
 	var randomeUserName string
 	// assign randomUserName with safe random string
-	var randomN int64
-	rnd := rand.New(rand.NewSource(time.Now().UnixNano()))
-	randomN = 100000000 + rnd.Int63n(899999999)
-	randomeUserName = fmt.Sprintf("testuser%d", randomN)
+	randomeUserName = fmt.Sprintf("testuser%d", createRandomInt())
 	randomUser, err := userModel.Create(wst.M{
 		"username": randomeUserName,
 		"password": "abcd1234.",
@@ -362,8 +355,7 @@ func Test_AggregationsWithDirectNestedQuery(t *testing.T) {
 
 	var randomNoteTitle string
 	// assign randomNoteTitle with safe random string
-	randomN = 100000000 + rnd.Int63n(899999999)
-	randomNoteTitle = fmt.Sprintf("testnote%d", randomN)
+	randomNoteTitle = fmt.Sprintf("testnote%d", createRandomInt())
 
 	note, err := noteModel.Create(wst.M{
 		"title":  randomNoteTitle,
