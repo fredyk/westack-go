@@ -112,7 +112,14 @@ jobs:
               cp -r ${{ github.workspace }}/.cache/mod ${{ github.workspace }}/go/pkg
             fi
             go mod download
-            go test -v ./westack/tests -timeout 5m -coverprofile=coverage.txt -covermode=atomic -count=1
+            # go test -v ./westack/tests -timeout 5m -coverprofile=coverage.txt
+            cd westack/tests
+            go test -timeout 5m -c -coverpkg=../../../westack-go/... -covermode=atomic github.com/fredyk/westack-go/westack/tests -o output.test
+            # Test and print "Output" to stdout. Skip empty "Output" and null "Output". Skip empty lines
+            go tool test2json -t ./output.test -test.v -test.paniconexit0 -test.coverprofile ../../coverage.txt | jq -r 'select(.Output != "" and .Output != null) | .Output' | sed '/^$/d' | tee ../../test_output.txt 
+            cd ../..
+            # Select from test_output.txt only lines containing "coverage: "
+            cat test_output.txt | grep "coverage: " > coverage.summary.txt
             # Where is go???
             echo "Go is at $(which go)"
 
@@ -121,6 +128,32 @@ jobs:
           with:
               name: coverage.txt
               path: coverage.txt
+
+        - name: Upload coverage.summary.txt
+          uses: actions/upload-artifact@v2
+          with:
+              name: coverage.summary.txt
+              path: coverage.summary.txt
+
+        - name: Upload test_output.txt
+          uses: actions/upload-artifact@v2
+          with:
+              name: test_output.txt
+              path: test_output.txt
+
+        - name: Process coverage.summary.txt
+          run: |
+            # Parse coverage_lines to get coverage percentage. If any percentage is below 24.2, exit with error
+            coverage_lines=$(cat coverage.summary.txt)
+            echo "$coverage_lines" | while read -r line; do
+              echo "$line"
+              coverage=$(echo "$line" | sed 's/.*coverage: \([0-9]*\.[0-9]*\).*/\1/')
+              echo "coverage: $coverage"
+              if (( $(echo "$coverage < 24.2" | bc -l) )); then
+                echo "Coverage is below 24.2"
+                exit 1
+              fi
+            done
 
         - name: Create temporary branch with random name
           run: |
