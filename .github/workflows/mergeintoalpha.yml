@@ -186,7 +186,6 @@ jobs:
           run: |
             git push origin alpha
             git push -u origin v-${{ steps.latest_tag.outputs.tag }}-alpha
-#            git push --tags
 
         - name: Comments on the pull request and closes it
           run: |
