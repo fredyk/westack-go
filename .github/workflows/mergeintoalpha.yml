@@ -234,8 +234,15 @@ jobs:
           run: |
             git fetch
             # Push local temp branch to remote alpha branch
-            git push origin temp-branch-${{ github.run_id }}:alpha
-            git push origin temp-branch-${{ github.run_id }}:v-${{ steps.latest_tag.outputs.tag }}-alpha
+            git checkout -b alpha origin/alpha
+            git pull
+            git merge --no-edit --no-ff --allow-unrelated-histories temp-branch-${{ github.run_id }}
+            git push origin alpha
+            git checkout -b v-${{ steps.latest_tag.outputs.tag }}-alpha HEAD
+            git branch --set-upstream-to=origin/v-${{ steps.latest_tag.outputs.tag }}-alpha v-${{ steps.latest_tag.outputs.tag }}-alpha || true
+            git pull || true
+            git merge --no-edit --no-ff --allow-unrelated-histories temp-branch-${{ github.run_id }}
+            git push origin v-${{ steps.latest_tag.outputs.tag }}-alpha
 
         - name: Comments on the pull request and closes it
           run: |
