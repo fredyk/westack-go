@@ -217,10 +217,9 @@ jobs:
         - name: Push
           run: |
             git fetch
-            # git push origin alpha
-            # Use refs instead
-            git push origin alpha:refs/heads/alpha
-            git push -u origin v-${{ steps.latest_tag.outputs.tag }}-alpha
+            # Push local temp branch to remote alpha branch
+            git push origin temp-branch-${{ github.run_id }}:alpha
+            git push origin temp-branch-${{ github.run_id }}:v-${{ steps.latest_tag.outputs.tag }}-alpha
 
         - name: Comments on the pull request and closes it
           run: |
