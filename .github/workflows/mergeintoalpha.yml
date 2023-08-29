@@ -99,65 +99,18 @@ jobs:
 #            sudo apt-get update
 #            sudo apt-get install -y mongodb-org
 
-        - name: Install MongoDB binaries with cache
-          uses: actions/cache@v2
+#        - name: Start MongoDB
+#          run: |
+#            sudo systemctl start mongod
+#            sudo systemctl status mongod
+
+        - name: Run MongoDB in background using action
+          uses: supercharge/mongodb-github-action@v2.0.0
           with:
-              path: /opt/mongodb
-              key: mongodb
-              restore-keys: |
-                mongodb-
-
-        - name: Create MongoDB data directory
-          run: |
-            sudo mkdir -p /var/lib/mongodb
-            sudo chown -R $USER /var/lib/mongodb
-
-        - name: Create MongoDB log directory
-          run: |
-              sudo mkdir -p /var/log/mongodb
-              sudo chown -R $USER /var/log/mongodb
-
-        - name: Create symlinks for MongoDB
-          run: |
-              sudo ln -s /opt/mongodb/bin/mongod /usr/bin/mongod
-              sudo ln -s /opt/mongodb/bin/mongo /usr/bin/mongo
-
-        - name: Create service file for MongoDB
-          run: |
-              sudo touch /etc/systemd/system/mongod.service
-              sudo chmod 666 /etc/systemd/system/mongod.service
-              sudo echo "[Unit]" >> /etc/systemd/system/mongod.service
-              sudo echo "Description=MongoDB Database" >> /etc/systemd/system/mongod.service
-              sudo echo "After=network.target" >> /etc/systemd/system/mongod.service
-              sudo echo "" >> /etc/systemd/system/mongod.service
-              sudo echo "[Service]" >> /etc/systemd/system/mongod.service
-              sudo echo "User=$USER" >> /etc/systemd/system/mongod.service
-              sudo echo "ExecStart=/usr/bin/mongod --config /etc/mongod.conf" >> /etc/systemd/system/mongod.service
-              sudo echo "" >> /etc/systemd/system/mongod.service
-              sudo echo "[Install]" >> /etc/systemd/system/mongod.service
-              sudo echo "WantedBy=multi-user.target" >> /etc/systemd/system/mongod.service
-              sudo chmod 644 /etc/systemd/system/mongod.service
-
-        - name: Create config file for MongoDB
-          run: |
-              sudo touch /etc/mongod.conf
-              sudo chmod 666 /etc/mongod.conf
-              sudo echo "storage:" >> /etc/mongod.conf
-              sudo echo "  dbPath: /var/lib/mongodb" >> /etc/mongod.conf
-              sudo echo "  journal:" >> /etc/mongod.conf
-              sudo echo "    enabled: true" >> /etc/mongod.conf
-              sudo echo "systemLog:" >> /etc/mongod.conf
-              sudo echo "  destination: file" >> /etc/mongod.conf
-              sudo echo "  logAppend: true" >> /etc/mongod.conf
-              sudo echo "  path: /var/log/mongodb/mongod.log" >> /etc/mongod.conf
-              sudo echo "net:" >> /etc/mongod.conf
-              sudo echo "  port: 27017" >> /etc/mongod.conf
-              sudo echo "  bindIp: 127.0.0.1" >> /etc/mongod.conf
-
-        - name: Start MongoDB
-          run: |
-            sudo systemctl start mongod
-            sudo systemctl status mongod
+              mongodb-version: '4.4.9'
+              mongodb-port: 27017
+              mongodb-bin: /usr/bin/mongod
+              mongodb-args: --quiet --bind_ip
 
         - name: Test WeStack
           run: |
