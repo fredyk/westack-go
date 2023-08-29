@@ -148,7 +148,7 @@ jobs:
         - name: Process tests output
           run: |
             # Select from test_output.txt only lines containing " FAIL: "
-            all_failed_tests=$(cat test_output.txt | grep ' FAIL: ')
+            all_failed_tests=$(cat test_output.txt | grep ' FAIL: ' | sed '/^$/d')
             echo "Tests failed:"
             echo $all_failed_tests
             # Use -z to check if string is empty
