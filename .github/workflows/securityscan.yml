@@ -38,7 +38,6 @@ jobs:
         run: |
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git config --global user.name "github-actions[bot]"
-          # Merge master, abort if there are conflicts
           git merge origin/master --allow-unrelated-histories --no-edit -X theirs || git merge --abort
           # Beta
           git merge origin/beta --allow-unrelated-histories --no-edit -X theirs || git merge --abort
