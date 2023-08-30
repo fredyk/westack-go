@@ -36,10 +36,12 @@ jobs:
 
       - name: Merge multiple branches
         run: |
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git config --global user.name "github-actions[bot]"
           # Merge master, abort if there are conflicts
-          git merge origin/master --allow-unrelated-histories --no-commit || git merge --abort
+          git merge origin/master --allow-unrelated-histories --no-edit || git merge --abort
           # Beta
-          git merge origin/beta --allow-unrelated-histories --no-commit || git merge --abort
+          git merge origin/beta --allow-unrelated-histories --no-edit || git merge --abort
 
       - name: Set up Go
         uses: actions/setup-go@v4
