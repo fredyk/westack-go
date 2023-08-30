@@ -85,6 +85,7 @@ jobs:
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git config --global user.name "github-actions[bot]"
           git add .
+          git stash
           # git push origin update-dependencies
           # replace non-alphanumeric characters with scores
           escaped_module=${{ steps.get_changed_dependency.outputs.escaped_module }}
@@ -92,6 +93,7 @@ jobs:
           git checkout -b update-dependency-$escaped_module
           git config pull.rebase true
           git pull --rebase origin update-dependency-$escaped_module || true
+          git stash pop
           git commit -m "[dep-bot] Updated $module to $version"
           git push origin update-dependency-$escaped_module
           # Obtain full commit sha
