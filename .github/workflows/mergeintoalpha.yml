@@ -3,6 +3,7 @@ on:
   pull_request:
     branches:
       - alpha
+      - update-dependencies
     types: [opened, synchronize, reopened]
 
 jobs:
