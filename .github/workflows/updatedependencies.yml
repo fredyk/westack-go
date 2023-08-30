@@ -61,13 +61,13 @@ jobs:
       - name: Revert go.mod and apply single change
         if: steps.get_changed_dependency.outputs.first_changed != ''
         run: |
-          git checkout --
+          git checkout -- go.mod go.sum
           # Parse first_changed into module and version
           module=$(echo "${{ steps.get_changed_dependency.outputs.first_changed }}" | cut -d' ' -f1)
           version=$(echo "${{ steps.get_changed_dependency.outputs.first_changed }}" | cut -d' ' -f2)
           echo "new_version=$version" >> $GITHUB_OUTPUT
           echo "Changed module: $module"
-          go get -u $module
+          go get $module@$version
           go mod tidy
           go mod verify
           go mod download 
