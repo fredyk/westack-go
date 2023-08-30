@@ -105,10 +105,10 @@ jobs:
         uses: peter-evans/create-pull-request@v3
         with:
             token: ${{ secrets.PULL_REQUEST_TOKEN }}
-            commit-message: "[dep-bot] Updated ${{ steps.get_changed_dependency.outputs.first_changed }} to ${{ steps.get_changed_dependency.outputs.version }}"
-            title: "[dep-bot] Updated ${{ steps.get_changed_dependency.outputs.first_changed }} to ${{ steps.get_changed_dependency.outputs.version }}"
+            commit-message: "[dep-bot] Updated ${{ steps.get_changed_dependency.outputs.module }} to ${{ steps.get_changed_dependency.outputs.version }}"
+            title: "[dep-bot] Updated ${{ steps.get_changed_dependency.outputs.module }} to ${{ steps.get_changed_dependency.outputs.version }}"
             body: |
-              Updated ${{ steps.get_changed_dependency.outputs.first_changed }} to ${{ steps.get_changed_dependency.outputs.version }}
+              Updated ${{ steps.get_changed_dependency.outputs.module }} to ${{ steps.get_changed_dependency.outputs.version }}
             branch: refs/heads/update-dependency-${{ steps.get_changed_dependency.outputs.escaped_module }}
             base: update-dependencies
             labels: |
