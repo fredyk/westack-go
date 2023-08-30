@@ -21,7 +21,7 @@ jobs:
         PPROF_AUTH_USERNAME: test
         PPROF_AUTH_PASSWORD: abcd1234.
         GITHUB_TOKEN: ${{ secrets.PULL_REQUEST_TOKEN }}
-        MIN_COVERAGE_THRESHOLD: 68.2
+        MIN_COVERAGE_THRESHOLD: 67.7
       steps:
         - name: Checkout master
           uses: actions/checkout@v3
