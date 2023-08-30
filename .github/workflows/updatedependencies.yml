@@ -84,6 +84,7 @@ jobs:
           # git push origin update-dependencies
           # replace non-alphanumeric characters with scores
           escaped_module=$(echo "$module" | sed 's/[^a-zA-Z0-9]/-/g')
+          echo "escaped_module=$escaped_module" >> $GITHUB_OUTPUT
           # Create new branch and push. If it already exists in remote, it will fail, need fetch and pull first
           git checkout -b update-dependency-$escaped_module
           git pull origin update-dependency-$escaped_module || true
