@@ -34,11 +34,9 @@ jobs:
       - name: Merge multiple branches
         run: |
           # Merge master, abort if there are conflicts
-          git merge master || git merge --abort
+          git merge origin/master || git merge --abort
           # Beta
-          git merge beta || git merge --abort
-          # Alpha
-          git merge main || git merge --abort
+          git merge origin/beta || git merge --abort
 
       - name: Set up Go
         uses: actions/setup-go@v4
