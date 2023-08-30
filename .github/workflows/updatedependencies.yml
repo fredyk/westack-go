@@ -1,8 +1,8 @@
 name: Update Dependencies
 on:
   schedule:
-      - cron: '0 0/6 * * *'
-      - cron: '56 10 * * *'
+      - cron: '0 2,8,14,20 * * *'
+      - cron: '14 11 * * *'
   push:
     branches:
       - update-dependencies
