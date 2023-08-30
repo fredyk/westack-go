@@ -42,7 +42,6 @@ jobs:
       - name: Select first changed dependency from go.mod
         id: get_changed_dependency
         run: |
-          # Only first
           first_changed=$(git diff -- go.mod | grep -E '^\+[[:space:]]{1,}([a-z0-9\/\.\-]+) [a-z0-9\.\-]+' | head -n 1)
           # Trim leading +
           first_changed=$(echo "$first_changed" | sed 's/^\+//')
