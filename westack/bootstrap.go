@@ -147,6 +147,10 @@ func (app *WeStack) loadDataSources() {
 
 			if app.dataSourceOptions != nil {
 				ds.Options = (*app.dataSourceOptions)[dsName]
+				if ds.Options == nil {
+					ds.Options = &datasource.Options{}
+				}
+				ds.Options.RetryOnError = dsViper.GetBool(key + ".retryOnError")
 			}
 
 			err := ds.Initialize()

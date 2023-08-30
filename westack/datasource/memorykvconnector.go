@@ -159,6 +159,10 @@ func (connector *MemoryKVConnector) Ping(parentCtx context.Context) error {
 	return nil
 }
 
+func (connector *MemoryKVConnector) SetTimeout(seconds float32) {
+	// We don't need to set timeout for memorykv
+}
+
 func (connector *MemoryKVConnector) GetClient() interface{} {
 	return connector.db
 }

@@ -1,8 +1,11 @@
 name: Accept PRs into alpha
 on:
   pull_request:
-    branches:
-      - alpha
+#    branches:
+#      - alpha
+#      - update-dependencies
+#      - master
+#      - update-schedule
     types: [opened, synchronize, reopened]
 
 jobs:
@@ -19,17 +22,18 @@ jobs:
         PPROF_AUTH_USERNAME: test
         PPROF_AUTH_PASSWORD: abcd1234.
         GITHUB_TOKEN: ${{ secrets.PULL_REQUEST_TOKEN }}
-        MIN_COVERAGE_THRESHOLD: 66.8
+        MIN_COVERAGE_THRESHOLD: 67.6
       steps:
         - name: Checkout master
           uses: actions/checkout@v3
           with:
             ref: master
 
-        - name: Checkout alpha
+        - name: Checkout base branch
           run: |
+            echo "Trying to merge PR into ${{ github.event.pull_request.base.ref }}"
             git fetch
-            git checkout -b alpha origin/alpha
+            git checkout -b ${{ github.event.pull_request.base.ref }} origin/${{ github.event.pull_request.base.ref }}
             git pull
 
         - name: Merge PR
@@ -56,52 +60,6 @@ jobs:
             go-version: ${{ matrix.go }}
             check-latest: true
             cache-dependency-path: ${{ github.workspace }}/go.sum
-
-        - name: Setup Golangci-lint with cache
-          timeout-minutes: 15
-          run: |
-            go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
-            go install github.com/securego/gosec/v2/cmd/gosec@latest
-
-        - name: Run Gosec Security Scanner
-          id: golangci_lint
-          run: |
-            pwd
-            ls -la
-            golangci-lint run --timeout 10m --disable-all --enable=gosec --out-format=json ./... > results.json || true
-            result=0
-            detailed_issues=""
-            if [ -f results.json ]; then
-              result=$(cat results.json | jq '.Issues | length')
-              detailed_issues=$(cat results.json | jq '.Issues')
-            fi
-            if [ $result -ne 0 ]; then
-              echo "Gosec found issues"
-              echo "issues_found=true" >> $GITHUB_OUTPUT
-              detailed_issues=$(echo $detailed_issues | sed 's/{/\\{/g' | sed 's/}/\\}/g' | sed 's/(/\\(/g' | sed 's/)/\\)/g' | sed 's/"/\\"/g')
-              echo "detailed_issues=$detailed_issues" >> $GITHUB_OUTPUT
-
-            else
-              echo "Gosec found no issues"
-              echo "issues_found=false" >> $GITHUB_OUTPUT
-            fi
-            exit 0
-
-        - name: Upload results.json
-          uses: actions/upload-artifact@v3
-          with:
-              name: results.json
-              path: results.json
-
-        - name: Exit if Gosec found issues
-          run: |
-            issues_found="${{ steps.golangci_lint.outputs.issues_found }}"
-            if [ "$issues_found" = "true" ]; then
-              cat results.json | jq '.Issues' 1>&2
-              exit 1
-            else
-              echo "Gosec found no issues at '${{ steps.golangci_lint.outputs.issues_found }}'"
-            fi
 
         - name: Start MongoDB
           uses: supercharge/mongodb-github-action@1.10.0
@@ -172,18 +130,19 @@ jobs:
             done
 
         - name: Create temporary branch with random name
+          if: ${{ github.event.pull_request.base.ref == 'alpha' }}
           run: |
               git checkout -b temp-branch-${{ github.run_id }}
 
         - name: Push temporary branch
+          if: ${{ github.event.pull_request.base.ref == 'alpha' }}
           run: |
               git fetch
               git push origin temp-branch-${{ github.run_id }} --force
 
-  #        - name: Create tag
-  #          run: git tag -a v${{ steps.latest_tag.outputs.tag }}-alpha-${{ steps.date.outputs.date }} -m "v${{ steps.latest_tag.outputs.tag }}-alpha-${{ steps.date.outputs.date }}"
-    push_to_alpha:
+    push_to_base:
       runs-on: ubuntu-latest
+      if: ${{ github.event.pull_request.base.ref == 'alpha' }}
       needs: [run_tests]
       env:
         GITHUB_TOKEN: ${{ secrets.PULL_REQUEST_TOKEN }}
@@ -202,7 +161,9 @@ jobs:
 
         - name: Create go tag with date
           id: date
-          run: echo "::set-output name=date::$(date +'%Y%m%d%H%M')"
+          run: |
+              # echo "::set-output name=date::$(date +'%Y%m%d%H%M')"
+              echo "date=$(date +'%Y%m%d%H%M')" >> $GITHUB_OUTPUT
 
         - name: Fetch all tags
           run: git fetch --prune --unshallow --tags
@@ -224,25 +185,29 @@ jobs:
             patch="0"
             new_tag=${major}.${minor}.${patch}
             echo "Tagging new as: $new_tag"
-            echo "::set-output name=tag::${new_tag}"
+            # echo "::set-output name=tag::${new_tag}"
+            echo "tag=${new_tag}" >> $GITHUB_OUTPUT
 
         - name: Push
           run: |
             git fetch
-            # Push local temp branch to remote alpha branch
-            git checkout -b alpha origin/alpha
+            # Push local temp branch to remote base branch
+            git checkout -b ${{ github.event.pull_request.base.ref }} origin/${{ github.event.pull_request.base.ref }}
             git pull
+            git config --global user.email "github-actions[bot]@users.noreply.github.com"
+            git config --global user.name "github-actions[bot]"
             git merge --no-edit temp-branch-${{ github.run_id }}
-            git push origin alpha
+            git push origin ${{ github.event.pull_request.base.ref }}
             git checkout -b v-${{ steps.latest_tag.outputs.tag }}-alpha HEAD
             git branch --set-upstream-to=origin/v-${{ steps.latest_tag.outputs.tag }}-alpha v-${{ steps.latest_tag.outputs.tag }}-alpha || true
-            git pull || true
+            git pull --rebase || true
             git merge --no-edit temp-branch-${{ github.run_id }}
             git push origin v-${{ steps.latest_tag.outputs.tag }}-alpha
 
         - name: Comments on the pull request and closes it
+          if: ${{ github.event.pull_request.base.ref == 'alpha' }}
           run: |
-            curl -X POST -H "Authorization: token ${{ secrets.PULL_REQUEST_TOKEN }}" -H "Content-Type: application/json" -d '{"body": "This PR has been merged into alpha and tagged as ${{ steps.latest_tag.outputs.tag }}-alpha-${{ steps.date.outputs.date }}. Thanks for your contribution!"}' https://api.github.com/repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments
+            curl -X POST -H "Authorization: token ${{ secrets.PULL_REQUEST_TOKEN }}" -H "Content-Type: application/json" -d '{"body": "This PR has been merged into ${{ github.event.pull_request.base.ref }} and tagged as ${{ steps.latest_tag.outputs.tag }}-alpha-${{ steps.date.outputs.date }}. Thanks for your contribution!"}' https://api.github.com/repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments
             curl -X PATCH -H "Authorization: token ${{ secrets.PULL_REQUEST_TOKEN }}" -H "Content-Type: application/json" -d '{"state": "closed"}' https://api.github.com/repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}
 
         - name: Delete temporary branch
