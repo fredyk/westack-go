@@ -31,7 +31,7 @@ jobs:
           run: |
             echo "Trying to merge PR into ${{ github.event.pull_request.base.ref }}"
             git fetch
-            git checkout -b alpha origin/alpha
+            git checkout -b ${{ github.event.pull_request.base.ref }} origin/${{ github.event.pull_request.base.ref }}
             git pull
 
         - name: Merge PR
@@ -136,9 +136,7 @@ jobs:
               git fetch
               git push origin temp-branch-${{ github.run_id }} --force
 
-  #        - name: Create tag
-  #          run: git tag -a v${{ steps.latest_tag.outputs.tag }}-alpha-${{ steps.date.outputs.date }} -m "v${{ steps.latest_tag.outputs.tag }}-alpha-${{ steps.date.outputs.date }}"
-    push_to_alpha:
+    push_to_base:
       runs-on: ubuntu-latest
       needs: [run_tests]
       env:
@@ -188,13 +186,13 @@ jobs:
         - name: Push
           run: |
             git fetch
-            # Push local temp branch to remote alpha branch
-            git checkout -b alpha origin/alpha
+            # Push local temp branch to remote base branch
+            git checkout -b ${{ github.event.pull_request.base.ref }} origin/${{ github.event.pull_request.base.ref }}
             git pull
             git config --global user.email "github-actions[bot]@users.noreply.github.com"
             git config --global user.name "github-actions[bot]"
             git merge --no-edit temp-branch-${{ github.run_id }}
-            git push origin alpha
+            git push origin ${{ github.event.pull_request.base.ref }}
             git checkout -b v-${{ steps.latest_tag.outputs.tag }}-alpha HEAD
             git branch --set-upstream-to=origin/v-${{ steps.latest_tag.outputs.tag }}-alpha v-${{ steps.latest_tag.outputs.tag }}-alpha || true
             git pull || true
@@ -203,7 +201,7 @@ jobs:
 
         - name: Comments on the pull request and closes it
           run: |
-            curl -X POST -H "Authorization: token ${{ secrets.PULL_REQUEST_TOKEN }}" -H "Content-Type: application/json" -d '{"body": "This PR has been merged into alpha and tagged as ${{ steps.latest_tag.outputs.tag }}-alpha-${{ steps.date.outputs.date }}. Thanks for your contribution!"}' https://api.github.com/repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments
+            curl -X POST -H "Authorization: token ${{ secrets.PULL_REQUEST_TOKEN }}" -H "Content-Type: application/json" -d '{"body": "This PR has been merged into ${{ github.event.pull_request.base.ref }} and tagged as ${{ steps.latest_tag.outputs.tag }}-alpha-${{ steps.date.outputs.date }}. Thanks for your contribution!"}' https://api.github.com/repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments
             curl -X PATCH -H "Authorization: token ${{ secrets.PULL_REQUEST_TOKEN }}" -H "Content-Type: application/json" -d '{"state": "closed"}' https://api.github.com/repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}
 
         - name: Delete temporary branch
