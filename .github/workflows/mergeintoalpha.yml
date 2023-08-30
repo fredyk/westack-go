@@ -65,6 +65,14 @@ jobs:
             go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
             go install github.com/securego/gosec/v2/cmd/gosec@latest
 
+        - name: Install Nancy
+          run: |
+            go install github.com/sonatype-nexus-community/nancy@latest
+
+        - name: Match dependencies from go.mod with latest Go Vulnerabilities
+          run: |
+            go list -m -json all | nancy sleuth --exclude-vulnerability-file .nancy-ignore
+
         - name: Run Gosec Security Scanner
           id: golangci_lint
           run: |
