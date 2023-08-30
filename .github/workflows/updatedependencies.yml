@@ -2,7 +2,7 @@ name: Update Dependencies
 on:
   schedule:
       - cron: '0 2,8,14,20 * * *'
-      - cron: '45 11 * * *'
+      - cron: '10 12 * * *'
   push:
     branches:
       - update-dependencies
