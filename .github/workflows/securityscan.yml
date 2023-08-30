@@ -1,8 +1,8 @@
 name: Security Scan
 on:
   schedule:
-    - cron: '35 8 * * *'
-    - cron: '0 12 * * *'
+    - cron: '50 8 * * *'
+    - cron: '0 8,9,20 * * *'
   push:
     branches:
       - master
