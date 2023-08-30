@@ -91,6 +91,7 @@ jobs:
           escaped_module=${{ steps.get_changed_dependency.outputs.escaped_module }}
           # Create new branch and push. If it already exists in remote, it will fail, need fetch and pull first
           git checkout -b update-dependency-$escaped_module
+          git config pull.rebase true
           git pull origin update-dependency-$escaped_module || true
           git commit -m "[dep-bot] Updated $module to $version"
           git push origin update-dependency-$escaped_module
