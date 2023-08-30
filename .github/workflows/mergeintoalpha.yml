@@ -1,10 +1,11 @@
 name: Accept PRs into alpha
 on:
   pull_request:
-    branches:
-      - alpha
-      - update-dependencies
-      - master
+#    branches:
+#      - alpha
+#      - update-dependencies
+#      - master
+#      - update-
     types: [opened, synchronize, reopened]
 
 jobs:
