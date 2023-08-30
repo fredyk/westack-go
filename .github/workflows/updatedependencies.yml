@@ -42,9 +42,14 @@ jobs:
       - name: Select first changed dependency from go.mod
         id: get_changed_dependency
         run: |
-          first_changed=$(git diff --name-only HEAD~1 HEAD | grep go.mod | head -n 1)
-          # Trim leading and trailing whitespace. And empty lines
-          first_changed=$(echo "$first_changed" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+          # Only first
+          first_changed=$(git diff -- go.mod | grep -E '^\+[[:space:]]{1,}([a-z0-9\/\.\-]+) [a-z0-9\.\-]+' | head -n 1)
+          # Trim leading +
+          first_changed=$(echo "$first_changed" | sed 's/^\+//')
+          # Trim optional trailing comments starting with //
+          first_changed=$(echo "$first_changed" | sed 's/[[:space:]]*\/\/.*$//')
+          # Trim leading and trailing whitespace. And empty lines.
+          first_changed=$(echo "$first_changed" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//;/^$/d')
           echo "Changed dependency: $first_changed"
           echo "first_changed=$first_changed" >> $GITHUB_OUTPUT
           # If nothing changed, exit
