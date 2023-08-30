@@ -33,7 +33,10 @@ jobs:
           run: |
             echo "Trying to merge PR into ${{ github.event.pull_request.base.ref }}"
             git fetch
-            git checkout -b ${{ github.event.pull_request.base.ref }} origin/${{ github.event.pull_request.base.ref }}
+            # Only if it is not master branch
+            if [ "${{ github.event.pull_request.base.ref }}" != "master" ]; then
+              git checkout -b ${{ github.event.pull_request.base.ref }} origin/${{ github.event.pull_request.base.ref }}
+            fi
             git pull
 
         - name: Merge PR
