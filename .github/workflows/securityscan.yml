@@ -9,11 +9,11 @@ on:
       - alpha
       - beta
   pull_request:
-      branches:
-        - master
-        - main
-        - alpha
-        - beta
+    branches:
+      - master
+      - main
+      - alpha
+      - beta
 
 jobs:
 
