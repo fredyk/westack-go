@@ -204,7 +204,9 @@ jobs:
 
         - name: Create go tag with date
           id: date
-          run: echo "::set-output name=date::$(date +'%Y%m%d%H%M')"
+          run: |
+              # echo "::set-output name=date::$(date +'%Y%m%d%H%M')"
+              echo "date=$(date +'%Y%m%d%H%M')" >> $GITHUB_OUTPUT
 
         - name: Fetch all tags
           run: git fetch --prune --unshallow --tags
@@ -226,7 +228,8 @@ jobs:
             patch="0"
             new_tag=${major}.${minor}.${patch}
             echo "Tagging new as: $new_tag"
-            echo "::set-output name=tag::${new_tag}"
+            # echo "::set-output name=tag::${new_tag}"
+            echo "tag=${new_tag}" >> $GITHUB_OUTPUT
 
         - name: Push
           run: |
