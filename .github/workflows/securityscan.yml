@@ -2,6 +2,7 @@ name: Security Scan
 on:
   schedule:
     - cron: '15 8 * * *'
+    - cron: '20 8,9 * * *'
     - cron: '0 12 * * *'
   push:
     branches:
