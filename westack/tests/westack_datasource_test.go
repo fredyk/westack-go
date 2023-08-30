@@ -51,3 +51,21 @@ func Test_Datasource_Ping(t *testing.T) {
 	time.Sleep(3200 * time.Millisecond)
 
 }
+
+func Test_Datasource_Ping_Will_Fail(t *testing.T) {
+
+	t.Parallel()
+
+	db, err := app.FindDatasource("db_expected_to_fail")
+	assert.NoError(t, err)
+	assert.NotNil(t, db)
+
+	// Wait 0.1 seconds, then change host and expect to fail
+	time.Sleep(100 * time.Millisecond)
+
+	db.SetTimeout(0.1)
+
+	// Wait 5.1 seconds to cover datasource ping interval
+	time.Sleep(5100 * time.Millisecond)
+
+}
