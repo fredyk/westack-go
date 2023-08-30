@@ -190,6 +190,8 @@ jobs:
             # Push local temp branch to remote alpha branch
             git checkout -b alpha origin/alpha
             git pull
+            git config --global user.email "github-actions[bot]@users.noreply.github.com"
+            git config --global user.name "github-actions[bot]"
             git merge --no-edit temp-branch-${{ github.run_id }}
             git push origin alpha
             git checkout -b v-${{ steps.latest_tag.outputs.tag }}-alpha HEAD
