@@ -28,8 +28,9 @@ jobs:
           with:
             ref: master
 
-        - name: Checkout alpha
+        - name: Checkout base branch
           run: |
+            echo "Trying to merge PR into ${{ github.event.pull_request.base.ref }}"
             git fetch
             git checkout -b alpha origin/alpha
             git pull
