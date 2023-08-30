@@ -28,24 +28,20 @@ jobs:
         with:
           ref: master
 
-      - name: Checkout beta
-        uses: actions/checkout@v3
-        with:
-          ref: beta
-
       - name: Checkout alpha
-        uses: actions/checkout@v3
-        with:
-          ref: alpha
+        run: |
+          git fetch
+          git checkout -b alpha origin/alpha
+          git pull
 
       - name: Merge multiple branches
         run: |
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git config --global user.name "github-actions[bot]"
           # Merge master, abort if there are conflicts
-          git merge origin/master --no-edit || git merge --abort
+          git merge origin/master --allow-unrelated-histories --no-edit -X theirs || git merge --abort
           # Beta
-          git merge origin/beta --no-edit || git merge --abort
+          git merge origin/beta --allow-unrelated-histories --no-edit -X theirs || git merge --abort
 
       - name: Set up Go
         uses: actions/setup-go@v4
