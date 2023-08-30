@@ -20,6 +20,8 @@ jobs:
 
   run_security_scans:
     runs-on: ubuntu-latest
+    env:
+      GITHUB_TOKEN: ${{ secrets.PULL_REQUEST_TOKEN }}
     steps:
       - name: Checkout master
         uses: actions/checkout@v3
