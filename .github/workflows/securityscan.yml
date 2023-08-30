@@ -8,6 +8,12 @@ on:
       - main
       - alpha
       - beta
+  pull_request:
+      branches:
+        - master
+        - main
+        - alpha
+        - beta
 
 jobs:
 
