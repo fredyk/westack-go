@@ -38,14 +38,40 @@ jobs:
       - name: Install Go Dependencies
         run: |
           go get -u ./...
+
+      - name: Select first changed dependency from go.mod
+        id: get_changed_dependency
+        run: |
+          first_changed=$(git diff --name-only HEAD~1 HEAD | grep go.mod | head -n 1)
+          # Trim leading and trailing whitespace. And empty lines
+          first_changed=$(echo "$first_changed" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+          echo "Changed dependency: $first_changed"
+          echo "first_changed=$first_changed" >> $GITHUB_OUTPUT
+          # If nothing changed, exit
+          if [ -z "$first_changed" ]; then
+              echo "No changes in go.mod"
+              exit 0
+          fi
+
+      - name: Revert go.mod and apply single change
+        if: steps.get_changed_dependency.outputs.first_changed != ''
+        run: |
+          git checkout --
+          # Parse first_changed into module and version
+          module=$(echo "${{ steps.get_changed_dependency.outputs.first_changed }}" | cut -d' ' -f1)
+          version=$(echo "${{ steps.get_changed_dependency.outputs.first_changed }}" | cut -d' ' -f2)
+          echo "new_version=$version" >> $GITHUB_OUTPUT
+          echo "Changed module: $module"
+          go get -u $module
           go mod tidy
           go mod verify
-          go mod download
+          go mod download 
 
       - name: Commit changes
+        if: steps.get_changed_dependency.outputs.first_changed != ''
         run: |
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git config --global user.name "github-actions[bot]"
           git add .
-          git commit -m "Update dependencies"
+          git commit -m "[dep-bot] Update ${{ steps.get_changed_dependency.outputs.first_changed }} to version ${{ steps.get_changed_dependency.outputs.new_version }}"
           git push origin update-dependencies
