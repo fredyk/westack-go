@@ -133,16 +133,19 @@ jobs:
             done
 
         - name: Create temporary branch with random name
+          if: ${{ github.event.pull_request.base.ref == 'alpha' }}
           run: |
               git checkout -b temp-branch-${{ github.run_id }}
 
         - name: Push temporary branch
+          if: ${{ github.event.pull_request.base.ref == 'alpha' }}
           run: |
               git fetch
               git push origin temp-branch-${{ github.run_id }} --force
 
     push_to_base:
       runs-on: ubuntu-latest
+      if: ${{ github.event.pull_request.base.ref == 'alpha' }}
       needs: [run_tests]
       env:
         GITHUB_TOKEN: ${{ secrets.PULL_REQUEST_TOKEN }}
