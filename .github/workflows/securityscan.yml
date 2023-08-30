@@ -51,6 +51,8 @@ jobs:
       - name: Install Nancy
         run: |
           go install github.com/sonatype-nexus-community/nancy@latest
+          # Update nancy sleuth database
+          nancy update
 
       - name: Match dependencies from go.mod with latest Go Vulnerabilities
         run: |
