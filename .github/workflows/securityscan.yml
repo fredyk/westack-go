@@ -42,6 +42,11 @@ jobs:
           git merge origin/master --allow-unrelated-histories --no-edit -X theirs || git merge --abort
           # Beta
           git merge origin/beta --allow-unrelated-histories --no-edit -X theirs || git merge --abort
+          # if pull_request, also merge it using event sha
+          if [ -n "$GITHUB_HEAD_REF" ]; then
+            echo "Merging pull request $GITHUB_HEAD_REF"
+            git merge --no-edit -X theirs --allow-unrelated-histories $GITHUB_SHA || git merge --abort
+          fi
 
       - name: Set up Go
         uses: actions/setup-go@v4
