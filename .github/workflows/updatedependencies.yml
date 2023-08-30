@@ -109,7 +109,7 @@ jobs:
             title: "[dep-bot] Updated ${{ steps.get_changed_dependency.outputs.first_changed }} to ${{ steps.get_changed_dependency.outputs.version }}"
             body: |
               Updated ${{ steps.get_changed_dependency.outputs.first_changed }} to ${{ steps.get_changed_dependency.outputs.version }}
-            branch: refs/heads/${{ steps.get_changed_dependency.outputs.escaped_module }}
+            branch: refs/heads/update-dependency-${{ steps.get_changed_dependency.outputs.escaped_module }}
             base: update-dependencies
             labels: |
               auto-merge
