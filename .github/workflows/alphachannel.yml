@@ -5,7 +5,7 @@ on:
   push:
     branches-ignore:
       - alpha
-      - update-dependency-* # ignore branches created by the update-dependencies workflow
+#      - update-dependency-* # ignore branches created by the update-dependencies workflow
 
 jobs:
 
