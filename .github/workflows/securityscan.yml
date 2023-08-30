@@ -37,9 +37,9 @@ jobs:
       - name: Merge multiple branches
         run: |
           # Merge master, abort if there are conflicts
-          git merge origin/master --allow-unrelated-histories || git merge --abort
+          git merge origin/master --allow-unrelated-histories --no-commit || git merge --abort
           # Beta
-          git merge origin/beta --allow-unrelated-histories || git merge --abort
+          git merge origin/beta --allow-unrelated-histories --no-commit || git merge --abort
 
       - name: Set up Go
         uses: actions/setup-go@v4
