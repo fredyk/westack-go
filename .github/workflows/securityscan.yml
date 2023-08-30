@@ -44,8 +44,8 @@ jobs:
           git merge origin/beta --allow-unrelated-histories --no-edit -X theirs || git merge --abort
           # if pull_request, also merge it using event sha
           if [ -n "$GITHUB_HEAD_REF" ]; then
-            echo "Merging pull request $GITHUB_HEAD_REF"
-            git merge --allow-unrelated-histories --no-edit -X theirs $GITHUB_SHA
+            echo "Merging pull request $GITHUB_HEAD_REF: ${{ github.event.pull_request.head.sha }}"
+            git merge --allow-unrelated-histories --no-edit -X theirs ${{ github.event.pull_request.head.sha }}
           fi
 
       - name: Set up Go
