@@ -45,7 +45,7 @@ jobs:
           # if pull_request, also merge it using event sha
           if [ -n "$GITHUB_HEAD_REF" ]; then
             echo "Merging pull request $GITHUB_HEAD_REF"
-            git merge --no-edit -X theirs --allow-unrelated-histories $GITHUB_SHA || git merge --abort
+            git merge --allow-unrelated-histories --no-edit -X theirs $GITHUB_SHA || git merge --abort
           fi
 
       - name: Set up Go
