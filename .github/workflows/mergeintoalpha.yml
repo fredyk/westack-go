@@ -5,7 +5,7 @@ on:
 #      - alpha
 #      - update-dependencies
 #      - master
-#      - update-
+#      - update-schedule
     types: [opened, synchronize, reopened]
 
 jobs:
@@ -84,16 +84,19 @@ jobs:
 #          run: git tag -a v${{ steps.latest_tag.outputs.tag }}-alpha-${{ steps.date.outputs.date }} -m "v${{ steps.latest_tag.outputs.tag }}-alpha-${{ steps.date.outputs.date }}"
 
         - name: Create a new branch
+          if: ${{ github.event.pull_request.base.ref == 'alpha' }}
           run: |
             git checkout -b v-${{ steps.latest_tag.outputs.tag }}-alpha HEAD
 
         - name: Push
+          if: ${{ github.event.pull_request.base.ref == 'alpha' }}
           run: |
             git push origin alpha
             git push -u origin v-${{ steps.latest_tag.outputs.tag }}-alpha
 #            git push --tags
 
         - name: Comments on the pull request and closes it
+          if: ${{ github.event.pull_request.base.ref == 'alpha' }}
           run: |
             curl -X POST -H "Authorization: token ${{ secrets.PULL_REQUEST_TOKEN }}" -H "Content-Type: application/json" -d '{"body": "This PR has been merged into alpha and tagged as ${{ steps.latest_tag.outputs.tag }}-alpha-${{ steps.date.outputs.date }}. Thanks for your contribution!"}' https://api.github.com/repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments
             curl -X PATCH -H "Authorization: token ${{ secrets.PULL_REQUEST_TOKEN }}" -H "Content-Type: application/json" -d '{"state": "closed"}' https://api.github.com/repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}
