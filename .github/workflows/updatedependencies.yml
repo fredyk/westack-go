@@ -75,8 +75,29 @@ jobs:
       - name: Commit changes
         if: steps.get_changed_dependency.outputs.first_changed != ''
         run: |
+          module=$(echo "${{ steps.get_changed_dependency.outputs.first_changed }}" | cut -d' ' -f1)
+          version=$(echo "${{ steps.get_changed_dependency.outputs.first_changed }}" | cut -d' ' -f2)
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git config --global user.name "github-actions[bot]"
           git add .
-          git commit -m "[dep-bot] Update ${{ steps.get_changed_dependency.outputs.first_changed }} to version ${{ steps.get_changed_dependency.outputs.new_version }}"
-          git push origin update-dependencies
+          git commit -m "[dep-bot] Updated $module to $version"
+          # git push origin update-dependencies
+          # replace non-alphanumeric characters with scores
+          escaped_module=$(echo "$module" | sed 's/[^a-zA-Z0-9]/-/g')
+          # Create new branch
+          git push origin HEAD:refs/heads/update-dependency-$escaped_module
+
+      - name: Create Pull Request
+        if: steps.get_changed_dependency.outputs.first_changed != ''
+        uses: peter-evans/create-pull-request@v3
+        with:
+            token: ${{ secrets.PULL_REQUEST_TOKEN }}
+            commit-message: "[dep-bot] Updated ${{ steps.get_changed_dependency.outputs.first_changed }} to ${{ steps.get_changed_dependency.outputs.new_version }}"
+            title: "[dep-bot] Updated ${{ steps.get_changed_dependency.outputs.first_changed }} to ${{ steps.get_changed_dependency.outputs.new_version }}"
+            body: |
+              Updated ${{ steps.get_changed_dependency.outputs.first_changed }} to ${{ steps.get_changed_dependency.outputs.new_version }}
+            branch: update-dependency-${{ steps.get_changed_dependency.outputs.escaped_module }}
+            base: update-dependencies
+            labels: |
+              auto-merge
+              auto-merge-squash
