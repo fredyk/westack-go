@@ -105,19 +105,6 @@ func (connector *MongoDBConnector) FindMany(collectionName string, lookups *wst.
 	if err != nil {
 		return nil, err
 	}
-	// Close mongo cursor outside of this function
-	//defer func(cursor *mongo.Cursor, ctx context.Context) {
-	//	err := cursor.Close(ctx)
-	//	if err != nil {
-	//		panic(err)
-	//	}
-	//}(cursor, ctx)
-	//var documents wst.A
-	//err = cursor.All(ds.Context, &documents)
-	//if err != nil {
-	//	return nil, err
-	//}
-	//return &documents, nil
 	return cursor, nil
 }
 
@@ -222,7 +209,7 @@ func (connector *MongoDBConnector) UpdateById(collectionName string, id interfac
 	delete(*data, "id")
 	delete(*data, "_id")
 	if _, err := collection.UpdateOne(connector.context, wst.M{"_id": id}, wst.M{"$set": *data}); err != nil {
-		panic(err)
+		return nil, err
 	}
 	return connector.findByObjectId(collectionName, id, nil)
 }
