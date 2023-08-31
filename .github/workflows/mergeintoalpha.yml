@@ -214,9 +214,14 @@ jobs:
         - name: Sets the pull request milestone using ${{ needs.push_to_base.outputs.tag }}
           run: |
             # First converts tag "x.y.z" to milestone "vx.y"
-            milestone=$(echo ${{ needs.push_to_base.outputs.tag }} | sed 's/\([0-9]*\.[0-9]*\)\.[0-9]*/v\1/')
-            echo "Milestone: $milestone"
-            curl -X PATCH -H "Authorization: token ${{ secrets.PULL_REQUEST_TOKEN }}" -H "Content-Type: application/json" -d "{\"milestone\":{\"title\":\"$milestone\"}}" https://api.github.com/repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}
+            milestone_title=$(echo ${{ needs.push_to_base.outputs.tag }} | sed 's/\([0-9]*\.[0-9]*\)\.[0-9]*/v\1/')
+            echo "Milestone: $milestone_title"
+            # List milestones to obtain milestone number
+            curl -H "Authorization: token ${{ secrets.PULL_REQUEST_TOKEN }}" https://api.github.com/repos/${{ github.repository }}/milestones > milestones.json
+            # milestone title is in the json as "title": "vx.y"
+            milestone_number=$(cat milestones.json | jq -r --arg milestone_title "$milestone_title" '.[] | select(.title == $milestone_title) | .number')
+            echo "Milestone number: $milestone_number"
+            curl -X PATCH -H "Authorization: token ${{ secrets.PULL_REQUEST_TOKEN }}" -H "Content-Type: application/json" -d "{\"milestone\":$milestone_number}" https://api.github.com/repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}
 
         - name: Comments on the pull request and closes it
           run: |
