@@ -1,0 +1,34 @@
+{
+  "name": "publicUser",
+  "base": "User",
+  "public": true,
+  "properties": {
+    "email": {
+      "type": "string",
+      "required": true
+    },
+    "phone": {
+      "type": "string",
+      "default": ""
+    }
+  },
+  "hidden": ["password"],
+  "protected": [
+    "email",
+    "phone"
+  ],
+  "relations": {
+    "notes": {
+      "type": "hasMany",
+      "model": "Note"
+    }
+  },
+  "casbin": {
+    "policies": [
+      "$authenticated,*,read,allow"
+    ]
+  },
+  "mongo": {
+    "collection": "user"
+  }
+}

@@ -251,7 +251,7 @@ func loginUser(email string, password string, t *testing.T) (wst.M, error) {
 }
 
 func loginAsUsernameOrEmail(email string, password string, mode string, t *testing.T) (wst.M, error) {
-	request, err := http.NewRequest("POST", "http://localhost:8019/api/v1/users/login", jsonToReader(wst.M{
+	request, err := http.NewRequest("POST", "/api/v1/users/login", jsonToReader(wst.M{
 		mode:       email,
 		"password": password,
 	}))
@@ -261,7 +261,7 @@ func loginAsUsernameOrEmail(email string, password string, mode string, t *testi
 
 	request.Header.Set("Content-Type", "application/json")
 
-	response, err := http.DefaultClient.Do(request)
+	response, err := app.Server.Test(request)
 	if err != nil {
 		return nil, err
 	}

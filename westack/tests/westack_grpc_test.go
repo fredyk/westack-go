@@ -41,6 +41,7 @@ var userId primitive.ObjectID
 var noteId primitive.ObjectID
 var noteModel *model.Model
 var userModel *model.Model
+var publicUserModel *model.Model
 var customerModel *model.Model
 var orderModel *model.Model
 var storeModel *model.Model
@@ -602,6 +603,7 @@ func revertAllTests() error {
 	for _, toDeleteMap := range []*model.Model{
 		noteModel,
 		userModel,
+		publicUserModel,
 		customerModel,
 		orderModel,
 		storeModel,
