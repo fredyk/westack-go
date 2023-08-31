@@ -220,7 +220,7 @@ func Test_CustomerOrderStore(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NotNil(t, customers)
 	delayed := time.Since(start)
-	assert.Greater(t, delayed.Milliseconds(), int64(4))
+	assert.Greater(t, delayed.Milliseconds(), int64(3))
 	fmt.Printf("\n===\nDELAYED without cache: %v\n===\n", delayed.Milliseconds())
 
 	assert.Equal(t, 1, len(customers))

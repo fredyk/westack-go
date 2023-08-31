@@ -47,6 +47,8 @@ func ReplaceObjectIds(data interface{}) (interface{}, error) {
 		return data, nil
 	case primitive.ObjectID:
 		return data, nil
+	case *primitive.ObjectID:
+		return data, nil
 	case time.Time:
 		return data, nil
 	case primitive.DateTime:

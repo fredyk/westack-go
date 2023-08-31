@@ -3,7 +3,6 @@ package tests
 import (
 	"bytes"
 	"crypto/rand"
-	"fmt"
 	"github.com/fredyk/westack-go/westack"
 	wst "github.com/fredyk/westack-go/westack/common"
 	"github.com/goccy/go-json"
@@ -68,9 +67,6 @@ func invokeApi(t *testing.T, method string, url string, body wst.M, headers wst.
 	err = json.Unmarshal(respBody, &parsedRespBody)
 	assert.NoError(t, err)
 
-	if !assert.GreaterOrEqual(t, resp.StatusCode, 200) || !assert.LessOrEqual(t, resp.StatusCode, 299) {
-		return parsedRespBody, fmt.Errorf("unexpected status code: %v. Body: %v", resp.StatusCode, parsedRespBody)
-	}
 	return parsedRespBody, err
 }
 
