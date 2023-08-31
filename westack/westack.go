@@ -86,9 +86,12 @@ func (app *WeStack) FindModelsWithClass(modelClass string) (foundModels []*model
 
 func (app *WeStack) Boot(customRoutesCallbacks ...func(app *WeStack)) {
 
-	app.loadDataSources()
+	err := app.loadDataSources()
+	if err != nil {
+		log.Fatalf("Error while loading datasources: %v", err)
+	}
 
-	err := app.loadModels()
+	err = app.loadModels()
 	if err != nil {
 		log.Fatalf("Error while loading models: %v", err)
 	}
@@ -136,7 +139,10 @@ func (app *WeStack) Boot(customRoutesCallbacks ...func(app *WeStack)) {
 		app.Middleware(compress.New(app.Options.CompressionConfig))
 	}
 
-	app.loadModelsFixedRoutes()
+	err = app.loadModelsFixedRoutes()
+	if err != nil {
+		log.Fatalf("Error while loading models fixed routes: %v", err)
+	}
 
 	systemContext := &model.EventContext{
 		Bearer: &model.BearerToken{User: &model.BearerUser{System: true}},
@@ -337,11 +343,11 @@ func New(options ...Options) *WeStack {
 			appViper.SetConfigName("config") // name of config file (without extension)
 			err := appViper.ReadInConfig()   // Find and read the config file
 			if err != nil {
-				panic(fmt.Errorf("fatal error config file: %w", err))
+				log.Fatalf("fatal error config file: %w", err)
 			}
 			break
 		default:
-			panic(fmt.Errorf("fatal error config file: %w", err))
+			log.Fatalf("fatal error config file: %w", err)
 		}
 	}
 
