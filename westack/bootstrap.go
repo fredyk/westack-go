@@ -515,10 +515,11 @@ func (app *WeStack) setupModel(loadedModel *model.Model, dataSource *datasource.
 		})
 
 		deleteByIdHandler := func(ctx *model.EventContext) error {
-			deletedCount, err := loadedModel.DeleteById(ctx.ModelID)
+			deleteResult, err := loadedModel.DeleteById(ctx.ModelID)
 			if err != nil {
 				return err
 			}
+			deletedCount := deleteResult.DeletedCount
 			if deletedCount != 1 {
 				return wst.CreateError(fiber.ErrBadRequest, "BAD_REQUEST", fiber.Map{"message": fmt.Sprintf("Deleted %v instances for %v", deletedCount, ctx.ModelID)}, "Error")
 			}
