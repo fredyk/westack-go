@@ -114,3 +114,4 @@ jobs:
             labels: |
               auto-merge
               auto-merge-squash
+              delete-branch
