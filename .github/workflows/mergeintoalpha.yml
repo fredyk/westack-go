@@ -133,19 +133,19 @@ jobs:
             done
 
         - name: Create temporary branch with random name
-          if: ${{ github.event.pull_request.base.ref == 'alpha' }}
+          if: ${{ contains(github.event.pull_request.labels.*.name, 'auto-merge') }}
           run: |
               git checkout -b temp-branch-${{ github.run_id }}
 
         - name: Push temporary branch
-          if: ${{ github.event.pull_request.base.ref == 'alpha' }}
+          if: ${{ contains(github.event.pull_request.labels.*.name, 'auto-merge') }}
           run: |
               git fetch
               git push origin temp-branch-${{ github.run_id }} --force
 
     push_to_base:
       runs-on: ubuntu-latest
-      if: ${{ github.event.pull_request.base.ref == 'alpha' }}
+      if: ${{ contains(github.event.pull_request.labels.*.name, 'auto-merge') }}
       needs: [run_tests]
       env:
         GITHUB_TOKEN: ${{ secrets.PULL_REQUEST_TOKEN }}
@@ -209,7 +209,7 @@ jobs:
 
     close_pr_success:
       runs-on: ubuntu-latest
-      if: ${{ github.event.pull_request.base.ref == 'alpha' }}
+      if: ${{ contains(github.event.pull_request.labels.*.name, 'auto-merge') }}
       needs: [run_tests, push_to_base]
       steps:
 
@@ -220,7 +220,7 @@ jobs:
 
     close_pr_failure:
         runs-on: ubuntu-latest
-        if: ${{ always() && github.event.pull_request.base.ref == 'alpha' && contains(needs.*.result, 'failure') }}
+        if: ${{ always() && contains(github.event.pull_request.labels.*.name, 'auto-merge') && contains(needs.*.result, 'failure') }}
         needs: [run_tests, push_to_base]
         steps:
 
@@ -231,7 +231,7 @@ jobs:
 
     cleanup_temp_branch:
       runs-on: ubuntu-latest
-      if: ${{ always() && github.event.pull_request.base.ref == 'alpha' }}
+      if: ${{ always() && contains(github.event.pull_request.labels.*.name, 'auto-merge') }}
       needs: [run_tests, push_to_base]
       steps:
 
