@@ -207,14 +207,31 @@ jobs:
             git merge --no-edit temp-branch-${{ github.run_id }}
             git push origin v-${{ steps.latest_tag.outputs.tag }}-alpha
 
+    close_pr_success:
+      runs-on: ubuntu-latest
+      if: ${{ success() && github.event.pull_request.base.ref == 'alpha' }}
+      needs: [run_tests, push_to_base]
+      steps:
+
         - name: Comments on the pull request and closes it
           run: |
-            curl -X POST -H "Authorization: token ${{ secrets.PULL_REQUEST_TOKEN }}" -H "Content-Type: application/json" -d '{"body": "This PR has been merged into ${{ github.event.pull_request.base.ref }} and tagged as ${{ steps.latest_tag.outputs.tag }}-alpha-${{ steps.date.outputs.date }}. Thanks for your contribution!"}' https://api.github.com/repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments
+            curl -X POST -H "Authorization: token ${{ secrets.PULL_REQUEST_TOKEN }}" -H "Content-Type: application/json" -d '{"body": "This PR has been merged into ${{ github.event.pull_request.base.ref }}. Thanks for your contribution!"}' https://api.github.com/repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments
             curl -X PATCH -H "Authorization: token ${{ secrets.PULL_REQUEST_TOKEN }}" -H "Content-Type: application/json" -d '{"state": "closed"}' https://api.github.com/repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}
+
+    close_pr_failure:
+        runs-on: ubuntu-latest
+        if: ${{ always() && github.event.pull_request.base.ref == 'alpha' && contains(needs.*.result, 'failure') }}
+        needs: [run_tests, push_to_base]
+        steps:
+
+          - name: Comments on the pull request and closes it
+            run: |
+                curl -X POST -H "Authorization: token ${{ secrets.PULL_REQUEST_TOKEN }}" -H "Content-Type: application/json" -d '{"body": "This PR has not been merged into ${{ github.event.pull_request.base.ref }}. Please fix the issues and re-open the PR."}' https://api.github.com/repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments
+                curl -X PATCH -H "Authorization: token ${{ secrets.PULL_REQUEST_TOKEN }}" -H "Content-Type: application/json" -d '{"state": "closed"}' https://api.github.com/repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}
 
     cleanup:
       runs-on: ubuntu-latest
-      if: always() && ${{ github.event.pull_request.base.ref == 'alpha' }}
+      if: ${{ always() && github.event.pull_request.base.ref == 'alpha' }}
       needs: [run_tests, push_to_base]
       steps:
 
