@@ -144,6 +144,9 @@ jobs:
       needs: [run_tests]
       env:
         GITHUB_TOKEN: ${{ secrets.PULL_REQUEST_TOKEN }}
+      outputs:
+        tag: ${{ steps.latest_tag.outputs.tag }}
+        date: ${{ steps.date.outputs.date }}
       steps:
 
         - name: Checkout master
@@ -207,6 +210,13 @@ jobs:
       if: contains(github.event.pull_request.labels.*.name, 'auto-merge')
       needs: [run_tests, push_to_base]
       steps:
+
+        - name: Sets the pull request milestone using ${{ steps.push_to_base.outputs.tag }}
+          run: |
+            # First converts tag "v-x.y.z-alpha" to milestone "vx.0"
+            milestone=$(echo ${{ steps.push_to_base.outputs.tag }} | sed 's/v\([0-9]*\)\.\([0-9]*\)\.\([0-9]*\)-.*/v\1.0/')
+            echo "Milestone: $milestone"
+            curl -X PATCH -H "Authorization: token ${{ secrets.PULL_REQUEST_TOKEN }}" -H "Content-Type: application/json" -d '{"milestone": "'"$milestone"'"}' https://api.github.com/repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}
 
         - name: Comments on the pull request and closes it
           run: |
