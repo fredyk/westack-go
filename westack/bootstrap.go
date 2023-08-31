@@ -34,12 +34,12 @@ func (app *WeStack) loadModels() error {
 	fileInfos, err := fs.ReadDir(os.DirFS("./common/models"), ".")
 
 	if err != nil {
-		panic("Error while loading models: " + err.Error())
+		return fmt.Errorf("Error while loading models: " + err.Error())
 	}
 
 	var globalModelConfig *map[string]*model.SimplifiedConfig
 	if err := wst.LoadFile("./server/model-config.json", &globalModelConfig); err != nil {
-		panic("Missing or invalid ./server/model-config.json: " + err.Error())
+		return fmt.Errorf("Missing or invalid ./server/model-config.json: " + err.Error())
 	}
 
 	app.swaggerHelper = swaggerhelper.NewSwaggerHelper()
@@ -60,8 +60,7 @@ func (app *WeStack) loadModels() error {
 		var config *model.Config
 		err := wst.LoadFile("./common/models/"+fileInfo.Name(), &config)
 		if err != nil {
-			fmt.Printf("Error while loading model %v: %v\n", fileInfo.Name(), err)
-			panic(err)
+			return fmt.Errorf("Error while loading model %v: %v\n", fileInfo.Name(), err)
 		}
 		if config.Relations == nil {
 			config.Relations = &map[string]*model.Relation{}
@@ -70,17 +69,20 @@ func (app *WeStack) loadModels() error {
 		configFromGlobal := (*globalModelConfig)[config.Name]
 
 		if configFromGlobal == nil {
-			panic("ERROR: Missing model " + config.Name + " in model-config.json")
+			return fmt.Errorf("ERROR: Missing model " + config.Name + " in model-config.json")
 		}
 
 		dataSource := (*app.datasources)[configFromGlobal.Datasource]
 
 		if dataSource == nil {
-			panic(fmt.Sprintf("ERROR: Missing or invalid datasource file for %v", dataSource))
+			return fmt.Errorf("ERROR: Missing or invalid datasource file for %v", dataSource)
 		}
 
 		loadedModel := model.New(config, app.modelRegistry)
-		app.setupModel(loadedModel, dataSource)
+		err = app.setupModel(loadedModel, dataSource)
+		if err != nil {
+			return err
+		}
 		if loadedModel.Config.Base == "User" {
 			someUserModel = loadedModel
 		}
@@ -88,7 +90,10 @@ func (app *WeStack) loadModels() error {
 
 	if app.roleMappingModel != nil {
 		(*app.roleMappingModel.Config.Relations)["user"].Model = someUserModel.Name
-		app.setupModel(app.roleMappingModel, app.roleMappingModel.Datasource)
+		err := app.setupModel(app.roleMappingModel, app.roleMappingModel.Datasource)
+		if err != nil {
+			return err
+		}
 	}
 
 	for _, loadedModel := range *app.modelRegistry {
@@ -99,7 +104,7 @@ func (app *WeStack) loadModels() error {
 	}
 	return nil
 }
-func (app *WeStack) loadDataSources() {
+func (app *WeStack) loadDataSources() error {
 
 	dsViper := viper.New()
 	app.DsViper = dsViper
@@ -125,11 +130,11 @@ func (app *WeStack) loadDataSources() {
 			dsViper.SetConfigName("datasources") // name of config file (without extension)
 			err := dsViper.ReadInConfig()        // Find and read the config file
 			if err != nil {
-				panic(fmt.Errorf("fatal error config file: %w", err))
+				return fmt.Errorf("fatal error config file: %w", err)
 			}
 			break
 		default:
-			panic(fmt.Errorf("fatal error config file: %w", err))
+			return fmt.Errorf("fatal error config file: %w", err)
 		}
 	}
 
@@ -154,19 +159,20 @@ func (app *WeStack) loadDataSources() {
 
 			err := ds.Initialize()
 			if err != nil {
-				panic(err)
+				return fmt.Errorf("ERROR: Could not initialize datasource %v: %v", dsName, err)
 			}
 			(*app.datasources)[dsName] = ds
 			if app.debug {
 				log.Println("Connected to database", dsViper.GetString(key+".database"))
 			}
 		} else {
-			panic("ERROR: connector " + connector + " not supported")
+			return fmt.Errorf("ERROR: connector " + connector + " not supported")
 		}
 	}
+	return nil
 }
 
-func (app *WeStack) setupModel(loadedModel *model.Model, dataSource *datasource.Datasource) {
+func (app *WeStack) setupModel(loadedModel *model.Model, dataSource *datasource.Datasource) error {
 
 	loadedModel.App = app.asInterface()
 	loadedModel.Datasource = dataSource
@@ -314,20 +320,20 @@ func (app *WeStack) setupModel(loadedModel *model.Model, dataSource *datasource.
 		if os.IsNotExist(err) {
 			err = os.MkdirAll(basePoliciesDirectory, os.ModePerm)
 			if err != nil {
-				panic(err)
+				return fmt.Errorf("ERROR: Could not create directory %v: %v", basePoliciesDirectory, err)
 			}
 		} else {
-			panic(err)
+			return fmt.Errorf("ERROR: Could not stat directory %v: %v", basePoliciesDirectory, err)
 		}
 	}
 
 	f, err := os.OpenFile(fmt.Sprintf("%v/%v.policies.csv", basePoliciesDirectory, loadedModel.Name), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
 	if err != nil {
-		panic(err)
+		return fmt.Errorf("ERROR: Could not open file %v/%v.policies.csv: %v", basePoliciesDirectory, loadedModel.Name, err)
 	}
 	err = f.Close()
 	if err != nil {
-		panic(err)
+		return fmt.Errorf("ERROR: Could not close file %v/%v.policies.csv: %v", basePoliciesDirectory, loadedModel.Name, err)
 	}
 
 	adapter := fileadapter.NewAdapter(fmt.Sprintf("%v/%v.policies.csv", basePoliciesDirectory, loadedModel.Name))
@@ -383,7 +389,7 @@ func (app *WeStack) setupModel(loadedModel *model.Model, dataSource *datasource.
 
 	err = adapter.SavePolicy(casbModel)
 	if err != nil {
-		panic(err)
+		return fmt.Errorf("ERROR: Could not save policy %v: %v", loadedModel.Name, err)
 	}
 	if loadedModel.Config.Public {
 
@@ -534,6 +540,7 @@ func (app *WeStack) setupModel(loadedModel *model.Model, dataSource *datasource.
 		loadedModel.On("instance_delete", deleteByIdHandler)
 
 	}
+	return nil
 }
 
 func handleFindMany(loadedModel *model.Model, ctx *model.EventContext) error {
