@@ -18,11 +18,13 @@ jobs:
         - name: Log auto-merge
           run: |
             echo "PR labels: ${{ github.event.pull_request.labels }}"
+            # For each label of the array, print it
             if [ "${{ github.event.pull_request.labels }}" == *"auto-merge"* ]; then
               echo "auto-merge label found"
             else
               echo "auto-merge label not found"
             fi
+            echo "${{ github.event.pull_request.labels }}" | jq -r '.[] | .name'
 
     run_tests:
       runs-on: ubuntu-latest
