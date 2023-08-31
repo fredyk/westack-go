@@ -257,7 +257,7 @@ jobs:
 
         - name: If tag 'delete-branch' was set on the pull request, delete the branch
           run: |
-              # if [ "${{ github.event.pull_request.labels }}" == *"delete-branch"* ]; then
-              echo "Deleting branch ${{ github.event.pull_request.head.ref }}"
-              git push origin --delete ${{ github.event.pull_request.head.ref }}
-              # fi 
+              # First fetch. Then guess if remote head branch still exists and delete it. If it doesn't exist, it will fail, but that's ok
+              echo "Trying to delete branch ${{ github.event.pull_request.head.ref }}"
+              git fetch
+              git push origin --delete ${{ github.event.pull_request.head.ref }} || true
