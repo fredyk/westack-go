@@ -10,6 +10,15 @@ on:
 
 jobs:
 
+    test_job:
+      runs-on: ubuntu-latest
+      if: contains(github.event.pull_request.labels.*.name, 'auto-merge')
+      steps:
+
+        - name: Log auto-merge
+          run: |
+            echo "PR labels: ${{ github.event.pull_request.labels }}"
+
     run_tests:
       runs-on: ubuntu-latest
       strategy:
@@ -133,19 +142,19 @@ jobs:
             done
 
         - name: Create temporary branch with random name
-          if: ${{ contains(github.event.pull_request.labels.*.name, 'auto-merge') }}
+          if: contains(github.event.pull_request.labels.*.name, 'auto-merge')
           run: |
               git checkout -b temp-branch-${{ github.run_id }}
 
         - name: Push temporary branch
-          if: ${{ contains(github.event.pull_request.labels.*.name, 'auto-merge') }}
+          if: contains(github.event.pull_request.labels.*.name, 'auto-merge')
           run: |
               git fetch
               git push origin temp-branch-${{ github.run_id }} --force
 
     push_to_base:
       runs-on: ubuntu-latest
-      if: ${{ contains(github.event.pull_request.labels.*.name, 'auto-merge') }}
+      if: contains(github.event.pull_request.labels.*.name, 'auto-merge')
       needs: [run_tests]
       env:
         GITHUB_TOKEN: ${{ secrets.PULL_REQUEST_TOKEN }}
@@ -209,7 +218,7 @@ jobs:
 
     close_pr_success:
       runs-on: ubuntu-latest
-      if: ${{ contains(github.event.pull_request.labels.*.name, 'auto-merge') }}
+      if: contains(github.event.pull_request.labels.*.name, 'auto-merge')
       needs: [run_tests, push_to_base]
       steps:
 
