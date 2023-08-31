@@ -19,7 +19,7 @@ import (
 type MongoDBDatasourceOptions struct {
 	Registry *bsoncodec.Registry
 	Monitor  *event.CommandMonitor
-	Timeout  int
+	Timeout  float32
 }
 
 type MongoDBConnector struct {
@@ -271,6 +271,17 @@ func (connector *MongoDBConnector) Ping(parentCtx context.Context) error {
 	}
 
 	return connector.db.Ping(mongoCtx, readpref.SecondaryPreferred())
+}
+
+func (connector *MongoDBConnector) SetTimeout(seconds float32) {
+	if connector.options != nil {
+		connector.options.Timeout = seconds
+	} else {
+		connector.options = &MongoDBDatasourceOptions{
+			Timeout: seconds,
+		}
+	}
+	connector.dsViper.Set("timeout", seconds)
 }
 
 func (connector *MongoDBConnector) GetClient() interface{} {
