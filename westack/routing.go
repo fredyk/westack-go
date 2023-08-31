@@ -542,6 +542,23 @@ func (app *WeStack) loadModelsDynamicRoutes() {
 				Verb: "delete",
 			},
 		})
+
+		if loadedModel.Config.Base == "User" {
+			loadedModel.RemoteMethod(func(eventContext *model.EventContext) error {
+				id, err := primitive.ObjectIDFromHex(eventContext.Ctx.Params("id"))
+				if err != nil {
+					return err
+				}
+				eventContext.ModelID = &id
+				return handleEvent(eventContext, loadedModel, "user_upsertRoles")
+			}, model.RemoteMethodOptions{
+				Name: "user_upsertRoles",
+				Http: model.RemoteMethodOptionsHttp{
+					Path: "/:id/roles",
+					Verb: "put",
+				},
+			})
+		}
 	}
 }
 
