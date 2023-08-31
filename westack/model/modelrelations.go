@@ -152,7 +152,10 @@ func (loadedModel *Model) ExtractLookupsFromFilter(filterMap *wst.Filter, disabl
 	if targetWhere != nil {
 		targetWhereAsM := wst.M(*targetWhere)
 		if !disableTypeConversions {
-			datasource.ReplaceObjectIds(*targetWhere)
+			_, err := datasource.ReplaceObjectIds(*targetWhere)
+			if err != nil {
+				return nil, err
+			}
 		}
 		var extractedMatch wst.M
 		newFoundFields, extractedMatch = recursiveExtractFields(targetWhereAsM, newFoundFields, "EXCLUDE")
