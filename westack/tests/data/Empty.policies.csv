@@ -1,0 +1,9 @@
+p, _EVERYONE_, *, read, allow
+g, findMany, read
+g, findById, read
+g, count, read
+g, create, write
+g, instance_updateAttributes, write
+g, instance_delete, write
+g, read, *
+g, write, *

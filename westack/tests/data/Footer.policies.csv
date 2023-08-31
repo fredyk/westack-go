@@ -1,0 +1,18 @@
+p, _EVERYONE_, *, *, allow
+g, findMany, read
+g, findById, read
+g, count, read
+g, create, write
+g, instance_updateAttributes, write
+g, instance_delete, write
+g, read, *
+g, write, *
+g, findMany, *
+g, count, *
+g, create, *
+g, findById, *
+g, instance_updateAttributes, *
+g, instance_delete, *
+g, 64f0cb836fb4d27b7e9060e5, _EVERYONE_
+g, 64f0cb836fb4d27b7e9060e5, _AUTHENTICATED_
+g, 64f0cb836fb4d27b7e9060e5, USER
