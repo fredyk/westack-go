@@ -3,6 +3,7 @@ package tests
 import (
 	"bytes"
 	"crypto/rand"
+	"github.com/fredyk/westack-go/westack"
 	wst "github.com/fredyk/westack-go/westack/common"
 	"github.com/goccy/go-json"
 	"github.com/golang-jwt/jwt"
@@ -13,6 +14,8 @@ import (
 	"strings"
 	"testing"
 )
+
+var app *westack.WeStack
 
 // Decode the payload as JSON
 type payload struct {
@@ -55,8 +58,7 @@ func invokeApi(t *testing.T, method string, url string, body wst.M, headers wst.
 	for k, v := range headers {
 		req.Header.Add(k, v.(string))
 	}
-	client := &http.Client{}
-	resp, err := client.Do(req)
+	resp, err := app.Server.Test(req)
 	assert.NoError(t, err)
 	defer resp.Body.Close()
 	respBody, err := io.ReadAll(resp.Body)
