@@ -32,6 +32,18 @@
     "useNewUrlParser": true,
     "allowExtendedOperators": true
   },
+  "db_expected_to_fail": {
+    "host": "127.0.0.1",
+    "port": 27017,
+    "database": "example_db_expected_to_fail",
+    "password": "",
+    "name": "db_expected_to_fail",
+    "username": "",
+    "connector": "mongodb",
+    "useNewUrlParser": true,
+    "allowExtendedOperators": true,
+    "retryOnError": true
+  },
   "memorykv": {
     "name": "memorykv",
     "url": "localhost:0",
