@@ -84,7 +84,7 @@ var DefaultConfig = AppConfig{
 	Casbin: AppCasbinConfig{
 		DumpModels: false,
 		Policies: AppCasbinConfigPolicies{
-			OutputDirectory: "./common/models",
+			OutputDirectory: "./data",
 		},
 	},
 	Env:                              make(map[string]interface{}),
