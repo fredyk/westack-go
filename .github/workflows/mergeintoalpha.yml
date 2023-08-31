@@ -229,7 +229,7 @@ jobs:
                 curl -X POST -H "Authorization: token ${{ secrets.PULL_REQUEST_TOKEN }}" -H "Content-Type: application/json" -d '{"body": "This PR has not been merged into ${{ github.event.pull_request.base.ref }}. Please fix the issues and re-open the PR."}' https://api.github.com/repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments
                 curl -X PATCH -H "Authorization: token ${{ secrets.PULL_REQUEST_TOKEN }}" -H "Content-Type: application/json" -d '{"state": "closed"}' https://api.github.com/repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}
 
-    cleanup:
+    cleanup_temp_branch:
       runs-on: ubuntu-latest
       if: ${{ always() && github.event.pull_request.base.ref == 'alpha' }}
       needs: [run_tests, push_to_base]
@@ -248,3 +248,16 @@ jobs:
               git checkout master
               git branch -D temp-branch-${{ github.run_id }}
               git push origin --delete temp-branch-${{ github.run_id }}
+
+    cleanup_head_branch:
+      runs-on: ubuntu-latest
+      if: ${{ always() && contains(github.event.pull_request.labels.*.name, 'delete-branch') }}
+      needs: [run_tests, push_to_base, close_pr_success, close_pr_failure]
+      steps:
+
+        - name: If tag 'delete-branch' was set on the pull request, delete the branch
+          run: |
+              if [ "${{ github.event.pull_request.labels }}" == *"delete-branch"* ]; then
+                echo "Deleting branch ${{ github.event.pull_request.head.ref }}"
+                git push origin --delete ${{ github.event.pull_request.head.ref }}
+              fi 
