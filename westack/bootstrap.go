@@ -541,21 +541,23 @@ func (app *WeStack) setupModel(loadedModel *model.Model, dataSource *datasource.
 		}
 		loadedModel.On("instance_delete", deleteByIdHandler)
 
-		upsertUserRolesHandler := func(ctx *model.EventContext) error {
-			var body UpserRequestBody
-			err := ctx.Ctx.BodyParser(&body)
-			if err != nil {
-				return err
+		if config.Base == "User" {
+			upsertUserRolesHandler := func(ctx *model.EventContext) error {
+				var body UpserRequestBody
+				err := ctx.Ctx.BodyParser(&body)
+				if err != nil {
+					return err
+				}
+				err = UpsertUserRoles(app, ctx.ModelID, body.Roles, ctx)
+				if err != nil {
+					return err
+				}
+				ctx.StatusCode = fiber.StatusOK
+				ctx.Result = wst.M{"result": "OK"}
+				return nil
 			}
-			err = UpsertUserRoles(app, ctx.ModelID, body.Roles, ctx)
-			if err != nil {
-				return err
-			}
-			ctx.StatusCode = fiber.StatusOK
-			ctx.Result = wst.M{"result": "OK"}
-			return nil
+			loadedModel.On("user_upsertRoles", upsertUserRolesHandler)
 		}
-		loadedModel.On("user_upsertRoles", upsertUserRolesHandler)
 
 	}
 }
