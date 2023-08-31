@@ -188,7 +188,7 @@ func Test_RemoteAssignRole(t *testing.T) {
 	// or 401 { error: { code: "AUTHORIZATION_REQUIRED", message: "Authorization required" } }
 	// or 404 { error: { code: "USER_NOT_FOUND", message: "User not found" } }
 
-	url := fmt.Sprintf("http://localhost:8019/api/users/%v/roles", user["id"])
+	url := fmt.Sprintf("http://localhost:8019/api/v1/users/%v/roles", user["id"])
 	updateRolesResponse, err := invokeApi(t, "PUT", url, wst.M{
 		"roles": desiredRoles,
 	}, wst.M{
@@ -210,7 +210,8 @@ func Test_RemoteAssignRole(t *testing.T) {
 	//Decode the payload of the userBearer token as a JWT
 	jwtPayload, err := extractJWTPayload(t, userBearer, err)
 	assert.Nil(t, err)
-	assert.Equal(t, 2, len(jwtPayload.Roles))
+	assert.Equal(t, 3, len(jwtPayload.Roles))
+	assert.Contains(t, jwtPayload.Roles, "USER")
 	assert.Contains(t, jwtPayload.Roles, desiredRoles[0])
 	assert.Contains(t, jwtPayload.Roles, desiredRoles[1])
 
@@ -222,9 +223,9 @@ func Test_RemoteAssignRole(t *testing.T) {
 		"Authorization": fmt.Sprintf("Bearer %v", userBearer),
 		"Content-Type":  "application/json",
 	})
-	assert.NotNil(t, err)
+	assert.NoError(t, err)
 	assert.Contains(t, resp, "error")
-	assert.EqualValues(t, 401, resp["error"].(map[string]interface{})["status"])
+	assert.EqualValues(t, 401, resp["error"].(map[string]interface{})["statusCode"])
 
 	// Login again
 	userToken, err = loginUser(user["username"].(string), password, t)
@@ -237,12 +238,12 @@ func Test_RemoteAssignRole(t *testing.T) {
 	//Decode the payload of the userBearer token as a JWT
 	jwtPayload, err = extractJWTPayload(t, userBearer, err)
 	assert.Nil(t, err)
-	assert.Equal(t, 2, len(jwtPayload.Roles))
+	assert.Equal(t, 3, len(jwtPayload.Roles))
 	// The new roles should not be present
 	assert.NotContainsf(t, jwtPayload.Roles, newDesiredRoles[0], "Role %v should not be present", newDesiredRoles[0])
 	assert.NotContainsf(t, jwtPayload.Roles, newDesiredRoles[1], "Role %v should not be present", newDesiredRoles[1])
 	// The old roles should still be present
+	assert.Containsf(t, jwtPayload.Roles, "USER", "Role %v should be present", "USER")
 	assert.Containsf(t, jwtPayload.Roles, desiredRoles[0], "Role %v should be present", desiredRoles[0])
 	assert.Containsf(t, jwtPayload.Roles, desiredRoles[1], "Role %v should be present", desiredRoles[1])
-
 }
