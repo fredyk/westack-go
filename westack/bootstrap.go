@@ -26,6 +26,10 @@ import (
 	"github.com/fredyk/westack-go/westack/model"
 )
 
+type UpserRequestBody struct {
+	Roles []string `json:"roles"`
+}
+
 func (app *WeStack) loadModels() error {
 
 	// List directory common/models without using ioutil.ReadDir
@@ -146,6 +150,10 @@ func (app *WeStack) loadDataSources() {
 
 			if app.dataSourceOptions != nil {
 				ds.Options = (*app.dataSourceOptions)[dsName]
+				if ds.Options == nil {
+					ds.Options = &datasource.Options{}
+				}
+				ds.Options.RetryOnError = dsViper.GetBool(key + ".retryOnError")
 			}
 
 			err := ds.Initialize()
@@ -317,7 +325,7 @@ func (app *WeStack) setupModel(loadedModel *model.Model, dataSource *datasource.
 		}
 	}
 
-	f, err := os.OpenFile(fmt.Sprintf("%v/%v.policies.csv", basePoliciesDirectory, loadedModel.Name), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	f, err := os.OpenFile(fmt.Sprintf("%v/%v.policies.csv", basePoliciesDirectory, loadedModel.Name), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
 	if err != nil {
 		panic(err)
 	}
@@ -370,8 +378,12 @@ func (app *WeStack) setupModel(loadedModel *model.Model, dataSource *datasource.
 	if config.Base == "User" {
 		casbModel.AddPolicy("p", "p", []string{replaceVarNames("$everyone,*,create,allow")})
 		casbModel.AddPolicy("p", "p", []string{replaceVarNames("$everyone,*,login,allow")})
-		casbModel.AddPolicy("p", "p", []string{replaceVarNames("$owner,*,*,allow")})
+		casbModel.AddPolicy("p", "p", []string{replaceVarNames("$owner,*,findById,allow")})
+		casbModel.AddPolicy("p", "p", []string{replaceVarNames("$owner,*,instance_updateAttributes,allow")})
+		// TODO: check https://github.com/fredyk/westack-go/issues/447
+		casbModel.AddPolicy("p", "p", []string{replaceVarNames("$owner,*,instace_delete,allow")})
 		casbModel.AddPolicy("p", "p", []string{replaceVarNames("$authenticated,*,findSelf,allow")})
+		casbModel.AddPolicy("p", "p", []string{replaceVarNames("admin,*,user_upsertRoles,allow")})
 	}
 
 	loadedModel.CasbinModel = &casbModel
@@ -529,6 +541,22 @@ func (app *WeStack) setupModel(loadedModel *model.Model, dataSource *datasource.
 		}
 		loadedModel.On("instance_delete", deleteByIdHandler)
 
+		upsertUserRolesHandler := func(ctx *model.EventContext) error {
+			var body UpserRequestBody
+			err := ctx.Ctx.BodyParser(&body)
+			if err != nil {
+				return err
+			}
+			err = UpsertUserRoles(app, ctx.ModelID, body.Roles, ctx)
+			if err != nil {
+				return err
+			}
+			ctx.StatusCode = fiber.StatusOK
+			ctx.Result = wst.M{"result": "OK"}
+			return nil
+		}
+		loadedModel.On("user_upsertRoles", upsertUserRolesHandler)
+
 	}
 }
 
@@ -545,8 +573,16 @@ func handleFindMany(loadedModel *model.Model, ctx *model.EventContext) error {
 	case *model.ErrorCursor:
 		return cursor.(*model.ErrorCursor).Error()
 	}
-	if cursor.(*model.ChannelCursor).Err == nil {
-		ctx.StatusCode = fiber.StatusOK
+	// Check if it is a *model.ChannelCursor, then check if it has an error
+	if v, ok := cursor.(*model.ChannelCursor); ok {
+		if v.Err == nil {
+			ctx.StatusCode = fiber.StatusOK
+		}
+	} else {
+		if _, ok := cursor.(*model.FixedLengthCursor); ok {
+			// No error
+			ctx.StatusCode = fiber.StatusOK
+		}
 	}
 	ctx.Result = chunkGenerator
 	return nil

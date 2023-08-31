@@ -29,16 +29,30 @@ var (
 	RegexHoursFromNow   = regexp.MustCompile(`^\$(\d+)Hfromnow$`)
 )
 
-func ReplaceObjectIds(data interface{}) interface{} {
+func ReplaceObjectIds(data interface{}) (interface{}, error) {
 
 	if data == nil {
-		return nil
+		return nil, nil
 	}
 
 	var finalData wst.M
 	switch data.(type) {
-	case int, int32, int64, float32, float64, bool, primitive.ObjectID, *primitive.ObjectID, time.Time, primitive.DateTime:
-		return data
+	case int:
+		return data, nil
+	case int32:
+		return data, nil
+	case float64:
+		return data, nil
+	case bool:
+		return data, nil
+	case primitive.ObjectID:
+		return data, nil
+	case *primitive.ObjectID:
+		return data, nil
+	case time.Time:
+		return data, nil
+	case primitive.DateTime:
+		return data, nil
 	case string:
 		var newValue interface{}
 		var err error
@@ -52,31 +66,13 @@ func ReplaceObjectIds(data interface{}) interface{} {
 			log.Println("WARNING: ", err)
 		}
 		if newValue != nil {
-			return newValue
+			return newValue, nil
 		} else {
-			return data
+			return data, nil
 		}
 	case wst.Where:
 		finalData = wst.M{}
 		for key, value := range data.(wst.Where) {
-			finalData[key] = value
-		}
-		break
-	case *wst.Where:
-		finalData = wst.M{}
-		for key, value := range *data.(*wst.Where) {
-			finalData[key] = value
-		}
-		break
-	case map[string]interface{}:
-		finalData = wst.M{}
-		for key, value := range data.(map[string]interface{}) {
-			finalData[key] = value
-		}
-		break
-	case *map[string]interface{}:
-		finalData = wst.M{}
-		for key, value := range *data.(*map[string]interface{}) {
 			finalData[key] = value
 		}
 		break
@@ -86,9 +82,12 @@ func ReplaceObjectIds(data interface{}) interface{} {
 	case *wst.M:
 		finalData = *data.(*wst.M)
 		break
+	case map[string]interface{}:
+		finalData = data.(map[string]interface{})
+		break
 	default:
 		log.Println(fmt.Sprintf("WARNING: Invalid input for ReplaceObjectIds() <- %s", data))
-		return data
+		return data, nil
 	}
 	for key, value := range finalData {
 		if value == nil {
@@ -111,85 +110,85 @@ func ReplaceObjectIds(data interface{}) interface{} {
 					if r := RegexDaysAgo.FindStringSubmatch(value.(string)); len(r) > 1 {
 						atoi, err := strconv.Atoi(r[1])
 						if err != nil {
-							panic(err)
+							return nil, err
 						}
 						newValue = time.Now().Add(-time.Duration(atoi) * 24 * time.Hour)
 					} else if r := RegexWeeksAgo.FindStringSubmatch(value.(string)); len(r) > 1 {
 						atoi, err := strconv.Atoi(r[1])
 						if err != nil {
-							panic(err)
+							return nil, err
 						}
 						newValue = time.Now().Add(-time.Duration(atoi) * 7 * 24 * time.Hour)
 					} else if r := RegexMonthsAgo.FindStringSubmatch(value.(string)); len(r) > 1 {
 						atoi, err := strconv.Atoi(r[1])
 						if err != nil {
-							panic(err)
+							return nil, err
 						}
 						newValue = time.Now().Add(-time.Duration(atoi) * 30 * 24 * time.Hour)
 					} else if r := RegexYearsAgo.FindStringSubmatch(value.(string)); len(r) > 1 {
 						atoi, err := strconv.Atoi(r[1])
 						if err != nil {
-							panic(err)
+							return nil, err
 						}
 						newValue = time.Now().Add(-time.Duration(atoi) * 365 * 24 * time.Hour)
 					} else if r := RegexSecondsAgo.FindStringSubmatch(value.(string)); len(r) > 1 {
 						atoi, err := strconv.Atoi(r[1])
 						if err != nil {
-							panic(err)
+							return nil, err
 						}
 						newValue = time.Now().Add(-time.Duration(atoi) * time.Second)
 					} else if r := RegexMinutesAgo.FindStringSubmatch(value.(string)); len(r) > 1 {
 						atoi, err := strconv.Atoi(r[1])
 						if err != nil {
-							panic(err)
+							return nil, err
 						}
 						newValue = time.Now().Add(-time.Duration(atoi) * time.Minute)
 					} else if r := RegexHoursAgo.FindStringSubmatch(value.(string)); len(r) > 1 {
 						atoi, err := strconv.Atoi(r[1])
 						if err != nil {
-							panic(err)
+							return nil, err
 						}
 						newValue = time.Now().Add(-time.Duration(atoi) * time.Hour)
 					} else if r := RegexDaysFromNow.FindStringSubmatch(value.(string)); len(r) > 1 {
 						atoi, err := strconv.Atoi(r[1])
 						if err != nil {
-							panic(err)
+							return nil, err
 						}
 						newValue = time.Now().Add(time.Duration(atoi) * 24 * time.Hour)
 					} else if r := RegexWeeksFromNow.FindStringSubmatch(value.(string)); len(r) > 1 {
 						atoi, err := strconv.Atoi(r[1])
 						if err != nil {
-							panic(err)
+							return nil, err
 						}
 						newValue = time.Now().Add(time.Duration(atoi) * 7 * 24 * time.Hour)
 					} else if r := RegexMonthsFromNow.FindStringSubmatch(value.(string)); len(r) > 1 {
 						atoi, err := strconv.Atoi(r[1])
 						if err != nil {
-							panic(err)
+							return nil, err
 						}
 						newValue = time.Now().Add(time.Duration(atoi) * 30 * 24 * time.Hour)
 					} else if r := RegexYearsFromNow.FindStringSubmatch(value.(string)); len(r) > 1 {
 						atoi, err := strconv.Atoi(r[1])
 						if err != nil {
-							panic(err)
+							return nil, err
 						}
 						newValue = time.Now().Add(time.Duration(atoi) * 365 * 24 * time.Hour)
 					} else if r := RegexSecondsFromNow.FindStringSubmatch(value.(string)); len(r) > 1 {
 						atoi, err := strconv.Atoi(r[1])
 						if err != nil {
-							panic(err)
+							return nil, err
 						}
 						newValue = time.Now().Add(time.Duration(atoi) * time.Second)
 					} else if r := RegexMinutesFromNow.FindStringSubmatch(value.(string)); len(r) > 1 {
 						atoi, err := strconv.Atoi(r[1])
 						if err != nil {
-							panic(err)
+							return nil, err
 						}
 						newValue = time.Now().Add(time.Duration(atoi) * time.Minute)
 					} else if r := RegexHoursFromNow.FindStringSubmatch(value.(string)); len(r) > 1 {
 						atoi, err := strconv.Atoi(r[1])
 						if err != nil {
-							panic(err)
+							return nil, err
 						}
 						newValue = time.Now().Add(time.Duration(atoi) * time.Hour)
 					}
@@ -199,29 +198,45 @@ func ReplaceObjectIds(data interface{}) interface{} {
 		if newValue == nil {
 			switch value.(type) {
 			case string, wst.Where, *wst.Where, wst.M, *wst.M, int, int32, int64, float32, float64, bool, primitive.ObjectID, *primitive.ObjectID, time.Time, primitive.DateTime:
-				newValue = ReplaceObjectIds(value)
+				newValue, err = ReplaceObjectIds(value)
+				if err != nil {
+					return nil, err
+				}
 				break
 			default:
 				asMap, asMapOk := value.(wst.M)
 				if asMapOk {
-					newValue = ReplaceObjectIds(asMap)
+					newValue, err = ReplaceObjectIds(asMap)
+					if err != nil {
+						return nil, err
+					}
 				} else {
 					asList, asListOk := value.([]interface{})
 					if asListOk {
 						for i, asListItem := range asList {
-							asList[i] = ReplaceObjectIds(asListItem)
+							asList[i], err = ReplaceObjectIds(asListItem)
+							if err != nil {
+								return nil, err
+							}
 						}
 					} else {
 						_, asStringListOk := value.([]string)
 						if !asStringListOk {
 							asMap, asMapOk := value.(map[string]interface{})
 							if asMapOk {
-								newValue = ReplaceObjectIds(asMap)
+								newValue, err = ReplaceObjectIds(asMap)
+								if err != nil {
+									return nil, err
+								}
 							} else {
 								asList, asMListOk := value.([]wst.M)
 								if asMListOk {
 									for i, asListItem := range asList {
-										asList[i] = ReplaceObjectIds(asListItem).(wst.M)
+										v, err := ReplaceObjectIds(asListItem)
+										if err != nil {
+											return nil, err
+										}
+										asList[i] = v.(wst.M)
 									}
 								} else {
 									log.Println(fmt.Sprintf("WARNING: What to do with %v (%s)?", value, value))
@@ -236,22 +251,12 @@ func ReplaceObjectIds(data interface{}) interface{} {
 			switch data.(type) {
 			case wst.Where:
 				data.(wst.Where)[key] = newValue
-				break
-			case *wst.Where:
-				(*data.(*wst.Where))[key] = newValue
-				break
 			case wst.M:
 				data.(wst.M)[key] = newValue
-				break
 			case *wst.M:
 				(*data.(*wst.M))[key] = newValue
-				break
 			case map[string]interface{}:
 				data.(map[string]interface{})[key] = newValue
-				break
-			case *map[string]interface{}:
-				(*data.(*map[string]interface{}))[key] = newValue
-				break
 			default:
 				log.Println(fmt.Sprintf("WARNING: invalid input ReplaceObjectIds() <- %s", data))
 				break
@@ -260,5 +265,5 @@ func ReplaceObjectIds(data interface{}) interface{} {
 			log.Println("WARNING: ", err)
 		}
 	}
-	return data
+	return data, nil
 }

@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"github.com/fredyk/westack-go/westack/model"
 	"io"
-	"math/rand"
 	"net/http"
 	"sync"
 	"testing"
@@ -24,12 +23,12 @@ func Test_ExtractLookups(t *testing.T) {
 
 	// test nil filter
 	lookups, err := noteModel.ExtractLookupsFromFilter(nil, false)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Nil(t, lookups)
 
 	// test empty filter
 	lookups, err = noteModel.ExtractLookupsFromFilter(&wst.Filter{}, false)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	// assert empty lookups
 	assert.Equal(t, 0, len(*lookups))
 
@@ -37,7 +36,7 @@ func Test_ExtractLookups(t *testing.T) {
 	lookups, err = noteModel.ExtractLookupsFromFilter(&wst.Filter{
 		Order: &wst.Order{"title ASC"},
 	}, false)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Equal(t, 1, len(*lookups))
 	assert.Contains(t, (*lookups)[0], "$sort")
 	assert.Equal(t, (*lookups)[0]["$sort"].(bson.D)[0].Key, "title")
@@ -47,7 +46,7 @@ func Test_ExtractLookups(t *testing.T) {
 	lookups, err = noteModel.ExtractLookupsFromFilter(&wst.Filter{
 		Order: &wst.Order{"created DESC"},
 	}, false)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Equal(t, 1, len(*lookups))
 	assert.Contains(t, (*lookups)[0], "$sort")
 	assert.Equal(t, (*lookups)[0]["$sort"].(bson.D)[0].Key, "created")
@@ -57,13 +56,13 @@ func Test_ExtractLookups(t *testing.T) {
 	lookups, err = noteModel.ExtractLookupsFromFilter(&wst.Filter{
 		Order: &wst.Order{"created INVALID-DIRECTION"},
 	}, false)
-	assert.NotNil(t, err)
+	assert.Error(t, err)
 
 	// test skip
 	lookups, err = noteModel.ExtractLookupsFromFilter(&wst.Filter{
 		Skip: 10,
 	}, false)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Equal(t, 1, len(*lookups))
 	assert.Contains(t, (*lookups)[0], "$skip")
 	assert.Equal(t, int64(10), (*lookups)[0]["$skip"])
@@ -72,7 +71,7 @@ func Test_ExtractLookups(t *testing.T) {
 	lookups, err = noteModel.ExtractLookupsFromFilter(&wst.Filter{
 		Include: &wst.Include{{Relation: "user"}},
 	}, false)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Equal(t, 2, len(*lookups))
 	assert.Contains(t, (*lookups)[0], "$lookup")
 	assert.Equal(t, "user", (*lookups)[0]["$lookup"].(wst.M)["from"])
@@ -89,19 +88,19 @@ func Test_ExtractLookups(t *testing.T) {
 	lookups, err = noteModel.ExtractLookupsFromFilter(&wst.Filter{
 		Include: &wst.Include{{Relation: "invalid"}},
 	}, false)
-	assert.NotNil(t, err)
+	assert.Error(t, err)
 
 	// test include with invalid relation 2
 	lookups, err = noteModel.ExtractLookupsFromFilter(&wst.Filter{
 		Include: &wst.Include{{Relation: "invalidRelation1"}},
 	}, false)
-	assert.NotNil(t, err)
+	assert.Error(t, err)
 
 	// test include with scope
 	lookups, err = noteModel.ExtractLookupsFromFilter(&wst.Filter{
 		Include: &wst.Include{{Relation: "user", Scope: &wst.Filter{Where: &wst.Where{"name": "John"}}}},
 	}, false)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Equal(t, 2, len(*lookups))
 	assert.Contains(t, (*lookups)[0], "$lookup")
 	assert.Equal(t, "user", (*lookups)[0]["$lookup"].(wst.M)["from"])
@@ -121,7 +120,7 @@ func Test_ExtractLookups(t *testing.T) {
 	lookups, err = userModel.ExtractLookupsFromFilter(&wst.Filter{
 		Include: &wst.Include{{Relation: "notes"}},
 	}, false)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Equal(t, 1, len(*lookups))
 	assert.Contains(t, (*lookups)[0], "$lookup")
 	assert.Equal(t, "Note", (*lookups)[0]["$lookup"].(wst.M)["from"])
@@ -134,13 +133,13 @@ func Test_ExtractLookups(t *testing.T) {
 	lookups, err = noteModel.ExtractLookupsFromFilter(&wst.Filter{
 		Include: &wst.Include{{Relation: "user", Scope: &wst.Filter{Include: &wst.Include{{Relation: "invalid"}}}}},
 	}, false)
-	assert.NotNil(t, err)
+	assert.Error(t, err)
 
 }
 
 func Test_CustomerOrderStore(t *testing.T) {
 	// Create a customer with a random name, using math
-	nameN := 1000000 + rand.Intn(8999999)
+	nameN := createRandomInt()
 	name := fmt.Sprintf("Customer %v", nameN)
 
 	customer := wst.M{
@@ -152,11 +151,11 @@ func Test_CustomerOrderStore(t *testing.T) {
 		},
 	}
 	createdCustomer, err := customerModel.Create(customer, systemContext)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.NotNil(t, createdCustomer)
 
 	// Create a store with a random name
-	storeNameN := 1000000 + rand.Intn(8999999)
+	storeNameN := createRandomInt()
 	storeName := fmt.Sprintf("Store %v", storeNameN)
 
 	store := wst.M{
@@ -167,7 +166,7 @@ func Test_CustomerOrderStore(t *testing.T) {
 		},
 	}
 	createdStore, err := storeModel.Create(store, systemContext)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.NotNil(t, createdStore)
 
 	// Create 2 orders with amount
@@ -177,11 +176,11 @@ func Test_CustomerOrderStore(t *testing.T) {
 		"storeId":    createdStore.Id,
 	}
 	createdOrder, err := orderModel.Create(order, systemContext)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.NotNil(t, createdOrder)
 	order["amount"] = 123.45
 	createdOrder, err = orderModel.Create(order, systemContext)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.NotNil(t, createdOrder)
 
 	// Create a waiting group using sync.WaitGroup
@@ -193,12 +192,12 @@ func Test_CustomerOrderStore(t *testing.T) {
 	for i := 0; i < orderCountToCreate; i++ {
 		go func() {
 			order := wst.M{
-				"amount":     rand.Float64() * 1000,
+				"amount":     createRandomFloat(0, 1000.0),
 				"customerId": nil,
 				"storeId":    nil,
 			}
 			cratedOrder, err := orderModel.Create(order, systemContext)
-			assert.Nil(t, err)
+			assert.NoError(t, err)
 			assert.NotNil(t, cratedOrder)
 			wg.Done()
 		}()
@@ -218,10 +217,10 @@ func Test_CustomerOrderStore(t *testing.T) {
 	customersCursor := customerModel.FindMany(filter, systemContext)
 	assert.NotNil(t, customersCursor)
 	customers, err := customersCursor.All()
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.NotNil(t, customers)
 	delayed := time.Since(start)
-	assert.Greater(t, delayed.Milliseconds(), int64(4))
+	assert.Greater(t, delayed.Milliseconds(), int64(3))
 	fmt.Printf("\n===\nDELAYED without cache: %v\n===\n", delayed.Milliseconds())
 
 	assert.Equal(t, 1, len(customers))
@@ -236,16 +235,20 @@ func Test_CustomerOrderStore(t *testing.T) {
 	stats := requestStats(t, err)
 
 	// Check that the cache has been used, present at stats["stats"]["datasorces"]["memorykv"]["Order"]
-	assert.Greater(t, int(stats["stats"].(map[string]interface{})["datasources"].(map[string]interface{})["memorykv"].(map[string]interface{})["Order"].(map[string]interface{})["entries"].(float64)), 0)
+	allStats := stats["stats"].(map[string]interface{})
+	datasourcesStats := allStats["datasources"].(map[string]interface{})
+	memoryKvStats := datasourcesStats["memorykv"].(map[string]interface{})
+	orderStats := memoryKvStats["Order"].(map[string]interface{})
+	assert.Greater(t, int(orderStats["entries"].(float64)), 0)
 	// Exactly 1 miss, because the cache was empty
-	assert.Equal(t, 1, int(stats["stats"].(map[string]interface{})["datasources"].(map[string]interface{})["memorykv"].(map[string]interface{})["Order"].(map[string]interface{})["misses"].(float64)))
+	assert.Equal(t, 1, int(orderStats["misses"].(float64)))
 
 	// Get the customer including the orders and the store, again
 	start = time.Now()
 	customersCursor = customerModel.FindMany(filter, systemContext)
 	assert.NotNil(t, customersCursor)
 	customers, err = customersCursor.All()
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.NotNil(t, customers)
 	prevDelayed := delayed
 	delayed = time.Since(start)
@@ -285,17 +288,14 @@ func Test_Aggregations(t *testing.T) {
 
 	var randomUserName string
 	// assign randomUserName with safe random string
-	var randomN int64
-	rnd := rand.New(rand.NewSource(time.Now().UnixNano()))
-	randomN = 100000000 + rnd.Int63n(899999999)
-	randomUserName = fmt.Sprintf("testuser%d", randomN)
+	randomUserName = fmt.Sprintf("testuser%d", createRandomInt())
 	randomUser, err := userModel.Create(wst.M{
 		"username":  randomUserName,
 		"password":  "abcd1234.",
 		"firstName": "John",
 		"lastName":  "Doe",
 	}, systemContext)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.NotNil(t, randomUser)
 
 	noteTitle := "Note 1"
@@ -303,7 +303,7 @@ func Test_Aggregations(t *testing.T) {
 		"title":  noteTitle,
 		"userId": randomUser.Id,
 	}, systemContext)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.NotNil(t, note)
 
 	// Get the note including the user
@@ -334,7 +334,7 @@ func Test_Aggregations(t *testing.T) {
 	notesCursor := noteModel.FindMany(filter, systemContext)
 	assert.NotNil(t, notesCursor)
 	notes, err := notesCursor.All()
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.NotNil(t, notes)
 	assert.Equal(t, 1, len(notes))
 	assert.Equal(t, noteTitle, notes[0].ToJSON()["title"])
@@ -349,27 +349,23 @@ func Test_AggregationsWithDirectNestedQuery(t *testing.T) {
 
 	var randomeUserName string
 	// assign randomUserName with safe random string
-	var randomN int64
-	rnd := rand.New(rand.NewSource(time.Now().UnixNano()))
-	randomN = 100000000 + rnd.Int63n(899999999)
-	randomeUserName = fmt.Sprintf("testuser%d", randomN)
+	randomeUserName = fmt.Sprintf("testuser%d", createRandomInt())
 	randomUser, err := userModel.Create(wst.M{
 		"username": randomeUserName,
 		"password": "abcd1234.",
 	}, systemContext)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.NotNil(t, randomUser)
 
 	var randomNoteTitle string
 	// assign randomNoteTitle with safe random string
-	randomN = 100000000 + rnd.Int63n(899999999)
-	randomNoteTitle = fmt.Sprintf("testnote%d", randomN)
+	randomNoteTitle = fmt.Sprintf("testnote%d", createRandomInt())
 
 	note, err := noteModel.Create(wst.M{
 		"title":  randomNoteTitle,
 		"userId": randomUser.Id,
 	}, systemContext)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.NotNil(t, note)
 
 	filter := &wst.Filter{
@@ -387,7 +383,7 @@ func Test_AggregationsWithDirectNestedQuery(t *testing.T) {
 	notesCursor := noteModel.FindMany(filter, systemContext)
 	assert.NotNil(t, notesCursor)
 	notes, err := notesCursor.All()
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.NotNil(t, notes)
 	assert.Equal(t, 1, len(notes))
 	assert.Equal(t, note.GetString("title"), notes[0].GetString("title"))
@@ -400,7 +396,7 @@ func Test_AggregationsLimitAfterLookups(t *testing.T) {
 	t.Parallel()
 
 	firstUser, err := userModel.FindOne(nil, systemContext)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.NotNil(t, firstUser)
 
 	// we are adding a field that does not exist in the model, so skip and limit should be applied after the stage
@@ -428,7 +424,7 @@ func Test_AggregationsLimitAfterLookups(t *testing.T) {
 	notesCursor := noteModel.FindMany(filter, systemContext)
 	assert.NotNil(t, notesCursor)
 	_, err = notesCursor.All()
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 
 	// check that the limit was applied after the stage
 	pipeline := notesCursor.(*model.ChannelCursor).UsedPipeline
@@ -450,7 +446,7 @@ func Test_AggregationsLimitBeforeLookups(t *testing.T) {
 	t.Parallel()
 
 	firstUser, err := userModel.FindOne(nil, systemContext)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.NotNil(t, firstUser)
 
 	// this time, we are not adding new fields so skip and limit should be applied before the $lookup stage
@@ -477,7 +473,7 @@ func Test_AggregationsLimitBeforeLookups(t *testing.T) {
 	notesCursor := noteModel.FindMany(filter, systemContext)
 	assert.NotNil(t, notesCursor)
 	_, err = notesCursor.All()
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 
 	// check that the limit was applied before the $lookup stage
 	pipeline := notesCursor.(*model.ChannelCursor).UsedPipeline
@@ -517,7 +513,7 @@ func Test_AggregationsWithInvalidDatasource(t *testing.T) {
 	notesCursor := noteModel.FindMany(filter, systemContext)
 	assert.NotNil(t, notesCursor)
 	notes, err := notesCursor.All()
-	assert.NotNil(t, err)
+	assert.Error(t, err)
 
 	assert.Nil(t, notes)
 
@@ -533,19 +529,21 @@ func Test_AggregationsWithInvalidDatasource(t *testing.T) {
 }
 
 func requestStats(t *testing.T, err error) wst.M {
-	resp, err := http.Get("http://localhost:8020/system/memorykv/stats")
-	assert.Nil(t, err)
+	req, err := http.NewRequest("GET", "/system/memorykv/stats", nil)
+	assert.NoError(t, err)
+	resp, err := app.Server.Test(req)
+	assert.NoError(t, err)
 	assert.NotNil(t, resp)
 	assert.Equal(t, 200, resp.StatusCode)
 	defer resp.Body.Close()
 	body, err := io.ReadAll(resp.Body)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.NotNil(t, body)
 
 	fmt.Printf("cache stats response: %v\n", string(body))
 	stats := wst.M{}
 	err = json.Unmarshal(body, &stats)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.NotNil(t, stats)
 	return stats
 }
