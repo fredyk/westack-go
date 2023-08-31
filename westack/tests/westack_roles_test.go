@@ -188,7 +188,7 @@ func Test_RemoteAssignRole(t *testing.T) {
 	// or 401 { error: { code: "AUTHORIZATION_REQUIRED", message: "Authorization required" } }
 	// or 404 { error: { code: "USER_NOT_FOUND", message: "User not found" } }
 
-	url := fmt.Sprintf("http://localhost:8019/api/v1/users/%v/roles", user["id"])
+	url := fmt.Sprintf("/api/v1/users/%v/roles", user["id"])
 	updateRolesResponse, err := invokeApi(t, "PUT", url, wst.M{
 		"roles": desiredRoles,
 	}, wst.M{

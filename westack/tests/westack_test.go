@@ -22,8 +22,6 @@ import (
 	wst "github.com/fredyk/westack-go/westack/common"
 )
 
-var app *westack.WeStack
-
 func init() {
 	app = westack.New(westack.Options{
 		DatasourceOptions: &map[string]*datasource.Options{
@@ -87,6 +85,11 @@ func init() {
 			fmt.Println("saving user")
 			return nil
 		})
+
+		publicUserModel, err = app.FindModel("publicUser")
+		if err != nil {
+			log.Fatalf("failed to find model: %v", err)
+		}
 
 		customerModel, err = app.FindModel("Customer")
 		if err != nil {
@@ -161,28 +164,14 @@ func init() {
 }
 
 func createUser(t *testing.T, userData wst.M) (wst.M, error) {
-	b := createBody(t, userData)
-
-	request := httptest.NewRequest("POST", "/api/v1/users", b)
-	request.Header.Set("Content-Type", "application/json")
-	response, err := app.Server.Test(request)
-	if err != nil {
-		return nil, err
-	}
-	if !assert.Equal(t, 200, response.StatusCode) {
-		return nil, fmt.Errorf("expected status code 200, got %v", response.StatusCode)
-	}
-
-	var responseBytes []byte
-	responseBytes, err = io.ReadAll(response.Body)
-	if err != nil {
-		return nil, err
-	}
 
 	var responseMap wst.M
-	err = json.Unmarshal(responseBytes, &responseMap)
+	var err error
+	responseMap, err = invokeApi(t, "POST", "/api/v1/users", userData, wst.M{
+		"Content-Type": "application/json",
+	})
 	if err != nil {
-		return nil, err
+		return responseMap, err
 	}
 
 	assert.Contains(t, responseMap, "id")
@@ -235,7 +224,7 @@ func Test_WeStackCreateUser(t *testing.T) {
 
 	n, _ := rand.Int(rand.Reader, big.NewInt(899999999))
 	email := fmt.Sprintf("email%v@example.com", 100000000+n.Int64())
-	password := "test"
+	password := "abcd1234."
 	body := wst.M{"email": email, "password": password, "username": fmt.Sprintf("user%v", n)}
 	user, err := createUser(t, body)
 	assert.Nil(t, err)
