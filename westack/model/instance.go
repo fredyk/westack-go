@@ -278,6 +278,8 @@ func (modelInstance *Instance) GetString(path string) string {
 		return strconv.FormatInt(res.(int64), 10)
 	case bool:
 		return strconv.FormatBool(res.(bool))
+	case primitive.ObjectID:
+		return res.(primitive.ObjectID).Hex()
 	default:
 		return ""
 	}
