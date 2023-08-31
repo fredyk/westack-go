@@ -1,9 +1,12 @@
 package tests
 
 import (
+	"fmt"
+	"os"
 	"testing"
 	"time"
 
+	"github.com/fredyk/westack-go/westack"
 	"github.com/fredyk/westack-go/westack/model"
 
 	"github.com/stretchr/testify/assert"
@@ -310,5 +313,148 @@ func Test_CreateWithDefaultTimeHourFromNow(t *testing.T) {
 	assert.IsType(t, primitive.DateTime(0), created.ToJSON()["defaultTimeHourFromNow"])
 	assert.GreaterOrEqual(t, created.ToJSON()["defaultTimeHourFromNow"].(primitive.DateTime).Time().Unix(), lowerSeconds)
 	assert.LessOrEqual(t, created.ToJSON()["defaultTimeHourFromNow"].(primitive.DateTime).Time().Unix(), upperSeconds)
+
+}
+
+// https://github.com/fredyk/westack-go/issues/464
+func Test_ProtectedFields(t *testing.T) {
+
+	t.Parallel()
+
+	// Create a random user
+	plainUser1 := wst.M{
+		"username": fmt.Sprintf("user%v", createRandomInt()),
+		"password": "abcd1234.",
+		"phone":    "1234567890",
+	}
+	user1, err := createUser(t, plainUser1)
+	assert.NoError(t, err)
+
+	// Another random user
+	plainUser2 := wst.M{
+		"username": fmt.Sprintf("user%v", createRandomInt()),
+		"password": "abcd1234.",
+		"phone":    "9876543210",
+	}
+	_, err = createUser(t, plainUser2)
+	assert.NoError(t, err)
+
+	// User with special privilege "__protectedFieldsPrivileged"
+	plainUser3 := wst.M{
+		"username": fmt.Sprintf("__protectedFieldsPrivileged_user%v", createRandomInt()),
+		"password": "abcd1234.",
+	}
+
+	// Add the privilege "__protectedFieldsPrivileged" to the user3
+	plainUserWithPrivileges := westack.UserWithRoles{
+		Username: plainUser3.GetString("username"),
+		Password: plainUser3.GetString("password"),
+		Roles:    []string{"__protectedFieldsPrivileged"},
+	}
+	userWithPrivileges, err := westack.UpsertUserWithRoles(app, plainUserWithPrivileges, systemContext)
+	assert.NoError(t, err)
+	assert.NotNil(t, userWithPrivileges.Id)
+	assert.NotEmptyf(t, userWithPrivileges.GetString("id"), "User should have an id")
+
+	// Login the user1
+	username1 := plainUser1.GetString("username")
+	password1 := plainUser1.GetString("password")
+	user1Token, err := loginUser(username1, password1, t)
+	assert.NoError(t, err)
+
+	// Login the user2
+	user2Token, err := loginUser(plainUser2.GetString("username"), plainUser2.GetString("password"), t)
+	assert.NoError(t, err)
+
+	// Login with admin
+	adminUsername := os.Getenv("WST_ADMIN_USERNAME")
+	adminPwd := os.Getenv("WST_ADMIN_PWD")
+	adminToken, err := loginUser(
+		adminUsername,
+		adminPwd,
+		t,
+	)
+	assert.NoError(t, err)
+
+	// Login with userWithPrivileges
+	userWithPrivilegesToken, err := loginUser(
+		plainUserWithPrivileges.Username,
+		plainUserWithPrivileges.Password,
+		t,
+	)
+	assert.NoError(t, err)
+	privilegedUserBearer := userWithPrivilegesToken.GetString("id")
+	// Extract the payload from the bearer
+	privilegedUserPayload, err := extractJWTPayload(t, privilegedUserBearer, err)
+	assert.NoError(t, err)
+	assert.Contains(t, privilegedUserPayload.Roles, "__protectedFieldsPrivileged")
+
+	// Get the user 1 through API with the user2
+	// Phone should not be returned with user2
+	user1RetrievedWithUser2, err := invokeApi(
+		t,
+		"GET",
+		fmt.Sprintf("/api/v1/public-users/%v", user1.GetString("id")),
+		nil,
+		wst.M{
+			"Authorization": fmt.Sprintf("Bearer %v", user2Token["id"]),
+		},
+	)
+	assert.NoError(t, err)
+	assert.Equal(t, user1.GetString("id"), user1RetrievedWithUser2.GetString("id"))
+	assert.Equal(t, user1.GetString("username"), user1RetrievedWithUser2.GetString("username"))
+	assert.NotContainsf(t, user1RetrievedWithUser2, "password", "Password should not be returned")
+	assert.NotContainsf(t, user1RetrievedWithUser2, "phone", "Phone should not be returned")
+
+	// Now get the user 1 through API with the admin token
+	// Phone should be returned with admin
+	user1RetrievedWithAdmin, err := invokeApi(
+		t,
+		"GET",
+		fmt.Sprintf("/api/v1/public-users/%v", user1.GetString("id")),
+		nil,
+		wst.M{
+			"Authorization": fmt.Sprintf("Bearer %v", adminToken["id"]),
+		},
+	)
+	assert.NoError(t, err)
+	assert.Equal(t, user1.GetString("id"), user1RetrievedWithAdmin.GetString("id"))
+	assert.Equal(t, user1.GetString("username"), user1RetrievedWithAdmin.GetString("username"))
+	assert.NotContainsf(t, user1RetrievedWithAdmin, "password", "Password should not be returned")
+	assert.Containsf(t, user1RetrievedWithAdmin, "phone", "Phone should be returned")
+
+	// Phone should be returned also with user1 because it is the $owner
+	user1RetrievedWithUser1, err := invokeApi(
+		t,
+		"GET",
+		fmt.Sprintf("/api/v1/public-users/%v", user1.GetString("id")),
+		nil,
+		wst.M{
+			"Authorization": fmt.Sprintf("Bearer %v", user1Token["id"]),
+		},
+	)
+	assert.NoError(t, err)
+	assert.Equal(t, user1.GetString("id"), user1RetrievedWithUser1.GetString("id"))
+	assert.Equal(t, user1.GetString("username"), user1RetrievedWithUser1.GetString("username"))
+	assert.NotContainsf(t, user1RetrievedWithUser1, "password", "Password should not be returned")
+	assert.Containsf(t, user1RetrievedWithUser1, "phone", "Phone should be returned")
+	assert.Equalf(t, user1.GetString("phone"), user1RetrievedWithUser1.GetString("phone"), "Phone should be the same")
+
+	// And Phone should be returned also with userWithPrivileges
+	user1RetrievedWithUserWithPrivileges, err := invokeApi(
+		t,
+		"GET",
+		fmt.Sprintf("/api/v1/public-users/%v", user1.GetString("id")),
+		nil,
+		wst.M{
+			"Authorization": fmt.Sprintf("Bearer %v", userWithPrivilegesToken["id"]),
+		},
+	)
+	assert.NoError(t, err)
+	assert.Equal(t, user1.GetString("id"), user1RetrievedWithUserWithPrivileges.GetString("id"))
+	assert.Equal(t, user1.GetString("username"), user1RetrievedWithUserWithPrivileges.GetString("username"))
+	assert.NotContainsf(t, user1RetrievedWithUserWithPrivileges, "password", "Password should not be returned")
+	assert.Containsf(t, user1RetrievedWithUserWithPrivileges, "phone", "Phone should be returned")
+	assert.Equalf(t, user1.GetString("phone"), user1RetrievedWithUserWithPrivileges.GetString("phone"), "Phone should be the same")
 
 }
