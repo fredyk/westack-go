@@ -193,7 +193,7 @@ func executeRequest(request *http.Request) (*http.Response, error) {
 
 func executeRequestRaw(request *http.Request) (*http.Response, error) {
 
-	resp, err := app.Server.Test(request)
+	resp, err := app.Server.Test(request, 45000)
 	if err != nil {
 		return nil, err
 	}

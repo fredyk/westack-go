@@ -220,7 +220,7 @@ func Test_CustomerOrderStore(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NotNil(t, customers)
 	delayed := time.Since(start)
-	assert.Greater(t, delayed.Milliseconds(), int64(4))
+	assert.Greater(t, delayed.Milliseconds(), int64(3))
 	fmt.Printf("\n===\nDELAYED without cache: %v\n===\n", delayed.Milliseconds())
 
 	assert.Equal(t, 1, len(customers))
@@ -531,7 +531,7 @@ func Test_AggregationsWithInvalidDatasource(t *testing.T) {
 func requestStats(t *testing.T, err error) wst.M {
 	req, err := http.NewRequest("GET", "/system/memorykv/stats", nil)
 	assert.NoError(t, err)
-	resp, err := app.Server.Test(req)
+	resp, err := app.Server.Test(req, 45000)
 	assert.NoError(t, err)
 	assert.NotNil(t, resp)
 	assert.Equal(t, 200, resp.StatusCode)

@@ -14,11 +14,8 @@ type UserWithRoles struct {
 }
 
 func UpsertUserWithRoles(app *WeStack, userToUpsert UserWithRoles, eventContext *model.EventContext) (user *model.Instance, err error) {
-	var role *model.Instance
-	var roleMapping *model.Instance
 
 	var userModel *model.Model
-	var roleModel *model.Model
 
 	// validate:
 	if userToUpsert.Username == "" {
@@ -40,12 +37,6 @@ func UpsertUserWithRoles(app *WeStack, userToUpsert UserWithRoles, eventContext 
 		return
 	}
 	userModel = foundModels[0]
-	foundModels = app.FindModelsWithClass("Role")
-	if len(foundModels) == 0 {
-		err = fmt.Errorf("role model not found")
-		return
-	}
-	roleModel = foundModels[0]
 
 	// Check if the user exists
 	user, err = userModel.FindOne(&wst.Filter{
@@ -70,41 +61,55 @@ func UpsertUserWithRoles(app *WeStack, userToUpsert UserWithRoles, eventContext 
 		fmt.Printf("User %v already exists\n", userToUpsert.Username)
 	}
 
-	for _, roleName := range userToUpsert.Roles {
+	err = UpsertUserRoles(app, user.Id, userToUpsert.Roles, eventContext)
+	if err != nil {
+		return
+	}
+
+	return
+}
+
+func UpsertUserRoles(app *WeStack, userId interface{}, roles []string, eventContext *model.EventContext) error {
+	var roleModel *model.Model
+	foundModels := app.FindModelsWithClass("Role")
+	if len(foundModels) == 0 {
+		return fmt.Errorf("role model not found")
+	}
+	roleModel = foundModels[0]
+
+	for _, roleName := range roles {
 
 		// find role model to add the role
-		role, err = findRoleWithModel(eventContext, roleName, roleModel)
+		role, err := findRoleWithModel(eventContext, roleName, roleModel)
 		if err != nil {
-			return
+			return err
 		}
 		// check if role mapping exists
-		roleMapping, err = app.roleMappingModel.FindOne(&wst.Filter{
+		roleMapping, err := app.roleMappingModel.FindOne(&wst.Filter{
 			Where: &wst.Where{
 				"principalType": "USER",
-				"principalId":   user.Id,
+				"principalId":   userId,
 				"roleId":        role.Id,
 			},
 		}, eventContext)
 		if err != nil {
-			return
+			return err
 		}
 		if roleMapping == nil {
 			roleMapping, err = app.roleMappingModel.Create(wst.M{
 				"principalType": "USER",
-				"principalId":   user.Id,
+				"principalId":   userId,
 				"roleId":        role.Id,
 			}, eventContext)
 			if err != nil {
-				return
+				return err
 			}
-			fmt.Printf("Assigned role %v to user %v with mapping id %v\n", roleName, userToUpsert.Username, roleMapping.Id)
+			fmt.Printf("Assigned role %v to userId %v with mapping id %v\n", roleName, userId, roleMapping.Id)
 		} else {
-			fmt.Printf("Role mapping already exists for user %s and role %s\n", userToUpsert.Username, roleName)
+			fmt.Printf("Role mapping already exists for userId %s and role %s\n", userId, roleName)
 		}
-
 	}
-
-	return
+	return nil
 }
 
 func findRoleWithModel(eventContext *model.EventContext, roleName string, roleModel *model.Model) (roleInstance *model.Instance, err error) {
