@@ -6,7 +6,7 @@ on:
 jobs:
 
     run_tests:
-      runs-on: ubuntu-latest
+      runs-on: self-hosted
       strategy:
         matrix:
           go: [ '1.20.1', '1.20.6' ]
@@ -139,7 +139,7 @@ jobs:
               git push origin temp-branch-${{ github.run_id }} --force || true
 
     push_to_base:
-      runs-on: ubuntu-latest
+      runs-on: self-hosted
       if: contains(github.event.pull_request.labels.*.name, 'auto-merge')
       needs: [run_tests]
       env:
@@ -203,7 +203,7 @@ jobs:
             git push origin v-${{ steps.latest_tag.outputs.tag }}-alpha
 
     close_pr_success:
-      runs-on: ubuntu-latest
+      runs-on: self-hosted
       if: contains(github.event.pull_request.labels.*.name, 'auto-merge')
       needs: [run_tests, push_to_base]
       steps:
@@ -214,7 +214,7 @@ jobs:
             curl -X PATCH -H "Authorization: token ${{ secrets.PULL_REQUEST_TOKEN }}" -H "Content-Type: application/json" -d '{"state": "closed"}' https://api.github.com/repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}
 
     close_pr_failure:
-        runs-on: ubuntu-latest
+        runs-on: self-hosted
         if: always() && contains(github.event.pull_request.labels.*.name, 'auto-merge') && contains(needs.*.result, 'failure')
         needs: [run_tests, push_to_base]
         steps:
@@ -225,7 +225,7 @@ jobs:
                 curl -X PATCH -H "Authorization: token ${{ secrets.PULL_REQUEST_TOKEN }}" -H "Content-Type: application/json" -d '{"state": "closed"}' https://api.github.com/repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}
 
     cleanup_temp_branch:
-      runs-on: ubuntu-latest
+      runs-on: self-hosted
       if: always() && contains(github.event.pull_request.labels.*.name, 'auto-merge')
       needs: [run_tests, push_to_base]
       steps:
@@ -245,7 +245,7 @@ jobs:
               git push origin --delete temp-branch-${{ github.run_id }}
 
     cleanup_head_branch:
-      runs-on: ubuntu-latest
+      runs-on: self-hosted
       if: always() && contains(github.event.pull_request.labels.*.name, 'delete-branch')
       needs: [run_tests, push_to_base, close_pr_success, close_pr_failure]
       steps:
