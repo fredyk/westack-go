@@ -45,6 +45,19 @@ func Test_Datasource_Initialize_ConnectError(t *testing.T) {
 
 }
 
+func Test_DatasourceClose(t *testing.T) {
+
+	t.Parallel()
+
+	ds, err := app.FindDatasource("db_expected_to_be_closed")
+	assert.NoError(t, err)
+	assert.NotNil(t, ds)
+
+	err = ds.Close()
+	assert.NoError(t, err)
+
+}
+
 func Test_Datasource_Ping(t *testing.T) {
 
 	t.Parallel()
