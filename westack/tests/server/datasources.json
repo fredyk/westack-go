@@ -44,6 +44,18 @@
     "allowExtendedOperators": true,
     "retryOnError": true
   },
+  "db_expected_to_be_closed": {
+    "host": "127.0.0.1",
+    "port": 27017,
+    "database": "example_db_expected_to_be_closed",
+    "password": "",
+    "name": "db_expected_to_be_closed",
+    "username": "",
+    "connector": "mongodb",
+    "useNewUrlParser": true,
+    "allowExtendedOperators": true,
+    "retryOnError": true
+  },
   "memorykv": {
     "name": "memorykv",
     "url": "localhost:0",
