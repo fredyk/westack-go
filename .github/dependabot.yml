@@ -10,3 +10,6 @@ updates:
     schedule:
       interval: "weekly"
     target-branch: "update-dependencies"
+    labels:
+      - "auto-merge"
+      - "delete-branch"
