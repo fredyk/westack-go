@@ -822,7 +822,7 @@ func (loadedModel *Model) DeleteById(id interface{}) (datasource.DeleteResult, e
 	return loadedModel.Datasource.DeleteById(loadedModel.CollectionName, finalId)
 }
 
-func (loadedModel *Model) DeleteMany(where *wst.Where, systemContext *EventContext) (result datasource.DeleteResult, err error) {
+func (loadedModel *Model) DeleteMany(where *wst.Where, ctx *EventContext) (result datasource.DeleteResult, err error) {
 	if where == nil {
 		return result, errors.New("where cannot be nil")
 	}
