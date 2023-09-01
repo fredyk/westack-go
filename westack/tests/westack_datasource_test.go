@@ -54,6 +54,13 @@ func Test_DatasourceClose(t *testing.T) {
 	err = ds.Close()
 	assert.NoError(t, err)
 
+	// Based on suggestion from @tanryberdi: https://github.com/fredyk/westack-go/pull/480#discussion_r1312634782
+	// Attempt to perform a query. We don't mind the queried collection because the client
+	// is disconnected anyway
+	result, err := ds.FindMany("unknownCollection", nil)
+	assert.Errorf(t, err, "client is disconnected")
+	assert.Nil(t, result)
+
 }
 
 func Test_Datasource_Ping(t *testing.T) {
