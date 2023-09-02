@@ -5,7 +5,6 @@ import (
 	"github.com/fredyk/westack-go/westack/model"
 	"io"
 	"net/http"
-	"sync"
 	"testing"
 	"time"
 
@@ -183,26 +182,26 @@ func Test_CustomerOrderStore(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NotNil(t, createdOrder)
 
-	// Create a waiting group using sync.WaitGroup
-	var wg sync.WaitGroup
+	//// Create a waiting group using sync.WaitGroup
+	//var wg sync.WaitGroup
 	// Create other 12k orders
 	orderCountToCreate := 12000
-	wg.Add(orderCountToCreate)
+	//wg.Add(orderCountToCreate)
 	creationInit := time.Now()
 	for i := 0; i < orderCountToCreate; i++ {
-		go func() {
-			order := wst.M{
-				"amount":     createRandomFloat(0, 1000.0),
-				"customerId": nil,
-				"storeId":    nil,
-			}
-			cratedOrder, err := orderModel.Create(order, systemContext)
-			assert.NoError(t, err)
-			assert.NotNil(t, cratedOrder)
-			wg.Done()
-		}()
+		//go func() {
+		order := wst.M{
+			"amount":     createRandomFloat(0, 1000.0),
+			"customerId": nil,
+			"storeId":    nil,
+		}
+		cratedOrder, err := orderModel.Create(order, systemContext)
+		assert.NoError(t, err)
+		assert.NotNil(t, cratedOrder)
+		//	wg.Done()
+		//}()
 	}
-	wg.Wait()
+	//wg.Wait()
 	creationDelay := time.Since(creationInit)
 	fmt.Printf("\n===\nCREATION DELAY: %v ms for %d orders\n===\n", creationDelay.Milliseconds(), orderCountToCreate)
 
