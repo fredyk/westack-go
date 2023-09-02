@@ -183,6 +183,10 @@ func (ds *Datasource) Close() error {
 	return nil
 }
 
+func (ds *Datasource) SetTimeout(seconds float32) {
+	ds.connectorInstance.SetTimeout(seconds)
+}
+
 func New(dsKey string, dsViper *viper.Viper, parentContext context.Context) *Datasource {
 	subViper := dsViper.Sub(dsKey)
 	if subViper == nil {

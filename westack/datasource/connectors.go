@@ -39,4 +39,6 @@ type PersistedConnector interface {
 	Ping(parentCtx context.Context) error
 	// GetClient Returns the client for the datasource
 	GetClient() interface{}
+	// SetTimeout Sets the timeout for the datasource
+	SetTimeout(seconds float32)
 }
