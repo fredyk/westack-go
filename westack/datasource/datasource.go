@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	wst "github.com/fredyk/westack-go/westack/common"
@@ -192,6 +193,10 @@ func New(dsKey string, dsViper *viper.Viper, parentContext context.Context) *Dat
 	if subViper == nil {
 		subViper = viper.New()
 	}
+	subViper.SetEnvPrefix("wst_" + dsKey)
+	replacer := strings.NewReplacer(".", "_")
+	subViper.SetEnvKeyReplacer(replacer)
+	subViper.AutomaticEnv()
 	name := subViper.GetString("name")
 	if name == "" {
 		name = dsKey
