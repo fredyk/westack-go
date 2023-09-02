@@ -342,7 +342,7 @@ func (loadedModel *Model) FindMany(filterMap *wst.Filter, baseContext *EventCont
 					}
 				}
 				return newFixedLengthCursor(result)
-			case wst.A, []wst.M:
+			case wst.A:
 				var result InstanceA
 				sameLevelCache := NewBuildCache()
 				if v, castOk := eventContext.Result.(wst.A); castOk {
@@ -735,7 +735,10 @@ func (loadedModel *Model) Create(data interface{}, baseContext *EventContext) (*
 		}
 	}
 	if !baseContext.DisableTypeConversions {
-		datasource.ReplaceObjectIds(finalData)
+		_, err := datasource.ReplaceObjectIds(finalData)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	eventContext := &EventContext{
@@ -819,7 +822,7 @@ func (loadedModel *Model) DeleteById(id interface{}) (datasource.DeleteResult, e
 	return loadedModel.Datasource.DeleteById(loadedModel.CollectionName, finalId)
 }
 
-func (loadedModel *Model) DeleteMany(where *wst.Where, systemContext *EventContext) (result datasource.DeleteResult, err error) {
+func (loadedModel *Model) DeleteMany(where *wst.Where, ctx *EventContext) (result datasource.DeleteResult, err error) {
 	if where == nil {
 		return result, errors.New("where cannot be nil")
 	}
