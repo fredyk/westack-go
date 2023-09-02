@@ -122,14 +122,14 @@ func initProject(cwd string) error {
 		config.Database = dbName
 		DefaultDatasources["db"] = config
 		bytes, err := json.MarshalIndent(DefaultDatasources, "", "  ")
-		err = os.WriteFile("server/datasources.json", bytes, 0644)
+		err = os.WriteFile("server/datasources.json", bytes, 0600)
 		if err != nil {
 			return err
 		}
 	}
 
 	if _, err := os.Stat("server/model-config.json"); os.IsNotExist(err) {
-		err = os.WriteFile("server/model-config.json", []byte("{}"), 0644)
+		err = os.WriteFile("server/model-config.json", []byte("{}"), 0600)
 		if err != nil {
 			return err
 		}
@@ -195,7 +195,7 @@ func initProject(cwd string) error {
 	if _, err := os.Stat("server/config.json"); os.IsNotExist(err) {
 		DefaultConfig.Name = projectName
 		bytes, err := json.MarshalIndent(DefaultConfig, "", "  ")
-		err = os.WriteFile("server/config.json", bytes, 0644)
+		err = os.WriteFile("server/config.json", bytes, 0600)
 		if err != nil {
 			return err
 		}
@@ -215,7 +215,7 @@ func addModel(config model.Config, datasource string) error {
 	log.Printf("Adding model %v attached to datasource %v\n", config.Name, datasource)
 
 	bytes, err := json.MarshalIndent(config, "", "  ")
-	err = os.WriteFile(path, bytes, 0644)
+	err = os.WriteFile(path, bytes, 0600)
 	if err != nil {
 		return err
 	}
@@ -233,7 +233,7 @@ func addModel(config model.Config, datasource string) error {
 	}
 
 	bytes, err = json.MarshalIndent(globalConfig, "", "  ")
-	err = os.WriteFile("server/model-config.json", bytes, 0644)
+	err = os.WriteFile("server/model-config.json", bytes, 0600)
 	if err != nil {
 		return err
 	}

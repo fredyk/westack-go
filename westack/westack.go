@@ -45,7 +45,7 @@ type WeStack struct {
 	Options Options
 	Bson    wst.BsonOptions
 
-	port              int32
+	port              int
 	datasources       *map[string]*datasource.Datasource
 	modelRegistry     *map[string]*model.Model
 	debug             bool
@@ -268,7 +268,7 @@ func GRPCCallWithBody[InputT any, ClientT interface{}, OutputT proto.Message](se
 
 type Options struct {
 	RestApiRoot       string
-	Port              int32
+	Port              int
 	JwtSecretKey      string
 	DatasourceOptions *map[string]*datasource.Options
 	EnableCompression bool
@@ -349,7 +349,7 @@ func New(options ...Options) *WeStack {
 		finalOptions.RestApiRoot = appViper.GetString("restApiRoot")
 	}
 	if finalOptions.Port == 0 {
-		finalOptions.Port = appViper.GetInt32("port")
+		finalOptions.Port = appViper.GetInt("port")
 	}
 	if os.Getenv("PORT") != "" {
 		portFromEnv, err := strconv.Atoi(os.Getenv("PORT"))
@@ -359,7 +359,7 @@ func New(options ...Options) *WeStack {
 		if finalOptions.debug {
 			log.Printf("DEBUG: PORT environment variable is set to %v", portFromEnv)
 		}
-		finalOptions.Port = int32(portFromEnv)
+		finalOptions.Port = portFromEnv
 	}
 
 	var bsonRegistry *bsoncodec.Registry

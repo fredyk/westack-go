@@ -341,9 +341,17 @@ func (loadedModel *Model) HandleRemoteMethod(name string, eventContext *EventCon
 
 		}
 	}
-	eventContext.Data = datasource.ReplaceObjectIds(eventContext.Data).(*wst.M)
+	replaced, err := datasource.ReplaceObjectIds(eventContext.Data)
+	if err != nil {
+		return err
+	}
+	eventContext.Data = replaced.(*wst.M)
 	if foundSomeQuery {
-		eventContext.Query = datasource.ReplaceObjectIds(eventContext.Query).(*wst.M)
+		replaced, err = datasource.ReplaceObjectIds(eventContext.Query)
+		if err != nil {
+			return err
+		}
+		eventContext.Query = replaced.(*wst.M)
 	}
 
 	err = handler(eventContext)

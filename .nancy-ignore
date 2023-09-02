@@ -1,0 +1,2 @@
+# Ignore github.com/hashicorp/consul/api@v1.20.0
+CVE-2022-29153

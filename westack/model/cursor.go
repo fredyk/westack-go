@@ -1,53 +1,9 @@
 package model
 
-import (
-	"context"
-
-	"github.com/fredyk/westack-go/westack/datasource"
-)
-
 type Cursor interface {
 	Next() (result *Instance, err error)
 	All() (result InstanceA, err error)
 	Close() error
-}
-
-type MongoCursor struct {
-	mCursor datasource.MongoCursorI
-	ctx     context.Context
-	Err     error
-}
-
-func (cursor *MongoCursor) Next() (result *Instance, err error) {
-	if cursor.Err != nil {
-		return result, cursor.Err
-	}
-	if cursor.mCursor.Next(cursor.ctx) {
-		err = cursor.mCursor.Decode(&result)
-		return
-	} else {
-		return result, nil
-	}
-}
-
-func (cursor *MongoCursor) All() (result InstanceA, err error) {
-	err = cursor.mCursor.All(cursor.ctx, &result)
-	return
-}
-
-func (cursor *MongoCursor) Close() error {
-	return cursor.mCursor.Close(cursor.ctx)
-}
-
-func (cursor *MongoCursor) Error(err error) {
-	cursor.Err = err
-}
-
-func newMongoCursor(ctx context.Context, mCursor datasource.MongoCursorI) Cursor {
-	return &MongoCursor{
-		mCursor: mCursor,
-		ctx:     ctx,
-	}
 }
 
 type ErrorCursor struct {
@@ -76,12 +32,12 @@ func newErrorCursor(err error) Cursor {
 	}
 }
 
-type fixedLengthCursor struct {
+type FixedLengthCursor struct {
 	instances InstanceA
 	index     int
 }
 
-func (cursor *fixedLengthCursor) Next() (result *Instance, err error) {
+func (cursor *FixedLengthCursor) Next() (result *Instance, err error) {
 	if cursor.index >= len(cursor.instances) {
 		return result, nil
 	}
@@ -90,16 +46,16 @@ func (cursor *fixedLengthCursor) Next() (result *Instance, err error) {
 	return
 }
 
-func (cursor *fixedLengthCursor) All() (result InstanceA, err error) {
+func (cursor *FixedLengthCursor) All() (result InstanceA, err error) {
 	return cursor.instances, nil
 }
 
-func (cursor *fixedLengthCursor) Close() error {
+func (cursor *FixedLengthCursor) Close() error {
 	return nil
 }
 
 func newFixedLengthCursor(instances InstanceA) Cursor {
-	return &fixedLengthCursor{
+	return &FixedLengthCursor{
 		instances: instances,
 		index:     0,
 	}

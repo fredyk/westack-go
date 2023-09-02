@@ -10,7 +10,8 @@
       <env name="DEBUG" value="true" />
     </envs>
     <root_directory value="$PROJECT_DIR$" />
-    <kind value="FILE" />
+    <kind value="PACKAGE" />
+    <package value="github.com/fredyk/westack-go/westack/tests" />
     <directory value="$PROJECT_DIR$" />
     <filePath value="$PROJECT_DIR$/../westack-go/westack/tests/westack_api_test.go|$PROJECT_DIR$/../westack-go/westack/tests/westack_chunks_test.go|$PROJECT_DIR$/../westack-go/westack/tests/westack_common_test.go|$PROJECT_DIR$/../westack-go/westack/tests/westack_datasource_test.go|$PROJECT_DIR$/../westack-go/westack/tests/westack_grpc_test.go|$PROJECT_DIR$/../westack-go/westack/tests/westack_model_instance_test.go|$PROJECT_DIR$/../westack-go/westack/tests/westack_model_test.go|$PROJECT_DIR$/../westack-go/westack/tests/westack_pprof_test.go|$PROJECT_DIR$/../westack-go/westack/tests/westack_relation_test.go|$PROJECT_DIR$/../westack-go/westack/tests/westack_roles_test.go|$PROJECT_DIR$/../westack-go/westack/tests/westack_swagger_test.go|$PROJECT_DIR$/../westack-go/westack/tests/westack_test.go" />
     <framework value="gotest" />

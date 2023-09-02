@@ -197,6 +197,11 @@ Response body: {"title":"Note 1","body":"I modified the note body","userId":"622
 ```
 ### Change Log
 
+* **v1.6.14**
+    * [#475 - Create tests for Datasource.DeleteMany()](https://github.com/fredyk/westack-go/issues/475)
+    * [#478 - Create tests for Datasource.Close()](https://github.com/fredyk/westack-go/issues/478)
+    * [Updated github.com/gofiber/fiber/v2 to v2.49.0](https://github.com/fredyk/westack-go/pull/499)
+
 * **v1.6.0**
 
     * Added parameter `strictSingleRelatedDocumentCheck` in config.json, defaults to `true`in new projects, and `false` in existing ones.
