@@ -5,25 +5,63 @@ on:
   push:
     branches-ignore:
       - alpha
+#      - update-dependency-* # ignore branches created by the update-dependencies workflow
 
 jobs:
 
     alpha:
         runs-on: ubuntu-latest
+        env:
+          GITHUB_TOKEN: ${{ secrets.PULL_REQUEST_TOKEN }}
         steps:
         - name: Checkout
-          uses: actions/checkout@v2
+          uses: actions/checkout@v3
 
-        - name: Create Pull Request
-          uses: peter-evans/create-pull-request@v3
+#        - name: Create Pull Request Using Action
+#          uses: peter-evans/create-pull-request@v3
+#          with:
+#              token: ${{ secrets.PULL_REQUEST_TOKEN }}
+#              commit-message: Merge ${{ github.ref }} into alpha
+#              title: Merge ${{ github.ref }} into alpha
+#              body: |
+#                Merge ${{ github.ref }} into alpha
+#              branch: ${{ github.ref }}
+#              base: alpha
+#              labels: |
+#                auto-merge
+#                auto-merge-squash
+
+        - name: Create Pull Request Using REST API
+          run: |
+            # Make the request without labels. Export it to a file so we can add labels later
+            curl \
+              -s \
+              -X POST \
+              -H "Accept: application/vnd.github.v3+json" \
+              -H "Authorization: token ${{ secrets.PULL_REQUEST_TOKEN }}" \
+              https://api.github.com/repos/${{ github.repository }}/pulls \
+              -d '{"title":"Merge ${{ github.ref }} into alpha","body":"Merge ${{ github.ref }} into alpha","head":"${{ github.ref }}","base":"alpha"}' \
+              -o pull_request.json
+            result=$?
+            if [ $result -ne 0 ]; then
+              echo "WARNING: curl failed with exit code $result"
+              exit 0
+            fi
+
+            # Add the labels to the pull request
+            issue_url=$(jq -r '.issue_url' pull_request.json)
+            echo "Adding labels to pull request $issue_url"
+            curl \
+              -s \
+              -X PUT \
+              -H "Accept: application/vnd.github.v3+json" \
+              -H "Authorization: token ${{ secrets.PULL_REQUEST_TOKEN }}" \
+              "$issue_url/labels" \
+              -d '["auto-merge","auto-merge-squash"]'
+
+        - name: Always upload artifacts
+          if: always()
+          uses: actions/upload-artifact@v2
           with:
-              token: ${{ secrets.PULL_REQUEST_TOKEN }}
-              commit-message: Merge ${{ github.ref }} into alpha
-              title: Merge ${{ github.ref }} into alpha
-              body: |
-                Merge ${{ github.ref }} into alpha
-              branch: ${{ github.ref }}
-              base: alpha
-              labels: |
-                auto-merge
-                auto-merge-squash
+            name: pull_request.json
+            path: pull_request.json
