@@ -51,6 +51,11 @@ jobs:
             # Add the labels to the pull request
             issue_url=$(jq -r '.issue_url' pull_request.json)
             echo "Adding labels to pull request $issue_url"
+            # If no issue_url found, exit with success
+            if [ "$issue_url" == "null" ]; then
+              echo "WARNING: No issue_url found in pull_request.json"
+              exit 0
+            fi
             curl \
               -s \
               -X PUT \
