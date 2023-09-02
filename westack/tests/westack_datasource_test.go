@@ -27,9 +27,9 @@ func Test_Datasource_Initialize_ConnectError(t *testing.T) {
 
 	t.Parallel()
 
-	prevHost := app.DsViper.GetString("db.host")
 	ds := datasource.New("db0", app.DsViper, context.Background())
-	ds.SubViper.Set("host", "<invalid host>")
+	prevHost := ds.SubViper.GetString("url")
+	ds.SubViper.Set("url", "<invalid url>")
 	ds.Options = &datasource.Options{
 		MongoDB: &datasource.MongoDBDatasourceOptions{
 			Timeout: 3,
@@ -37,9 +37,9 @@ func Test_Datasource_Initialize_ConnectError(t *testing.T) {
 	}
 	err := ds.Initialize()
 	assert.Error(t, err)
-	assert.Regexp(t, "no such host", err.Error(), "error message should be 'no such host'")
+	assert.Regexp(t, `error parsing uri: scheme must be "mongodb" or "mongodb\+srv"`, err.Error(), "error message should be 'error parsing uri: scheme must be \"mongodb\" or \"mongodb+srv\"'")
 
-	ds.SubViper.Set("host", prevHost)
+	ds.SubViper.Set("url", prevHost)
 	err = ds.Initialize()
 	assert.NoError(t, err)
 

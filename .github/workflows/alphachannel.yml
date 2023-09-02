@@ -6,6 +6,7 @@ on:
     branches-ignore:
       - alpha
 #      - update-dependency-* # ignore branches created by the update-dependencies workflow
+      - dependabot/** # ignore branches created by dependabot
 
 jobs:
 
