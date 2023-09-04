@@ -1,22 +1,22 @@
 {
   "db0": {
-    "host": "mongo-dev.fhcreations.com",
-    "port": 27019,
+    "host": "127.0.0.1",
+    "port": 27017,
     "database": "example_db_00",
-    "password": "<from_$WST_$ds.key_PASSWORD>",
+    "password": "",
     "name": "db0",
-    "username": "<from_$WST_$ds.key_USERNAME>",
+    "username": "",
     "connector": "mongodb",
     "useNewUrlParser": true,
     "allowExtendedOperators": true
   },
   "db1": {
-    "host": "mongo-dev.fhcreations.com",
-    "port": 27019,
+    "host": "127.0.0.1",
+    "port": 27017,
     "database": "example_db_01",
-    "password": "<from_$WST_$ds.key_PASSWORD>",
+    "password": "",
     "name": "db1",
-    "username": "<from_$WST_$ds.key_USERNAME>",
+    "username": "",
     "connector": "mongodb",
     "useNewUrlParser": true,
     "allowExtendedOperators": true
