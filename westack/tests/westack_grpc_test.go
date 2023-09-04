@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"go.mongodb.org/mongo-driver/mongo"
 	"io"
 	"log"
 	"net"
@@ -599,7 +600,7 @@ func revertAllTests() error {
 			"$ne": nil,
 		},
 	}
-	for _, toDeleteMap := range []*model.Model{
+	for _, modelToPurge := range []*model.Model{
 		noteModel,
 		userModel,
 		customerModel,
@@ -607,11 +608,23 @@ func revertAllTests() error {
 		storeModel,
 		footerModel,
 	} {
-		deleteManyResult, err := toDeleteMap.DeleteMany(sharedDeleteManyWhere, systemContext)
+		deleteManyResult, err := modelToPurge.DeleteMany(sharedDeleteManyWhere, systemContext)
 		if err != nil {
 			return err
 		}
-		fmt.Printf("Deleted %d instances from model %s\n", deleteManyResult.DeletedCount, toDeleteMap.Name)
+		fmt.Printf("Deleted %d instances from model %s\n", deleteManyResult.DeletedCount, modelToPurge.Name)
+		// Drop db
+		ds := modelToPurge.Datasource
+		if ds.SubViper.GetString("connector") == "mongodb" {
+			// drop database
+			mongoDatabase := ds.SubViper.GetString("database")
+			err = ds.Db.(*mongo.Client).Database(mongoDatabase).Drop(context.Background())
+			if err != nil {
+				return err
+			} else {
+				fmt.Printf("Dropped database %s\n", mongoDatabase)
+			}
+		}
 	}
 	return nil
 }
