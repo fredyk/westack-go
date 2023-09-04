@@ -33,13 +33,13 @@ func (app *WeStack) loadNotFoundRoutes() {
 	}
 }
 
-func (app *WeStack) loadModelsFixedRoutes() {
+func (app *WeStack) loadModelsFixedRoutes() error {
 	for _, entry := range *app.modelRegistry {
 		loadedModel := entry
 
 		e, err := casbin.NewEnforcer(*loadedModel.CasbinModel, *loadedModel.CasbinAdapter, app.debug)
 		if err != nil {
-			panic(err)
+			return fmt.Errorf("could not create casbin enforcer: %v", err)
 		}
 
 		loadedModel.Enforcer = e
@@ -158,47 +158,47 @@ func (app *WeStack) loadModelsFixedRoutes() {
 
 		_, err = e.AddRoleForUser("findMany", replaceVarNames("read"))
 		if err != nil {
-			panic(err)
+			return fmt.Errorf("could not add role for user: %v", err)
 		}
 		_, err = e.AddRoleForUser("findById", replaceVarNames("read"))
 		if err != nil {
-			panic(err)
+			return fmt.Errorf("could not add role for user: %v", err)
 		}
 		_, err = e.AddRoleForUser("count", replaceVarNames("read"))
 		if err != nil {
-			panic(err)
+			return fmt.Errorf("could not add role for user: %v", err)
 		}
 
 		_, err = e.AddRoleForUser("create", replaceVarNames("write"))
 		if err != nil {
-			panic(err)
+			return fmt.Errorf("could not add role for user: %v", err)
 		}
 		_, err = e.AddRoleForUser("instance_updateAttributes", replaceVarNames("write"))
 		if err != nil {
-			panic(err)
+			return fmt.Errorf("could not add role for user: %v", err)
 		}
 		_, err = e.AddRoleForUser("instance_delete", replaceVarNames("write"))
 		if err != nil {
-			panic(err)
+			return fmt.Errorf("could not add role for user: %v", err)
 		}
 
 		_, err = e.AddRoleForUser("read", replaceVarNames("*"))
 		if err != nil {
-			panic(err)
+			return fmt.Errorf("could not add role for user: %v", err)
 		}
 		_, err = e.AddRoleForUser("write", replaceVarNames("*"))
 		if err != nil {
-			panic(err)
+			return fmt.Errorf("could not add role for user: %v", err)
 		}
 
 		err = e.SavePolicy()
 		if err != nil {
-			panic(err)
+			return fmt.Errorf("could not save policy: %v", err)
 		}
 
 		err = e.LoadPolicy()
 		if err != nil {
-			panic(err)
+			return fmt.Errorf("could not load policy: %v", err)
 		}
 
 		if app.debug {
@@ -209,7 +209,7 @@ func (app *WeStack) loadModelsFixedRoutes() {
 			text := loadedModel.CasbinModel.ToText()
 			err = os.WriteFile(fmt.Sprintf("common/models/%v.casbin.dump.conf", loadedModel.Name), []byte(text), os.ModePerm)
 			if err != nil {
-				panic(err)
+				return fmt.Errorf("could not write casbin dump: %v", err)
 			}
 		}
 
@@ -449,6 +449,7 @@ func (app *WeStack) loadModelsFixedRoutes() {
 
 		}
 	}
+	return nil
 }
 
 func (app *WeStack) loadModelsDynamicRoutes() {
