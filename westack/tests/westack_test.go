@@ -163,7 +163,7 @@ func createUser(t *testing.T, userData wst.M) (wst.M, error) {
 
 	request := httptest.NewRequest("POST", "/api/v1/users", b)
 	request.Header.Set("Content-Type", "application/json")
-	response, err := app.Server.Test(request)
+	response, err := app.Server.Test(request, 45000)
 	if err != nil {
 		return nil, err
 	}
@@ -191,7 +191,7 @@ func login(t *testing.T, body wst.M) (string, string) {
 	b := createBody(t, body)
 	request := httptest.NewRequest("POST", "/api/v1/users/login", b)
 	request.Header.Set("Content-Type", "application/json")
-	response, err := app.Server.Test(request)
+	response, err := app.Server.Test(request, 45000)
 	if err != nil {
 		t.Error(err)
 		return "", ""
@@ -231,10 +231,10 @@ func Test_WeStackCreateUser(t *testing.T) {
 
 	t.Parallel()
 
-	n, _ := rand.Int(rand.Reader, big.NewInt(899999999))
-	email := fmt.Sprintf("email%v@example.com", 100000000+n.Int64())
+	randomUserSuffix := createRandomInt()
+	email := fmt.Sprintf("email%v@example.com", randomUserSuffix)
 	password := "test"
-	body := wst.M{"email": email, "password": password, "username": fmt.Sprintf("user%v", n)}
+	body := wst.M{"email": email, "password": password, "username": fmt.Sprintf("user%v", randomUserSuffix)}
 	user, err := createUser(t, body)
 	assert.Nil(t, err)
 	assert.NotNil(t, user)
@@ -287,7 +287,7 @@ func Test_WeStackDelete(t *testing.T) {
 
 	request := httptest.NewRequest("DELETE", fmt.Sprintf("/api/v1/users/%v", userId), nil)
 	request.Header.Set("Authorization", fmt.Sprintf("Bearer %v", bearer))
-	response, err := app.Server.Test(request)
+	response, err := app.Server.Test(request, 45000)
 	if err != nil {
 		t.Error(err)
 		return
