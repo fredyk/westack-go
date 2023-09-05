@@ -9,14 +9,14 @@ jobs:
       runs-on: ubuntu-latest
       strategy:
         matrix:
-          go: [ '1.19', '1.20.1', '1.20.6' ]
+          go: [ '1.18', '1.19', '1.20.1', '1.20.6' ]
       env:
         WST_ADMIN_USERNAME: admin
         WST_ADMIN_PWD: testadmin
         PPROF_AUTH_USERNAME: test
         PPROF_AUTH_PASSWORD: abcd1234.
         GITHUB_TOKEN: ${{ secrets.PULL_REQUEST_TOKEN }}
-        MIN_COVERAGE_THRESHOLD: 67.6
+        MIN_COVERAGE_THRESHOLD: 71.9
         WST_DB0_USERNAME: ${{ secrets.MONGO_DEV_USERNAME }}
         WST_DB0_PASSWORD: ${{ secrets.MONGO_DEV_PWD }}
         WST_DB1_USERNAME: ${{ secrets.MONGO_DEV_USERNAME }}
@@ -27,6 +27,7 @@ jobs:
         WST_DB_EXPECTED_TO_FAIL_PASSWORD: ${{ secrets.MONGO_DEV_PWD }}
         WST_DB_EXPECTED_TO_BE_CLOSED_USERNAME: ${{ secrets.MONGO_DEV_USERNAME }}
         WST_DB_EXPECTED_TO_BE_CLOSED_PASSWORD: ${{ secrets.MONGO_DEV_PWD }}
+        DEBUG: true
       steps:
         - name: Checkout master
           uses: actions/checkout@v3
@@ -121,6 +122,8 @@ jobs:
             fi
 
         - name: Process coverage.summary.txt
+          # skip for mongo 1.18
+          if: matrix.go != '1.18'
           run: |
             # Parse coverage_lines to get coverage percentage. If any percentage is below $MIN_COVERAGE_THRESHOLD, exit with error
             # Also skip github.com/fredyk/westack-go/westack/tests
