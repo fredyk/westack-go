@@ -72,6 +72,9 @@ func (chunkGenerator *cursorChunkGenerator) ContentType() string {
 }
 
 func (chunkGenerator *cursorChunkGenerator) NextChunk() (chunk Chunk, err error) {
+	if v, ok := chunkGenerator.cursor.(*ErrorCursor); ok {
+		return chunk, v.Error()
+	}
 	err = chunkGenerator.GenerateNextChunk()
 	chunk = chunkGenerator.currentChunk
 	return

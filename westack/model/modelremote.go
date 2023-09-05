@@ -332,6 +332,9 @@ func (loadedModel *Model) HandleRemoteMethod(name string, eventContext *EventCon
 			if paramDef.Arg == "filter" {
 				filterSt := (*eventContext.Query)[key].(string)
 				filterMap := ParseFilter(filterSt)
+				if filterSt != "" && filterMap == nil {
+					return wst.CreateError(fiber.ErrBadRequest, "INVALID_FILTER", fiber.Map{"message": "Invalid filter"}, "ValidationError")
+				}
 
 				eventContext.Filter = filterMap
 				continue
