@@ -3,41 +3,14 @@ package tests
 import (
 	"fmt"
 	"github.com/goccy/go-json"
+	"github.com/gofiber/fiber/v2"
 	"github.com/stretchr/testify/assert"
-	"go.mongodb.org/mongo-driver/bson/primitive"
 	"io"
 	"net/http"
 	"testing"
 
 	wst "github.com/fredyk/westack-go/westack/common"
 )
-
-func createUserThroughNetwork(t *testing.T) wst.M {
-	randUserN := createRandomInt()
-	request, err := http.NewRequest("POST", "http://localhost:8019/api/v1/users", jsonToReader(wst.M{
-		"username": fmt.Sprintf("user%v", randUserN),
-		"email":    fmt.Sprintf("user.%v@example.com", randUserN),
-		"password": "abcd1234.",
-	}))
-	assert.NoError(t, err)
-	request.Header.Set("Content-Type", "application/json")
-
-	response, err := http.DefaultClient.Do(request)
-	assert.NoError(t, err)
-
-	var out []byte
-	var parsed wst.M
-
-	// read response body bytes
-	out, err = io.ReadAll(response.Body)
-	assert.NoError(t, err)
-
-	// parse response body bytes
-	err = json.Unmarshal(out, &parsed)
-	assert.Nilf(t, err, "Error: %v, received bytes: %v <--", err, string(out))
-
-	return parsed
-}
 
 func createNoteForUser(userId string, token string, footerId string, t *testing.T) (note wst.M, err error) {
 	request, err := http.NewRequest("POST", "http://localhost:8019/api/v1/notes", jsonToReader(wst.M{
@@ -75,8 +48,11 @@ func Test_FindMany(t *testing.T) {
 
 	var err error
 
-	user := createUserThroughNetwork(t)
-	token, err := loginUser(user["email"].(string), "abcd1234.", t)
+	user := createUser(t, wst.M{
+		"username": fmt.Sprintf("user-%d", createRandomInt()),
+		"password": "abcd1234.",
+	})
+	token, err := loginUser(user.GetString("username"), "abcd1234.", t)
 	assert.Nilf(t, err, "Error while logging in: %v", err)
 	assert.NotNilf(t, token, "Token is nil: %v", token)
 	assert.Contains(t, token, "id")
@@ -162,23 +138,93 @@ func Test_Count(t *testing.T) {
 	// t.Parallel()
 
 	// Count notes
-	count, err := noteModel.Count(nil, systemContext)
+	countResponse, err := invokeApiAsRandomUser(t, "GET", "/notes/count", nil, nil)
 	assert.NoError(t, err)
-	assert.GreaterOrEqual(t, count, int64(0))
+	assert.EqualValues(t, 0, countResponse["count"])
 
 	// Create a note
-	note, err := noteModel.Create(wst.M{
+	note, err := invokeApiAsRandomUser(t, "POST", "/notes", wst.M{
 		"title": "Test Note",
-	}, systemContext)
+	}, wst.M{
+		"Content-Type": "application/json",
+	})
 	assert.NoError(t, err)
 	assert.NotNil(t, note)
-	assert.NotEqualValuesf(t, primitive.NilObjectID, note.Id, "Note ID is nil: %v", note.Id)
+	assert.NotEmptyf(t, note.GetString("id"), "Note ID is nil: %v", note)
 	assert.Equal(t, "Test Note", note.GetString("title"))
 
 	// Count notes again
-	newCount, err := noteModel.Count(nil, systemContext)
+	newCount, err := invokeApiAsRandomUser(t, "GET", "/notes/count", nil, nil)
 	assert.NoError(t, err)
-	assert.EqualValuesf(t, count+1, newCount, "Count is not increased: %v", newCount)
+	assert.EqualValuesf(t, countResponse["count"].(float64)+1, newCount["count"], "Count is not increased: %v", newCount)
+
+}
+
+func Test_FindById(t *testing.T) {
+
+	t.Parallel()
+
+	foundUser, err := invokeApiAsRandomUser(t, "GET", fmt.Sprintf("/users/%v", randomUser.GetString("id")), nil, nil)
+	assert.NoError(t, err)
+	assert.Contains(t, foundUser, "id")
+	assert.Equal(t, randomUser.GetString("id"), foundUser.GetString("id"))
+
+}
+
+func Test_UserFindSelf(t *testing.T) {
+
+	t.Parallel()
+
+	foundUser, err := invokeApiAsRandomUser(t, "GET", "/users/me", nil, nil)
+	assert.NoError(t, err)
+	assert.Contains(t, foundUser, "id")
+	assert.Equal(t, randomUser.GetString("id"), foundUser.GetString("id"))
+
+}
+
+func Test_PostResetPassword(t *testing.T) {
+
+	t.Parallel()
+
+	// Request password reset
+	resetPasswordResponse, err := invokeApiJsonM(t, "POST", "/users/reset-password", wst.M{}, wst.M{
+		"Content-Type": "application/json",
+	})
+	assert.NoError(t, err)
+	assert.Equal(t, "OK", resetPasswordResponse.GetString("result"))
+	assert.Equal(t, "Reset password email sent", resetPasswordResponse.GetString("message"))
+
+}
+
+func Test_VerifyEmail(t *testing.T) {
+
+	t.Parallel()
+
+	// Request email verification
+	verifyEmailResponse, err := invokeApiAsRandomUser(t, "POST", "/users/verify-mail", wst.M{}, wst.M{
+		"Content-Type": "application/json",
+	})
+	assert.NoError(t, err)
+	assert.Equal(t, "OK", verifyEmailResponse.GetString("result"))
+	assert.Equal(t, "Verification email sent", verifyEmailResponse.GetString("message"))
+
+	// Request email verification
+	performVerificationResponse := invokeApiFullResponse(t, "GET", fmt.Sprintf("/users/verify-mail?user_id=%s&access_token=%s&redirect_uri=%s",
+		randomUser.GetString("id"),
+		verifyEmailResponse.GetString("bearer"),
+		encodeUriComponent("http://localhost:8019/api/v1/users/me"),
+	), nil, nil, err)
+	assert.NotEmpty(t, performVerificationResponse)
+	assert.Equal(t, fiber.StatusFound, performVerificationResponse.StatusCode)
+	assert.Equal(t, "http://localhost:8019/api/v1/users/me", performVerificationResponse.Header.Get("Location"))
+	//assert.Equal(t, "OK", performVerificationResponse.GetString("result"))
+	//assert.Equal(t, "Email verified", performVerificationResponse.GetString("message"))
+
+}
+
+func Test_GetPerformEmailVerification(t *testing.T) {
+
+	t.Parallel()
 
 }
 
@@ -291,4 +337,65 @@ func loginAsUsernameOrEmail(email string, password string, mode string, t *testi
 	}
 
 	return parsed, nil
+}
+
+func Test_CreateUserWithoutUsername(t *testing.T) {
+
+	t.Parallel()
+
+	user, err := invokeApiJsonM(t, "POST", "/users", wst.M{
+		"password": "abcd1234.",
+	}, wst.M{
+		"Content-Type": "application/json",
+	})
+	assert.NoError(t, err)
+	assert.EqualValues(t, fiber.StatusBadRequest, user.GetM("error").GetInt("statusCode"))
+	assert.Equal(t, "EMAIL_PRESENCE", user.GetM("error").GetString("code"))
+
+}
+
+func Test_LoginUserWithoutUserOrEmail(t *testing.T) {
+
+	t.Parallel()
+
+	user, err := invokeApiJsonM(t, "POST", "/users/login", wst.M{
+		"password": "abcd1234.",
+	}, wst.M{
+		"Content-Type": "application/json",
+	})
+	assert.NoError(t, err)
+	assert.EqualValues(t, fiber.StatusBadRequest, user.GetM("error").GetInt("statusCode"))
+	assert.Equal(t, "USERNAME_EMAIL_REQUIRED", user.GetM("error").GetString("code"))
+
+}
+
+func Test_LoginUserWithoutPassword(t *testing.T) {
+
+	t.Parallel()
+
+	user, err := invokeApiJsonM(t, "POST", "/users/login", wst.M{
+		"username": fmt.Sprintf("user-%d-doesnotexist", createRandomInt()),
+	}, wst.M{
+		"Content-Type": "application/json",
+	})
+	assert.NoError(t, err)
+	assert.EqualValues(t, fiber.StatusUnauthorized, user.GetM("error").GetInt("statusCode"))
+	assert.Equal(t, "LOGIN_FAILED", user.GetM("error").GetString("code"))
+
+}
+
+func Test_LoginUserWithWrongPassword(t *testing.T) {
+
+	t.Parallel()
+
+	user, err := invokeApiJsonM(t, "POST", "/users/login", wst.M{
+		"username": randomUser.GetString("username"),
+		"password": "wrongpassword",
+	}, wst.M{
+		"Content-Type": "application/json",
+	})
+	assert.NoError(t, err)
+	assert.EqualValues(t, fiber.StatusUnauthorized, user.GetM("error").GetInt("statusCode"))
+	assert.Equal(t, "LOGIN_FAILED", user.GetM("error").GetString("code"))
+
 }
