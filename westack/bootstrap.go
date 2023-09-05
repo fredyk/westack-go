@@ -3,6 +3,8 @@ package westack
 import (
 	"context"
 	"fmt"
+	"github.com/gofiber/fiber/v2"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"io/fs"
 	"log"
 	"os"
@@ -14,12 +16,7 @@ import (
 	"github.com/fredyk/westack-go/westack/lib/swaggerhelper"
 	swaggerhelper2 "github.com/fredyk/westack-go/westack/lib/swaggerhelperinterface"
 
-	casbinmodel "github.com/casbin/casbin/v2/model"
-	fileadapter "github.com/casbin/casbin/v2/persist/file-adapter"
-	fiber "github.com/gofiber/fiber/v2"
-	"github.com/golang-jwt/jwt"
 	"github.com/spf13/viper"
-	"go.mongodb.org/mongo-driver/bson/primitive"
 	"golang.org/x/crypto/bcrypt"
 
 	wst "github.com/fredyk/westack-go/westack/common"
@@ -48,12 +45,12 @@ func (app *WeStack) loadModels() error {
 	fileInfos, err := fs.ReadDir(os.DirFS("./common/models"), ".")
 
 	if err != nil {
-		panic("Error while loading models: " + err.Error())
+		return fmt.Errorf("error while loading models: " + err.Error())
 	}
 
 	var globalModelConfig *map[string]*model.SimplifiedConfig
 	if err := wst.LoadFile("./server/model-config.json", &globalModelConfig); err != nil {
-		panic("Missing or invalid ./server/model-config.json: " + err.Error())
+		return fmt.Errorf("missing or invalid ./server/model-config.json: " + err.Error())
 	}
 
 	app.swaggerHelper = swaggerhelper.NewSwaggerHelper()
@@ -74,8 +71,7 @@ func (app *WeStack) loadModels() error {
 		var config *model.Config
 		err := wst.LoadFile("./common/models/"+fileInfo.Name(), &config)
 		if err != nil {
-			fmt.Printf("Error while loading model %v: %v\n", fileInfo.Name(), err)
-			panic(err)
+			return fmt.Errorf("error while loading model %v: %v\n", fileInfo.Name(), err)
 		}
 		if config.Relations == nil {
 			config.Relations = &map[string]*model.Relation{}
@@ -84,17 +80,20 @@ func (app *WeStack) loadModels() error {
 		configFromGlobal := (*globalModelConfig)[config.Name]
 
 		if configFromGlobal == nil {
-			panic("ERROR: Missing model " + config.Name + " in model-config.json")
+			return fmt.Errorf("missing model " + config.Name + " in model-config.json")
 		}
 
 		dataSource := (*app.datasources)[configFromGlobal.Datasource]
 
 		if dataSource == nil {
-			panic(fmt.Sprintf("ERROR: Missing or invalid datasource file for %v", dataSource))
+			return fmt.Errorf("missing or invalid datasource file for %v", dataSource)
 		}
 
 		loadedModel := model.New(config, app.modelRegistry)
-		app.setupModel(loadedModel, dataSource)
+		err = app.setupModel(loadedModel, dataSource)
+		if err != nil {
+			return err
+		}
 		if loadedModel.Config.Base == "User" {
 			someUserModel = loadedModel
 		}
@@ -102,7 +101,10 @@ func (app *WeStack) loadModels() error {
 
 	if app.roleMappingModel != nil {
 		(*app.roleMappingModel.Config.Relations)["user"].Model = someUserModel.Name
-		app.setupModel(app.roleMappingModel, app.roleMappingModel.Datasource)
+		err := app.setupModel(app.roleMappingModel, app.roleMappingModel.Datasource)
+		if err != nil {
+			return err
+		}
 	}
 
 	for _, loadedModel := range *app.modelRegistry {
@@ -113,7 +115,7 @@ func (app *WeStack) loadModels() error {
 	}
 	return nil
 }
-func (app *WeStack) loadDataSources() {
+func (app *WeStack) loadDataSources() error {
 
 	dsViper := viper.New()
 	app.DsViper = dsViper
@@ -139,11 +141,11 @@ func (app *WeStack) loadDataSources() {
 			dsViper.SetConfigName("datasources") // name of config file (without extension)
 			err := dsViper.ReadInConfig()        // Find and read the config file
 			if err != nil {
-				panic(fmt.Errorf("fatal error config file: %w", err))
+				return fmt.Errorf("fatal error config file: %w", err)
 			}
 			break
 		default:
-			panic(fmt.Errorf("fatal error config file: %w", err))
+			return fmt.Errorf("fatal error config file: %w", err)
 		}
 	}
 
@@ -156,7 +158,7 @@ func (app *WeStack) loadDataSources() {
 		}
 		connector := dsViper.GetString(key + ".connector")
 		if connector == "mongodb" || connector == "memorykv" {
-			ds := datasource.New(key, dsViper, ctx)
+			ds := datasource.New(app.asInterface(), key, dsViper, ctx)
 
 			if app.dataSourceOptions != nil {
 				ds.Options = (*app.dataSourceOptions)[dsName]
@@ -168,19 +170,20 @@ func (app *WeStack) loadDataSources() {
 
 			err := ds.Initialize()
 			if err != nil {
-				panic(err)
+				return fmt.Errorf("could not initialize datasource %v: %v", dsName, err)
 			}
 			(*app.datasources)[dsName] = ds
 			if app.debug {
 				log.Println("Connected to database", dsViper.GetString(key+".database"))
 			}
 		} else {
-			panic("ERROR: connector " + connector + " not supported")
+			return fmt.Errorf("connector " + connector + " not supported")
 		}
 	}
+	return nil
 }
 
-func (app *WeStack) setupModel(loadedModel *model.Model, dataSource *datasource.Datasource) {
+func (app *WeStack) setupModel(loadedModel *model.Model, dataSource *datasource.Datasource) error {
 
 	loadedModel.App = app.asInterface()
 	loadedModel.Datasource = dataSource
@@ -190,125 +193,12 @@ func (app *WeStack) setupModel(loadedModel *model.Model, dataSource *datasource.
 	loadedModel.Initialize()
 
 	if config.Base == "Role" {
-		roleMappingModel := model.New(&model.Config{
-			Name:   "RoleMapping",
-			Plural: "role-mappings",
-			Base:   "PersistedModel",
-			//Datasource: config.Datasource,
-			Public:     true,
-			Properties: nil,
-			Relations: &map[string]*model.Relation{
-				"role": {
-					Type:  "belongsTo",
-					Model: config.Name,
-					//PrimaryKey: "",
-					//ForeignKey: "",
-				},
-				"user": {
-					Type:  "belongsTo",
-					Model: "user",
-					//PrimaryKey: "",
-					//ForeignKey: "",
-				},
-			},
-			Casbin: model.CasbinConfig{
-				Policies: []string{
-					"$owner,*,__get__role,allow",
-					"roleManager,*,read,allow",
-					"roleManager,*,write,allow",
-				},
-			},
-		}, app.modelRegistry)
-		roleMappingModel.App = app.asInterface()
-		roleMappingModel.Datasource = dataSource
-
-		app.roleMappingModel = roleMappingModel
+		setupRoleModel(config, app, dataSource)
 	}
 
 	if config.Base == "User" {
 
-		loadedModel.On("login", func(ctx *model.EventContext) error {
-			data := ctx.Data
-			email := data.GetString("email")
-			username := data.GetString("username")
-
-			if email == "" && username == "" {
-				return wst.CreateError(fiber.ErrBadRequest, "USERNAME_EMAIL_REQUIRED", fiber.Map{"message": "username or email is required"}, "ValidationError")
-			}
-
-			if (*data)["password"] == nil || strings.TrimSpace((*data)["password"].(string)) == "" {
-				return wst.CreateError(fiber.ErrUnauthorized, "LOGIN_FAILED", fiber.Map{"message": "login failed"}, "Error")
-			}
-
-			var where wst.Where
-			if email != "" {
-				where = wst.Where{"email": email}
-			} else {
-				where = wst.Where{"username": username}
-			}
-			users, err := loadedModel.FindMany(&wst.Filter{
-				Where: &where,
-			}, ctx).All()
-			if len(users) == 0 {
-				return wst.CreateError(fiber.ErrUnauthorized, "LOGIN_FAILED", fiber.Map{"message": "login failed"}, "Error")
-			}
-			firstUser := users[0]
-			ctx.Instance = &firstUser
-
-			firstUserData := firstUser.ToJSON()
-			savedPassword := firstUserData["password"]
-			err = bcrypt.CompareHashAndPassword([]byte(savedPassword.(string)), []byte((*data)["password"].(string)))
-			if err != nil {
-				return wst.CreateError(fiber.ErrUnauthorized, "LOGIN_FAILED", fiber.Map{"message": "login failed"}, "Error")
-			}
-
-			userIdHex := firstUser.Id.(primitive.ObjectID).Hex()
-
-			roleNames := []string{"USER"}
-			if app.roleMappingModel != nil {
-				ctx.Bearer = &model.BearerToken{
-					User: &model.BearerUser{
-						System: true,
-					},
-					Roles: []model.BearerRole{},
-				}
-				roleContext := &model.EventContext{
-					BaseContext:            ctx,
-					DisableTypeConversions: true,
-				}
-				roleEntries, err := app.roleMappingModel.FindMany(&wst.Filter{Where: &wst.Where{
-					"principalType": "USER",
-					"$or": []wst.M{
-						{
-							"principalId": userIdHex,
-						},
-						{
-							"principalId": firstUser.Id,
-						},
-					},
-				}, Include: &wst.Include{{Relation: "role"}}}, roleContext).All()
-				if err != nil {
-					return err
-				}
-				for _, roleEntry := range roleEntries {
-					role := roleEntry.GetOne("role")
-					roleNames = append(roleNames, role.ToJSON()["name"].(string))
-				}
-			}
-
-			token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-				"userId":  userIdHex,
-				"created": time.Now().UnixMilli(),
-				"ttl":     604800 * 2 * 1000,
-				"roles":   roleNames,
-			})
-
-			tokenString, err := token.SignedString(loadedModel.App.JwtSecretKey)
-
-			ctx.StatusCode = fiber.StatusOK
-			ctx.Result = fiber.Map{"id": tokenString, "userId": userIdHex}
-			return nil
-		})
+		setupUserModel(loadedModel, app)
 
 	}
 
@@ -320,89 +210,11 @@ func (app *WeStack) setupModel(loadedModel *model.Model, dataSource *datasource.
 	}
 	config.Plural = plural
 
-	casbModel := casbinmodel.NewModel()
-
-	basePoliciesDirectory := app.Viper.GetString("casbin.policies.outputDirectory")
-	_, err := os.Stat(basePoliciesDirectory)
+	err := createCasbinModel(loadedModel, app, config)
 	if err != nil {
-		if os.IsNotExist(err) {
-			err = os.MkdirAll(basePoliciesDirectory, os.ModePerm)
-			if err != nil {
-				panic(err)
-			}
-		} else {
-			panic(err)
-		}
+		return err
 	}
 
-	f, err := os.OpenFile(fmt.Sprintf("%v/%v.policies.csv", basePoliciesDirectory, loadedModel.Name), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
-	if err != nil {
-		panic(err)
-	}
-	err = f.Close()
-	if err != nil {
-		panic(err)
-	}
-
-	adapter := fileadapter.NewAdapter(fmt.Sprintf("%v/%v.policies.csv", basePoliciesDirectory, loadedModel.Name))
-
-	requestDefinition := "sub, obj, act"
-	policyDefinition := "sub, obj, act, eft"
-	roleDefinition := "_, _"
-	policyEffect := "subjectPriority(p.eft) || deny"
-	matchersDefinition := fmt.Sprintf("" +
-		"(" +
-		"	((p.sub == '$owner' && isOwner(r.sub, r.obj, p.obj)) || g(r.sub, p.sub)) && keyMatch(r.obj, p.obj) && (g(r.act, p.act) || keyMatch(r.act, p.act))" +
-		")")
-	if loadedModel.Config.Casbin.RequestDefinition != "" {
-		requestDefinition = loadedModel.Config.Casbin.RequestDefinition
-	}
-	if loadedModel.Config.Casbin.PolicyDefinition != "" {
-		policyDefinition = loadedModel.Config.Casbin.PolicyDefinition
-	}
-	if loadedModel.Config.Casbin.RoleDefinition != "" {
-		roleDefinition = loadedModel.Config.Casbin.RoleDefinition
-	}
-	if loadedModel.Config.Casbin.PolicyEffect != "" {
-		policyEffect = strings.ReplaceAll(loadedModel.Config.Casbin.PolicyEffect, "$default", policyEffect)
-	}
-	if loadedModel.Config.Casbin.MatchersDefinition != "" {
-		matchersDefinition = strings.ReplaceAll(loadedModel.Config.Casbin.MatchersDefinition, "$default", " ( "+matchersDefinition+" ) ")
-	}
-
-	casbModel.AddDef("r", "r", replaceVarNames(requestDefinition))
-	casbModel.AddDef("p", "p", replaceVarNames(policyDefinition))
-	casbModel.AddDef("g", "g", replaceVarNames(roleDefinition))
-	casbModel.AddDef("e", "e", replaceVarNames(policyEffect))
-	casbModel.AddDef("m", "m", replaceVarNames(matchersDefinition))
-
-	if len(loadedModel.Config.Casbin.Policies) > 0 {
-		for _, p := range loadedModel.Config.Casbin.Policies {
-			casbModel.AddPolicy("p", "p", []string{replaceVarNames(p)})
-		}
-	} else {
-		casbModel.AddPolicy("p", "p", []string{replaceVarNames("$authenticated,*,read,allow")})
-		casbModel.AddPolicy("p", "p", []string{replaceVarNames("$owner,*,write,allow")})
-	}
-
-	if config.Base == "User" {
-		casbModel.AddPolicy("p", "p", []string{replaceVarNames("$everyone,*,create,allow")})
-		casbModel.AddPolicy("p", "p", []string{replaceVarNames("$everyone,*,login,allow")})
-		casbModel.AddPolicy("p", "p", []string{replaceVarNames("$owner,*,findById,allow")})
-		casbModel.AddPolicy("p", "p", []string{replaceVarNames("$owner,*,instance_updateAttributes,allow")})
-		// TODO: check https://github.com/fredyk/westack-go/issues/447
-		casbModel.AddPolicy("p", "p", []string{replaceVarNames("$owner,*,instace_delete,allow")})
-		casbModel.AddPolicy("p", "p", []string{replaceVarNames("$authenticated,*,findSelf,allow")})
-		casbModel.AddPolicy("p", "p", []string{replaceVarNames("admin,*,user_upsertRoles,allow")})
-	}
-
-	loadedModel.CasbinModel = &casbModel
-	loadedModel.CasbinAdapter = &adapter
-
-	err = adapter.SavePolicy(casbModel)
-	if err != nil {
-		panic(err)
-	}
 	if loadedModel.Config.Public {
 
 		modelRouter := app.Server.Group(app.restApiRoot+"/"+plural, func(ctx *fiber.Ctx) error {
@@ -615,6 +427,7 @@ func (app *WeStack) setupModel(loadedModel *model.Model, dataSource *datasource.
 		}
 
 	}
+	return nil
 }
 
 func handleFindMany(loadedModel *model.Model, ctx *model.EventContext) error {
@@ -623,23 +436,23 @@ func handleFindMany(loadedModel *model.Model, ctx *model.EventContext) error {
 	}
 
 	cursor := loadedModel.FindMany(ctx.Filter, ctx)
-
-	//chunkGenerator := model.NewInstanceAChunkGenerator(loadedModel, cursor, "application/json")
-	chunkGenerator := model.NewCursorChunkGenerator(loadedModel, cursor)
-	switch cursor.(type) {
-	case *model.ErrorCursor:
-		return cursor.(*model.ErrorCursor).Error()
+	if v, ok := cursor.(*model.ErrorCursor); ok {
+		defer v.Close()
+		var err error
+		ctx.Result, err = v.Next()
+		return err
 	}
+	chunkGenerator := model.NewCursorChunkGenerator(loadedModel, cursor)
+	//switch cursor.(type) {
+	//case *model.ErrorCursor:
+	//	return cursor.(*model.ErrorCursor).Error()
+	//}
 	// Check if it is a *model.ChannelCursor, then check if it has an error
-	if v, ok := cursor.(*model.ChannelCursor); ok {
-		if v.Err == nil {
-			ctx.StatusCode = fiber.StatusOK
-		}
-	} else {
-		if _, ok := cursor.(*model.FixedLengthCursor); ok {
-			// No error
-			ctx.StatusCode = fiber.StatusOK
-		}
+	if v, ok := cursor.(*model.ChannelCursor); ok && v.Err == nil {
+		ctx.StatusCode = fiber.StatusOK
+	} else if _, ok := cursor.(*model.FixedLengthCursor); ok {
+		// No error
+		ctx.StatusCode = fiber.StatusOK
 	}
 	ctx.Result = chunkGenerator
 	return nil
@@ -659,6 +472,9 @@ func (app *WeStack) asInterface() *wst.IApp {
 		},
 		SwaggerHelper: func() swaggerhelper2.SwaggerHelper {
 			return app.swaggerHelper
+		},
+		Logger: func() wst.ILogger {
+			return app.logger
 		},
 	}
 }

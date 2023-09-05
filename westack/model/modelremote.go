@@ -49,14 +49,14 @@ func (loadedModel *Model) SendError(ctx *fiber.Ctx, err error) error {
 
 func (loadedModel *Model) RemoteMethod(handler func(context *EventContext) error, options RemoteMethodOptions) fiber.Router {
 	if !loadedModel.Config.Public {
-		panic(fmt.Sprintf("Trying to register a remote method in the private model: %v, you may set \"public\": true in the %v.json file", loadedModel.Name, loadedModel.Name))
+		loadedModel.App.Logger().Fatalf("Trying to register a remote method in the private model: %v, you may set \"public\": true in the %v.json file", loadedModel.Name, loadedModel.Name)
 	}
 	options.Name = strings.TrimSpace(options.Name)
 	if options.Name == "" {
-		panic("Method name cannot be empty")
+		loadedModel.App.Logger().Fatalf("Method name cannot be empty at the remote method in the model: %v, options: %v", loadedModel.Name, options)
 	}
 	if loadedModel.remoteMethodsMap[options.Name] != nil {
-		panic(fmt.Sprintf("Already registered a remote method with name '%v'", options.Name))
+		loadedModel.App.Logger().Fatalf("Already registered a remote method with name '%v'", options.Name)
 	}
 
 	var http = options.Http
@@ -67,16 +67,16 @@ func (loadedModel *Model) RemoteMethod(handler func(context *EventContext) error
 	for _, arg := range options.Accepts {
 		arg.Arg = strings.TrimSpace(arg.Arg)
 		if arg.Arg == "" {
-			panic(fmt.Sprintf("Argument name cannot be empty in the remote method '%v'", options.Name))
+			loadedModel.App.Logger().Fatalf("Argument name cannot be empty in the remote method '%v'", options.Name)
 		}
 		if arg.Http.Source != "query" && arg.Http.Source != "body" {
-			panic(fmt.Sprintf("Argument '%v' in the remote method '%v' has an invalid 'in' value: '%v'", arg.Arg, options.Name, arg.Http.Source))
+			loadedModel.App.Logger().Fatalf("Argument '%v' in the remote method '%v' has an invalid 'in' value: '%v'", arg.Arg, options.Name, arg.Http.Source)
 		}
 	}
 
 	_, err := loadedModel.Enforcer.AddRoleForUser(options.Name, "*")
 	if err != nil {
-		panic(err)
+		loadedModel.App.Logger().Fatalf("Error adding role '%v' for user '%v': %v", options.Name, "*", err)
 	}
 
 	var toInvoke func(string, ...fiber.Handler) fiber.Router
@@ -122,7 +122,7 @@ func (loadedModel *Model) RemoteMethod(handler func(context *EventContext) error
 	if verb == "post" || verb == "put" || verb == "patch" {
 		assignOpenAPIRequestBody(pathDef)
 	} else {
-		params := createOpenAPIAdditionalParams(options)
+		params := createOpenAPIAdditionalParams(loadedModel, options)
 		if len(params) > 0 {
 			pathDef["parameters"] = params
 		}
@@ -188,12 +188,12 @@ func createRemoteMethodOperationItem(handler func(context *EventContext) error, 
 	}
 }
 
-func createOpenAPIAdditionalParams(options RemoteMethodOptions) []wst.M {
+func createOpenAPIAdditionalParams(loadedModel *Model, options RemoteMethodOptions) []wst.M {
 	var params []wst.M
 	for _, param := range options.Accepts {
 		paramType := param.Type
 		if paramType == "" {
-			panic(fmt.Sprintf("Argument '%v' in the remote method '%v' has an invalid 'type' value: '%v'", param.Arg, options.Name, paramType))
+			loadedModel.App.Logger().Fatalf("Argument '%v' in the remote method '%v' has an invalid 'type' value: '%v'", param.Arg, options.Name, paramType)
 		}
 		paramDescription := param.Description
 		if paramType == "date" {
@@ -332,6 +332,9 @@ func (loadedModel *Model) HandleRemoteMethod(name string, eventContext *EventCon
 			if paramDef.Arg == "filter" {
 				filterSt := (*eventContext.Query)[key].(string)
 				filterMap := ParseFilter(filterSt)
+				if filterSt != "" && filterMap == nil {
+					return wst.CreateError(fiber.ErrBadRequest, "INVALID_FILTER", fiber.Map{"message": "Invalid filter"}, "ValidationError")
+				}
 
 				eventContext.Filter = filterMap
 				continue
