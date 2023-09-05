@@ -160,20 +160,22 @@ func Test_CreateWithOverrideResultError(t *testing.T) {
 
 	t.Parallel()
 
-	_, err := noteModel.Create(wst.M{
+	result, err := invokeApiAsRandomUser(t, "POST", "/notes", wst.M{
 		"__forceError": true,
-	}, systemContext)
-	assert.Error(t, err)
+	}, wst.M{"Content-Type": "application/json"})
+	assert.NoError(t, err)
+	assert.Contains(t, result, "error")
 }
 
 func Test_CreateWithOverrideInvalid(t *testing.T) {
 
 	t.Parallel()
 
-	_, err := noteModel.Create(wst.M{
+	result, err := invokeApiAsRandomUser(t, "POST", "/notes", wst.M{
 		"__overwriteWith": 1,
-	}, systemContext)
-	assert.Error(t, err)
+	}, wst.M{"Content-Type": "application/json"})
+	assert.NoError(t, err)
+	assert.Contains(t, result, "error")
 }
 
 func Test_CreateWithInvalidBsonInput(t *testing.T) {
@@ -183,17 +185,18 @@ func Test_CreateWithInvalidBsonInput(t *testing.T) {
 	created, err := noteModel.Create(wst.M{
 		"invalid": make(chan int),
 	}, systemContext)
-	assert.NotNilf(t, err, "Should not be able to create with invalid bson <-- %v", created)
+	assert.Errorf(t, err, "Should not be able to create with invalid bson <-- %v", created)
 }
 
 func Test_CreateWithForcingError(t *testing.T) {
 
 	t.Parallel()
 
-	_, err := noteModel.Create(wst.M{
+	result, err := invokeApiAsRandomUser(t, "POST", "/notes", wst.M{
 		"__forceAfterError": true,
-	}, systemContext)
-	assert.Error(t, err)
+	}, wst.M{"Content-Type": "application/json"})
+	assert.NoError(t, err)
+	assert.Contains(t, result, "error")
 }
 
 func Test_EnforceExError(t *testing.T) {
@@ -208,7 +211,7 @@ func Test_CreateWithDefaultStringValue(t *testing.T) {
 
 	t.Parallel()
 
-	created, err := noteModel.Create(wst.M{}, systemContext)
+	created, err := invokeApiAsRandomUser(t, "POST", "/notes", wst.M{}, wst.M{"Content-Type": "application/json"})
 	assert.Nil(t, err)
 	assert.Equal(t, "default", created.GetString("defaultString"))
 }
@@ -217,50 +220,50 @@ func Test_CreateWithDefaultIntValue(t *testing.T) {
 
 	t.Parallel()
 
-	created, err := noteModel.Create(wst.M{}, systemContext)
+	created, err := invokeApiAsRandomUser(t, "POST", "/notes", wst.M{}, wst.M{"Content-Type": "application/json"})
 	assert.Nil(t, err)
-	assert.Equal(t, int64(1), created.GetInt("defaultInt"))
+	assert.EqualValues(t, 1, created["defaultInt"])
 }
 
 func Test_CreateWithDefaultFloatValue(t *testing.T) {
 
 	t.Parallel()
 
-	created, err := noteModel.Create(wst.M{}, systemContext)
+	created, err := invokeApiAsRandomUser(t, "POST", "/notes", wst.M{}, wst.M{"Content-Type": "application/json"})
 	assert.Nil(t, err)
-	assert.Equal(t, 87436874647.8761781676, created.GetFloat64("defaultFloat"))
+	assert.EqualValues(t, 87436874647.8761781676, created["defaultFloat"])
 }
 
 func Test_CreateWithDefaultBooleanValue(t *testing.T) {
 
 	t.Parallel()
 
-	created, err := noteModel.Create(wst.M{}, systemContext)
+	created, err := invokeApiAsRandomUser(t, "POST", "/notes", wst.M{}, wst.M{"Content-Type": "application/json"})
 	assert.Nil(t, err)
-	assert.Equal(t, true, created.GetBoolean("defaultBoolean", false))
+	assert.EqualValues(t, true, created["defaultBoolean"])
 }
 
 func Test_CreateWithDefaultListValue(t *testing.T) {
 
 	t.Parallel()
 
-	created, err := noteModel.Create(wst.M{}, systemContext)
+	created, err := invokeApiAsRandomUser(t, "POST", "/notes", wst.M{}, wst.M{"Content-Type": "application/json"})
 	assert.Nil(t, err)
-	assert.Contains(t, created.ToJSON(), "defaultList")
-	assert.IsType(t, primitive.A{}, created.ToJSON()["defaultList"])
-	assert.Equal(t, primitive.A{"default"}, created.ToJSON()["defaultList"].(primitive.A))
+	assert.Contains(t, created, "defaultList")
+	assert.IsType(t, []interface{}{}, created["defaultList"])
+	assert.EqualValues(t, []interface{}{"default"}, created["defaultList"])
 }
 
 func Test_CreateWithDefaultMapValue(t *testing.T) {
 
 	t.Parallel()
 
-	created, err := noteModel.Create(wst.M{}, systemContext)
+	created, err := invokeApiAsRandomUser(t, "POST", "/notes", wst.M{}, wst.M{"Content-Type": "application/json"})
 	assert.Nil(t, err)
-	assert.Contains(t, created.ToJSON(), "defaultMap")
-	assert.IsType(t, wst.M{}, created.ToJSON()["defaultMap"])
-	assert.Contains(t, created.ToJSON()["defaultMap"].(wst.M), "defaultKey")
-	assert.Equal(t, wst.M{"defaultKey": "defaultValue"}, created.ToJSON()["defaultMap"].(wst.M))
+	assert.Contains(t, created, "defaultMap")
+	assert.IsType(t, map[string]interface{}{}, created["defaultMap"])
+	assert.Contains(t, created["defaultMap"].(map[string]interface{}), "defaultKey")
+	assert.Equal(t, map[string]interface{}{"defaultKey": "defaultValue"}, created["defaultMap"].(map[string]interface{}))
 }
 
 func Test_CreateWithDefaultTimeValue(t *testing.T) {
@@ -271,12 +274,14 @@ func Test_CreateWithDefaultTimeValue(t *testing.T) {
 	lowerSeconds := probablyTime.Unix()
 	// Should be 15 milliseconds after at most
 	upperSeconds := probablyTime.Unix() + 3
-	created, err := noteModel.Create(wst.M{}, systemContext)
+	created, err := invokeApiAsRandomUser(t, "POST", "/notes", wst.M{}, wst.M{"Content-Type": "application/json"})
 	assert.Nil(t, err)
-	assert.Contains(t, created.ToJSON(), "defaultTimeNow")
-	assert.IsType(t, primitive.DateTime(0), created.ToJSON()["defaultTimeNow"])
-	assert.GreaterOrEqual(t, created.ToJSON()["defaultTimeNow"].(primitive.DateTime).Time().Unix(), lowerSeconds)
-	assert.LessOrEqual(t, created.ToJSON()["defaultTimeNow"].(primitive.DateTime).Time().Unix(), upperSeconds)
+	assert.Contains(t, created, "defaultTimeNow")
+	var parsedTime time.Time
+	parsedTime, err = time.Parse(time.RFC3339, created["defaultTimeNow"].(string))
+	assert.NoError(t, err)
+	assert.GreaterOrEqual(t, parsedTime.Unix(), lowerSeconds)
+	assert.LessOrEqual(t, parsedTime.Unix(), upperSeconds)
 
 }
 
@@ -287,12 +292,14 @@ func Test_CreateWithDefaultTimeHourAgo(t *testing.T) {
 	lowerSeconds := probablyTime.Unix() - 3600
 	// Should be 15 milliseconds after at most
 	upperSeconds := probablyTime.Unix() - 3597
-	created, err := noteModel.Create(wst.M{}, systemContext)
+	created, err := invokeApiAsRandomUser(t, "POST", "/notes", wst.M{}, wst.M{"Content-Type": "application/json"})
 	assert.Nil(t, err)
-	assert.Contains(t, created.ToJSON(), "defaultTimeHourAgo")
-	assert.IsType(t, primitive.DateTime(0), created.ToJSON()["defaultTimeHourAgo"])
-	assert.GreaterOrEqual(t, created.ToJSON()["defaultTimeHourAgo"].(primitive.DateTime).Time().Unix(), lowerSeconds)
-	assert.LessOrEqual(t, created.ToJSON()["defaultTimeHourAgo"].(primitive.DateTime).Time().Unix(), upperSeconds)
+	assert.Contains(t, created, "defaultTimeHourAgo")
+	var parsedTime time.Time
+	parsedTime, err = time.Parse(time.RFC3339, created["defaultTimeHourAgo"].(string))
+	assert.NoError(t, err)
+	assert.GreaterOrEqual(t, parsedTime.Unix(), lowerSeconds)
+	assert.LessOrEqual(t, parsedTime.Unix(), upperSeconds)
 
 }
 
@@ -304,11 +311,13 @@ func Test_CreateWithDefaultTimeHourFromNow(t *testing.T) {
 	lowerSeconds := probablyTime.Unix() + 3600
 	// Should be 15 milliseconds after at most
 	upperSeconds := probablyTime.Unix() + 3603
-	created, err := noteModel.Create(wst.M{}, systemContext)
+	created, err := invokeApiAsRandomUser(t, "POST", "/notes", wst.M{}, wst.M{"Content-Type": "application/json"})
 	assert.Nil(t, err)
-	assert.Contains(t, created.ToJSON(), "defaultTimeHourFromNow")
-	assert.IsType(t, primitive.DateTime(0), created.ToJSON()["defaultTimeHourFromNow"])
-	assert.GreaterOrEqual(t, created.ToJSON()["defaultTimeHourFromNow"].(primitive.DateTime).Time().Unix(), lowerSeconds)
-	assert.LessOrEqual(t, created.ToJSON()["defaultTimeHourFromNow"].(primitive.DateTime).Time().Unix(), upperSeconds)
+	assert.Contains(t, created, "defaultTimeHourFromNow")
+	var parsedTime time.Time
+	parsedTime, err = time.Parse(time.RFC3339, created["defaultTimeHourFromNow"].(string))
+	assert.NoError(t, err)
+	assert.GreaterOrEqual(t, parsedTime.Unix(), lowerSeconds)
+	assert.LessOrEqual(t, parsedTime.Unix(), upperSeconds)
 
 }
