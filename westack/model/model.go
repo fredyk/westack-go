@@ -834,6 +834,33 @@ func (loadedModel *Model) DeleteMany(where *wst.Where, ctx *EventContext) (resul
 			"$match": wst.M(*where),
 		},
 	}
+	var baseContext = ctx
+	if baseContext == nil {
+		baseContext = &EventContext{}
+	}
+	var targetBaseContext = baseContext
+	for {
+		if targetBaseContext.BaseContext != nil {
+			targetBaseContext = targetBaseContext.BaseContext
+		} else {
+			break
+		}
+	}
+	if !baseContext.DisableTypeConversions {
+		_, err := datasource.ReplaceObjectIds(&(*whereLookups)[0])
+		if err != nil {
+			return result, err
+		}
+	}
+
+	eventContext := &EventContext{
+		BaseContext: targetBaseContext,
+	}
+	//eventContext.Data = &finalData
+	eventContext.Model = loadedModel
+	eventContext.IsNewInstance = false
+	eventContext.OperationName = wst.OperationNameDeleteMany
+
 	return loadedModel.Datasource.DeleteMany(loadedModel.CollectionName, whereLookups)
 }
 
