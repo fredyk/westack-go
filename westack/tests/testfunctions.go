@@ -3,6 +3,7 @@ package tests
 import (
 	"bytes"
 	"crypto/rand"
+	"fmt"
 	"github.com/fredyk/westack-go/westack"
 	wst "github.com/fredyk/westack-go/westack/common"
 	"github.com/goccy/go-json"
@@ -53,7 +54,7 @@ func createRandomFloat(min float64, max float64) float64 {
 }
 
 func invokeApi(t *testing.T, method string, url string, body wst.M, headers wst.M) (result wst.M, err error) {
-	req, err := http.NewRequest(method, url, jsonToReader(body))
+	req, err := http.NewRequest(method, fmt.Sprintf("/api/v1%s", url), jsonToReader(body))
 	assert.NoError(t, err)
 	for k, v := range headers {
 		req.Header.Add(k, v.(string))
