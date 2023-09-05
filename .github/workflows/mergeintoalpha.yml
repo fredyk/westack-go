@@ -9,7 +9,7 @@ jobs:
       runs-on: ubuntu-latest
       strategy:
         matrix:
-          go: [ '1.19', '1.20.1', '1.20.6' ]
+          go: [ '1.18', '1.19', '1.20.1', '1.20.6' ]
       env:
         WST_ADMIN_USERNAME: admin
         WST_ADMIN_PWD: testadmin
@@ -27,6 +27,7 @@ jobs:
         WST_DB_EXPECTED_TO_FAIL_PASSWORD: ${{ secrets.MONGO_DEV_PWD }}
         WST_DB_EXPECTED_TO_BE_CLOSED_USERNAME: ${{ secrets.MONGO_DEV_USERNAME }}
         WST_DB_EXPECTED_TO_BE_CLOSED_PASSWORD: ${{ secrets.MONGO_DEV_PWD }}
+        DEBUG: true
       steps:
         - name: Checkout master
           uses: actions/checkout@v3
