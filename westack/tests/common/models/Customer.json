@@ -13,11 +13,11 @@
   },
   "hidden": [],
   "casbin": {
-    "requestDefinition": "",
-    "policyDefinition": "",
-    "roleDefinition": "",
-    "policyEffect": "",
-    "matchersDefinition": "",
+    "requestDefinition": "sub, obj, act",
+    "policyDefinition": "sub, obj, act, eft",
+    "roleDefinition": "_, _",
+    "policyEffect": "subjectPriority(p.eft) || deny",
+    "matchersDefinition": "(((p.sub == '$owner' && isOwner(r.sub, r.obj, p.obj)) || g(r.sub, p.sub)) && keyMatch(r.obj, p.obj) && (g(r.act, p.act) || keyMatch(r.act, p.act)))",
     "policies": null
   },
   "cache": {

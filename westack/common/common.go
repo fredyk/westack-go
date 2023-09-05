@@ -56,10 +56,6 @@ func (m M) GetString(key string) string {
 }
 
 func (m M) MarshalEasyJSON(w *jwriter.Writer) {
-	if m == nil {
-		w.Raw(NilBytes, nil)
-		return
-	}
 	w.RawByte('{')
 	first := true
 	for k, v := range m {
@@ -87,8 +83,6 @@ func (m M) MarshalEasyJSON(w *jwriter.Writer) {
 			w.Int32(v)
 		case int64:
 			w.Int64(v)
-		case uint:
-			w.Uint(v)
 		case uint8:
 			w.Uint8(v)
 		case uint16:
@@ -101,8 +95,6 @@ func (m M) MarshalEasyJSON(w *jwriter.Writer) {
 			w.Float32(v)
 		case float64:
 			w.Float64(v)
-		case time.Time:
-			w.String(v.Format(time.RFC3339))
 		case primitive.ObjectID:
 			w.String(v.Hex())
 		case primitive.DateTime:
@@ -112,10 +104,6 @@ func (m M) MarshalEasyJSON(w *jwriter.Writer) {
 			if vv, ok := v.(easyjson.Marshaler); ok {
 				//fmt.Printf("Found easyjson.Marshaler: %v at %v\n", vv, k)
 				vv.MarshalEasyJSON(w)
-			} else if vv, ok := v.(json.Marshaler); ok {
-				//fmt.Printf("Found json.Marshaler: %v at %v\n", vv, k)
-				bytes, err := vv.MarshalJSON()
-				w.Raw(bytes, err)
 			} else {
 				//fmt.Printf("Found unknown: %v at %v\n", v, k)
 				bytes, err := json.Marshal(v)
@@ -127,18 +115,41 @@ func (m M) MarshalEasyJSON(w *jwriter.Writer) {
 }
 
 func (m *M) UnmarshalEasyJSON(l *jlexer.Lexer) {
-	if l.IsNull() {
-		l.Skip()
-		return
-	}
-	if m == nil {
-		*m = make(M)
-	}
 	inputBytes := l.Raw()
 	err := json.Unmarshal(inputBytes, &m)
 	if err != nil {
 		l.AddError(err)
 		return
+	}
+}
+
+func (m M) GetInt(path string) (result int) {
+	pathSegments := strings.Split(path, ".")
+	var currentMap = m
+	for idx, pathSegment := range pathSegments {
+		if idx == len(pathSegments)-1 {
+			result = asInt(currentMap[pathSegment])
+		} else {
+			currentMap = currentMap.GetM(pathSegment)
+		}
+	}
+	return
+}
+
+func asInt(v interface{}) int {
+	switch v := v.(type) {
+	case int:
+		return v
+	case int32:
+		return int(v)
+	case int64:
+		return int(v)
+	case float32:
+		return int(v)
+	case float64:
+		return int(v)
+	default:
+		return 0
 	}
 }
 
@@ -163,6 +174,19 @@ func (a A) MarshalEasyJSON(w *jwriter.Writer) {
 	w.RawByte(']')
 }
 
+func (a A) UnmarshalEasyJSON(l *jlexer.Lexer) {
+	if l.IsNull() {
+		l.Skip()
+		return
+	}
+	inputBytes := l.Raw()
+	err := json.Unmarshal(inputBytes, &a)
+	if err != nil {
+		l.AddError(err)
+		return
+	}
+}
+
 //func (a A) String() string {
 //	if a == nil {
 //		return ""
@@ -182,6 +206,10 @@ const (
 	OperationNameCount            OperationName = "count"
 	OperationNameCreate           OperationName = "create"
 	OperationNameUpdateAttributes OperationName = "updateAttributes"
+	OperationNameUpdateById       OperationName = "updateById"
+	OperationNameUpdateMany       OperationName = "updateMany"
+	OperationNameDeleteById       OperationName = "deleteById"
+	OperationNameDeleteMany       OperationName = "deleteMany"
 )
 
 var (
@@ -275,19 +303,21 @@ type IApp struct {
 	SwaggerHelper  func() swaggerhelperinterface.SwaggerHelper
 	FindModel      func(modelName string) (interface{}, error)
 	FindDatasource func(datasource string) (interface{}, error)
+	Logger         func() ILogger
 	JwtSecretKey   []byte
 	Viper          *viper.Viper
 	Bson           BsonOptions
 }
 
-var RegexpIdEntire = regexp.MustCompile("^([0-9a-f]{24})$")
-var RegexpIpStart = regexp.MustCompile("^[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}")
+var RegexpIdEntire = regexp.MustCompile(`^([0-9a-f]{24})$`)
+var RegexpIpStart = regexp.MustCompile(`^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}`)
 
-var regexpTimeZoneReplacing = regexp.MustCompile("([+\\-]\\d{2}):(\\d{2})$")
-var regexpDate1 = regexp.MustCompile("^(\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2})([+\\-:0-9]+)$")
-var regexpDate2 = regexp.MustCompile("^(\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3})([+\\-:0-9]+)$")
-var regexpDate3 = regexp.MustCompile("^(\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2})(Z)?$")
-var regexpDate4 = regexp.MustCompile("^(\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3})(Z)?$")
+var regexpTrimMilliseconds = regexp.MustCompile(`^(.+\.\d{3})\d+(.*)$`)
+var regexpTimeZoneReplacing = regexp.MustCompile(`([+\-]\d{2}):(\d{2})$`)
+var regexpDate1 = regexp.MustCompile(`^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})([+\-:0-9]+)$`)
+var regexpDate2 = regexp.MustCompile(`^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3,})([+\-:0-9]+)$`)
+var regexpDate3 = regexp.MustCompile(`^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})(Z)?$`)
+var regexpDate4 = regexp.MustCompile(`^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3,})(Z)?$`)
 
 type WeStackError struct {
 	FiberError *fiber.Error
@@ -355,11 +385,19 @@ func Transform(in interface{}, out interface{}) error {
 func ParseDate(data string) (time.Time, error) {
 	var parsedDate time.Time
 	var err error
+	prevData := data
+	data = regexpTrimMilliseconds.ReplaceAllString(data, "$1$2")
+	if prevData != data {
+		log.Printf("WARNING: ParseDate: trimming input to 3 digits of milliseconds: %v -> %v", prevData, data)
+	}
 	if IsDate1(data) {
 		layout := "2006-01-02T15:04:05-0700"
 		parsedDate, err = time.Parse(layout, regexpTimeZoneReplacing.ReplaceAllString(data, "$1$2"))
 	} else if IsDate2(data) {
 		layout := "2006-01-02T15:04:05.000-0700"
+		// Trim input up to 3 digits of milliseconds using regex
+		// This is needed because time.Parse() does not support more than 3 digits of milliseconds
+
 		parsedDate, err = time.Parse(layout, regexpTimeZoneReplacing.ReplaceAllString(data, "$1$2"))
 	} else if is3, groups := IsDate3(data); is3 {
 		//layout := "2006-01-02T15:04:05Z"
@@ -414,4 +452,20 @@ func CreateError(fiberError *fiber.Error, code string, details fiber.Map, name s
 		Details:    details,
 		Name:       name,
 	}
+}
+
+type ILogger interface {
+	Printf(format string, v ...any)
+	Print(v ...any)
+	Println(v ...any)
+	Fatal(v ...any)
+	Fatalf(format string, v ...any)
+	Fatalln(v ...any)
+	Panic(v ...any)
+	Panicf(format string, v ...any)
+	Panicln(v ...any)
+	Flags() int
+	SetFlags(flag int)
+	Prefix() string
+	SetPrefix(prefix string)
 }
