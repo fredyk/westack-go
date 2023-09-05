@@ -186,7 +186,7 @@ func Test_CustomerOrderStore(t *testing.T) {
 	// Create a waiting group using sync.WaitGroup
 	var wg sync.WaitGroup
 	// Create other 12k orders
-	orderCountToCreate := 25
+	orderCountToCreate := 100
 	wg.Add(orderCountToCreate)
 	creationInit := time.Now()
 	for i := 0; i < orderCountToCreate; i++ {
@@ -289,19 +289,17 @@ func Test_Aggregations(t *testing.T) {
 	var randomUserName string
 	// assign randomUserName with safe random string
 	randomUserName = fmt.Sprintf("testuser%d", createRandomInt())
-	randomUser, err := userModel.Create(wst.M{
+	randomUser := createUser(t, wst.M{
 		"username":  randomUserName,
 		"password":  "abcd1234.",
 		"firstName": "John",
 		"lastName":  "Doe",
-	}, systemContext)
-	assert.NoError(t, err)
-	assert.NotNil(t, randomUser)
+	})
 
 	noteTitle := "Note 1"
 	note, err := noteModel.Create(wst.M{
 		"title":  noteTitle,
-		"userId": randomUser.Id,
+		"userId": randomUser.GetString("id"),
 	}, systemContext)
 	assert.NoError(t, err)
 	assert.NotNil(t, note)
@@ -347,23 +345,13 @@ func Test_AggregationsWithDirectNestedQuery(t *testing.T) {
 
 	t.Parallel()
 
-	var randomeUserName string
-	// assign randomUserName with safe random string
-	randomeUserName = fmt.Sprintf("testuser%d", createRandomInt())
-	randomUser, err := userModel.Create(wst.M{
-		"username": randomeUserName,
-		"password": "abcd1234.",
-	}, systemContext)
-	assert.NoError(t, err)
-	assert.NotNil(t, randomUser)
-
 	var randomNoteTitle string
 	// assign randomNoteTitle with safe random string
 	randomNoteTitle = fmt.Sprintf("testnote%d", createRandomInt())
 
 	note, err := noteModel.Create(wst.M{
 		"title":  randomNoteTitle,
-		"userId": randomUser.Id,
+		"userId": randomUser.GetString("id"),
 	}, systemContext)
 	assert.NoError(t, err)
 	assert.NotNil(t, note)
@@ -371,7 +359,7 @@ func Test_AggregationsWithDirectNestedQuery(t *testing.T) {
 	filter := &wst.Filter{
 		Where: &wst.Where{
 			"title":         note.GetString("title"),
-			"user.username": randomUser.ToJSON()["username"],
+			"user.username": randomUser.GetString("username"),
 		},
 		Include: &wst.Include{
 			{
@@ -387,7 +375,7 @@ func Test_AggregationsWithDirectNestedQuery(t *testing.T) {
 	assert.NotNil(t, notes)
 	assert.Equal(t, 1, len(notes))
 	assert.Equal(t, note.GetString("title"), notes[0].GetString("title"))
-	assert.Equal(t, randomUser.ToJSON()["username"], notes[0].GetOne("user").ToJSON()["username"])
+	assert.Equal(t, randomUser.GetString("username"), notes[0].GetOne("user").ToJSON()["username"])
 
 }
 

@@ -174,6 +174,16 @@ func Test_FixedBeforeLoadMock124404(t *testing.T) {
 
 }
 
+func Test_AfterLoadShouldReturnError(t *testing.T) {
+
+	t.Parallel()
+
+	resp, err := invokeApi(t, "GET", "/api/v1/notes?forceError1753=true", nil, nil)
+	assert.NoError(t, err)
+	assert.Equal(t, "forced error 1753", resp.GetM("error").GetString("message"))
+
+}
+
 func parseResultAsJsonArray(resp *http.Response) (responseBody wst.A, err error) {
 
 	bytes, err := io.ReadAll(resp.Body)

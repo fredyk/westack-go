@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"github.com/fredyk/westack-go/westack/datasource"
 	"github.com/fredyk/westack-go/westack/model"
+	"github.com/gofiber/fiber/v2"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"io"
 	"log"
 	"math/big"
@@ -27,13 +29,14 @@ func init() {
 		DatasourceOptions: &map[string]*datasource.Options{
 			"db": {
 				MongoDB: &datasource.MongoDBDatasourceOptions{
-					Registry: FakeMongoDbRegistry(),
-					Monitor:  FakeMongoDbMonitor(),
+					//Registry: FakeMongoDbRegistry(),
+					Monitor: FakeMongoDbMonitor(),
 					//Timeout:  3,
 				},
 				RetryOnError: true,
 			},
 		},
+		Logger: createMockLogger(),
 	})
 	var err error
 	app.Boot(func(app *westack.WeStack) {
@@ -83,6 +86,37 @@ func init() {
 		}
 		userModel.Observe("before save", func(ctx *model.EventContext) error {
 			fmt.Println("saving user")
+			return nil
+		})
+
+		userModel.On("sendResetPasswordEmail", func(ctx *model.EventContext) error {
+			fmt.Println("sending reset password email")
+			ctx.Result = wst.M{
+				"result":  "OK",
+				"message": "Reset password email sent",
+			}
+			return nil
+		})
+
+		userModel.On("sendVerificationEmail", func(ctx *model.EventContext) error {
+			fmt.Println("sending verify email")
+			// This bearer would be sent in the email in a real case, because it contains
+			// a special claim that allows the user to verify the email
+			bearerForEmailVerification := ctx.Bearer.Raw
+			ctx.Result = wst.M{
+				"result":  "OK",
+				"message": "Verification email sent",
+				"bearer":  bearerForEmailVerification,
+			}
+			return nil
+		})
+
+		userModel.On("performEmailVerification", func(ctx *model.EventContext) error {
+			fmt.Println("performing email verification")
+			ctx.Result = wst.M{
+				"result":  "OK",
+				"message": "Email verified",
+			}
 			return nil
 		})
 
@@ -143,6 +177,41 @@ func init() {
 					ctx.Result = wst.A{
 						{"title": "mocked124404"},
 					}
+				} else if ctx.BaseContext.Ctx.Query("forceError1719") == "true" {
+					return wst.CreateError(fiber.ErrBadRequest, "ERR_1719", fiber.Map{"message": "forced error 1719"}, "Error")
+				}
+			}
+			return nil
+		})
+
+		app.Server.Get("/api/v1/endpoint-using-codecs", func(ctx *fiber.Ctx) error {
+			type localNote struct {
+				ID      primitive.ObjectID `json:"id" bson:"_id"`
+				Title   string             `json:"title" bson:"title"`
+				Content string             `json:"content" bson:"content"`
+				DueDate time.Time          `json:"dueDate" bson:"dueDate"`
+			}
+			var noteToInsert localNote
+			noteToInsert.ID = primitive.NewObjectID()
+			noteToInsert.Title = "test"
+			noteToInsert.Content = "test"
+			noteToInsert.DueDate = time.Now().Add(7 * 24 * time.Hour)
+			note, err := noteModel.Create(noteToInsert, systemContext)
+			if err != nil {
+				return err
+			}
+			var resultNote localNote
+			err = note.Transform(&resultNote)
+			if err != nil {
+				return err
+			}
+			return ctx.JSON(resultNote)
+		})
+
+		noteModel.Observe("after load", func(ctx *model.EventContext) error {
+			if ctx.BaseContext.Remote != nil {
+				if ctx.BaseContext.Ctx.Query("forceError1753") == "true" {
+					return fmt.Errorf("forced error 1753")
 				}
 			}
 			return nil
@@ -158,33 +227,81 @@ func init() {
 	time.Sleep(300 * time.Millisecond)
 }
 
-func createUser(t *testing.T, userData wst.M) (wst.M, error) {
-	b := createBody(t, userData)
+type mockLogger struct {
+	output          io.Writer
+	flags           int
+	internalLogger  *log.Logger
+	prefix          string
+	lastFatalOutput interface{}
+}
 
-	request := httptest.NewRequest("POST", "/api/v1/users", b)
-	request.Header.Set("Content-Type", "application/json")
-	response, err := app.Server.Test(request, 45000)
-	if err != nil {
-		return nil, err
-	}
-	if !assert.Equal(t, 200, response.StatusCode) {
-		return nil, fmt.Errorf("expected status code 200, got %v", response.StatusCode)
-	}
+func (l *mockLogger) Printf(format string, v ...any) {
+	fmt.Printf(format, v...)
+}
 
-	var responseBytes []byte
-	responseBytes, err = io.ReadAll(response.Body)
-	if err != nil {
-		return nil, err
-	}
+func (l *mockLogger) Print(v ...any) {
+	fmt.Print(v...)
+}
+func (l *mockLogger) Println(v ...any) {
+	fmt.Println(v...)
+}
+func (l *mockLogger) Fatal(v ...any) {
+	st := fmt.Sprint(v...)
+	l.lastFatalOutput = st
+	fmt.Print(v...)
+	panic(st)
+}
+func (l *mockLogger) Fatalf(format string, v ...any) {
+	st := fmt.Sprintf(format, v...)
+	l.lastFatalOutput = st
+	fmt.Print(st)
+	panic(st)
+}
+func (l *mockLogger) Fatalln(v ...any) {
+	st := fmt.Sprintf("%v\n", v...)
+	l.lastFatalOutput = st
+	fmt.Print(st)
+	panic(st)
+}
+func (l *mockLogger) Panic(v ...any) {
+	panic(fmt.Sprintf("%v", v...))
+}
+func (l *mockLogger) Panicf(format string, v ...any) {
+	panic(fmt.Sprintf(format, v...))
+}
+func (l *mockLogger) Panicln(v ...any) {
+	panic(fmt.Sprintf("%v\n", v...))
+}
 
-	var responseMap wst.M
-	err = json.Unmarshal(responseBytes, &responseMap)
-	if err != nil {
-		return nil, err
-	}
+func (l *mockLogger) Flags() int {
+	return l.flags
+}
+func (l *mockLogger) SetFlags(flag int) {
+	l.flags = flag
+}
+func (l *mockLogger) Prefix() string {
+	return l.prefix
+}
 
-	assert.Contains(t, responseMap, "id")
-	return responseMap, nil
+func (l *mockLogger) SetPrefix(prefix string) {
+	l.prefix = prefix
+}
+
+func createMockLogger() wst.ILogger {
+	return &mockLogger{
+		internalLogger: log.New(os.Stdout, "", log.LstdFlags),
+	}
+}
+
+func createUser(t *testing.T, userData wst.M) wst.M {
+	var user wst.M
+	var err error
+	user, err = invokeApiJsonM(t, "POST", "/users", userData, wst.M{
+		"Content-Type": "application/json",
+	})
+	assert.NoError(t, err)
+	assert.Contains(t, user, "id")
+	return user
 }
 
 func login(t *testing.T, body wst.M) (string, string) {
@@ -234,11 +351,8 @@ func Test_WeStackCreateUser(t *testing.T) {
 	randomUserSuffix := createRandomInt()
 	email := fmt.Sprintf("email%v@example.com", randomUserSuffix)
 	password := "test"
-	body := wst.M{"email": email, "password": password, "username": fmt.Sprintf("user%v", randomUserSuffix)}
-	user, err := createUser(t, body)
-	assert.Nil(t, err)
-	assert.NotNil(t, user)
-	assert.Contains(t, user, "id")
+	plainUser := wst.M{"email": email, "password": password, "username": fmt.Sprintf("user%v", randomUserSuffix)}
+	createUser(t, plainUser)
 
 }
 
@@ -260,13 +374,10 @@ func Test_WeStackLogin(t *testing.T) {
 	password := "test"
 
 	log.Println("Email", email)
-	body := wst.M{"email": email, "password": password, "username": fmt.Sprintf("user%v", n)}
-	user, err := createUser(t, body)
-	assert.Nil(t, err)
-	assert.NotNil(t, user)
-	assert.Contains(t, user, "id")
+	plainUser := wst.M{"email": email, "password": password, "username": fmt.Sprintf("user%v", n)}
+	createUser(t, plainUser)
 
-	login(t, body)
+	login(t, plainUser)
 
 }
 
@@ -277,13 +388,10 @@ func Test_WeStackDelete(t *testing.T) {
 	n, _ := rand.Int(rand.Reader, big.NewInt(899999999))
 	email := fmt.Sprintf("email%v@example.com", 100000000+n.Int64())
 	password := "test"
-	body := wst.M{"email": email, "password": password, "username": fmt.Sprintf("user%v", n)}
-	user, err := createUser(t, body)
-	assert.Nil(t, err)
-	assert.NotNil(t, user)
-	assert.Contains(t, user, "id")
+	plainUser := wst.M{"email": email, "password": password, "username": fmt.Sprintf("user%v", n)}
+	createUser(t, plainUser)
 
-	bearer, userId := login(t, body)
+	bearer, userId := login(t, plainUser)
 
 	request := httptest.NewRequest("DELETE", fmt.Sprintf("/api/v1/users/%v", userId), nil)
 	request.Header.Set("Authorization", fmt.Sprintf("Bearer %v", bearer))
@@ -308,3 +416,85 @@ func Test_WeStackDelete(t *testing.T) {
 //	}
 //	os.Exit(code)
 //}
+
+func Test_InitAndServe(t *testing.T) {
+
+	t.Parallel()
+
+	go func() {
+		westack.InitAndServe(westack.Options{Port: 8021})
+	}()
+
+	time.Sleep(5 * time.Second)
+
+}
+
+func Test_MissingCasbinOutputDirectory(t *testing.T) {
+
+	t.Parallel()
+
+	app := westack.New(westack.Options{
+		Logger: createMockLogger(),
+	})
+	app.Viper.Set("casbin.policies.outputDirectory", "/invalid/path")
+
+	// recover from panic
+	defer func() {
+		if r := recover(); r != nil {
+			assert.Equal(t, "Error while loading models: could not create policies directory /invalid/path: mkdir /invalid: permission denied", r)
+			// mark as ok
+			t.Log("OK")
+		}
+	}()
+
+	app.Boot()
+
+}
+
+func Test_InvalidCasbinOutputDirectory1(t *testing.T) {
+
+	t.Parallel()
+
+	app := westack.New(westack.Options{
+		Logger: createMockLogger(),
+	})
+	app.Viper.Set("casbin.policies.outputDirectory", "/proc/1/cwd/a")
+
+	// recover from panic
+	defer func() {
+		if r := recover(); r != nil {
+			assert.Equal(t, "Error while loading models: could not check policies directory /proc/1/cwd/a: stat /proc/1/cwd/a: permission denied", r)
+			// mark as ok
+			t.Log("OK")
+		} else {
+			t.Error("Should have panicked")
+		}
+	}()
+
+	app.Boot()
+
+}
+
+func Test_InvalidCasbinOutputDirectory2(t *testing.T) {
+
+	t.Parallel()
+
+	app := westack.New(westack.Options{
+		Logger: createMockLogger(),
+	})
+	app.Viper.Set("casbin.policies.outputDirectory", "/lib")
+
+	// recover from panic
+	defer func() {
+		if r := recover(); r != nil {
+			assert.Regexp(t, `Error while loading models: could not open policies file Customer: open /lib/Customer.policies.csv: permission denied`, r)
+			// mark as ok
+			t.Log("OK")
+		} else {
+			t.Error("Should have panicked")
+		}
+	}()
+
+	app.Boot()
+
+}

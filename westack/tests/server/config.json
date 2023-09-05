@@ -5,7 +5,7 @@
   "casbin": {
     "dumpModels": false,
     "policies": {
-      "outputDirectory": "./common/models"
+      "outputDirectory": "./data"
     }
   },
   "restApiRoot": "/api/v1",
