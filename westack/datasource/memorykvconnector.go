@@ -10,6 +10,7 @@ import (
 	"github.com/spf13/viper"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
+	"time"
 )
 
 // MemoryKVConnector implements the PersistedConnector interface
@@ -110,7 +111,26 @@ func (connector *MemoryKVConnector) Create(collectionName string, data *wst.M) (
 	} else {
 		id = (*data)["_redId"]
 	}
-	for _, doc := range (*data)["_entries"].(wst.A) {
+	var finalEntries wst.A
+	if v, ok := (*data)["_entries"].(wst.A); ok {
+		finalEntries = v
+	} else if v, ok := (*data)["_entries"].([]interface{}); ok {
+		finalEntries = wst.A{}
+		for _, entry := range v {
+			var vv wst.M
+			if vvv, ok := entry.(wst.M); ok {
+				vv = vvv
+			} else if vvv, ok := entry.(map[string]interface{}); ok {
+				vv = vvv
+			} else {
+				return nil, errors.New(fmt.Sprintf("invalid _entries type %v", (*data)["_entries"]))
+			}
+			finalEntries = append(finalEntries, vv)
+		}
+	} else {
+		return nil, errors.New(fmt.Sprintf("invalid _entries type %v", (*data)["_entries"]))
+	}
+	for _, doc := range finalEntries {
 		switch id.(type) {
 		case string:
 			idAsStr = id.(string)
@@ -125,13 +145,8 @@ func (connector *MemoryKVConnector) Create(collectionName string, data *wst.M) (
 		allBytes = append(allBytes, bytes)
 	}
 
-	//db[id] = data
-	err := db.GetBucket(collectionName).Set(idAsStr, allBytes)
-	if err != nil {
-		return nil, err
-	}
-	//return findByObjectId(collectionName, id, ds, nil)
-	return data, nil
+	err := db.GetBucket(collectionName).SetEx(idAsStr, allBytes, 365*86400*time.Second)
+	return data, err
 }
 
 func (connector *MemoryKVConnector) UpdateById(collectionName string, id interface{}, data *wst.M) (*wst.M, error) {

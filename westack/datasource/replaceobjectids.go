@@ -107,89 +107,48 @@ func ReplaceObjectIds(data interface{}) (interface{}, error) {
 			} else {
 				switch value.(type) {
 				case string:
+					var atoi int
 					if r := RegexDaysAgo.FindStringSubmatch(value.(string)); len(r) > 1 {
-						atoi, err := strconv.Atoi(r[1])
-						if err != nil {
-							return nil, err
-						}
+						atoi, err = strconv.Atoi(r[1])
 						newValue = time.Now().Add(-time.Duration(atoi) * 24 * time.Hour)
 					} else if r := RegexWeeksAgo.FindStringSubmatch(value.(string)); len(r) > 1 {
-						atoi, err := strconv.Atoi(r[1])
-						if err != nil {
-							return nil, err
-						}
+						atoi, err = strconv.Atoi(r[1])
 						newValue = time.Now().Add(-time.Duration(atoi) * 7 * 24 * time.Hour)
 					} else if r := RegexMonthsAgo.FindStringSubmatch(value.(string)); len(r) > 1 {
-						atoi, err := strconv.Atoi(r[1])
-						if err != nil {
-							return nil, err
-						}
+						atoi, err = strconv.Atoi(r[1])
 						newValue = time.Now().Add(-time.Duration(atoi) * 30 * 24 * time.Hour)
 					} else if r := RegexYearsAgo.FindStringSubmatch(value.(string)); len(r) > 1 {
-						atoi, err := strconv.Atoi(r[1])
-						if err != nil {
-							return nil, err
-						}
+						atoi, err = strconv.Atoi(r[1])
 						newValue = time.Now().Add(-time.Duration(atoi) * 365 * 24 * time.Hour)
 					} else if r := RegexSecondsAgo.FindStringSubmatch(value.(string)); len(r) > 1 {
-						atoi, err := strconv.Atoi(r[1])
-						if err != nil {
-							return nil, err
-						}
+						atoi, err = strconv.Atoi(r[1])
 						newValue = time.Now().Add(-time.Duration(atoi) * time.Second)
 					} else if r := RegexMinutesAgo.FindStringSubmatch(value.(string)); len(r) > 1 {
-						atoi, err := strconv.Atoi(r[1])
-						if err != nil {
-							return nil, err
-						}
+						atoi, err = strconv.Atoi(r[1])
 						newValue = time.Now().Add(-time.Duration(atoi) * time.Minute)
 					} else if r := RegexHoursAgo.FindStringSubmatch(value.(string)); len(r) > 1 {
-						atoi, err := strconv.Atoi(r[1])
-						if err != nil {
-							return nil, err
-						}
+						atoi, err = strconv.Atoi(r[1])
 						newValue = time.Now().Add(-time.Duration(atoi) * time.Hour)
 					} else if r := RegexDaysFromNow.FindStringSubmatch(value.(string)); len(r) > 1 {
-						atoi, err := strconv.Atoi(r[1])
-						if err != nil {
-							return nil, err
-						}
+						atoi, err = strconv.Atoi(r[1])
 						newValue = time.Now().Add(time.Duration(atoi) * 24 * time.Hour)
 					} else if r := RegexWeeksFromNow.FindStringSubmatch(value.(string)); len(r) > 1 {
-						atoi, err := strconv.Atoi(r[1])
-						if err != nil {
-							return nil, err
-						}
+						atoi, err = strconv.Atoi(r[1])
 						newValue = time.Now().Add(time.Duration(atoi) * 7 * 24 * time.Hour)
 					} else if r := RegexMonthsFromNow.FindStringSubmatch(value.(string)); len(r) > 1 {
-						atoi, err := strconv.Atoi(r[1])
-						if err != nil {
-							return nil, err
-						}
+						atoi, err = strconv.Atoi(r[1])
 						newValue = time.Now().Add(time.Duration(atoi) * 30 * 24 * time.Hour)
 					} else if r := RegexYearsFromNow.FindStringSubmatch(value.(string)); len(r) > 1 {
-						atoi, err := strconv.Atoi(r[1])
-						if err != nil {
-							return nil, err
-						}
+						atoi, err = strconv.Atoi(r[1])
 						newValue = time.Now().Add(time.Duration(atoi) * 365 * 24 * time.Hour)
 					} else if r := RegexSecondsFromNow.FindStringSubmatch(value.(string)); len(r) > 1 {
-						atoi, err := strconv.Atoi(r[1])
-						if err != nil {
-							return nil, err
-						}
+						atoi, err = strconv.Atoi(r[1])
 						newValue = time.Now().Add(time.Duration(atoi) * time.Second)
 					} else if r := RegexMinutesFromNow.FindStringSubmatch(value.(string)); len(r) > 1 {
-						atoi, err := strconv.Atoi(r[1])
-						if err != nil {
-							return nil, err
-						}
+						atoi, err = strconv.Atoi(r[1])
 						newValue = time.Now().Add(time.Duration(atoi) * time.Minute)
 					} else if r := RegexHoursFromNow.FindStringSubmatch(value.(string)); len(r) > 1 {
-						atoi, err := strconv.Atoi(r[1])
-						if err != nil {
-							return nil, err
-						}
+						atoi, err = strconv.Atoi(r[1])
 						newValue = time.Now().Add(time.Duration(atoi) * time.Hour)
 					}
 				}
