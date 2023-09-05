@@ -212,111 +212,10 @@ func (loadedModel *Model) ExtractLookupsFromFilter(filterMap *wst.Filter, disabl
 	}
 	if targetInclude != nil {
 		for _, includeItem := range *targetInclude {
-
-			var targetScope *wst.Filter
-			if includeItem.Scope != nil {
-				scopeValue := *includeItem.Scope
-				targetScope = &scopeValue
-			} else {
-				targetScope = nil
-			}
-
-			relationName := includeItem.Relation
-			relation := (*loadedModel.Config.Relations)[relationName]
-			if relation == nil {
-				return nil, fmt.Errorf("warning: relation %v not found for model %v", relationName, loadedModel.Name)
-			}
-
-			relatedModelName := relation.Model
-			relatedLoadedModel := (*loadedModel.modelRegistry)[relatedModelName]
-
-			if relatedLoadedModel == nil {
-				return nil, fmt.Errorf("warning: related model %v not found for relation %v.%v", relatedModelName, loadedModel.Name, relationName)
-			}
-
-			if relatedLoadedModel.Datasource.Name == loadedModel.Datasource.Name {
-				switch relation.Type {
-				case "belongsTo", "hasOne", "hasMany":
-					var matching wst.M
-					var lookupLet wst.M
-					switch relation.Type {
-					case "belongsTo":
-						lookupLet = wst.M{
-							*relation.ForeignKey: fmt.Sprintf("$%v", *relation.ForeignKey),
-						}
-						matching = wst.M{
-							"$eq": []string{fmt.Sprintf("$%v", *relation.PrimaryKey), fmt.Sprintf("$$%v", *relation.ForeignKey)},
-						}
-						break
-					case "hasOne", "hasMany":
-						lookupLet = wst.M{
-							*relation.ForeignKey: fmt.Sprintf("$%v", *relation.PrimaryKey),
-						}
-						matching = wst.M{
-							"$eq": []string{fmt.Sprintf("$%v", *relation.ForeignKey), fmt.Sprintf("$$%v", *relation.ForeignKey)},
-						}
-						break
-					}
-					pipeline := wst.A{
-						wst.M{
-							"$match": wst.M{
-								"$expr": wst.M{
-									"$and": wst.A{
-										matching,
-									},
-								},
-							},
-						},
-					}
-					project := wst.M{}
-					for _, propertyName := range relatedLoadedModel.Config.Hidden {
-						project[propertyName] = false
-					}
-					if len(project) > 0 {
-						pipeline = append(pipeline, wst.M{
-							"$project": project,
-						})
-					}
-					if targetScope != nil {
-						nestedLoopkups, err := relatedLoadedModel.ExtractLookupsFromFilter(targetScope, disableTypeConversions)
-						if err != nil {
-							return nil, err
-						}
-						if nestedLoopkups != nil {
-							for _, v := range *nestedLoopkups {
-								pipeline = append(pipeline, v)
-							}
-						}
-					}
-
-					// limit "belongsTo" and "hasOne" to 2 documents, in order to check later if there is more than one
-					if relation.Type == "belongsTo" || relation.Type == "hasOne" {
-						pipeline = append(pipeline, wst.M{
-							"$limit": 2,
-						})
-					}
-
-					*lookups = append(*lookups, wst.M{
-						"$lookup": wst.M{
-							"from":     relatedLoadedModel.CollectionName,
-							"let":      lookupLet,
-							"pipeline": pipeline,
-							"as":       relationName,
-						},
-					})
-					break
-				}
-				switch relation.Type {
-				case "hasOne", "belongsTo":
-					*lookups = append(*lookups, wst.M{
-						"$unwind": wst.M{
-							"path":                       fmt.Sprintf("$%v", relationName),
-							"preserveNullAndEmptyArrays": true,
-						},
-					})
-					break
-				}
-
+			var err error
+			lookups, err = loadedModel.appendIncludeToLookups(includeItem, disableTypeConversions, lookups)
+			if err != nil {
+				return nil, err
 			}
 		}
 
@@ -347,6 +246,115 @@ func (loadedModel *Model) ExtractLookupsFromFilter(filterMap *wst.Filter, disabl
 		log.Printf("DEBUG: lookups %v\n", string(marshalled))
 	}
 
+	return lookups, nil
+}
+
+func (loadedModel *Model) appendIncludeToLookups(includeItem wst.IncludeItem, disableTypeConversions bool, lookups *wst.A) (*wst.A, error) {
+	var targetScope *wst.Filter
+	if includeItem.Scope != nil {
+		scopeValue := *includeItem.Scope
+		targetScope = &scopeValue
+	} else {
+		targetScope = nil
+	}
+
+	relationName := includeItem.Relation
+	relation := (*loadedModel.Config.Relations)[relationName]
+	if relation == nil {
+		return nil, fmt.Errorf("warning: relation %v not found for model %v", relationName, loadedModel.Name)
+	}
+
+	relatedModelName := relation.Model
+	relatedLoadedModel := (*loadedModel.modelRegistry)[relatedModelName]
+
+	if relatedLoadedModel == nil {
+		return nil, fmt.Errorf("warning: related model %v not found for relation %v.%v", relatedModelName, loadedModel.Name, relationName)
+	}
+
+	if relatedLoadedModel.Datasource.Name == loadedModel.Datasource.Name {
+		switch relation.Type {
+		case "belongsTo", "hasOne", "hasMany":
+			var matching wst.M
+			var lookupLet wst.M
+			switch relation.Type {
+			case "belongsTo":
+				lookupLet = wst.M{
+					*relation.ForeignKey: fmt.Sprintf("$%v", *relation.ForeignKey),
+				}
+				matching = wst.M{
+					"$eq": []string{fmt.Sprintf("$%v", *relation.PrimaryKey), fmt.Sprintf("$$%v", *relation.ForeignKey)},
+				}
+				break
+			case "hasOne", "hasMany":
+				lookupLet = wst.M{
+					*relation.ForeignKey: fmt.Sprintf("$%v", *relation.PrimaryKey),
+				}
+				matching = wst.M{
+					"$eq": []string{fmt.Sprintf("$%v", *relation.ForeignKey), fmt.Sprintf("$$%v", *relation.ForeignKey)},
+				}
+				break
+			}
+			pipeline := wst.A{
+				wst.M{
+					"$match": wst.M{
+						"$expr": wst.M{
+							"$and": wst.A{
+								matching,
+							},
+						},
+					},
+				},
+			}
+			project := wst.M{}
+			for _, propertyName := range relatedLoadedModel.Config.Hidden {
+				project[propertyName] = false
+			}
+			if len(project) > 0 {
+				pipeline = append(pipeline, wst.M{
+					"$project": project,
+				})
+			}
+			if targetScope != nil {
+				nestedLoopkups, err := relatedLoadedModel.ExtractLookupsFromFilter(targetScope, disableTypeConversions)
+				if err != nil {
+					return nil, err
+				}
+				if nestedLoopkups != nil {
+					for _, v := range *nestedLoopkups {
+						pipeline = append(pipeline, v)
+					}
+				}
+			}
+
+			// limit "belongsTo" and "hasOne" to 2 documents, in order to check later if there is more than one
+			if relation.Type == "belongsTo" || relation.Type == "hasOne" {
+				pipeline = append(pipeline, wst.M{
+					"$limit": 2,
+				})
+			}
+
+			*lookups = append(*lookups, wst.M{
+				"$lookup": wst.M{
+					"from":     relatedLoadedModel.CollectionName,
+					"let":      lookupLet,
+					"pipeline": pipeline,
+					"as":       relationName,
+				},
+			})
+			break
+		}
+		switch relation.Type {
+		case "hasOne", "belongsTo":
+			*lookups = append(*lookups, wst.M{
+				"$unwind": wst.M{
+					"path":                       fmt.Sprintf("$%v", relationName),
+					"preserveNullAndEmptyArrays": true,
+				},
+			})
+			break
+		}
+
+	}
 	return lookups, nil
 }
 
@@ -523,76 +531,9 @@ func (loadedModel *Model) mergeRelated(relationDeepLevel byte, documents *wst.A,
 
 				if !disabledCache && wasEmptyWhere && relatedLoadedModel.Config.Cache.Datasource != "" /* && keyFrom == relatedLoadedModel.Config.Cache.Keys*/ {
 
-					cacheDs, err := loadedModel.App.FindDatasource(relatedLoadedModel.Config.Cache.Datasource)
+					err := loadedModel.findCachedRelatedDocuments(relatedLoadedModel, keyFrom, document, keyTo, targetScope, localCache, cachedRelatedDocs, documentIdx, baseContext)
 					if err != nil {
 						return err
-					}
-					safeCacheDs := cacheDs.(*datasource.Datasource)
-
-					//baseKey := fmt.Sprintf("%v:%v", safeCacheDs.Viper.GetString(safeCacheDs.Key+".database"), relatedLoadedModel.Config.Name)
-					for _, keyGroup := range relatedLoadedModel.Config.Cache.Keys {
-
-						if len(keyGroup) == 1 && keyGroup[0] == keyFrom {
-
-							var documentKeyTo = document[keyTo]
-							switch documentKeyTo.(type) {
-							case primitive.ObjectID:
-								documentKeyTo = documentKeyTo.(primitive.ObjectID).Hex()
-							}
-							var includePrefix = ""
-							if targetScope.Include != nil {
-								marshalledTargetInclude, err := json.Marshal(targetScope.Include)
-								if err != nil {
-									return err
-								}
-								includePrefix = fmt.Sprintf("_inc_%s_", marshalledTargetInclude)
-							}
-							if targetScope.Where == nil {
-								targetScope.Where = &wst.Where{}
-							}
-							(*targetScope.Where)[keyFrom] = documentKeyTo
-							marshalledTargetWhere, err := json.Marshal(targetScope.Where)
-							if err != nil {
-								return err
-							}
-							includePrefix += fmt.Sprintf("_whr_%s_", marshalledTargetWhere)
-							cacheKeyTo := fmt.Sprintf("%v%v:%v", includePrefix, keyFrom, documentKeyTo)
-
-							if localCache[cacheKeyTo] != nil {
-								cachedRelatedDocs[documentIdx] = localCache[cacheKeyTo]
-							} else {
-								var cachedDocs []wst.M
-
-								cacheLookups := &wst.A{wst.M{"$match": wst.M{keyFrom: cacheKeyTo}}}
-								if loadedModel.App.Debug {
-									log.Printf("DEBUG: cacheLookups %v\n", cacheLookups)
-								}
-								cursor, err := safeCacheDs.FindMany(relatedLoadedModel.CollectionName, cacheLookups)
-								if err != nil {
-									return err
-								}
-								err = cursor.All(context.Background(), &cachedDocs)
-								if err != nil {
-									cursor.Close(context.Background())
-									return err
-								}
-								cursor.Close(context.Background())
-
-								nestedDocsCache := NewBuildCache()
-								for _, cachedDoc := range cachedDocs {
-									cachedInstance, err := relatedLoadedModel.Build(cachedDoc, nestedDocsCache, baseContext)
-									if err != nil {
-										return err
-									}
-									if cachedRelatedDocs[documentIdx] == nil {
-										cachedRelatedDocs[documentIdx] = InstanceA{}
-									}
-									cachedRelatedDocs[documentIdx] = append(cachedRelatedDocs[documentIdx], cachedInstance)
-								}
-								localCache[cacheKeyTo] = cachedRelatedDocs[documentIdx]
-							}
-
-						}
 					}
 
 				}
@@ -712,5 +653,80 @@ func (loadedModel *Model) mergeRelated(relationDeepLevel byte, documents *wst.A,
 		}
 	}
 
+	return nil
+}
+
+func (loadedModel *Model) findCachedRelatedDocuments(relatedLoadedModel *Model, keyFrom string, document wst.M, keyTo string, targetScope *wst.Filter, localCache map[string]InstanceA, cachedRelatedDocs []InstanceA, documentIdx int, baseContext *EventContext) error {
+	cacheDs, err := loadedModel.App.FindDatasource(relatedLoadedModel.Config.Cache.Datasource)
+	if err != nil {
+		return err
+	}
+	safeCacheDs := cacheDs.(*datasource.Datasource)
+
+	//baseKey := fmt.Sprintf("%v:%v", safeCacheDs.Viper.GetString(safeCacheDs.Key+".database"), relatedLoadedModel.Config.Name)
+	for _, keyGroup := range relatedLoadedModel.Config.Cache.Keys {
+
+		if len(keyGroup) == 1 && keyGroup[0] == keyFrom {
+
+			var documentKeyTo = document[keyTo]
+			switch documentKeyTo.(type) {
+			case primitive.ObjectID:
+				documentKeyTo = documentKeyTo.(primitive.ObjectID).Hex()
+			}
+			var includePrefix = ""
+			if targetScope.Include != nil {
+				marshalledTargetInclude, err := json.Marshal(targetScope.Include)
+				if err != nil {
+					return err
+				}
+				includePrefix = fmt.Sprintf("_inc_%s_", marshalledTargetInclude)
+			}
+			if targetScope.Where == nil {
+				targetScope.Where = &wst.Where{}
+			}
+			(*targetScope.Where)[keyFrom] = documentKeyTo
+			marshalledTargetWhere, err := json.Marshal(targetScope.Where)
+			if err != nil {
+				return err
+			}
+			includePrefix += fmt.Sprintf("_whr_%s_", marshalledTargetWhere)
+			cacheKeyTo := fmt.Sprintf("%v%v:%v", includePrefix, keyFrom, documentKeyTo)
+
+			if localCache[cacheKeyTo] != nil {
+				cachedRelatedDocs[documentIdx] = localCache[cacheKeyTo]
+			} else {
+				var cachedDocs []wst.M
+
+				cacheLookups := &wst.A{wst.M{"$match": wst.M{keyFrom: cacheKeyTo}}}
+				if loadedModel.App.Debug {
+					log.Printf("DEBUG: cacheLookups %v\n", cacheLookups)
+				}
+				cursor, err := safeCacheDs.FindMany(relatedLoadedModel.CollectionName, cacheLookups)
+				if err != nil {
+					return err
+				}
+				err = cursor.All(context.Background(), &cachedDocs)
+				if err != nil {
+					cursor.Close(context.Background())
+					return err
+				}
+				cursor.Close(context.Background())
+
+				nestedDocsCache := NewBuildCache()
+				for _, cachedDoc := range cachedDocs {
+					cachedInstance, err := relatedLoadedModel.Build(cachedDoc, nestedDocsCache, baseContext)
+					if err != nil {
+						return err
+					}
+					if cachedRelatedDocs[documentIdx] == nil {
+						cachedRelatedDocs[documentIdx] = InstanceA{}
+					}
+					cachedRelatedDocs[documentIdx] = append(cachedRelatedDocs[documentIdx], cachedInstance)
+				}
+				localCache[cacheKeyTo] = cachedRelatedDocs[documentIdx]
+			}
+
+		}
+	}
 	return nil
 }
