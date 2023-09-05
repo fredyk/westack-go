@@ -86,6 +86,37 @@ func init() {
 			return nil
 		})
 
+		userModel.On("sendResetPasswordEmail", func(ctx *model.EventContext) error {
+			fmt.Println("sending reset password email")
+			ctx.Result = wst.M{
+				"result":  "OK",
+				"message": "Reset password email sent",
+			}
+			return nil
+		})
+
+		userModel.On("sendVerificationEmail", func(ctx *model.EventContext) error {
+			fmt.Println("sending verify email")
+			// This bearer would be sent in the email in a real case, because it contains
+			// a special claim that allows the user to verify the email
+			bearerForEmailVerification := ctx.Bearer.Raw
+			ctx.Result = wst.M{
+				"result":  "OK",
+				"message": "Verification email sent",
+				"bearer":  bearerForEmailVerification,
+			}
+			return nil
+		})
+
+		userModel.On("performEmailVerification", func(ctx *model.EventContext) error {
+			fmt.Println("performing email verification")
+			ctx.Result = wst.M{
+				"result":  "OK",
+				"message": "Email verified",
+			}
+			return nil
+		})
+
 		customerModel, err = app.FindModel("Customer")
 		if err != nil {
 			log.Fatalf("failed to find model: %v", err)
@@ -158,33 +189,15 @@ func init() {
 	time.Sleep(300 * time.Millisecond)
 }
 
-func createUser(t *testing.T, userData wst.M) (wst.M, error) {
-	b := createBody(t, userData)
-
-	request := httptest.NewRequest("POST", "/api/v1/users", b)
-	request.Header.Set("Content-Type", "application/json")
-	response, err := app.Server.Test(request, 45000)
-	if err != nil {
-		return nil, err
-	}
-	if !assert.Equal(t, 200, response.StatusCode) {
-		return nil, fmt.Errorf("expected status code 200, got %v", response.StatusCode)
-	}
-
-	var responseBytes []byte
-	responseBytes, err = io.ReadAll(response.Body)
-	if err != nil {
-		return nil, err
-	}
-
-	var responseMap wst.M
-	err = json.Unmarshal(responseBytes, &responseMap)
-	if err != nil {
-		return nil, err
-	}
-
-	assert.Contains(t, responseMap, "id")
-	return responseMap, nil
+func createUser(t *testing.T, userData wst.M) wst.M {
+	var user wst.M
+	var err error
+	user, err = invokeApiJsonM(t, "POST", "/users", userData, wst.M{
+		"Content-Type": "application/json",
+	})
+	assert.NoError(t, err)
+	assert.Contains(t, user, "id")
+	return user
 }
 
 func login(t *testing.T, body wst.M) (string, string) {
@@ -234,11 +247,8 @@ func Test_WeStackCreateUser(t *testing.T) {
 	randomUserSuffix := createRandomInt()
 	email := fmt.Sprintf("email%v@example.com", randomUserSuffix)
 	password := "test"
-	body := wst.M{"email": email, "password": password, "username": fmt.Sprintf("user%v", randomUserSuffix)}
-	user, err := createUser(t, body)
-	assert.Nil(t, err)
-	assert.NotNil(t, user)
-	assert.Contains(t, user, "id")
+	plainUser := wst.M{"email": email, "password": password, "username": fmt.Sprintf("user%v", randomUserSuffix)}
+	createUser(t, plainUser)
 
 }
 
@@ -260,13 +270,10 @@ func Test_WeStackLogin(t *testing.T) {
 	password := "test"
 
 	log.Println("Email", email)
-	body := wst.M{"email": email, "password": password, "username": fmt.Sprintf("user%v", n)}
-	user, err := createUser(t, body)
-	assert.Nil(t, err)
-	assert.NotNil(t, user)
-	assert.Contains(t, user, "id")
+	plainUser := wst.M{"email": email, "password": password, "username": fmt.Sprintf("user%v", n)}
+	createUser(t, plainUser)
 
-	login(t, body)
+	login(t, plainUser)
 
 }
 
@@ -277,13 +284,10 @@ func Test_WeStackDelete(t *testing.T) {
 	n, _ := rand.Int(rand.Reader, big.NewInt(899999999))
 	email := fmt.Sprintf("email%v@example.com", 100000000+n.Int64())
 	password := "test"
-	body := wst.M{"email": email, "password": password, "username": fmt.Sprintf("user%v", n)}
-	user, err := createUser(t, body)
-	assert.Nil(t, err)
-	assert.NotNil(t, user)
-	assert.Contains(t, user, "id")
+	plainUser := wst.M{"email": email, "password": password, "username": fmt.Sprintf("user%v", n)}
+	createUser(t, plainUser)
 
-	bearer, userId := login(t, body)
+	bearer, userId := login(t, plainUser)
 
 	request := httptest.NewRequest("DELETE", fmt.Sprintf("/api/v1/users/%v", userId), nil)
 	request.Header.Set("Authorization", fmt.Sprintf("Bearer %v", bearer))
@@ -308,3 +312,15 @@ func Test_WeStackDelete(t *testing.T) {
 //	}
 //	os.Exit(code)
 //}
+
+func Test_InitAndServe(t *testing.T) {
+
+	t.Parallel()
+
+	go func() {
+		westack.InitAndServe(westack.Options{Port: 8021})
+	}()
+
+	time.Sleep(5 * time.Second)
+
+}
