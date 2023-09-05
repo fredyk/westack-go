@@ -182,6 +182,10 @@ const (
 	OperationNameCount            OperationName = "count"
 	OperationNameCreate           OperationName = "create"
 	OperationNameUpdateAttributes OperationName = "updateAttributes"
+	OperationNameUpdateById       OperationName = "updateById"
+	OperationNameUpdateMany       OperationName = "updateMany"
+	OperationNameDeleteById       OperationName = "deleteById"
+	OperationNameDeleteMany       OperationName = "deleteMany"
 )
 
 var (
@@ -283,6 +287,7 @@ type IApp struct {
 var RegexpIdEntire = regexp.MustCompile("^([0-9a-f]{24})$")
 var RegexpIpStart = regexp.MustCompile("^[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}")
 
+var regexpTrimMilliseconds = regexp.MustCompile(`^(.*\.\d{3})\d+(.*)$`)
 var regexpTimeZoneReplacing = regexp.MustCompile("([+\\-]\\d{2}):(\\d{2})$")
 var regexpDate1 = regexp.MustCompile("^(\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2})([+\\-:0-9]+)$")
 var regexpDate2 = regexp.MustCompile("^(\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3})([+\\-:0-9]+)$")
@@ -360,6 +365,14 @@ func ParseDate(data string) (time.Time, error) {
 		parsedDate, err = time.Parse(layout, regexpTimeZoneReplacing.ReplaceAllString(data, "$1$2"))
 	} else if IsDate2(data) {
 		layout := "2006-01-02T15:04:05.000-0700"
+		// Trim input up to 3 digits of milliseconds using regex
+		// This is needed because time.Parse() does not support more than 3 digits of milliseconds
+
+		prevData := data
+		data = regexpTrimMilliseconds.ReplaceAllString(data, "$1$2")
+		if prevData != data {
+			log.Printf("WARNING: ParseDate: trimming input to 3 digits of milliseconds: %v -> %v", prevData, data)
+		}
 		parsedDate, err = time.Parse(layout, regexpTimeZoneReplacing.ReplaceAllString(data, "$1$2"))
 	} else if is3, groups := IsDate3(data); is3 {
 		//layout := "2006-01-02T15:04:05Z"

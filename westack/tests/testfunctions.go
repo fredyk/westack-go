@@ -3,10 +3,12 @@ package tests
 import (
 	"bytes"
 	"crypto/rand"
+	"fmt"
 	"github.com/fredyk/westack-go/westack"
 	wst "github.com/fredyk/westack-go/westack/common"
 	"github.com/goccy/go-json"
 	"github.com/golang-jwt/jwt"
+	"github.com/mailru/easyjson"
 	"github.com/stretchr/testify/assert"
 	"io"
 	"math/big"
@@ -16,14 +18,18 @@ import (
 )
 
 var app *westack.WeStack
+var randomUser wst.M
+var randomUserToken wst.M
 
-// Decode the payload as JSON
-type payload struct {
+// Decode the jwtInfo as JSON
+type jwtInfo struct {
+	Bearer string `json:"-"`
 	// roles is mandatory
-	Roles []string `json:"roles"`
+	Roles  []string `json:"roles"`
+	UserId string   `json:"userId"`
 }
 
-func extractJWTPayload(t *testing.T, bearer string, err error) (payload, error) {
+func extractJWTPayload(t *testing.T, bearer string) jwtInfo {
 	splt := strings.Split(bearer, ".")
 	assert.Equal(t, 3, len(splt))
 	//payloadSt, err := base64.StdEncoding.DecodeString(splt[1])
@@ -32,9 +38,11 @@ func extractJWTPayload(t *testing.T, bearer string, err error) (payload, error) 
 	assert.NoError(t, err)
 	//assert.Equal(t, payloadSt, decoded)
 
-	var p payload
+	var p jwtInfo
 	err = json.Unmarshal(payloadSt, &p)
-	return p, err
+	assert.NoError(t, err)
+	p.Bearer = bearer
+	return p
 }
 
 func createRandomInt() int {
@@ -53,7 +61,7 @@ func createRandomFloat(min float64, max float64) float64 {
 }
 
 func invokeApi(t *testing.T, method string, url string, body wst.M, headers wst.M) (result wst.M, err error) {
-	req, err := http.NewRequest(method, url, jsonToReader(body))
+	req, err := http.NewRequest(method, fmt.Sprintf("/api/v1%s", url), jsonToReader(body))
 	assert.NoError(t, err)
 	for k, v := range headers {
 		req.Header.Add(k, v.(string))
@@ -64,10 +72,21 @@ func invokeApi(t *testing.T, method string, url string, body wst.M, headers wst.
 	respBody, err := io.ReadAll(resp.Body)
 	assert.NoError(t, err)
 	var parsedRespBody wst.M
-	err = json.Unmarshal(respBody, &parsedRespBody)
+	//err = json.Unmarshal(respBody, &parsedRespBody)
+	err = easyjson.Unmarshal(respBody, &parsedRespBody)
 	assert.NoError(t, err)
 
 	return parsedRespBody, err
+}
+
+func invokeApiAsRandomUser(t *testing.T, method string, url string, body wst.M, headers wst.M) (result wst.M, err error) {
+	if headers == nil {
+		headers = wst.M{}
+	}
+	if v, ok := headers["Authorization"]; !ok || v == "" {
+		headers["Authorization"] = fmt.Sprintf("Bearer %v", randomUserToken.GetString("id"))
+	}
+	return invokeApi(t, method, url, body, headers)
 }
 
 func jsonToReader(m wst.M) io.Reader {

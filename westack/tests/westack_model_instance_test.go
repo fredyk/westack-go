@@ -203,6 +203,7 @@ func Test_UpdateAttributes(t *testing.T) {
 
 	t.Parallel()
 
+	// keep using code directly because we want to test multiple input types for UpdateAttributes()
 	createdNote, err := noteModel.Create(wst.M{
 		"title": "Old title",
 	}, systemContext)
