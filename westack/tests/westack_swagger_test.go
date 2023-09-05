@@ -6,7 +6,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"io"
 	"net/http"
+	"os"
 	"testing"
+	"time"
 
 	"github.com/andybalholm/brotli"
 
@@ -72,4 +74,29 @@ func Test_Get_Swagger_UI(t *testing.T) {
 	}
 
 	fmt.Printf("DEBUG: Swagger: got %v bytes <-- %v\n", len(body), string(body[:32]))
+}
+
+func Test_GetCorruptSwagger(t *testing.T) {
+
+	t.Parallel()
+
+	// Wait 5 seconds, that way we don't break the other tests
+	time.Sleep(5 * time.Second)
+
+	// write <invalid json> to data/swagger.json
+	err := os.WriteFile("data/swagger.json", []byte("<invalid json>"), 0644)
+	assert.NoError(t, err)
+
+	// start client
+	client := http.Client{}
+
+	// test for error
+	resp, err := client.Get("http://localhost:8020/swagger/doc.json")
+	assert.NoError(t, err)
+	assert.EqualValues(t, 500, resp.StatusCode)
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	assert.NoError(t, err)
+	assert.EqualValues(t, "{\"error\":\"parse error: syntax error near offset 0 of '\\u003cinvalid j...'\"}", string(body))
+
 }
