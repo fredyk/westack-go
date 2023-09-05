@@ -1,11 +1,10 @@
 package cliutils
 
 import (
-	"log"
-	"os"
-
 	"github.com/fredyk/westack-go/westack"
 	"github.com/fredyk/westack-go/westack/model"
+	"log"
+	"os"
 )
 
 func RunCli() {
@@ -64,7 +63,7 @@ func RunCli() {
 		} else {
 			switch os.Args[2] {
 			case "start":
-				westack.InitAndServe()
+				westack.InitAndServe(westack.Options{})
 				break
 			default:
 				printHelp()

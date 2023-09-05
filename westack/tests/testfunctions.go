@@ -3,6 +3,7 @@ package tests
 import (
 	"bytes"
 	"crypto/rand"
+	"fmt"
 	"github.com/fredyk/westack-go/westack"
 	wst "github.com/fredyk/westack-go/westack/common"
 	"github.com/goccy/go-json"
@@ -16,14 +17,18 @@ import (
 )
 
 var app *westack.WeStack
+var randomUser wst.M
+var randomUserToken wst.M
 
-// Decode the payload as JSON
-type payload struct {
+// Decode the jwtInfo as JSON
+type jwtInfo struct {
+	Bearer string `json:"-"`
 	// roles is mandatory
-	Roles []string `json:"roles"`
+	Roles  []string `json:"roles"`
+	UserId string   `json:"userId"`
 }
 
-func extractJWTPayload(t *testing.T, bearer string, err error) (payload, error) {
+func extractJWTPayload(t *testing.T, bearer string) jwtInfo {
 	splt := strings.Split(bearer, ".")
 	assert.Equal(t, 3, len(splt))
 	//payloadSt, err := base64.StdEncoding.DecodeString(splt[1])
@@ -32,9 +37,11 @@ func extractJWTPayload(t *testing.T, bearer string, err error) (payload, error) 
 	assert.NoError(t, err)
 	//assert.Equal(t, payloadSt, decoded)
 
-	var p payload
+	var p jwtInfo
 	err = json.Unmarshal(payloadSt, &p)
-	return p, err
+	assert.NoError(t, err)
+	p.Bearer = bearer
+	return p
 }
 
 func createRandomInt() int {
@@ -52,29 +59,57 @@ func createRandomFloat(min float64, max float64) float64 {
 	return min + f*(max-min)
 }
 
-func invokeApi(t *testing.T, method string, url string, body wst.M, headers wst.M) (result wst.M, err error) {
-	req, err := http.NewRequest(method, url, jsonToReader(body))
-	assert.NoError(t, err)
-	for k, v := range headers {
-		req.Header.Add(k, v.(string))
-	}
-	resp, err := app.Server.Test(req, 45000)
-	assert.NoError(t, err)
-	defer resp.Body.Close()
-	respBody, err := io.ReadAll(resp.Body)
-	assert.NoError(t, err)
-	var parsedRespBody wst.M
+func invokeApiJsonM(t *testing.T, method string, url string, body wst.M, headers wst.M) (result wst.M, err error) {
+	result, err = invokeApiTyped[wst.M](t, method, url, body, headers)
+	return result, err
+}
+
+func invokeApiJsonA(t *testing.T, method string, url string, body wst.M, headers wst.M) (result wst.A, err error) {
+	return invokeApiTyped[wst.A](t, method, url, body, headers)
+}
+
+func invokeApiTyped[T any](t *testing.T, method string, url string, body wst.M, headers wst.M) (result T, err error) {
+	respBody := invokeApiBytes(t, method, url, body, headers, err)
+	var parsedRespBody T
 	err = json.Unmarshal(respBody, &parsedRespBody)
+	//err = easyjson.Unmarshal(respBody, parsedRespBody)
 	assert.NoError(t, err)
 
 	return parsedRespBody, err
 }
 
+func invokeApiBytes(t *testing.T, method string, url string, body wst.M, headers wst.M, err error) []byte {
+	resp := invokeApiFullResponse(t, method, url, body, headers, err)
+	defer resp.Body.Close()
+	respBody, err := io.ReadAll(resp.Body)
+	assert.NoError(t, err)
+	return respBody
+}
+
+func invokeApiFullResponse(t *testing.T, method string, url string, body wst.M, headers wst.M, err error) *http.Response {
+	req, err := http.NewRequest(method, fmt.Sprintf("/api/v1%s", url), jsonToReader(body))
+	assert.NoError(t, err)
+	for k, v := range headers {
+		req.Header.Add(k, v.(string))
+	}
+	resp, err := app.Server.Test(req, 3000)
+	assert.NoError(t, err)
+	return resp
+}
+
+func invokeApiAsRandomUser(t *testing.T, method string, url string, body wst.M, headers wst.M) (result wst.M, err error) {
+	if headers == nil {
+		headers = wst.M{}
+	}
+	if v, ok := headers["Authorization"]; !ok || v == "" {
+		headers["Authorization"] = fmt.Sprintf("Bearer %v", randomUserToken.GetString("id"))
+	}
+	return invokeApiJsonM(t, method, url, body, headers)
+}
+
 func jsonToReader(m wst.M) io.Reader {
 	out, err := json.Marshal(m)
-	if err != nil {
-		panic(err)
-	}
+	fmt.Printf("Ignoring error %v\n", err)
 	return bytes.NewReader(out)
 }
 
