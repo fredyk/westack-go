@@ -17,6 +17,9 @@
   "Order": {
     "dataSource": "db1"
   },
+  "RequestCache": {
+    "dataSource": "memorykv"
+  },
   "Store": {
     "dataSource": "db2"
   },

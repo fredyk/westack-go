@@ -34,12 +34,12 @@ type MemoryKvDb interface {
 //goland:noinspection GoNameStartsWithPackageName
 type MemoryKvBucket interface {
 	Get(key string) ([][]byte, error)
-	Set(key string, value [][]byte) error
+	Set(key string, value [][]byte)
 	SetEx(key string, value [][]byte, ttl time.Duration) error
 	Delete(key string) error
 	Expire(key string, ttl time.Duration) error
 	Stats() MemoryKvStats
-	Flush() error
+	Flush()
 }
 
 type kvPair struct {
@@ -153,7 +153,7 @@ func (kvBucket *MemoryKvBucketImpl) Get(key string) ([][]byte, error) {
 	}
 }
 
-func (kvBucket *MemoryKvBucketImpl) Set(key string, value [][]byte) error {
+func (kvBucket *MemoryKvBucketImpl) Set(key string, value [][]byte) {
 	dataLock.RLock()
 	pair, ok := kvBucket.data[key]
 	dataLock.RUnlock()
@@ -171,19 +171,11 @@ func (kvBucket *MemoryKvBucketImpl) Set(key string, value [][]byte) error {
 		dataLock.Unlock()
 	}
 	kvBucket.expirationQueue.Add(key, time.Now().Unix()+86400*365)
-	return nil
 }
 
 func (kvBucket *MemoryKvBucketImpl) SetEx(key string, value [][]byte, ttl time.Duration) error {
-	err := kvBucket.Set(key, value)
-	if err != nil {
-		return err
-	}
-	err = kvBucket.Expire(key, ttl)
-	if err != nil {
-		return err
-	}
-	return nil
+	kvBucket.Set(key, value)
+	return kvBucket.Expire(key, ttl)
 }
 
 func (kvBucket *MemoryKvBucketImpl) Expire(key string, ttl time.Duration) error {
@@ -209,11 +201,10 @@ func (kvBucket *MemoryKvBucketImpl) Delete(key string) error {
 	return nil
 }
 
-func (kvBucket *MemoryKvBucketImpl) Flush() error {
+func (kvBucket *MemoryKvBucketImpl) Flush() {
 	dataLock.Lock()
 	kvBucket.data = make(map[string]kvPair)
 	dataLock.Unlock()
-	return nil
 }
 
 func (kvBucket *MemoryKvBucketImpl) Stats() MemoryKvStats {
@@ -280,10 +271,7 @@ func (kvBucket *MemoryKvBucketImpl) Stats() MemoryKvStats {
 
 func (kvDb *MemoryKvDbImpl) Purge() error {
 	for _, bucket := range kvDb.buckets {
-		err := bucket.Flush()
-		if err != nil {
-			return err
-		}
+		bucket.Flush()
 	}
 	kvDb.buckets = make(map[string]MemoryKvBucket)
 	return nil
@@ -341,10 +329,6 @@ func (kvDb *MemoryKvDbImpl) GetBucket(name string) MemoryKvBucket {
 	}
 	bucketsLock.Lock()
 	defer bucketsLock.Unlock()
-	bucket, ok = kvDb.buckets[name]
-	if ok {
-		return bucket
-	}
 	bucket = createBucket(name)
 	kvDb.buckets[name] = bucket
 	return bucket

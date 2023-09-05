@@ -16,3 +16,4 @@
 /coverage.txt
 /test_output.txt
 /westack/tests/data/coverage/
+/westack/tests/data/*.policies.csv

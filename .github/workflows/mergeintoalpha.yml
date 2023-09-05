@@ -17,7 +17,7 @@ jobs:
         PPROF_AUTH_USERNAME: test
         PPROF_AUTH_PASSWORD: abcd1234.
         GITHUB_TOKEN: ${{ secrets.PULL_REQUEST_TOKEN }}
-        MIN_COVERAGE_THRESHOLD: 71.1
+        MIN_COVERAGE_THRESHOLD: 78.3
         WST_DB0_USERNAME: ${{ secrets.MONGO_DEV_USERNAME }}
         WST_DB0_PASSWORD: ${{ secrets.MONGO_DEV_PWD }}
         WST_DB1_USERNAME: ${{ secrets.MONGO_DEV_USERNAME }}
@@ -88,8 +88,11 @@ jobs:
             go test -timeout 5m -c -coverpkg=../../../westack-go/... -covermode=atomic github.com/fredyk/westack-go/westack/tests -o output.test
             go tool test2json -t ./output.test -test.v -test.paniconexit0 -test.coverprofile ../../coverage.txt | jq -r 'select(.Output != "" and .Output != null) | .Output' | sed '/^$/d' | tee ../../test_output.txt 
             cd ../..
+            sed -i 's/[\x00-\x09\x0b-\x1f\x7f-\xff]/\\&/g' test_output.txt
             # Select from test_output.txt only lines containing "coverage: "
-            cat test_output.txt | grep "coverage: " > coverage.summary.txt
+            echo "Coverage:"
+            cat test_output.txt | grep --text "coverage: "
+            cat test_output.txt | grep --text "coverage: " > coverage.summary.txt
             # Where is go???
             echo "Go is at $(which go)"
 
@@ -114,7 +117,7 @@ jobs:
         - name: Process tests output
           run: |
             # Select from test_output.txt only lines containing " FAIL: "
-            all_failed_tests=$(cat test_output.txt | grep ' FAIL: ' | sed '/^$/d')
+            all_failed_tests=$(cat test_output.txt | grep --text ' FAIL: ' | sed '/^$/d')
             if [ -n "$all_failed_tests" ]; then
               echo "Tests failed:"
               echo $all_failed_tests
@@ -131,6 +134,8 @@ jobs:
             # Also skip github.com/fredyk/westack-go/westack/tests
             coverage_lines=$(cat coverage.summary.txt | grep -v "coverage: \[no statements\]" | grep -v "coverage: \[no tests to run\]" | grep -v "github.com/fredyk/westack-go/westack/tests")
             echo "Target min coverage: $MIN_COVERAGE_THRESHOLD"
+            echo "Saved coverage:"
+            cat coverage.summary.txt
             echo "$coverage_lines" | while read -r line; do
               echo "$line"
               coverage=$(echo "$line" | sed 's/.*coverage: \([0-9]*\.[0-9]*\).*/\1/')

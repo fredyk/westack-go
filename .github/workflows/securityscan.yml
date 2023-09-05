@@ -35,10 +35,16 @@ jobs:
           # if pull_request, also merge it using event sha
           if [ -n "$GITHUB_HEAD_REF" ]; then
             echo "Merging pull request $GITHUB_HEAD_REF: ${{ github.event.pull_request.head.sha }}"
-            git merge --allow-unrelated-histories --no-edit -X theirs ${{ github.event.pull_request.head.sha }}
+            # git merge --allow-unrelated-histories --no-edit -X theirs ${{ github.event.pull_request.head.sha }}
+            git merge --allow-unrelated-histories --no-edit ${{ github.event.pull_request.head.sha }} \
+              || (git merge --abort || true) && git merge --allow-unrelated-histories --no-edit -X theirs ${{ github.event.pull_request.head.sha }} \
+              || git merge --abort
           elif [ -n "$GITHUB_REF" ]; then # else if it is a push
             echo "Merging push $GITHUB_REF: ${{ github.sha }}"
-            git merge --allow-unrelated-histories --no-edit -X theirs ${{ github.sha }}
+            # git merge --allow-unrelated-histories --no-edit -X theirs ${{ github.sha }}
+            git merge --allow-unrelated-histories --no-edit ${{ github.sha }} \
+                || (git merge --abort || true) && git merge --allow-unrelated-histories --no-edit -X theirs ${{ github.sha }} \
+                || git merge --abort
           fi
 
       - name: Set up Go

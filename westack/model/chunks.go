@@ -71,23 +71,23 @@ func (chunkGenerator *cursorChunkGenerator) ContentType() string {
 	return "application/json"
 }
 
-func (chunkGenerator *cursorChunkGenerator) NextChunk() (chunk Chunk, err error) {
+func (chunkGenerator *cursorChunkGenerator) obtainNextChunk(err error, chunk Chunk) (error, Chunk) {
 	err = chunkGenerator.GenerateNextChunk()
 	chunk = chunkGenerator.currentChunk
+	return err, chunk
+}
+
+func (chunkGenerator *cursorChunkGenerator) NextChunk() (chunk Chunk, err error) {
+	err, chunk = chunkGenerator.obtainNextChunk(err, chunk)
 	return
 }
 
 func (chunkGenerator *cursorChunkGenerator) GenerateNextChunk() (err error) {
 	chunkGenerator.currentChunk.raw = nil
 	chunkGenerator.currentChunk.length = 0
-	if chunkGenerator.isFirst {
-		chunkGenerator.currentChunk.raw = []byte{'['}
-		chunkGenerator.currentChunk.length += 1
-		chunkGenerator.isFirst = false
-	} else if chunkGenerator.eof {
+	if chunkGenerator.eof {
 		return io.EOF
 	} else {
-
 		var nextInstance *Instance
 		nextInstance, err = chunkGenerator.cursor.Next()
 		if err != nil {
@@ -97,7 +97,8 @@ func (chunkGenerator *cursorChunkGenerator) GenerateNextChunk() (err error) {
 			return err
 
 		} else if nextInstance == nil {
-			chunkGenerator.currentChunk.raw = []byte{']'}
+			chunkGenerator.appendOpenBracketIfNeeded()
+			chunkGenerator.currentChunk.raw = append(chunkGenerator.currentChunk.raw, ']')
 			chunkGenerator.currentChunk.length += 1
 			chunkGenerator.eof = true
 		} else {
@@ -112,9 +113,10 @@ func (chunkGenerator *cursorChunkGenerator) GenerateNextChunk() (err error) {
 				return err
 			}
 
+			chunkGenerator.appendOpenBracketIfNeeded()
 			if chunkGenerator.docsCount > 0 {
-				chunkGenerator.currentChunk.raw = []byte{','}
-				chunkGenerator.currentChunk.length += 1
+				chunkGenerator.currentChunk.raw = append(chunkGenerator.currentChunk.raw, ',', '\n')
+				chunkGenerator.currentChunk.length += 2
 			}
 
 			chunkGenerator.currentChunk.raw = append(chunkGenerator.currentChunk.raw, asBytes...)
@@ -125,6 +127,14 @@ func (chunkGenerator *cursorChunkGenerator) GenerateNextChunk() (err error) {
 	}
 
 	return
+}
+
+func (chunkGenerator *cursorChunkGenerator) appendOpenBracketIfNeeded() {
+	if chunkGenerator.isFirst {
+		chunkGenerator.currentChunk.raw = []byte{'['}
+		chunkGenerator.currentChunk.length += 1
+		chunkGenerator.isFirst = false
+	}
 }
 
 func (chunkGenerator *cursorChunkGenerator) Reader(eventContext *EventContext) io.Reader {

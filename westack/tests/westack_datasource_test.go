@@ -16,7 +16,7 @@ func Test_Datasource_Initialize_InvalidDatasource(t *testing.T) {
 
 	t.Parallel()
 
-	ds := datasource.New("test2020", app.DsViper, context.Background())
+	ds := datasource.New(&wst.IApp{}, "test2020", app.DsViper, context.Background())
 	err := ds.Initialize()
 	assert.Error(t, err)
 	assert.Regexp(t, "invalid connector", err.Error(), "error message should be 'invalid connector'")
@@ -27,7 +27,7 @@ func Test_Datasource_Initialize_ConnectError(t *testing.T) {
 
 	t.Parallel()
 
-	ds := datasource.New("db0", app.DsViper, context.Background())
+	ds := datasource.New(&wst.IApp{}, "db0", app.DsViper, context.Background())
 	prevHost := ds.SubViper.GetString("url")
 	ds.SubViper.Set("url", "<invalid url>")
 	ds.Options = &datasource.Options{
@@ -197,23 +197,27 @@ func Test_DatasourceDeleteManyOK(t *testing.T) {
 
 	t.Parallel()
 
-	note1, err := noteModel.Create(wst.M{
+	note1, err := invokeApiAsRandomUser(t, "POST", "/notes", wst.M{
 		"title": fmt.Sprintf("Note %v", createRandomInt()),
-	}, systemContext)
+	}, wst.M{
+		"Content-Type": "application/json",
+	})
 	assert.NoError(t, err)
-	assert.NotNil(t, note1)
+	assert.Contains(t, note1, "id")
 
-	note2, err := noteModel.Create(wst.M{
+	note2, err := invokeApiAsRandomUser(t, "POST", "/notes", wst.M{
 		"title": fmt.Sprintf("Note %v", createRandomInt()),
-	}, systemContext)
+	}, wst.M{
+		"Content-Type": "application/json",
+	})
 	assert.NoError(t, err)
-	assert.NotNil(t, note2)
+	assert.Contains(t, note2, "id")
 
 	result, err := noteModel.DeleteMany(&wst.Where{
 		"_id": wst.M{
 			"$in": []interface{}{
-				note1.Id,
-				note2.Id,
+				note1.GetString("id"),
+				note2.GetString("id"),
 			},
 		},
 	}, systemContext)

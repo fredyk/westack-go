@@ -28,6 +28,7 @@ type Datasource struct {
 	ctxCancelFn       context.CancelFunc
 	SubViper          *viper.Viper
 	connectorInstance PersistedConnector
+	app               *wst.IApp
 }
 
 func getConnectorByName(name string, dsKey string, dsViper *viper.Viper, options *Options) (PersistedConnector, error) {
@@ -39,7 +40,7 @@ func getConnectorByName(name string, dsKey string, dsViper *viper.Viper, options
 		}
 		return NewMongoDBConnector(mongoOptions), nil
 	case "memorykv":
-		return NewMemoryKVConnector(dsKey), nil
+		return NewMemoryKVConnector(wst.CreateDefaultMongoRegistry(), dsKey), nil
 	default:
 		return nil, errors.New("invalid connector " + name)
 	}
@@ -87,13 +88,13 @@ func (ds *Datasource) Initialize() error {
 				err := connector.Connect(initialCtx)
 				if err != nil {
 					if ds.Options == nil || !ds.Options.RetryOnError {
-						log.Fatalf("Could not reconnect %v: %v\n", ds.Key, err)
+						ds.app.Logger().Fatalf("Could not reconnect %v: %v\n", ds.Key, err)
 					}
 				} else {
 					err = connector.Ping(initialCtx)
 					if err != nil {
 						if ds.Options == nil || !ds.Options.RetryOnError {
-							log.Fatalf("Mongo client disconnected after %vms: %v", time.Now().UnixMilli()-init, err)
+							ds.app.Logger().Fatalf("Mongo client disconnected after %vms: %v", time.Now().UnixMilli()-init, err)
 						}
 					} else {
 						log.Printf("successfully reconnected to %v\n", ds.Key)
@@ -188,7 +189,7 @@ func (ds *Datasource) SetTimeout(seconds float32) {
 	ds.connectorInstance.SetTimeout(seconds)
 }
 
-func New(dsKey string, dsViper *viper.Viper, parentContext context.Context) *Datasource {
+func New(app *wst.IApp, dsKey string, dsViper *viper.Viper, parentContext context.Context) *Datasource {
 	subViper := dsViper.Sub(dsKey)
 	if subViper == nil {
 		subViper = viper.New()
@@ -211,6 +212,7 @@ func New(dsKey string, dsViper *viper.Viper, parentContext context.Context) *Dat
 
 		Context:     ctx,
 		ctxCancelFn: ctxCancelFn,
+		app:         app,
 	}
 	return ds
 }

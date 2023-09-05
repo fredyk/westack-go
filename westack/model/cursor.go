@@ -11,11 +11,11 @@ type ErrorCursor struct {
 }
 
 func (cursor *ErrorCursor) Next() (result *Instance, err error) {
-	return result, cursor.err
+	return result, cursor.Error()
 }
 
 func (cursor *ErrorCursor) All() (result InstanceA, err error) {
-	return result, cursor.err
+	return result, cursor.Error()
 }
 
 func (cursor *ErrorCursor) Close() error {

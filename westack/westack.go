@@ -5,24 +5,18 @@ import (
 	"errors"
 	"fmt"
 	"github.com/fredyk/westack-go/westack/lib/swaggerhelperinterface"
-	"github.com/fredyk/westack-go/westack/memorykv"
-	"io"
 	"log"
-	"net/http"
 	"os"
-	"reflect"
-	"runtime/debug"
+	"os/signal"
 	"strconv"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/compress"
-	"github.com/gofiber/fiber/v2/middleware/recover"
+
 	"github.com/golang/protobuf/proto"
 	"github.com/spf13/viper"
-	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/bsoncodec"
-	"go.mongodb.org/mongo-driver/bson/primitive"
 	"google.golang.org/grpc"
 
 	"github.com/goccy/go-json"
@@ -30,7 +24,6 @@ import (
 	wst "github.com/fredyk/westack-go/westack/common"
 	"github.com/fredyk/westack-go/westack/datasource"
 	"github.com/fredyk/westack-go/westack/model"
-	"github.com/fredyk/westack-go/westack/utils"
 )
 
 type LoginBody struct {
@@ -55,6 +48,7 @@ type WeStack struct {
 	init              time.Time
 	jwtSecretKey      []byte
 	swaggerHelper     swaggerhelperinterface.SwaggerHelper
+	logger            wst.ILogger
 }
 
 func (app *WeStack) FindModel(modelName string) (*model.Model, error) {
@@ -86,151 +80,7 @@ func (app *WeStack) FindModelsWithClass(modelClass string) (foundModels []*model
 
 func (app *WeStack) Boot(customRoutesCallbacks ...func(app *WeStack)) {
 
-	app.loadDataSources()
-
-	err := app.loadModels()
-	if err != nil {
-		log.Fatalf("Error while loading models: %v", err)
-	}
-
-	pprofAuthUsername := os.Getenv("PPROF_AUTH_USERNAME")
-	pprofAuthPassword := os.Getenv("PPROF_AUTH_PASSWORD")
-	if pprofAuthUsername != "" && pprofAuthPassword != "" {
-		app.Middleware(utils.PprofHandlers(utils.PprofMiddleOptions{
-			Auth: utils.BasicAuthOptions{
-				Username: pprofAuthUsername,
-				Password: pprofAuthPassword,
-			},
-		}))
-	}
-
-	app.Middleware(func(c *fiber.Ctx) error {
-		method := c.Method()
-		err := c.Next()
-		if err != nil {
-			log.Println("Error:", err)
-			log.Printf("%v: %v\n", method, c.OriginalURL())
-			switch err.(type) {
-			case *fiber.Error:
-				if err.(*fiber.Error).Code == fiber.StatusNotFound {
-					return c.Status(err.(*fiber.Error).Code).JSON(fiber.Map{"error": fiber.Map{"status": err.(*fiber.Error).Code, "message": fmt.Sprintf("Unknown method %v %v", method, c.Path())}})
-				} else {
-					return c.Status(err.(*fiber.Error).Code).JSON(fiber.Map{"error": fiber.Map{"status": err.(*fiber.Error).Code, "message": err.(*fiber.Error).Message}})
-				}
-			default:
-				return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": fiber.Map{"status": fiber.StatusInternalServerError, "message": err.Error()}})
-			}
-		}
-		return nil
-	})
-
-	app.Middleware(recover.New(recover.Config{
-		EnableStackTrace: true,
-		StackTraceHandler: func(c *fiber.Ctx, e interface{}) {
-			log.Println(e)
-			debug.PrintStack()
-		},
-	}))
-
-	if app.Options.EnableCompression {
-		app.Middleware(compress.New(app.Options.CompressionConfig))
-	}
-
-	app.loadModelsFixedRoutes()
-
-	systemContext := &model.EventContext{
-		Bearer: &model.BearerToken{User: &model.BearerUser{System: true}},
-	}
-
-	// Upsert the admin user
-	_, err = UpsertUserWithRoles(app, UserWithRoles{
-		Username: app.Options.adminUsername,
-		Password: app.Options.adminPwd,
-		Roles:    []string{"admin"},
-	}, systemContext)
-	if err != nil {
-		log.Fatalf("Error while creating admin user: %v", err)
-	}
-
-	for _, cb := range customRoutesCallbacks {
-		cb(app)
-	}
-
-	app.loadModelsDynamicRoutes()
-	app.loadNotFoundRoutes()
-
-	app.Server.Get("/system/memorykv/stats", func(c *fiber.Ctx) error {
-		allStats := make(map[string]map[string]memorykv.MemoryKvStats)
-		var totalSizeKiB float64
-		for _, ds := range *app.datasources {
-			if ds.SubViper.GetString("connector") == "memorykv" {
-				kvDbStats := ds.Db.(memorykv.MemoryKvDb).Stats()
-				allStats[ds.Name] = kvDbStats
-				for _, kvStats := range kvDbStats {
-					totalSizeKiB += float64(kvStats.TotalSize) / 1024.0
-				}
-			}
-		}
-		return c.JSON(fiber.Map{"stats": wst.M{
-			"totalSizeKiB": totalSizeKiB,
-			"datasources":  allStats,
-		}})
-	})
-
-	app.Server.Get("/swagger/doc.json", swaggerDocsHandler(app))
-
-	var swaggerUIStatic []byte
-	var swaggerContentEncoding = "deflate"
-	app.Server.Get("/swagger/*", func(ctx *fiber.Ctx) error {
-		if swaggerUIStatic == nil {
-			request, err := http.NewRequest("GET", "https://swagger-ui.fhcreations.com/", nil)
-			if err != nil {
-				return err
-			}
-			request.Header.Set("Accept", "text/html")
-			request.Header.Set("Accept-Encoding", "gzip, deflate, br")
-			//request.Header.Set("Accept-Language", "en-US,en;q=0.9")
-			//request.Header.Set("Cache-Control", "no-cache")
-
-			response, err := http.DefaultClient.Do(request)
-
-			for _, v := range response.Header["Content-Encoding"] {
-				swaggerContentEncoding = v
-			}
-
-			var reader io.Reader
-			//// decompress
-			//switch swaggerContentEncoding {
-			//case "gzip":
-			//	reader, err = gzip.NewReader(response.Body)
-			//	if err != nil {
-			//		break
-			//	}
-			//case "br":
-			//	reader = brotli.NewReader(response.Body)
-			//case "deflate", "":
-			reader = response.Body
-			//}
-			swaggerUIStatic, err = io.ReadAll(reader)
-			if err != nil {
-				return err
-			}
-
-			fmt.Printf("DEBUG: Fetched swagger ui static html (%v bytes)\n", len(swaggerUIStatic))
-			fmt.Printf("DEBUG: Swagger Content-Encoding: %v\n", swaggerContentEncoding)
-		}
-
-		ctx.Status(fiber.StatusOK).Set("Content-Type", "text/html; charset=utf-8")
-		ctx.Set("Content-Encoding", swaggerContentEncoding)
-
-		return ctx.Send(swaggerUIStatic)
-	})
-
-	// Free up memory
-	err = app.swaggerHelper.Dump()
-	if err != nil {
-		fmt.Printf("Error while dumping swagger helper: %v\n", err)
-	}
+	appBoot(customRoutesCallbacks, app)
 
 }
 
@@ -258,12 +108,16 @@ func (app *WeStack) Stop() error {
 	return nil
 }
 
-func GRPCCallWithQueryParams[InputT any, ClientT interface{}, OutputT proto.Message](serviceUrl string, clientConstructor func(cc grpc.ClientConnInterface) ClientT, clientMethod func(ClientT, context.Context, *InputT, ...grpc.CallOption) (OutputT, error)) func(ctx *fiber.Ctx) error {
-	return gRPCCallWithQueryParams(serviceUrl, clientConstructor, clientMethod)
+func (app *WeStack) Logger() wst.ILogger {
+	return app.logger
 }
 
-func GRPCCallWithBody[InputT any, ClientT interface{}, OutputT proto.Message](serviceUrl string, clientConstructor func(cc grpc.ClientConnInterface) ClientT, clientMethod func(ClientT, context.Context, *InputT, ...grpc.CallOption) (OutputT, error)) func(ctx *fiber.Ctx) error {
-	return gRPCCallWithBody(serviceUrl, clientConstructor, clientMethod)
+func GRPCCallWithQueryParams[InputT any, ClientT interface{}, OutputT proto.Message](serviceUrl string, clientConstructor func(cc grpc.ClientConnInterface) ClientT, clientMethod func(ClientT, context.Context, *InputT, ...grpc.CallOption) (OutputT, error), timeoutSeconds ...float32) func(ctx *fiber.Ctx) error {
+	return gRPCCallWithQueryParams(serviceUrl, clientConstructor, clientMethod, timeoutSeconds...)
+}
+
+func GRPCCallWithBody[InputT any, ClientT interface{}, OutputT proto.Message](serviceUrl string, clientConstructor func(cc grpc.ClientConnInterface) ClientT, clientMethod func(ClientT, context.Context, *InputT, ...grpc.CallOption) (OutputT, error), timeoutSeconds ...float32) func(ctx *fiber.Ctx) error {
+	return gRPCCallWithBody(serviceUrl, clientConstructor, clientMethod, timeoutSeconds...)
 }
 
 type Options struct {
@@ -277,9 +131,13 @@ type Options struct {
 	debug         bool
 	adminUsername string
 	adminPwd      string
+	Logger        wst.ILogger
 }
 
 func New(options ...Options) *WeStack {
+
+	var logger wst.ILogger
+
 	server := fiber.New(fiber.Config{
 		JSONEncoder: json.Marshal,
 		JSONDecoder: json.Unmarshal,
@@ -292,6 +150,13 @@ func New(options ...Options) *WeStack {
 	if len(options) > 0 {
 		finalOptions = options[0]
 	}
+
+	if finalOptions.Logger != nil {
+		logger = finalOptions.Logger
+	} else {
+		logger = log.New(os.Stdout, "[westack] ", 0)
+	}
+
 	if finalOptions.JwtSecretKey == "" {
 		if s, present := os.LookupEnv("JWT_SECRET"); present {
 			finalOptions.JwtSecretKey = s
@@ -304,13 +169,13 @@ func New(options ...Options) *WeStack {
 
 	adminUsername, present := os.LookupEnv("WST_ADMIN_USERNAME")
 	if !present {
-		log.Fatalf("WST_ADMIN_USERNAME environment variable is not set")
+		logger.Fatalf("WST_ADMIN_USERNAME environment variable is not set")
 	}
 	finalOptions.adminUsername = adminUsername
 
 	adminPassword, present := os.LookupEnv("WST_ADMIN_PWD")
 	if !present {
-		log.Fatalf("WST_ADMIN_PWD environment variable is not set")
+		logger.Fatalf("WST_ADMIN_PWD environment variable is not set")
 	}
 	finalOptions.adminPwd = adminPassword
 
@@ -337,11 +202,11 @@ func New(options ...Options) *WeStack {
 			appViper.SetConfigName("config") // name of config file (without extension)
 			err := appViper.ReadInConfig()   // Find and read the config file
 			if err != nil {
-				panic(fmt.Errorf("fatal error config file: %w", err))
+				log.Fatalf("fatal error config file: %w", err)
 			}
 			break
 		default:
-			panic(fmt.Errorf("fatal error config file: %w", err))
+			log.Fatalf("fatal error config file: %w", err)
 		}
 	}
 
@@ -354,7 +219,7 @@ func New(options ...Options) *WeStack {
 	if os.Getenv("PORT") != "" {
 		portFromEnv, err := strconv.Atoi(os.Getenv("PORT"))
 		if err != nil {
-			log.Fatalf("Invalid PORT environment variable: %v", err)
+			logger.Fatalf("Invalid PORT environment variable: %v", err)
 		}
 		if finalOptions.debug {
 			log.Printf("DEBUG: PORT environment variable is set to %v", portFromEnv)
@@ -372,7 +237,7 @@ func New(options ...Options) *WeStack {
 		}
 	}
 	if bsonRegistry == nil {
-		bsonRegistry = bson.NewRegistryBuilder().RegisterCodec(reflect.TypeOf(primitive.ObjectID{}), &bsoncodec.TimeCodec{}).Build()
+		bsonRegistry = wst.CreateDefaultMongoRegistry()
 	}
 	app := WeStack{
 		Server:  server,
@@ -390,15 +255,28 @@ func New(options ...Options) *WeStack {
 		jwtSecretKey:      []byte(finalOptions.JwtSecretKey),
 		dataSourceOptions: finalOptions.DatasourceOptions,
 		init:              time.Now(),
+		logger:            logger,
 	}
 
 	return &app
 }
 
-func InitAndServe() {
-	app := New()
+func InitAndServe(options Options) {
+	app := New(options)
 
 	app.Boot()
 
-	log.Fatal(app.Start())
+	// Catch SIGINT signal and Stop()
+	go func() {
+		c := make(chan os.Signal, 1)
+		signal.Notify(c, os.Interrupt)
+		<-c
+		err := app.Stop()
+		if err != nil {
+			app.logger.Fatal(err)
+		}
+		os.Exit(0)
+	}()
+
+	app.logger.Fatal(app.Start())
 }

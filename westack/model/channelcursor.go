@@ -9,20 +9,19 @@ type ChannelCursor struct {
 }
 
 func (cursor *ChannelCursor) Next() (result *Instance, err error) {
-	if cursor.Err != nil {
-		return result, cursor.Err
+	err = cursor.Err
+	if err != nil {
+		return
 	}
 	result = <-cursor.channel
-	if result == nil {
-		return result, nil
-	}
+	err = cursor.Err
 	return
 }
 
 func (cursor *ChannelCursor) All() (result InstanceA, err error) {
 	for {
-		if cursor.Err != nil {
-			return result, cursor.Err
+		if err = cursor.Err; err != nil {
+			return
 		}
 		instance := <-cursor.channel
 		if instance == nil {
@@ -30,6 +29,7 @@ func (cursor *ChannelCursor) All() (result InstanceA, err error) {
 		}
 		result = append(result, *instance)
 	}
+	err = cursor.Err
 	return
 }
 
