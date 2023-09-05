@@ -182,6 +182,10 @@ const (
 	OperationNameCount            OperationName = "count"
 	OperationNameCreate           OperationName = "create"
 	OperationNameUpdateAttributes OperationName = "updateAttributes"
+	OperationNameUpdateById       OperationName = "updateById"
+	OperationNameUpdateMany       OperationName = "updateMany"
+	OperationNameDeleteById       OperationName = "deleteById"
+	OperationNameDeleteMany       OperationName = "deleteMany"
 )
 
 var (

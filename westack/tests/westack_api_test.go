@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"github.com/goccy/go-json"
 	"github.com/stretchr/testify/assert"
-	"go.mongodb.org/mongo-driver/bson/primitive"
 	"io"
 	"net/http"
 	"testing"
@@ -76,7 +75,7 @@ func Test_FindMany(t *testing.T) {
 	var err error
 
 	user := createUserThroughNetwork(t)
-	token, err := loginUser(user["email"].(string), "abcd1234.", t)
+	token, err := loginUser(user.GetString("email"), "abcd1234.", t)
 	assert.Nilf(t, err, "Error while logging in: %v", err)
 	assert.NotNilf(t, token, "Token is nil: %v", token)
 	assert.Contains(t, token, "id")
@@ -162,23 +161,25 @@ func Test_Count(t *testing.T) {
 	// t.Parallel()
 
 	// Count notes
-	count, err := noteModel.Count(nil, systemContext)
+	countResponse, err := invokeApiAsRandomUser(t, "GET", "/notes/count", nil, nil)
 	assert.NoError(t, err)
-	assert.GreaterOrEqual(t, count, int64(0))
+	assert.EqualValues(t, 0, countResponse["count"])
 
 	// Create a note
-	note, err := noteModel.Create(wst.M{
+	note, err := invokeApiAsRandomUser(t, "POST", "/notes", wst.M{
 		"title": "Test Note",
-	}, systemContext)
+	}, wst.M{
+		"Content-Type": "application/json",
+	})
 	assert.NoError(t, err)
 	assert.NotNil(t, note)
-	assert.NotEqualValuesf(t, primitive.NilObjectID, note.Id, "Note ID is nil: %v", note.Id)
+	assert.NotEmptyf(t, note.GetString("id"), "Note ID is nil: %v", note)
 	assert.Equal(t, "Test Note", note.GetString("title"))
 
 	// Count notes again
-	newCount, err := noteModel.Count(nil, systemContext)
+	newCount, err := invokeApiAsRandomUser(t, "GET", "/notes/count", nil, nil)
 	assert.NoError(t, err)
-	assert.EqualValuesf(t, count+1, newCount, "Count is not increased: %v", newCount)
+	assert.EqualValuesf(t, countResponse["count"].(float64)+1, newCount["count"], "Count is not increased: %v", newCount)
 
 }
 
