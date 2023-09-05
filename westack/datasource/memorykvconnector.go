@@ -125,12 +125,7 @@ func (connector *MemoryKVConnector) Create(collectionName string, data *wst.M) (
 		allBytes = append(allBytes, bytes)
 	}
 
-	//db[id] = data
-	err := db.GetBucket(collectionName).Set(idAsStr, allBytes)
-	if err != nil {
-		return nil, err
-	}
-	//return findByObjectId(collectionName, id, ds, nil)
+	db.GetBucket(collectionName).Set(idAsStr, allBytes)
 	return data, nil
 }
 
