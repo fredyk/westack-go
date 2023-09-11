@@ -7,6 +7,7 @@ jobs:
 
     run_tests:
       runs-on: ubuntu-latest
+      timeout-minutes: 5
       strategy:
         matrix:
           go: [ '1.20.1', '1.20.6' ]
@@ -136,10 +137,13 @@ jobs:
           if: contains(github.event.pull_request.labels.*.name, 'auto-merge')
           run: |
               git fetch
+              git config --global user.email "github-actions[bot]@users.noreply.github.com"
+              git config --global user.name "github-actions[bot]"
               git push origin temp-branch-${{ github.run_id }} --force || true
 
     push_to_base:
       runs-on: ubuntu-latest
+      timeout-minutes: 5
       if: contains(github.event.pull_request.labels.*.name, 'auto-merge')
       needs: [run_tests]
       env:
@@ -207,6 +211,7 @@ jobs:
 
     close_pr_success:
       runs-on: ubuntu-latest
+      timeout-minutes: 5
       if: contains(github.event.pull_request.labels.*.name, 'auto-merge')
       needs: [run_tests, push_to_base]
       steps:
@@ -244,7 +249,9 @@ jobs:
 
     close_pr_failure:
         runs-on: ubuntu-latest
-        if: always() && contains(github.event.pull_request.labels.*.name, 'auto-merge') && contains(needs.*.result, 'failure')
+        timeout-minutes: 5
+      # Only if the pull request has the label 'auto-merge' and does not have the label 'close-on-success' and has failed
+        if: always() && contains(github.event.pull_request.labels.*.name, 'auto-merge') && !contains(github.event.pull_request.labels.*.name, 'close-on-success') && contains(needs.*.result, 'failure')
         needs: [run_tests, push_to_base]
         steps:
 
@@ -255,6 +262,7 @@ jobs:
 
     cleanup_temp_branch:
       runs-on: ubuntu-latest
+      timeout-minutes: 5
       if: always() && contains(github.event.pull_request.labels.*.name, 'auto-merge')
       needs: [run_tests, push_to_base]
       steps:
@@ -275,7 +283,8 @@ jobs:
 
     cleanup_head_branch:
       runs-on: ubuntu-latest
-      if: always() && contains(github.event.pull_request.labels.*.name, 'delete-branch')
+      timeout-minutes: 5
+      if: always() && contains(github.event.pull_request.labels.*.name, 'delete-branch') && !contains(github.event.pull_request.labels.*.name, 'close-on-success')
       needs: [run_tests, push_to_base, close_pr_success, close_pr_failure]
       steps:
 
