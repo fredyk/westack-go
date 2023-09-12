@@ -2,8 +2,10 @@ package wst
 
 import (
 	"fmt"
+	"go.mongodb.org/mongo-driver/bson/bsonrw"
 	"log"
 	"os"
+	"reflect"
 	"regexp"
 	"strings"
 	"time"
@@ -468,4 +470,80 @@ type ILogger interface {
 	SetFlags(flag int)
 	Prefix() string
 	SetPrefix(prefix string)
+}
+
+type objectIdCodec struct{}
+
+func (objectIdCodec) EncodeValue(encodeContext bsoncodec.EncodeContext, writer bsonrw.ValueWriter, val reflect.Value) error {
+	oid := val.Interface().(primitive.ObjectID)
+	return writer.WriteObjectID(oid)
+}
+
+func (objectIdCodec) DecodeValue(decodeContext bsoncodec.DecodeContext, reader bsonrw.ValueReader, val reflect.Value) error {
+	var oid primitive.ObjectID
+	var err error
+	switch reader.Type() {
+	case bson.TypeObjectID:
+		oid, err = reader.ReadObjectID()
+		if err != nil {
+			return err
+		}
+	case bson.TypeString:
+		str, err := reader.ReadString()
+		if err != nil {
+			return err
+		}
+		oid, err = primitive.ObjectIDFromHex(str)
+		if err != nil {
+			return err
+		}
+	default:
+		return fmt.Errorf("cannot decode %v into a primitive.ObjectID", reader.Type())
+	}
+	val.Set(reflect.ValueOf(oid))
+	return nil
+}
+
+func newObjectIDCodec() bsoncodec.ValueCodec {
+	return &objectIdCodec{}
+}
+
+func CreateDefaultMongoRegistry() *bsoncodec.Registry {
+	// create a new registry
+	bsonRegistryBuilder := bson.NewRegistryBuilder().
+		RegisterCodec(reflect.TypeOf(primitive.ObjectID{}), newObjectIDCodec()). // register the primitive.ObjectID type
+		//RegisterTypeMapEntry(bson.TypeEmbeddedDocument, reflect.TypeOf(bson.M{})).
+		RegisterTypeMapEntry(bson.TypeEmbeddedDocument, reflect.TypeOf(M{})).
+		//RegisterTypeMapEntry(bson.TypeArray, reflect.TypeOf([]bson.M{}))
+		RegisterTypeMapEntry(bson.TypeArray, reflect.TypeOf(A{}))
+
+	// register the custom types
+	bsonRegistryBuilder.
+		RegisterTypeEncoder(reflect.TypeOf(time.Time{}), bsoncodec.ValueEncoderFunc(func(ec bsoncodec.EncodeContext, vw bsonrw.ValueWriter, val reflect.Value) error {
+			return vw.WriteDateTime(val.Interface().(time.Time).UnixNano() / int64(time.Millisecond))
+		})).
+		RegisterTypeDecoder(reflect.TypeOf(time.Time{}), bsoncodec.ValueDecoderFunc(func(dc bsoncodec.DecodeContext, vr bsonrw.ValueReader, val reflect.Value) error {
+			var unixNano int64
+			var err error
+			switch vr.Type() {
+			case bson.TypeDateTime:
+				unixNano, err = vr.ReadDateTime()
+				if err != nil {
+					return err
+				}
+			case bson.TypeInt64:
+				var int64Val int64
+				int64Val, err = vr.ReadInt64()
+				if err != nil {
+					return err
+				}
+				unixNano = int64Val
+			default:
+				return fmt.Errorf("cannot decode %v into a time.Time", vr.Type())
+			}
+			val.Set(reflect.ValueOf(time.Unix(0, unixNano*int64(time.Millisecond))))
+			return nil
+		}))
+
+	return bsonRegistryBuilder.Build()
 }

@@ -621,8 +621,8 @@ func Test_SpecialFilter15SecondsFromNow(t *testing.T) {
 	// Create a note for checking the filter
 	randomTitle := fmt.Sprintf("Test_SpecialFilter15SecondsFromNow_%d", createRandomInt())
 	note, err := noteModel.Create(wst.M{
-		// Created 16 seconds from now
-		"created": time.Now().Add(16 * time.Second),
+		// Created 30 seconds from now
+		"created": time.Now().Add(30 * time.Second),
 		"title":   randomTitle,
 	}, systemContext)
 	assert.NoError(t, err)
@@ -716,9 +716,9 @@ func TestMain(m *testing.M) {
 		DatasourceOptions: &map[string]*datasource.Options{
 			"db": {
 				MongoDB: &datasource.MongoDBDatasourceOptions{
-					Registry: FakeMongoDbRegistry(),
-					Monitor:  FakeMongoDbMonitor(),
-					Timeout:  3,
+					//Registry: FakeMongoDbRegistry(),
+					Monitor: FakeMongoDbMonitor(),
+					Timeout: 3,
 				},
 				RetryOnError: true,
 			},

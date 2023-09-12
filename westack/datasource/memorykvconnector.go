@@ -9,6 +9,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/spf13/viper"
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/bsoncodec"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"time"
 )
@@ -18,6 +19,7 @@ type MemoryKVConnector struct {
 	db       memorykv.MemoryKvDb
 	dsKey    string
 	dsConfig *viper.Viper
+	registry *bsoncodec.Registry
 }
 
 func (connector *MemoryKVConnector) GetName() string {
@@ -86,7 +88,7 @@ func (connector *MemoryKVConnector) FindMany(collectionName string, lookups *wst
 	} else {
 		documents = bytes
 	}
-	return NewFixedMongoCursor(documents), nil
+	return NewFixedMongoCursor(connector.registry, documents), nil
 }
 
 func (connector *MemoryKVConnector) findByObjectId(collectionName string, _id interface{}, lookups *wst.A) (*wst.M, error) {
@@ -138,7 +140,7 @@ func (connector *MemoryKVConnector) Create(collectionName string, data *wst.M) (
 			idAsStr = id.(primitive.ObjectID).Hex()
 		}
 
-		bytes, err := bson.Marshal(doc)
+		bytes, err := bson.MarshalWithRegistry(connector.registry, doc)
 		if err != nil {
 			return nil, err
 		}
@@ -183,8 +185,9 @@ func (connector *MemoryKVConnector) GetClient() interface{} {
 }
 
 // NewMemoryKVConnector Factory method for MemoryKVConnector
-func NewMemoryKVConnector(dsKey string) PersistedConnector {
+func NewMemoryKVConnector(registry *bsoncodec.Registry, dsKey string) PersistedConnector {
 	return &MemoryKVConnector{
-		dsKey: dsKey,
+		dsKey:    dsKey,
+		registry: registry,
 	}
 }
