@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/gofiber/fiber/v2"
 	"github.com/stretchr/testify/assert"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"testing"
 	"time"
 
@@ -291,4 +292,14 @@ func Test_RequestCache(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Greater(t, len(requestCacheEntries), 0)
 
+}
+
+func Test_EndpointUsingCodecs(t *testing.T) {
+	t.Parallel()
+
+	result, err := invokeApiJsonM(t, "GET", "/endpoint-using-codecs", nil, nil)
+	assert.NoError(t, err)
+	assert.NotEmpty(t, result.GetString("title"))
+	assert.NotEmpty(t, result.GetString("id"))
+	assert.NotEqualValues(t, result.GetString("id"), primitive.NilObjectID.Hex())
 }

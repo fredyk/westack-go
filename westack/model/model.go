@@ -709,11 +709,11 @@ func (loadedModel *Model) Create(data interface{}, baseContext *EventContext) (*
 	default:
 		// check if data is a struct
 		if reflect.TypeOf(data).Kind() == reflect.Struct {
-			bytes, err := bson.Marshal(data)
+			bytes, err := bson.MarshalWithRegistry(loadedModel.App.Bson.Registry, data)
 			if err != nil {
 				return nil, err
 			}
-			err = bson.Unmarshal(bytes, &finalData)
+			err = bson.UnmarshalWithRegistry(loadedModel.App.Bson.Registry, bytes, &finalData)
 			if err != nil {
 				// how to test this???
 				return nil, err

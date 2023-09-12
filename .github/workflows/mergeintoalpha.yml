@@ -17,7 +17,7 @@ jobs:
         PPROF_AUTH_USERNAME: test
         PPROF_AUTH_PASSWORD: abcd1234.
         GITHUB_TOKEN: ${{ secrets.PULL_REQUEST_TOKEN }}
-        MIN_COVERAGE_THRESHOLD: 77.7
+        MIN_COVERAGE_THRESHOLD: 78.3
         WST_DB0_USERNAME: ${{ secrets.MONGO_DEV_USERNAME }}
         WST_DB0_PASSWORD: ${{ secrets.MONGO_DEV_PWD }}
         WST_DB1_USERNAME: ${{ secrets.MONGO_DEV_USERNAME }}

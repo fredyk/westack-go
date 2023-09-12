@@ -40,7 +40,7 @@ func getConnectorByName(name string, dsKey string, dsViper *viper.Viper, options
 		}
 		return NewMongoDBConnector(mongoOptions), nil
 	case "memorykv":
-		return NewMemoryKVConnector(dsKey), nil
+		return NewMemoryKVConnector(wst.CreateDefaultMongoRegistry(), dsKey), nil
 	default:
 		return nil, errors.New("invalid connector " + name)
 	}
