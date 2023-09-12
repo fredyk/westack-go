@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"github.com/fredyk/westack-go/westack/datasource"
 	"github.com/fredyk/westack-go/westack/model"
+	"github.com/gofiber/fiber/v2"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"io"
 	"log"
 	"math/big"
@@ -27,8 +29,8 @@ func init() {
 		DatasourceOptions: &map[string]*datasource.Options{
 			"db": {
 				MongoDB: &datasource.MongoDBDatasourceOptions{
-					Registry: FakeMongoDbRegistry(),
-					Monitor:  FakeMongoDbMonitor(),
+					//Registry: FakeMongoDbRegistry(),
+					Monitor: FakeMongoDbMonitor(),
 					//Timeout:  3,
 				},
 				RetryOnError: true,
@@ -175,9 +177,35 @@ func init() {
 					ctx.Result = wst.A{
 						{"title": "mocked124404"},
 					}
+				} else if ctx.BaseContext.Ctx.Query("forceError1719") == "true" {
+					return wst.CreateError(fiber.ErrBadRequest, "ERR_1719", fiber.Map{"message": "forced error 1719"}, "Error")
 				}
 			}
 			return nil
+		})
+
+		app.Server.Get("/api/v1/endpoint-using-codecs", func(ctx *fiber.Ctx) error {
+			type localNote struct {
+				ID      primitive.ObjectID `json:"id" bson:"_id"`
+				Title   string             `json:"title" bson:"title"`
+				Content string             `json:"content" bson:"content"`
+				DueDate time.Time          `json:"dueDate" bson:"dueDate"`
+			}
+			var noteToInsert localNote
+			noteToInsert.ID = primitive.NewObjectID()
+			noteToInsert.Title = "test"
+			noteToInsert.Content = "test"
+			noteToInsert.DueDate = time.Now().Add(7 * 24 * time.Hour)
+			note, err := noteModel.Create(noteToInsert, systemContext)
+			if err != nil {
+				return err
+			}
+			var resultNote localNote
+			err = note.Transform(&resultNote)
+			if err != nil {
+				return err
+			}
+			return ctx.JSON(resultNote)
 		})
 	})
 	go func() {

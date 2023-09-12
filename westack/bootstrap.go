@@ -414,7 +414,12 @@ func handleFindMany(loadedModel *model.Model, ctx *model.EventContext) error {
 	}
 
 	cursor := loadedModel.FindMany(ctx.Filter, ctx)
-
+	if v, ok := cursor.(*model.ErrorCursor); ok {
+		defer v.Close()
+		var err error
+		ctx.Result, err = v.Next()
+		return err
+	}
 	chunkGenerator := model.NewCursorChunkGenerator(loadedModel, cursor)
 	//switch cursor.(type) {
 	//case *model.ErrorCursor:

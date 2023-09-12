@@ -8,7 +8,6 @@ import (
 	"log"
 	"os"
 	"os/signal"
-	"reflect"
 	"strconv"
 	"time"
 
@@ -17,9 +16,7 @@ import (
 
 	"github.com/golang/protobuf/proto"
 	"github.com/spf13/viper"
-	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/bsoncodec"
-	"go.mongodb.org/mongo-driver/bson/primitive"
 	"google.golang.org/grpc"
 
 	"github.com/goccy/go-json"
@@ -240,7 +237,7 @@ func New(options ...Options) *WeStack {
 		}
 	}
 	if bsonRegistry == nil {
-		bsonRegistry = bson.NewRegistryBuilder().RegisterCodec(reflect.TypeOf(primitive.ObjectID{}), &bsoncodec.TimeCodec{}).Build()
+		bsonRegistry = wst.CreateDefaultMongoRegistry()
 	}
 	app := WeStack{
 		Server:  server,

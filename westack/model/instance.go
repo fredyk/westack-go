@@ -3,13 +3,11 @@ package model
 import (
 	"errors"
 	"fmt"
-	"log"
-	"reflect"
-	"strconv"
-
 	"github.com/oliveagle/jsonpath"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
+	"log"
+	"reflect"
 
 	wst "github.com/fredyk/westack-go/westack/common"
 	"github.com/fredyk/westack-go/westack/datasource"
@@ -99,10 +97,7 @@ func (modelInstance *Instance) HideProperties() {
 func (modelInstance *Instance) Transform(out interface{}) (err error) {
 	err = modelInstance.requireBytes()
 	if err == nil {
-		//Err = bson.Unmarshal(modelInstance.bytes, out)
 		err = bson.UnmarshalWithRegistry(modelInstance.Model.App.Bson.Registry, modelInstance.bytes, out)
-		//Err = json.Unmarshal(modelInstance.bytes, out)
-		//Err = easyjson.Unmarshal(modelInstance.bytes, out)
 		if err != nil && modelInstance.Model.App.Debug {
 			fmt.Printf("Error while unmarshalling instance: %s", err)
 		}
@@ -150,11 +145,11 @@ func (modelInstance *Instance) UpdateAttributes(data interface{}, baseContext *E
 	default:
 		// check if data is a struct
 		if reflect.TypeOf(data).Kind() == reflect.Struct {
-			bytes, err := bson.Marshal(data)
+			bytes, err := bson.MarshalWithRegistry(modelInstance.Model.App.Bson.Registry, data)
 			if err != nil {
 				return nil, err
 			}
-			err = bson.Unmarshal(bytes, &finalData)
+			err = bson.UnmarshalWithRegistry(modelInstance.Model.App.Bson.Registry, bytes, &finalData)
 			if err != nil {
 				return nil, err
 			}
@@ -263,106 +258,72 @@ func (modelInstance *Instance) Reload(eventContext *EventContext) error {
 }
 
 func (modelInstance *Instance) GetString(path string) string {
-	res, err := jsonpath.JsonPathLookup(modelInstance.data, fmt.Sprintf("$.%v", path))
-	if err != nil {
-		return ""
+	if res, err := jsonpath.JsonPathLookup(modelInstance.data, fmt.Sprintf("$.%v", path)); err == nil {
+		switch res.(type) {
+		case string:
+			return res.(string)
+		case primitive.ObjectID:
+			return res.(primitive.ObjectID).Hex()
+		}
 	}
-	switch res.(type) {
-	case string:
-		return res.(string)
-	case float64:
-		return strconv.FormatFloat(res.(float64), 'f', -1, 64)
-	case int:
-		return strconv.Itoa(res.(int))
-	case int64:
-		return strconv.FormatInt(res.(int64), 10)
-	case bool:
-		return strconv.FormatBool(res.(bool))
-	case primitive.ObjectID:
-		return res.(primitive.ObjectID).Hex()
-	default:
-		return ""
-	}
+	return ""
 }
 
 func (modelInstance *Instance) GetFloat64(path string) float64 {
-	res, err := jsonpath.JsonPathLookup(modelInstance.data, fmt.Sprintf("$.%v", path))
-	if err != nil {
-		return 0
-	}
-	switch res.(type) {
-	case string:
-		aux, err := strconv.ParseFloat(res.(string), 64)
-		if err != nil {
-			return 0
+	if res, err := jsonpath.JsonPathLookup(modelInstance.data, fmt.Sprintf("$.%v", path)); err == nil {
+		if v, ok := res.(float64); ok {
+			return v
+		} else if v, ok := res.(float32); ok {
+			return float64(v)
+		} else if v, ok := res.(int64); ok {
+			return float64(v)
+		} else if v, ok := res.(int32); ok {
+			return float64(v)
+		} else if v, ok := res.(int); ok {
+			return float64(v)
 		}
-		return aux
-	case float64:
-		return res.(float64)
-	case int:
-		return float64(res.(int))
-	case int64:
-		return float64(res.(int64))
-	case bool:
-		if res.(bool) {
-			return 1
-		} else {
-			return 0
-		}
-	default:
-		return 0
 	}
+	return 0
 }
 
 func (modelInstance *Instance) GetInt(path string) int64 {
-
-	res, err := jsonpath.JsonPathLookup(modelInstance.data, fmt.Sprintf("$.%v", path))
-	if err != nil {
-		return 0
+	if res, err := jsonpath.JsonPathLookup(modelInstance.data, fmt.Sprintf("$.%v", path)); err == nil {
+		if v, ok := res.(int64); ok {
+			return v
+		} else if v, ok := res.(int32); ok {
+			return int64(v)
+		} else if v, ok := res.(int); ok {
+			return int64(v)
+		} else if v, ok := res.(float64); ok {
+			return int64(v)
+		} else if v, ok := res.(float32); ok {
+			return int64(v)
+		}
 	}
-	switch res.(type) {
-	case float64:
-		return int64(res.(float64))
-	case int64:
-		return res.(int64)
-	case int32:
-		return int64(res.(int32))
-	case int:
-		return int64(res.(int))
-	case float32:
-		return int64(res.(float32))
-	default:
-		return 0
-	}
+	return 0
 }
 
 func (modelInstance *Instance) GetBoolean(path string, defaultValue bool) bool {
-	res, err := jsonpath.JsonPathLookup(modelInstance.data, fmt.Sprintf("$.%v", path))
-	if err != nil {
-		return defaultValue
+	if res, err := jsonpath.JsonPathLookup(modelInstance.data, fmt.Sprintf("$.%v", path)); err == nil {
+		switch res.(type) {
+		case bool:
+			return res.(bool)
+		}
 	}
-	switch res.(type) {
-	case bool:
-		return res.(bool)
-	default:
-		return defaultValue
-	}
+	return defaultValue
 }
 
 func (modelInstance *Instance) GetObjectId(path string) (result primitive.ObjectID) {
-	res, err := jsonpath.JsonPathLookup(modelInstance.data, fmt.Sprintf("$.%v", path))
 	result = primitive.NilObjectID
-	if err == nil {
+	if res, err := jsonpath.JsonPathLookup(modelInstance.data, fmt.Sprintf("$.%v", path)); err == nil {
 		switch res.(type) {
 		case string:
 			_id, err := primitive.ObjectIDFromHex(res.(string))
 			if err == nil {
 				result = _id
 			}
-			break
 		case primitive.ObjectID:
 			result = res.(primitive.ObjectID)
-			break
 		}
 	}
 	return result
@@ -453,7 +414,6 @@ func (modelInstance *Instance) requireBytes() (err error) {
 		//// register decoder for primitive.ObjectID
 		//bson.DefaultRegistry.RegisterDecoder(primitive.ObjectID{}, bson.ObjectIDDecoder{})
 
-		//modelInstance.bytes, Err = bson.Marshal(modelInstance.data)
 		if modelInstance.Model.App.Debug {
 			log.Printf("DEBUG: marshalling at requireBytes(): %v\n", modelInstance.data)
 		}
@@ -475,12 +435,23 @@ func (modelInstance *Instance) MarshalBSON() (out []byte, err error) {
 	if modelInstance.Model.App.Debug {
 		log.Printf("DEBUG: marshalling Instance: %v\n", toMarshal)
 	}
+	insertedId := false
+	if v, ok0 := toMarshal["id"]; ok0 {
+		if _, ok1 := toMarshal["_id"]; !ok1 {
+			toMarshal["_id"] = v
+			insertedId = true
+		}
+	}
 	//bytes, Err := easyjson.Marshal(toMarshal)
 	//w.Raw(bytes, Err)
 	//if modelInstance.Model.App.Debug {
 	//	log.Printf("DEBUG: marshalled Instance: %v\n", len(bytes))
 	//}
-	return bson.MarshalWithRegistry(modelInstance.Model.App.Bson.Registry, toMarshal)
+	bytes, err := bson.MarshalWithRegistry(modelInstance.Model.App.Bson.Registry, toMarshal)
+	if insertedId {
+		delete(toMarshal, "_id")
+	}
+	return bytes, err
 }
 
 func (instances InstanceA) ToJSON() []wst.M {

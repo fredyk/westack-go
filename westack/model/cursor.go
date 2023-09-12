@@ -11,8 +11,7 @@ type ErrorCursor struct {
 }
 
 func (cursor *ErrorCursor) Next() (result *Instance, err error) {
-	// TODO: implement
-	panic("not implemented")
+	return result, cursor.Error()
 }
 
 func (cursor *ErrorCursor) All() (result InstanceA, err error) {
@@ -20,8 +19,7 @@ func (cursor *ErrorCursor) All() (result InstanceA, err error) {
 }
 
 func (cursor *ErrorCursor) Close() error {
-	// TODO: implement
-	panic("not implemented")
+	return nil
 }
 
 func (cursor *ErrorCursor) Error() error {
