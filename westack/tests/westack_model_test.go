@@ -30,11 +30,12 @@ func Test_CreateWithMapPointer(t *testing.T) {
 
 	t.Parallel()
 
+	timeNow := time.Now()
 	created, err := noteModel.Create(&map[string]interface{}{
-		"date": time.Now(),
+		"date": timeNow,
 	}, systemContext)
 	assert.NoError(t, err)
-	assert.Equal(t, time.Now().Minute(), created.ToJSON()["date"].(primitive.DateTime).Time().Minute())
+	assert.Equal(t, timeNow.Minute(), created.ToJSON()["date"].(primitive.DateTime).Time().Minute())
 }
 
 func Test_CreateWithStruct(t *testing.T) {
