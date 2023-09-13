@@ -25,5 +25,8 @@
   },
   "user": {
     "dataSource": "db0"
+  },
+  "publicUser": {
+    "dataSource": "db0"
   }
 }
