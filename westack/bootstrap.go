@@ -31,6 +31,15 @@ type UpserRequestBody struct {
 	Roles []string `json:"roles"`
 }
 
+func isAllowedForProtectedFields(roles []model.BearerRole) bool {
+	for i := 0; i < len(roles); i++ {
+		if roles[i].Name == "admin" || roles[i].Name == "__protectedFieldsPrivileged" {
+			return true
+		}
+	}
+	return false
+}
+
 func (app *WeStack) loadModels() error {
 
 	// List directory common/models without using ioutil.ReadDir
@@ -545,7 +554,6 @@ func (app *WeStack) setupModel(loadedModel *model.Model, dataSource *datasource.
 		})
 
 		loadedModel.On("instance_updateAttributes", func(ctx *model.EventContext) error {
-
 			inst, err := loadedModel.FindById(ctx.ModelID, nil, ctx)
 			if err != nil {
 				return err
@@ -557,6 +565,19 @@ func (app *WeStack) setupModel(loadedModel *model.Model, dataSource *datasource.
 			}
 			ctx.StatusCode = fiber.StatusOK
 			ctx.Result = updated.ToJSON()
+			return nil
+		})
+
+		loadedModel.Observe("before build", func(eventContext *model.EventContext) error {
+			if eventContext.BaseContext.Bearer != nil && eventContext.BaseContext.Bearer.User != nil && !eventContext.BaseContext.Bearer.User.System {
+				foundUserId := eventContext.ModelID.(primitive.ObjectID).Hex()
+				requesterUserId := eventContext.BaseContext.Bearer.User.Id
+				if foundUserId != requesterUserId.(string) && !isAllowedForProtectedFields(eventContext.BaseContext.Bearer.Roles) {
+					for _, hiddenProperty := range loadedModel.Config.Protected {
+						delete(*eventContext.Data, hiddenProperty)
+					}
+				}
+			}
 			return nil
 		})
 

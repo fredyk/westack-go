@@ -79,6 +79,7 @@ type Config struct {
 	Properties map[string]Property   `json:"properties"`
 	Relations  *map[string]*Relation `json:"relations"`
 	Hidden     []string              `json:"hidden"`
+	Protected  []string              `json:"protected"`
 	Casbin     CasbinConfig          `json:"casbin"`
 	Cache      CacheConfig           `json:"cache"`
 	Mongo      MongoConfig           `json:"mongo"`
@@ -199,6 +200,22 @@ func (loadedModel *Model) Build(data wst.M, sameLevelCache *buildCache, baseCont
 		bytes: nil,
 		data:  data,
 		Model: loadedModel,
+	}
+
+	beforeBuildEventContext := &EventContext{
+		BaseContext:   targetBaseContext,
+		Data:          &data,
+		Model:         loadedModel,
+		ModelID:       modelInstance.Id,
+		OperationName: baseContext.OperationName,
+	}
+
+	if !loadedModel.DisabledHandlers["__operation__before_build"] {
+		err := loadedModel.GetHandler("__operation__before_build")(beforeBuildEventContext)
+		if err != nil {
+			fmt.Println("Warning", err)
+			return Instance{}, nil
+		}
 	}
 
 	for relationName, relationConfig := range *loadedModel.Config.Relations {
