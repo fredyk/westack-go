@@ -442,6 +442,7 @@ func handleFindMany(loadedModel *model.Model, ctx *model.EventContext) error {
 		ctx.Result, err = v.Next()
 		return err
 	}
+	//chunkGenerator := traceChunkGenerator(loadedModel, cursor)
 	chunkGenerator := model.NewCursorChunkGenerator(loadedModel, cursor)
 	//switch cursor.(type) {
 	//case *model.ErrorCursor:
@@ -456,6 +457,25 @@ func handleFindMany(loadedModel *model.Model, ctx *model.EventContext) error {
 	}
 	ctx.Result = chunkGenerator
 	return nil
+}
+
+// traceChunkGenerator is a helper function to trace the cursorChunkGenerator. For a given
+// ctx.Filter:
+// This is the flow:
+//
+//	if firstTime(ctx.Filter) || registeredError(ctx.Filter) {
+//	  chunkGenerator = createFixedChunkGenerator(cursor)
+//	  chunkGenerator.OnError(func (chunkGenerator, cursor, err) {
+//	    registerError(ctx.Filter, err)
+//	  })
+//	  return chunkGenerator
+//	} else {
+//
+//		 return createCursorChunkGenerator(cursor)
+//	}
+func traceChunkGenerator(filter wst.Filter, loadedModel *model.Model, cursor model.Cursor) model.ChunkGenerator {
+	// TODO: implement
+	panic("not implemented")
 }
 
 func (app *WeStack) asInterface() *wst.IApp {

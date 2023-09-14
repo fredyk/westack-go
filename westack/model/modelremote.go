@@ -284,6 +284,10 @@ func (loadedModel *Model) HandleRemoteMethod(name string, eventContext *EventCon
 	eventContext.Data = &wst.M{}
 	eventContext.Query = &wst.M{}
 
+	for k, v := range c.Queries() {
+		(*eventContext.Query)[k] = v
+	}
+
 	if strings.ToLower(options.Http.Verb) == "post" || strings.ToLower(options.Http.Verb) == "put" || strings.ToLower(options.Http.Verb) == "patch" {
 		var data wst.M
 		//bytes := eventContext.Ctx.Body()
@@ -354,7 +358,9 @@ func (loadedModel *Model) HandleRemoteMethod(name string, eventContext *EventCon
 		if err != nil {
 			return err
 		}
-		eventContext.Query = replaced.(*wst.M)
+		for k, v := range *replaced.(*wst.M) {
+			(*eventContext.Query)[k] = v
+		}
 	}
 
 	err = handler(eventContext)

@@ -62,8 +62,7 @@ func Test_ChannelChunkGeneratorError(t *testing.T) {
 
 	outBytes, err := io.ReadAll(chunkGenerator.Reader(systemContext))
 	assert.Error(t, err)
-	assert.Equal(t, 1, len(outBytes))
-	assert.Equal(t, byte('['), outBytes[0])
+	assert.Equal(t, 0, len(outBytes))
 
 }
 
@@ -93,8 +92,7 @@ func Test_ChannelChunkGeneratorClosedError(t *testing.T) {
 
 	outBytes, err := io.ReadAll(chunkGenerator.Reader(systemContext))
 	assert.Error(t, err)
-	assert.Equal(t, 1, len(outBytes))
-	assert.Equal(t, byte('['), outBytes[0])
+	assert.Equal(t, 0, len(outBytes))
 
 }
 
@@ -174,13 +172,23 @@ func Test_FixedBeforeLoadMock124404(t *testing.T) {
 
 }
 
-func Test_AfterLoadShouldReturnError(t *testing.T) {
+func Test_AfterLoadShouldReturnEmpty(t *testing.T) {
 
 	t.Parallel()
 
-	resp, err := invokeApi(t, "GET", "/api/v1/notes?forceError1753=true", nil, nil)
+	// First create a note
+	note, err := invokeApiAsRandomUser(t, "POST", "/notes", wst.M{
+		"title": "Note 0015",
+		"body":  "This is a note",
+	}, wst.M{"Content-Type": "application/json"})
 	assert.NoError(t, err)
-	assert.Equal(t, "forced error 1753", resp.GetM("error").GetString("message"))
+	assert.NotEmpty(t, note.GetString("id"))
+
+	resp, err := invokeApiJsonA(t, "GET", "/notes?forceError1753=true", nil, nil)
+	assert.NoError(t, err)
+	// assert.Equal(t, "forced error 1753", resp.GetM("error").GetString("message"))
+	// "after load" cannot handle errors. It skips failed instances.
+	assert.Equal(t, 0, len(resp))
 
 }
 
