@@ -142,7 +142,7 @@ func Test_VerifyEmail(t *testing.T) {
 		randomUser.GetString("id"),
 		verifyEmailResponse.GetString("bearer"),
 		encodeUriComponent("/api/v1/users/me"),
-	), nil, nil, err)
+	), nil, nil)
 	assert.NotEmpty(t, performVerificationResponse)
 	assert.Equal(t, fiber.StatusFound, performVerificationResponse.StatusCode)
 	assert.Equal(t, "/api/v1/users/me", performVerificationResponse.Header.Get("Location"))

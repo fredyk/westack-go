@@ -69,7 +69,7 @@ func invokeApiJsonA(t *testing.T, method string, url string, body wst.M, headers
 }
 
 func invokeApiTyped[T any](t *testing.T, method string, url string, body wst.M, headers wst.M) (result T, err error) {
-	respBody := invokeApiBytes(t, method, url, body, headers, err)
+	respBody := invokeApiBytes(t, method, url, body, headers)
 	var parsedRespBody T
 	err = json.Unmarshal(respBody, &parsedRespBody)
 	//err = easyjson.Unmarshal(respBody, parsedRespBody)
@@ -78,8 +78,8 @@ func invokeApiTyped[T any](t *testing.T, method string, url string, body wst.M, 
 	return parsedRespBody, err
 }
 
-func invokeApiBytes(t *testing.T, method string, url string, body wst.M, headers wst.M, err error) []byte {
-	resp := invokeApiFullResponse(t, method, url, body, headers, err)
+func invokeApiBytes(t *testing.T, method string, url string, body wst.M, headers wst.M) []byte {
+	resp := invokeApiFullResponse(t, method, url, body, headers)
 	if resp == nil || resp.Body == nil {
 		t.Error("resp or resp.Body is nil")
 		return make([]byte, 0)
@@ -90,13 +90,24 @@ func invokeApiBytes(t *testing.T, method string, url string, body wst.M, headers
 	return respBody
 }
 
-func invokeApiFullResponse(t *testing.T, method string, url string, body wst.M, headers wst.M, err error) *http.Response {
-	req, err := http.NewRequest(method, fmt.Sprintf("/api/v1%s", url), jsonToReader(body))
+func invokeApiFullResponse(t *testing.T, method string, url string, body wst.M, headers wst.M) *http.Response {
+	//origin := ""
+	origin := "http://localhost:8019"
+	req, err := http.NewRequest(method, fmt.Sprintf("%v/api/v1%s", origin, url), jsonToReader(body))
 	assert.NoError(t, err)
 	for k, v := range headers {
 		req.Header.Add(k, v.(string))
 	}
-	resp, err := app.Server.Test(req, 3000)
+	//resp, err := app.Server.Test(req, 3000)
+	for k, v := range headers {
+		req.Header.Add(k, v.(string))
+	}
+	//resp, err := app.Server.Test(req, 600000)
+	client := &http.Client{}
+	client.CheckRedirect = func(req *http.Request, via []*http.Request) error {
+		return http.ErrUseLastResponse
+	}
+	resp, err := client.Do(req)
 	assert.NoError(t, err)
 	assert.NotNil(t, resp)
 	return resp
