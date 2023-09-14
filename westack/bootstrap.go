@@ -381,7 +381,7 @@ func (app *WeStack) setupModel(loadedModel *model.Model, dataSource *datasource.
 		})
 
 		loadedModel.Observe("before build", func(eventContext *model.EventContext) error {
-			if eventContext.BaseContext.Bearer != nil && eventContext.BaseContext.Bearer.User != nil && !eventContext.BaseContext.Bearer.User.System {
+			if eventContext.BaseContext.Bearer != nil && eventContext.BaseContext.Bearer.User != nil && !eventContext.BaseContext.Bearer.User.System && !skipOperationForBeforeBuild(eventContext.OperationName) {
 				foundUserId := eventContext.ModelID.(primitive.ObjectID).Hex()
 				requesterUserId := eventContext.BaseContext.Bearer.User.Id
 				if foundUserId != requesterUserId.(string) && !isAllowedForProtectedFields(eventContext.BaseContext.Bearer.Roles) {
@@ -517,4 +517,8 @@ func fixRelations(loadedModel *model.Model) error {
 		}
 	}
 	return nil
+}
+
+func skipOperationForBeforeBuild(operationName wst.OperationName) bool {
+	return operationName == wst.OperationNameCreate || operationName == wst.OperationNameCount || operationName == wst.OperationNameFindMany
 }
