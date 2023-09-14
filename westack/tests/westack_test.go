@@ -139,7 +139,7 @@ func init() {
 
 		noteModel.Observe("before load", func(ctx *model.EventContext) error {
 			if ctx.BaseContext.Remote != nil {
-				if ctx.BaseContext.Ctx.Query("mockResultTest124401") == "true" {
+				if ctx.BaseContext.Query.GetString("mockResultTest124401") == "true" {
 					// set the result as *model.InstanceA
 					inst, err := noteModel.Build(wst.M{
 						"title": "mocked124401",
@@ -150,7 +150,7 @@ func init() {
 					ctx.Result = &model.InstanceA{
 						inst,
 					}
-				} else if ctx.BaseContext.Ctx.Query("mockResultTest124402") == "true" {
+				} else if ctx.BaseContext.Query.GetString("mockResultTest124402") == "true" {
 					// set the result as model.InstanceA
 					inst, err := noteModel.Build(wst.M{
 						"title": "mocked124402",
@@ -161,7 +161,7 @@ func init() {
 					ctx.Result = model.InstanceA{
 						inst,
 					}
-				} else if ctx.BaseContext.Ctx.Query("mockResultTest124403") == "true" {
+				} else if ctx.BaseContext.Query.GetString("mockResultTest124403") == "true" {
 					// set the result as []*model.InstanceA
 					inst, err := noteModel.Build(wst.M{
 						"title": "mocked124403",
@@ -172,13 +172,22 @@ func init() {
 					ctx.Result = []*model.Instance{
 						&inst,
 					}
-				} else if ctx.BaseContext.Ctx.Query("mockResultTest124404") == "true" {
+				} else if ctx.BaseContext.Query.GetString("mockResultTest124404") == "true" {
 					// set the result as wst.A
 					ctx.Result = wst.A{
 						{"title": "mocked124404"},
 					}
-				} else if ctx.BaseContext.Ctx.Query("forceError1719") == "true" {
+				} else if ctx.BaseContext.Query.GetString("forceError1719") == "true" {
 					return wst.CreateError(fiber.ErrBadRequest, "ERR_1719", fiber.Map{"message": "forced error 1719"}, "Error")
+				}
+			}
+			return nil
+		})
+
+		noteModel.Observe("after load", func(ctx *model.EventContext) error {
+			if ctx.BaseContext.Remote != nil {
+				if ctx.BaseContext.Query.GetString("forceError1753") == "true" && ctx.Instance.GetString("title") == "Note 3" {
+					return fmt.Errorf("forced error 1753")
 				}
 			}
 			return nil
@@ -208,14 +217,6 @@ func init() {
 			return ctx.JSON(resultNote)
 		})
 
-		noteModel.Observe("after load", func(ctx *model.EventContext) error {
-			if ctx.BaseContext.Remote != nil {
-				if ctx.BaseContext.Ctx.Query("forceError1753") == "true" {
-					return fmt.Errorf("forced error 1753")
-				}
-			}
-			return nil
-		})
 	})
 	go func() {
 		err := app.Start()
