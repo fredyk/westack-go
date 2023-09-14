@@ -213,8 +213,7 @@ func (loadedModel *Model) Build(data wst.M, sameLevelCache *buildCache, baseCont
 	if !loadedModel.DisabledHandlers["__operation__before_build"] {
 		err := loadedModel.GetHandler("__operation__before_build")(beforeBuildEventContext)
 		if err != nil {
-			fmt.Println("Warning", err)
-			return Instance{}, nil
+			return Instance{}, fmt.Errorf("error in __operation__before_build: %v", err)
 		}
 	}
 
