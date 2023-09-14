@@ -220,7 +220,7 @@ func mountUserModelFixedRoutes(loadedModel *model.Model, app *WeStack) {
 			if app.debug {
 				log.Println("Updated user ", updated)
 			}
-			redirectToUrl := eventContext.Ctx.Query("redirect_uri")
+			redirectToUrl := eventContext.Query.GetString("redirect_uri")
 			return eventContext.Ctx.Redirect(redirectToUrl)
 		}
 

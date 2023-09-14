@@ -14,21 +14,47 @@ type InstanceAChunkGenerator struct {
 	currentChunkIndex int
 	currentChunk      Chunk
 	contentType       string
+	latentChunk       Chunk
 }
 
 func (chunkGenerator *InstanceAChunkGenerator) ContentType() string {
 	return chunkGenerator.contentType
 }
 
-func (chunkGenerator *InstanceAChunkGenerator) NextChunk() (chunk Chunk, err error) {
-	if chunkGenerator.currentChunkIndex == chunkGenerator.totalChunks {
-		return chunk, io.EOF
-	}
+func (chunkGenerator *InstanceAChunkGenerator) obtainNextChunk() (chunk Chunk, err error) {
 	err = chunkGenerator.GenerateNextChunk()
 	if err != nil {
 		return
 	}
 	chunk = chunkGenerator.currentChunk
+	return
+}
+
+func (chunkGenerator *InstanceAChunkGenerator) PeekChunk() (chunk Chunk, err error) {
+	if chunkGenerator.currentChunkIndex == chunkGenerator.totalChunks {
+		return chunk, io.EOF
+	}
+	chunk, err = chunkGenerator.obtainNextChunk()
+	if err != nil {
+		return
+	}
+	chunkGenerator.latentChunk = chunk
+	return
+}
+
+func (chunkGenerator *InstanceAChunkGenerator) NextChunk() (chunk Chunk, err error) {
+	if chunkGenerator.latentChunk.length > 0 {
+		chunk = chunkGenerator.latentChunk
+		chunkGenerator.latentChunk = Chunk{}
+		return
+	}
+	if chunkGenerator.currentChunkIndex == chunkGenerator.totalChunks {
+		return chunk, io.EOF
+	}
+	chunk, err = chunkGenerator.obtainNextChunk()
+	if err != nil {
+		return
+	}
 	chunkGenerator.currentChunkIndex++
 	return
 }

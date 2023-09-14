@@ -23,18 +23,18 @@ func gRPCCallWithQueryParams[InputT any, ClientT interface{}, OutputT proto.Mess
 		var rawParamsQuery InputT
 		if err := ctx.QueryParser(&rawParamsQuery); err != nil {
 			fmt.Printf("GRPCCallWithQueryParams Query Parse Error: %s\n", err)
-			return SendError(ctx, err)
+			return SendInternalError(ctx, err)
 		}
 		client, err := obtainConnectedClient(serviceUrl, clientConstructor, timeoutSeconds...)
 		if err != nil {
 			fmt.Printf("GRPCCallWithQueryParams Connect Error: %s\n", err)
-			return SendError(ctx, err)
+			return SendInternalError(ctx, err)
 		}
 
 		res, err := clientMethod(client, ctx.Context(), &rawParamsQuery)
 		if err != nil {
 			fmt.Printf("GRPCCallWithQueryParams Call Error: %v --> %s\n", ctx.Route().Name, err)
-			return SendError(ctx, err)
+			return SendInternalError(ctx, err)
 		}
 		m := jsonpb.Marshaler{EmitDefaults: true}
 		toSend, _ := m.MarshalToString(res)
@@ -42,7 +42,7 @@ func gRPCCallWithQueryParams[InputT any, ClientT interface{}, OutputT proto.Mess
 		//toSend, err := m.MarshalToString(res)
 		//if err != nil {
 		//	fmt.Printf("GRPCCallWithQueryParams Marshal Error: %s\n", err)
-		//	return SendError(ctx, err)
+		//	return SendInternalError(ctx, err)
 		//}
 		ctx.Response().Header.SetContentType("application/json")
 		return ctx.SendString(toSend)
@@ -100,18 +100,18 @@ func gRPCCallWithBody[InputT any, ClientT interface{}, OutputT proto.Message](se
 		var rawParamsInput InputT
 		if err := ctx.BodyParser(&rawParamsInput); err != nil {
 			fmt.Printf("GRPCCallWithBody Body Parse Error: %s\n", err)
-			return SendError(ctx, err)
+			return SendInternalError(ctx, err)
 		}
 		client, err := obtainConnectedClient(serviceUrl, clientConstructor, timeoutSeconds...)
 		if err != nil {
 			fmt.Printf("GRPCCallWithBody Connect Error: %s\n", err)
-			return SendError(ctx, err)
+			return SendInternalError(ctx, err)
 		}
 
 		res, err := clientMethod(client, ctx.Context(), &rawParamsInput)
 		if err != nil {
 			fmt.Printf("GRPCCallWithBody Call Error: %v --> %s\n", ctx.Route().Name, err)
-			return SendError(ctx, err)
+			return SendInternalError(ctx, err)
 		}
 		m := jsonpb.Marshaler{EmitDefaults: true}
 		toSend, _ := m.MarshalToString(res)
@@ -119,7 +119,7 @@ func gRPCCallWithBody[InputT any, ClientT interface{}, OutputT proto.Message](se
 		//toSend, err := m.MarshalToString(res)
 		//if err != nil {
 		//	fmt.Printf("GRPCCallWithBody Marshal Error: %s\n", err)
-		//	return SendError(ctx, err)
+		//	return SendInternalError(ctx, err)
 		//}
 		ctx.Response().Header.SetContentType("application/json")
 		return ctx.SendString(toSend)
@@ -133,7 +133,7 @@ func connectGRPCService(url string, timeout time.Duration) (*grpc.ClientConn, er
 	return grpc.DialContext(ctx, url, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock(), grpc.WithBlock())
 }
 
-func SendError(ctx *fiber.Ctx, err error) error {
+func SendInternalError(ctx *fiber.Ctx, err error) error {
 	newErr := wst.CreateError(fiber.ErrInternalServerError, "ERR_INTERNAL", fiber.Map{"message": err.Error()}, "Error")
 	ctx.Response().Header.SetStatusCode(newErr.FiberError.Code)
 	ctx.Response().Header.SetStatusMessage([]byte(newErr.FiberError.Message))

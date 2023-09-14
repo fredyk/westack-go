@@ -3,6 +3,7 @@ package westack
 import (
 	"context"
 	"fmt"
+	"github.com/goccy/go-json"
 	"github.com/gofiber/fiber/v2"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"io/fs"
@@ -180,6 +181,22 @@ func (app *WeStack) loadDataSources() error {
 			return fmt.Errorf("connector " + connector + " not supported")
 		}
 	}
+
+	//dsViper.Set("<internal>", wst.M{
+	//	"connector": "memorykv",
+	//	"database":  "westack",
+	//	"name":      "<internal>",
+	//})
+	dsViper.SetDefault("<internal>.connector", "memorykv")
+	dsViper.SetDefault("<internal>.database", "westack")
+	dsViper.SetDefault("<internal>.name", "<internal>")
+	internalDs := datasource.New(app.asInterface(), "<internal>", dsViper, ctx)
+	err = internalDs.Initialize()
+	if err != nil {
+		return fmt.Errorf("could not initialize datasource <internal>: %v", err)
+	}
+	(*app.datasources)["<internal>"] = internalDs
+
 	return nil
 }
 
@@ -225,7 +242,7 @@ func (app *WeStack) setupModel(loadedModel *model.Model, dataSource *datasource.
 		loadedModel.BaseUrl = app.restApiRoot + "/" + plural
 
 		loadedModel.On("findMany", func(ctx *model.EventContext) error {
-			return handleFindMany(loadedModel, ctx)
+			return handleFindMany(app, loadedModel, ctx)
 		})
 		loadedModel.On("count", func(ctx *model.EventContext) error {
 			result, err := loadedModel.Count(ctx.Filter, ctx)
@@ -430,7 +447,7 @@ func (app *WeStack) setupModel(loadedModel *model.Model, dataSource *datasource.
 	return nil
 }
 
-func handleFindMany(loadedModel *model.Model, ctx *model.EventContext) error {
+func handleFindMany(app *WeStack, loadedModel *model.Model, ctx *model.EventContext) error {
 	if loadedModel.App.Debug {
 		fmt.Println("DEBUG: handleFindMany")
 	}
@@ -442,7 +459,11 @@ func handleFindMany(loadedModel *model.Model, ctx *model.EventContext) error {
 		ctx.Result, err = v.Next()
 		return err
 	}
-	chunkGenerator := model.NewCursorChunkGenerator(loadedModel, cursor)
+	chunkGenerator, err := traceChunkGenerator(app, loadedModel, ctx, cursor)
+	if err != nil {
+		return err
+	}
+	//chunkGenerator := model.NewCursorChunkGenerator(loadedModel, cursor)
 	//switch cursor.(type) {
 	//case *model.ErrorCursor:
 	//	return cursor.(*model.ErrorCursor).Error()
@@ -456,6 +477,108 @@ func handleFindMany(loadedModel *model.Model, ctx *model.EventContext) error {
 	}
 	ctx.Result = chunkGenerator
 	return nil
+}
+
+// traceChunkGenerator is a helper function to trace the cursorChunkGenerator. For a given
+// ctx.Filter:
+// This is the flow:
+//
+//	if firstTime(ctx.Filter) || registeredError(ctx.Filter) {
+//	  chunkGenerator = createFixedChunkGenerator(cursor)
+//	  chunkGenerator.OnError(func (chunkGenerator, cursor, err) {
+//	    registerError(ctx.Filter, err)
+//	  })
+//	  return chunkGenerator
+//	} else {
+//
+//		 return createCursorChunkGenerator(cursor)
+//	}
+func traceChunkGenerator(app *WeStack, loadedModel *model.Model, ctx *model.EventContext, cursor model.Cursor) (model.ChunkGenerator, error) {
+	internalDs, err := app.FindDatasource("<internal>")
+	if err != nil {
+		return nil, err
+	}
+	baseContext := model.FindBaseContext(ctx)
+	filterSt := loadedModel.Name
+	if ctx.Remote != nil {
+		filterSt += ":" + ctx.Remote.Name
+	} else {
+		filterSt += ":" + string(ctx.OperationName)
+	}
+	if baseContext.Query != nil {
+		bytes, _ := json.Marshal(baseContext.Query)
+		filterSt += ":q:" + string(bytes)
+	}
+	if ctx.Filter != nil {
+		bytes, _ := json.Marshal(ctx.Filter)
+		filterSt += ":f:" + string(bytes)
+	}
+	if app.debug {
+		fmt.Printf("DEBUG: traceChunkGenerator: %v\n", filterSt)
+	}
+	lastErrorEntries, err := findLastErrorEntries(internalDs, filterSt)
+	if err != nil {
+		return nil, err
+	}
+	lastRequestEntriesCursor, err := internalDs.FindMany("chunkGeneratorTraceRequests", &wst.A{{"$match": wst.M{"_redId": filterSt}}})
+	if err != nil {
+		return nil, err
+	}
+	var lastRequestEntries model.InstanceA
+	if err := lastRequestEntriesCursor.All(context.Background(), &lastRequestEntries); err != nil {
+		return nil, err
+	}
+	_, err = internalDs.Create("chunkGeneratorTraceRequests", &wst.M{
+		"_redId": filterSt,
+		"_entries": wst.A{
+			{"date": time.Now()},
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+	if len(lastRequestEntries) == 0 || len(lastErrorEntries) > 0 {
+		//docs, err := cursor.All()
+		var docs model.InstanceA
+		for {
+			doc, err := cursor.Next()
+			if err != nil {
+				return nil, err
+			}
+			if doc == nil {
+				break
+			}
+			docs = append(docs, *doc)
+		}
+		if err != nil {
+			_, err2 := internalDs.Create("chunkGeneratorTraceErrors", &wst.M{
+				"_redId": filterSt,
+				"_entries": wst.A{
+					{"hadError": true},
+				},
+			})
+			if err2 != nil {
+				return nil, err2
+			}
+			return nil, err
+		}
+		chunkGenerator := model.NewInstanceAChunkGenerator(loadedModel, docs, "application/json")
+		return chunkGenerator, nil
+	} else {
+		return model.NewCursorChunkGenerator(loadedModel, cursor), nil
+	}
+}
+
+func findLastErrorEntries(internalDs *datasource.Datasource, filterSt string) (model.InstanceA, error) {
+	lastErrorEntriesCursor, err := internalDs.FindMany("chunkGeneratorTraceErrors", &wst.A{{"$match": wst.M{"_redId": filterSt}}})
+	if err != nil {
+		return nil, err
+	}
+	var lastErrorEntries model.InstanceA
+	if err := lastErrorEntriesCursor.All(context.Background(), &lastErrorEntries); err != nil {
+		return nil, err
+	}
+	return lastErrorEntries, nil
 }
 
 func (app *WeStack) asInterface() *wst.IApp {

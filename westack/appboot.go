@@ -17,6 +17,7 @@ import (
 )
 
 func appBoot(customRoutesCallbacks []func(app *WeStack), app *WeStack) {
+
 	err := app.loadDataSources()
 	if err != nil {
 		app.logger.Fatalf("Error while loading datasources: %v", err)
@@ -26,6 +27,24 @@ func appBoot(customRoutesCallbacks []func(app *WeStack), app *WeStack) {
 	if err != nil {
 		app.logger.Fatalf("Error while loading models: %v", err)
 	}
+
+	app.Middleware(func(c *fiber.Ctx) error {
+		err := c.Next()
+		if err != nil {
+			app.logger.Printf("Unhandled error: %v\n", err)
+		}
+		return err
+	})
+
+	app.Middleware(recover.New(recover.Config{
+		EnableStackTrace: true,
+		StackTraceHandler: func(c *fiber.Ctx, e interface{}) {
+			log.Println(e)
+			debug.PrintStack()
+		},
+	}))
+
+	app.Middleware(createErrorHandler())
 
 	pprofAuthUsername := os.Getenv("PPROF_AUTH_USERNAME")
 	pprofAuthPassword := os.Getenv("PPROF_AUTH_PASSWORD")
@@ -37,34 +56,6 @@ func appBoot(customRoutesCallbacks []func(app *WeStack), app *WeStack) {
 			},
 		}))
 	}
-
-	app.Middleware(func(c *fiber.Ctx) error {
-		method := c.Method()
-		err := c.Next()
-		if err != nil {
-			log.Println("Error:", err)
-			log.Printf("%v: %v\n", method, c.OriginalURL())
-			switch err.(type) {
-			case *fiber.Error:
-				if err.(*fiber.Error).Code == fiber.StatusNotFound {
-					return c.Status(err.(*fiber.Error).Code).JSON(fiber.Map{"error": fiber.Map{"status": err.(*fiber.Error).Code, "message": fmt.Sprintf("Unknown method %v %v", method, c.Path())}})
-				} else {
-					return c.Status(err.(*fiber.Error).Code).JSON(fiber.Map{"error": fiber.Map{"status": err.(*fiber.Error).Code, "message": err.(*fiber.Error).Message}})
-				}
-			default:
-				return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": fiber.Map{"status": fiber.StatusInternalServerError, "message": err.Error()}})
-			}
-		}
-		return nil
-	})
-
-	app.Middleware(recover.New(recover.Config{
-		EnableStackTrace: true,
-		StackTraceHandler: func(c *fiber.Ctx, e interface{}) {
-			log.Println(e)
-			debug.PrintStack()
-		},
-	}))
 
 	if app.Options.EnableCompression {
 		app.Middleware(compress.New(app.Options.CompressionConfig))
@@ -167,5 +158,46 @@ func appBoot(customRoutesCallbacks []func(app *WeStack), app *WeStack) {
 	err = app.swaggerHelper.Dump()
 	if err != nil {
 		fmt.Printf("Error while dumping swagger helper: %v\n", err)
+	}
+}
+
+func createErrorHandler() func(ctx *fiber.Ctx) error {
+	return func(c *fiber.Ctx) error {
+		method := c.Method()
+		err := c.Next()
+		if err != nil {
+			log.Println("Error:", err)
+			log.Printf("%v: %v\n", method, c.OriginalURL())
+			if err == fiber.ErrUnauthorized {
+				err = wst.CreateError(fiber.ErrUnauthorized, "UNAUTHORIZED", fiber.Map{"message": "Unauthorized"}, "Error")
+			}
+			switch err.(type) {
+			case *fiber.Error:
+				if err.(*fiber.Error).Code == fiber.StatusNotFound {
+					return c.Status(err.(*fiber.Error).Code).JSON(fiber.Map{"error": fiber.Map{"status": err.(*fiber.Error).Code, "message": fmt.Sprintf("Unknown method %v %v", method, c.Path())}})
+				} else {
+					return c.Status(err.(*fiber.Error).Code).JSON(fiber.Map{"error": fiber.Map{"status": err.(*fiber.Error).Code, "message": err.(*fiber.Error).Message}})
+				}
+			case *wst.WeStackError:
+				errorName := err.(*wst.WeStackError).Name
+				if errorName == "" {
+					errorName = "Error"
+				}
+				return c.Status((err).(*wst.WeStackError).FiberError.Code).JSON(fiber.Map{
+					"error": fiber.Map{
+						"statusCode": (err).(*wst.WeStackError).FiberError.Code,
+						"name":       errorName,
+						"code":       err.(*wst.WeStackError).Code,
+						"error":      err.(*wst.WeStackError).FiberError.Error(),
+						"message":    (err.(*wst.WeStackError).Details)["message"],
+						"details":    err.(*wst.WeStackError).Details,
+					},
+				})
+			default:
+				//return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": fiber.Map{"status": fiber.StatusInternalServerError, "message": err.Error()}})
+				return SendInternalError(c, err)
+			}
+		}
+		return nil
 	}
 }

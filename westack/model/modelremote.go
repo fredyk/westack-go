@@ -17,36 +17,6 @@ import (
 	"github.com/fredyk/westack-go/westack/datasource"
 )
 
-func (loadedModel *Model) SendError(ctx *fiber.Ctx, err error) error {
-	switch err.(type) {
-	case *wst.WeStackError:
-		errorName := err.(*wst.WeStackError).Name
-		if errorName == "" {
-			errorName = "Error"
-		}
-		return ctx.Status((err).(*wst.WeStackError).FiberError.Code).JSON(fiber.Map{
-			"error": fiber.Map{
-				"statusCode": (err).(*wst.WeStackError).FiberError.Code,
-				"name":       errorName,
-				"code":       err.(*wst.WeStackError).Code,
-				"error":      err.(*wst.WeStackError).FiberError.Error(),
-				"message":    (err.(*wst.WeStackError).Details)["message"],
-				"details":    err.(*wst.WeStackError).Details,
-			},
-		})
-	default:
-		return ctx.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": fiber.Map{
-				"statusCode": 500,
-				"name":       "InternalServerError",
-				"code":       "INTERNAL_SERVER_ERROR",
-				"error":      err.Error(),
-				"message":    err.Error(),
-			},
-		})
-	}
-}
-
 func (loadedModel *Model) RemoteMethod(handler func(context *EventContext) error, options RemoteMethodOptions) fiber.Router {
 	if !loadedModel.Config.Public {
 		loadedModel.App.Logger().Fatalf("Trying to register a remote method in the private model: %v, you may set \"public\": true in the %v.json file", loadedModel.Name, loadedModel.Name)
@@ -169,15 +139,9 @@ func createFiberHandler(options RemoteMethodOptions, loadedModel *Model, verb st
 		eventContext.Model = loadedModel
 		err2 := loadedModel.HandleRemoteMethod(options.Name, eventContext)
 		if err2 != nil {
-
-			if err2 == fiber.ErrUnauthorized {
-				err2 = wst.CreateError(fiber.ErrUnauthorized, "UNAUTHORIZED", fiber.Map{"message": "Unauthorized"}, "Error")
-			}
-
 			log.Printf("Error in remote method %v.%v (%v %v%v): %v\n", loadedModel.Name, options.Name, strings.ToUpper(verb), loadedModel.BaseUrl, path, err2.Error())
-			return loadedModel.SendError(eventContext.Ctx, err2)
 		}
-		return nil
+		return err2
 	}
 }
 
@@ -284,6 +248,10 @@ func (loadedModel *Model) HandleRemoteMethod(name string, eventContext *EventCon
 	eventContext.Data = &wst.M{}
 	eventContext.Query = &wst.M{}
 
+	for k, v := range c.Queries() {
+		(*eventContext.Query)[k] = v
+	}
+
 	if strings.ToLower(options.Http.Verb) == "post" || strings.ToLower(options.Http.Verb) == "put" || strings.ToLower(options.Http.Verb) == "patch" {
 		var data wst.M
 		//bytes := eventContext.Ctx.Body()
@@ -354,7 +322,9 @@ func (loadedModel *Model) HandleRemoteMethod(name string, eventContext *EventCon
 		if err != nil {
 			return err
 		}
-		eventContext.Query = replaced.(*wst.M)
+		for k, v := range *replaced.(*wst.M) {
+			(*eventContext.Query)[k] = v
+		}
 	}
 
 	err = handler(eventContext)

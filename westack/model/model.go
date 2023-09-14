@@ -186,7 +186,7 @@ func (loadedModel *Model) Build(data wst.M, sameLevelCache *buildCache, currentC
 		}
 	}
 
-	var targetBaseContext = findBaseContext(currentContext)
+	var targetBaseContext = FindBaseContext(currentContext)
 
 	modelInstance := Instance{
 		Id:    data["id"],
@@ -304,7 +304,7 @@ func (loadedModel *Model) FindMany(filterMap *wst.Filter, baseContext *EventCont
 	if baseContext == nil {
 		baseContext = &EventContext{}
 	}
-	targetBaseContext := findBaseContext(baseContext)
+	targetBaseContext := FindBaseContext(baseContext)
 
 	lookups, err := loadedModel.ExtractLookupsFromFilter(filterMap, baseContext.DisableTypeConversions)
 	if err != nil {
@@ -376,7 +376,7 @@ func (loadedModel *Model) FindMany(filterMap *wst.Filter, baseContext *EventCont
 	return cursor
 }
 
-func findBaseContext(currentContext *EventContext) *EventContext {
+func FindBaseContext(currentContext *EventContext) *EventContext {
 	var targetBaseContext = currentContext
 	for {
 		if targetBaseContext.BaseContext != nil {
@@ -836,6 +836,8 @@ func (loadedModel *Model) Initialize() {
 func (loadedModel *Model) dispatchFindManyResults(cursor *ChannelCursor, dsCursor datasource.MongoCursorI, targetInclude *wst.Include, currentContext *EventContext, results chan *Instance, filterMap *wst.Filter) {
 	err := func() error {
 		defer func(cursor Cursor) {
+			//// wait 16ms for error
+			//time.Sleep(1600 * time.Millisecond)
 			err := cursor.Close()
 			if err != nil {
 				fmt.Printf("ERROR: Could not close cursor: %v\n", err)
@@ -850,115 +852,26 @@ func (loadedModel *Model) dispatchFindManyResults(cursor *ChannelCursor, dsCurso
 		disabledCache := loadedModel.App.Viper.GetBool("disableCache")
 		sameLevelCache := NewBuildCache()
 		var safeCacheDs *datasource.Datasource
+		if loadedModel.Config.Cache.Datasource != "" && !disabledCache {
+
+			// Dont cache if include is set
+			cacheDs, err := loadedModel.App.FindDatasource(loadedModel.Config.Cache.Datasource)
+			if err != nil {
+				return err
+			}
+
+			safeCacheDs = cacheDs.(*datasource.Datasource)
+		}
+
 		documentsToCacheByKey := make(map[string]wst.A)
 		for dsCursor.Next(context.Background()) {
-			var document wst.M
-			err := dsCursor.Decode(&document)
+			inst, err := loadedModel.dispatchFindManySingleDocument(dsCursor, targetInclude, currentContext, sameLevelCache, filterMap, disabledCache, safeCacheDs, documentsToCacheByKey)
 			if err != nil {
+				cursor.Error(err)
 				return err
+			} else if inst != nil {
+				results <- inst
 			}
-
-			if targetInclude != nil {
-				for _, includeItem := range *targetInclude {
-					relationName := includeItem.Relation
-					relation := (*loadedModel.Config.Relations)[relationName]
-					relatedModelName := relation.Model
-					relatedLoadedModel := (*loadedModel.modelRegistry)[relatedModelName]
-					if relatedLoadedModel == nil {
-						return fmt.Errorf("related model not found")
-					}
-
-					err := loadedModel.mergeRelated(1, &wst.A{document}, includeItem, currentContext)
-					if err != nil {
-						return err
-					}
-
-				}
-			}
-
-			inst, err := loadedModel.Build(document, sameLevelCache, currentContext)
-			if err != nil {
-				return err
-			}
-			results <- &inst
-			var includePrefix = ""
-			if targetInclude != nil {
-				marshalledTargetInclude, err := json.Marshal(targetInclude)
-				if err != nil {
-					return err
-				}
-				includePrefix = fmt.Sprintf("_inc_%s_", marshalledTargetInclude)
-			}
-			if filterMap != nil && filterMap.Where != nil {
-				marshalledWhere, err := json.Marshal(filterMap.Where)
-				if err != nil {
-					return err
-				}
-				includePrefix += fmt.Sprintf("_whr_%s_", marshalledWhere)
-			}
-			if loadedModel.Config.Cache.Datasource != "" && !disabledCache {
-
-				// Dont cache if include is set
-				cacheDs, err := loadedModel.App.FindDatasource(loadedModel.Config.Cache.Datasource)
-				if err != nil {
-					return err
-				}
-
-				safeCacheDs = cacheDs.(*datasource.Datasource)
-				for _, keyGroup := range loadedModel.Config.Cache.Keys {
-					toCache := wst.CopyMap(document)
-
-					// Remove fields that are not cacheable
-					if loadedModel.Config.Cache.ExcludeFields != nil {
-						for _, field := range loadedModel.Config.Cache.ExcludeFields {
-							if _, ok := toCache[field]; ok {
-								delete(toCache, field)
-							}
-						}
-					}
-
-					isUniqueId := false
-					if len(keyGroup) == 1 && keyGroup[0] == "_id" {
-						isUniqueId = true
-					}
-					canonicalId := includePrefix
-					for idx, key := range keyGroup {
-						if idx > 0 {
-							canonicalId = fmt.Sprintf("%v:", canonicalId)
-						}
-						v := (document)[key]
-						if key == "_id" && v == nil && document["id"] != nil {
-							v = document["id"]
-						}
-						switch v.(type) {
-						case primitive.ObjectID:
-							v = v.(primitive.ObjectID).Hex()
-							break
-						case *primitive.ObjectID:
-							v = v.(*primitive.ObjectID).Hex()
-							break
-						default:
-							break
-						}
-						canonicalId = fmt.Sprintf("%v%v:%v", canonicalId, key, v)
-					}
-
-					if isUniqueId {
-						err3 := insertCacheEntries(safeCacheDs, loadedModel, wst.M{"_entries": wst.A{toCache}, "_redId": canonicalId})
-						if err3 != nil {
-							return err3
-						}
-						err2 := doExpireCacheKey(safeCacheDs, loadedModel, canonicalId)
-						if err2 != nil {
-							return err2
-						}
-					} else {
-						documentsToCacheByKey[canonicalId] = append(documentsToCacheByKey[canonicalId], toCache)
-					}
-				}
-
-			}
-
 		}
 
 		for key, documents := range documentsToCacheByKey {
@@ -980,6 +893,108 @@ func (loadedModel *Model) dispatchFindManyResults(cursor *ChannelCursor, dsCurso
 		}
 		cursor.Error(err)
 	}
+}
+
+func (loadedModel *Model) dispatchFindManySingleDocument(dsCursor datasource.MongoCursorI, targetInclude *wst.Include, currentContext *EventContext, sameLevelCache *buildCache, filterMap *wst.Filter, disabledCache bool, safeCacheDs *datasource.Datasource, documentsToCacheByKey map[string]wst.A) (*Instance, error) {
+	var document wst.M
+	err := dsCursor.Decode(&document)
+	if err != nil {
+		return nil, err
+	}
+
+	if targetInclude != nil {
+		for _, includeItem := range *targetInclude {
+			relationName := includeItem.Relation
+			relation := (*loadedModel.Config.Relations)[relationName]
+			relatedModelName := relation.Model
+			relatedLoadedModel := (*loadedModel.modelRegistry)[relatedModelName]
+			if relatedLoadedModel == nil {
+				return nil, fmt.Errorf("could not find related model %v", relatedModelName)
+			}
+
+			err := loadedModel.mergeRelated(1, &wst.A{document}, includeItem, currentContext)
+			if err != nil {
+				return nil, err
+			}
+
+		}
+	}
+
+	inst, err := loadedModel.Build(document, sameLevelCache, currentContext)
+	if err != nil {
+		return nil, err
+	}
+	var includePrefix = ""
+	if targetInclude != nil {
+		marshalledTargetInclude, err := json.Marshal(targetInclude)
+		if err != nil {
+			return nil, err
+		}
+		includePrefix = fmt.Sprintf("_inc_%s_", marshalledTargetInclude)
+	}
+	if filterMap != nil && filterMap.Where != nil {
+		marshalledWhere, err := json.Marshal(filterMap.Where)
+		if err != nil {
+			return nil, err
+		}
+		includePrefix += fmt.Sprintf("_whr_%s_", marshalledWhere)
+	}
+	if safeCacheDs != nil {
+
+		for _, keyGroup := range loadedModel.Config.Cache.Keys {
+			toCache := wst.CopyMap(document)
+
+			// Remove fields that are not cacheable
+			if loadedModel.Config.Cache.ExcludeFields != nil {
+				for _, field := range loadedModel.Config.Cache.ExcludeFields {
+					if _, ok := toCache[field]; ok {
+						delete(toCache, field)
+					}
+				}
+			}
+
+			isUniqueId := false
+			if len(keyGroup) == 1 && keyGroup[0] == "_id" {
+				isUniqueId = true
+			}
+			canonicalId := includePrefix
+			for idx, key := range keyGroup {
+				if idx > 0 {
+					canonicalId = fmt.Sprintf("%v:", canonicalId)
+				}
+				v := (document)[key]
+				if key == "_id" && v == nil && document["id"] != nil {
+					v = document["id"]
+				}
+				switch v.(type) {
+				case primitive.ObjectID:
+					v = v.(primitive.ObjectID).Hex()
+					break
+				case *primitive.ObjectID:
+					v = v.(*primitive.ObjectID).Hex()
+					break
+				default:
+					break
+				}
+				canonicalId = fmt.Sprintf("%v%v:%v", canonicalId, key, v)
+			}
+
+			if isUniqueId {
+				err3 := insertCacheEntries(safeCacheDs, loadedModel, wst.M{"_entries": wst.A{toCache}, "_redId": canonicalId})
+				if err3 != nil {
+					return nil, err3
+				}
+				err2 := doExpireCacheKey(safeCacheDs, loadedModel, canonicalId)
+				if err2 != nil {
+					return nil, err2
+				}
+			} else {
+				documentsToCacheByKey[canonicalId] = append(documentsToCacheByKey[canonicalId], toCache)
+			}
+		}
+
+	}
+	return &inst, err
 }
 
 func GetIDAsString(idToConvert interface{}) string {
