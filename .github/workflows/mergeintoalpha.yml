@@ -216,11 +216,14 @@ jobs:
             git config --global user.name "github-actions[bot]"
             git merge --no-edit temp-branch-${{ github.run_id }}
             git push origin ${{ github.event.pull_request.base.ref }}
+            # Get current commit hash
+            commit_hash=$(git rev-parse HEAD)
             git checkout -b v-${{ steps.latest_tag.outputs.tag }}-alpha HEAD
             git branch --set-upstream-to=origin/v-${{ steps.latest_tag.outputs.tag }}-alpha v-${{ steps.latest_tag.outputs.tag }}-alpha || true
-            git pull --rebase || true
-            git merge --no-edit temp-branch-${{ github.run_id }}
-            git push origin v-${{ steps.latest_tag.outputs.tag }}-alpha
+            # git pull --rebase || true
+            # git merge --no-edit temp-branch-${{ github.run_id }}
+            git reset --hard $commit_hash
+            git push -f origin v-${{ steps.latest_tag.outputs.tag }}-alpha
 
     close_pr_success:
       runs-on: ubuntu-latest
