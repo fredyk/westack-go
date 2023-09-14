@@ -69,7 +69,7 @@ func invokeApiJsonA(t *testing.T, method string, url string, body wst.M, headers
 }
 
 func invokeApiTyped[T any](t *testing.T, method string, url string, body wst.M, headers wst.M) (result T, err error) {
-	respBody := invokeApiBytes(t, method, url, body, headers, err)
+	respBody := invokeApiBytes(t, method, url, body, headers)
 	var parsedRespBody T
 	err = json.Unmarshal(respBody, &parsedRespBody)
 	//err = easyjson.Unmarshal(respBody, parsedRespBody)
@@ -78,8 +78,8 @@ func invokeApiTyped[T any](t *testing.T, method string, url string, body wst.M, 
 	return parsedRespBody, err
 }
 
-func invokeApiBytes(t *testing.T, method string, url string, body wst.M, headers wst.M, err error) []byte {
-	resp := invokeApiFullResponse(t, method, url, body, headers, err)
+func invokeApiBytes(t *testing.T, method string, url string, body wst.M, headers wst.M) []byte {
+	resp := invokeApiFullResponse(t, method, url, body, headers)
 	if resp == nil || resp.Body == nil {
 		t.Error("resp or resp.Body is nil")
 		return make([]byte, 0)
@@ -90,7 +90,7 @@ func invokeApiBytes(t *testing.T, method string, url string, body wst.M, headers
 	return respBody
 }
 
-func invokeApiFullResponse(t *testing.T, method string, url string, body wst.M, headers wst.M, err error) *http.Response {
+func invokeApiFullResponse(t *testing.T, method string, url string, body wst.M, headers wst.M) *http.Response {
 	req, err := http.NewRequest(method, fmt.Sprintf("/api/v1%s", url), jsonToReader(body))
 	assert.NoError(t, err)
 	for k, v := range headers {

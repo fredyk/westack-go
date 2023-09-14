@@ -284,6 +284,10 @@ func (loadedModel *Model) HandleRemoteMethod(name string, eventContext *EventCon
 	eventContext.Data = &wst.M{}
 	eventContext.Query = &wst.M{}
 
+	for k, v := range c.Queries() {
+		(*eventContext.Query)[k] = v
+	}
+
 	if strings.ToLower(options.Http.Verb) == "post" || strings.ToLower(options.Http.Verb) == "put" || strings.ToLower(options.Http.Verb) == "patch" {
 		var data wst.M
 		//bytes := eventContext.Ctx.Body()
@@ -354,7 +358,9 @@ func (loadedModel *Model) HandleRemoteMethod(name string, eventContext *EventCon
 		if err != nil {
 			return err
 		}
-		eventContext.Query = replaced.(*wst.M)
+		for k, v := range *replaced.(*wst.M) {
+			(*eventContext.Query)[k] = v
+		}
 	}
 
 	err = handler(eventContext)
@@ -392,6 +398,11 @@ func (loadedModel *Model) HandleRemoteMethod(name string, eventContext *EventCon
 				eventContext.Ctx.Set("Content-Type", finalContentType)
 				eventContext.Ctx.Set("Transfer-Encoding", "chunked")
 				eventContext.Ctx.Response().Header.Set("Transfer-Encoding", "chunked")
+
+				_, err = resultAsGenerator.PeekChunk()
+				if err != nil {
+					return err
+				}
 
 				return eventContext.Ctx.SendStream(resultAsGenerator.Reader(eventContext), -1)
 

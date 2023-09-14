@@ -178,7 +178,15 @@ func Test_AfterLoadShouldReturnError(t *testing.T) {
 
 	t.Parallel()
 
-	resp, err := invokeApi(t, "GET", "/api/v1/notes?forceError1753=true", nil, nil)
+	// First create a note
+	note, err := invokeApiAsRandomUser(t, "POST", "/notes", wst.M{
+		"title": "Note 0015",
+		"body":  "This is a note",
+	}, wst.M{"Content-Type": "application/json"})
+	assert.NoError(t, err)
+	assert.NotEmpty(t, note.GetString("id"))
+
+	resp, err := invokeApiJsonM(t, "GET", "/notes?forceError1753=true", nil, nil)
 	assert.NoError(t, err)
 	assert.Equal(t, "forced error 1753", resp.GetM("error").GetString("message"))
 

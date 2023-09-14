@@ -15,6 +15,7 @@ type ChunkGenerator interface {
 	ContentType() string
 
 	GenerateNextChunk() error
+	PeekChunk() (Chunk, error)
 	NextChunk() (Chunk, error)
 
 	SetDebug(bool)
@@ -65,29 +66,41 @@ type cursorChunkGenerator struct {
 	isFirst      bool
 	eof          bool
 	docsCount    int
+	latentChunk  Chunk
 }
 
 func (chunkGenerator *cursorChunkGenerator) ContentType() string {
 	return "application/json"
 }
 
-func (chunkGenerator *cursorChunkGenerator) NextChunk() (chunk Chunk, err error) {
+func (chunkGenerator *cursorChunkGenerator) obtainNextChunk(err error, chunk Chunk) (error, Chunk) {
 	err = chunkGenerator.GenerateNextChunk()
 	chunk = chunkGenerator.currentChunk
+	return err, chunk
+}
+
+func (chunkGenerator *cursorChunkGenerator) PeekChunk() (chunk Chunk, err error) {
+	err, chunk = chunkGenerator.obtainNextChunk(err, chunk)
+	chunkGenerator.latentChunk = chunk
+	return
+}
+
+func (chunkGenerator *cursorChunkGenerator) NextChunk() (chunk Chunk, err error) {
+	if chunkGenerator.latentChunk.length > 0 {
+		chunk = chunkGenerator.latentChunk
+		chunkGenerator.latentChunk = Chunk{}
+		return
+	}
+	err, chunk = chunkGenerator.obtainNextChunk(err, chunk)
 	return
 }
 
 func (chunkGenerator *cursorChunkGenerator) GenerateNextChunk() (err error) {
 	chunkGenerator.currentChunk.raw = nil
 	chunkGenerator.currentChunk.length = 0
-	if chunkGenerator.isFirst {
-		chunkGenerator.currentChunk.raw = []byte{'['}
-		chunkGenerator.currentChunk.length += 1
-		chunkGenerator.isFirst = false
-	} else if chunkGenerator.eof {
+	if chunkGenerator.eof {
 		return io.EOF
 	} else {
-
 		var nextInstance *Instance
 		nextInstance, err = chunkGenerator.cursor.Next()
 		if err != nil {
@@ -112,7 +125,11 @@ func (chunkGenerator *cursorChunkGenerator) GenerateNextChunk() (err error) {
 				return err
 			}
 
-			if chunkGenerator.docsCount > 0 {
+			if chunkGenerator.isFirst {
+				chunkGenerator.currentChunk.raw = []byte{'['}
+				chunkGenerator.currentChunk.length += 1
+				chunkGenerator.isFirst = false
+			} else if chunkGenerator.docsCount > 0 {
 				chunkGenerator.currentChunk.raw = []byte{','}
 				chunkGenerator.currentChunk.length += 1
 			}
