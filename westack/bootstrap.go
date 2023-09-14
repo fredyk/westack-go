@@ -569,7 +569,7 @@ func (app *WeStack) setupModel(loadedModel *model.Model, dataSource *datasource.
 		})
 
 		loadedModel.Observe("before build", func(eventContext *model.EventContext) error {
-			if eventContext.BaseContext.Bearer != nil && eventContext.BaseContext.Bearer.User != nil && !eventContext.BaseContext.Bearer.User.System {
+			if eventContext.BaseContext.Bearer != nil && eventContext.BaseContext.Bearer.User != nil && !eventContext.BaseContext.Bearer.User.System && eventContext.OperationName != wst.OperationNameCreate && eventContext.OperationName != wst.OperationNameCount {
 				foundUserId := eventContext.ModelID.(primitive.ObjectID).Hex()
 				requesterUserId := eventContext.BaseContext.Bearer.User.Id
 				if foundUserId != requesterUserId.(string) && !isAllowedForProtectedFields(eventContext.BaseContext.Bearer.Roles) {
