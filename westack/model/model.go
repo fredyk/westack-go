@@ -288,8 +288,7 @@ func (loadedModel *Model) Build(data wst.M, sameLevelCache *buildCache, baseCont
 	if loadedModel.DisabledHandlers["__operation__after_load"] != true {
 		err := loadedModel.GetHandler("__operation__after_load")(eventContext)
 		if err != nil {
-			fmt.Println("Warning", err)
-			return Instance{}, nil
+			return Instance{}, err
 		}
 	}
 
