@@ -1,7 +1,7 @@
 name: Accept PRs into alpha
 on:
   pull_request:
-    types: [opened, synchronize, reopened, labeled]
+    types: [synchronize, reopened, labeled]
 
 jobs:
 
