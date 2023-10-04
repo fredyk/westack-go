@@ -1,7 +1,11 @@
 name: Accept PRs into alpha
+# Run only on last label
 on:
   pull_request:
-    types: [opened, synchronize, reopened, labeled]
+    types: [synchronize, reopened, labeled]
+concurrency:
+  group: ${{ github.event.pull_request.number }}
+  cancel-in-progress: false
 
 jobs:
 
@@ -141,18 +145,33 @@ jobs:
               fi
             done
 
-        - name: Create temporary branch with random name
-          if: contains(github.event.pull_request.labels.*.name, 'auto-merge')
-          run: |
-              git checkout -b temp-branch-${{ github.run_id }}
+        # - name: Create temporary branch with random name
+        #   if: contains(github.event.pull_request.labels.*.name, 'auto-merge')
+        #   run: |
+        #       git checkout -b temp-branch-${{ github.run_id }}
 
-        - name: Push temporary branch
-          if: contains(github.event.pull_request.labels.*.name, 'auto-merge')
-          run: |
-              git fetch
-              git config --global user.email "github-actions[bot]@users.noreply.github.com"
-              git config --global user.name "github-actions[bot]"
-              git push origin temp-branch-${{ github.run_id }} --force || true
+        # - name: Push temporary branch
+        #   if: contains(github.event.pull_request.labels.*.name, 'auto-merge')
+        #   run: |
+        #       git fetch
+        #       git config --global user.email "github-actions[bot]@users.noreply.github.com"
+        #       git config --global user.name "github-actions[bot]"
+        #       # git push origin temp-branch-${{ github.run_id }} --force || true
+        #       # push using github rest API
+        #       curl \
+        #           -s \
+        #           -X POST \
+        #           -H "Accept: application/vnd.github.v3+json" \
+        #           -H "Authorization: token ${{ secrets.PULL_REQUEST_TOKEN }}" \
+        #           https://api.github.com/repos/${{ github.repository }}/git/refs \
+        #           -d '{"ref":"refs/heads/temp-branch-'${{ github.run_id }}'","sha":"'${{ github.sha }}'"}'
+        #       # curl \
+        #       #     -s \
+        #       #     -X PATCH \
+        #       #     -H "Accept: application/vnd.github.v3+json" \
+        #       #     -H "Authorization: token ${{ secrets.PULL_REQUEST_TOKEN }}" \
+        #       #     https://api.github.com/repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }} \
+        #       #     -d '{"head":"temp-branch-'${{ github.run_id }}'"}'
 
     push_to_base:
       runs-on: ubuntu-latest
@@ -174,8 +193,8 @@ jobs:
         - name: Fetch
           run: |
               git fetch
-              git checkout -b temp-branch-${{ github.run_id }} origin/temp-branch-${{ github.run_id }}
-              git pull
+              # git checkout -b temp-branch-${{ github.run_id }} origin/temp-branch-${{ github.run_id }}
+              # git pull
 
         - name: Create go tag with date
           id: date
@@ -206,24 +225,33 @@ jobs:
             # echo "::set-output name=tag::${new_tag}"
             echo "tag=${new_tag}" >> $GITHUB_OUTPUT
 
-        - name: Push
+        - name: Merge PR
           run: |
-            git fetch
-            # Push local temp branch to remote base branch
-            git checkout -b ${{ github.event.pull_request.base.ref }} origin/${{ github.event.pull_request.base.ref }}
-            git pull
-            git config --global user.email "github-actions[bot]@users.noreply.github.com"
-            git config --global user.name "github-actions[bot]"
-            git merge --no-edit temp-branch-${{ github.run_id }}
-            git push origin ${{ github.event.pull_request.base.ref }}
-            # Get current commit hash
-            commit_hash=$(git rev-parse HEAD)
-            git checkout -b v-${{ steps.latest_tag.outputs.tag }}-alpha HEAD
-            git branch --set-upstream-to=origin/v-${{ steps.latest_tag.outputs.tag }}-alpha v-${{ steps.latest_tag.outputs.tag }}-alpha || true
-            # git pull --rebase || true
-            # git merge --no-edit temp-branch-${{ github.run_id }}
-            git reset --hard $commit_hash
-            git push -f origin v-${{ steps.latest_tag.outputs.tag }}-alpha
+            curl \
+                -s \
+                -X PUT \
+                -H "Accept: application/vnd.github.v3+json" \
+                -H "Authorization: token ${{ secrets.PULL_REQUEST_TOKEN }}" \
+                https://api.github.com/repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/merge \
+                -d '{"commit_title":"Merge ${{ github.event.pull_request.head.ref }} into ${{ github.event.pull_request.base.ref }}","commit_message":"Merge ${{ github.event.pull_request.head.ref }} into ${{ github.event.pull_request.base.ref }}","merge_method":"merge"}' \
+                -o merge_response.json
+            # parse merge_response.json message to check if merge was successful. Use jq
+            merge_response=$(cat merge_response.json)
+            echo "merge_response: $merge_response"
+            merge_response_message=$(echo $merge_response | jq -r '.message')
+            echo "merge_response_message: $merge_response_message"
+            if [ "$merge_response_message" != "Pull Request successfully merged" ]; then
+              echo "ERROR: Merge failed"
+              exit 1
+            fi
+            merged_sha=$(echo $merge_response | jq -r '.sha')
+            curl \
+                -s \
+                -X PATCH \
+                -H "Accept: application/vnd.github.v3+json" \
+                -H "Authorization: token ${{ secrets.PULL_REQUEST_TOKEN }}" \
+                https://api.github.com/repos/${{ github.repository }}/git/refs/heads/v-${{ steps.latest_tag.outputs.tag }}-alpha \
+                -d '{"sha":"'$merged_sha'"}'
 
     close_pr_success:
       runs-on: ubuntu-latest
@@ -276,26 +304,26 @@ jobs:
               curl -X POST -H "Authorization: token ${{ secrets.PULL_REQUEST_TOKEN }}" -H "Content-Type: application/json" -d '{"body": "This PR has not been merged into ${{ github.event.pull_request.base.ref }}. Please fix the issues and re-open the PR."}' https://api.github.com/repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments
               curl -X PATCH -H "Authorization: token ${{ secrets.PULL_REQUEST_TOKEN }}" -H "Content-Type: application/json" -d '{"state": "closed"}' https://api.github.com/repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}
 
-    cleanup_temp_branch:
-      runs-on: ubuntu-latest
-      timeout-minutes: 5
-      if: always() && contains(github.event.pull_request.labels.*.name, 'auto-merge')
-      needs: [run_tests, push_to_base]
-      steps:
-
-        - name: Checkout master
-          uses: actions/checkout@v3
-          with:
-            ref: master
-
-        - name: Delete temporary branch
-          run: |
-              git fetch
-              git checkout -b temp-branch-${{ github.run_id }} origin/temp-branch-${{ github.run_id }}
-              git pull
-              git checkout master
-              git branch -D temp-branch-${{ github.run_id }}
-              git push origin --delete temp-branch-${{ github.run_id }}
+    # cleanup_temp_branch:
+    #   runs-on: ubuntu-latest
+    #   timeout-minutes: 5
+    #   if: always() && contains(github.event.pull_request.labels.*.name, 'auto-merge')
+    #   needs: [run_tests, push_to_base]
+    #   steps:
+    #
+    #     - name: Checkout master
+    #       uses: actions/checkout@v3
+    #       with:
+    #         ref: master
+    #
+    #     - name: Delete temporary branch
+    #       run: |
+    #           git fetch
+    #           git checkout -b temp-branch-${{ github.run_id }} origin/temp-branch-${{ github.run_id }}
+    #           git pull
+    #           git checkout master
+    #           git branch -D temp-branch-${{ github.run_id }}
+    #           git push origin --delete temp-branch-${{ github.run_id }}
 
     cleanup_head_branch:
       runs-on: ubuntu-latest
