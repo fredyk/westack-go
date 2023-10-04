@@ -90,7 +90,7 @@ jobs:
             sed -i "s/\"database\": \"\(.*\)\",/\"database\": \"\1_$random_sufix\",/g" server/datasources*.json
             cat server/datasources.json
             go test -timeout 5m -c -coverpkg=../../../westack-go/... -covermode=atomic github.com/fredyk/westack-go/westack/tests -o output.test
-            go tool test2json -t ./output.test -test.v -test.paniconexit0 -test.coverprofile ../../coverage.txt | jq -r 'select(.Output != "" and .Output != null) | .Output' | sed '/^$/d' | tee ../../test_output.txt 
+            DEBUG=true go tool test2json -t ./output.test -test.v -test.paniconexit0 -test.coverprofile ../../coverage.txt | jq -r 'select(.Output != "" and .Output != null) | .Output' | sed '/^$/d' | tee ../../test_output.txt 
             cd ../..
             # Select from test_output.txt only lines containing "coverage: "
             cat test_output.txt | grep "coverage: " > coverage.summary.txt

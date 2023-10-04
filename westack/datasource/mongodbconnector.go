@@ -13,6 +13,7 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"go.mongodb.org/mongo-driver/mongo/readpref"
 	"log"
+	"os"
 	"time"
 )
 
@@ -58,6 +59,10 @@ func (connector *MongoDBConnector) Connect(parentContext context.Context) error 
 		credential := options.Credential{
 			Username: connector.dsViper.GetString("username"),
 			Password: connector.dsViper.GetString("password"),
+		}
+		if os.Getenv("DEBUG") == "true" {
+			fmt.Printf("DEBUG: username bytes: %d for database %v\n", len(credential.Username), connector.dsViper.GetString("database"))
+			fmt.Printf("DEBUG: password bytes: %d for database %v\n", len(credential.Password), connector.dsViper.GetString("database"))
 		}
 		clientOpts = options.Client().ApplyURI(url).SetAuth(credential)
 	} else {
