@@ -246,7 +246,15 @@ jobs:
             # git pull --rebase || true
             # git merge --no-edit temp-branch-${{ github.run_id }}
             git reset --hard $commit_hash
-            git push -f origin v-${{ steps.latest_tag.outputs.tag }}-alpha
+            # git push -f origin v-${{ steps.latest_tag.outputs.tag }}-alpha
+            # reset origin v-${{ steps.latest_tag.outputs.tag }}-alpha to $commit_hash using Rest API
+            curl \
+                -s \
+                -X PATCH \
+                -H "Accept: application/vnd.github.v3+json" \
+                -H "Authorization: token ${{ secrets.PULL_REQUEST_TOKEN }}" \
+                https://api.github.com/repos/${{ github.repository }}/git/refs/heads/v-${{ steps.latest_tag.outputs.tag }}-alpha \
+                -d '{"sha":"'$commit_hash'"}'
 
     close_pr_success:
       runs-on: ubuntu-latest
