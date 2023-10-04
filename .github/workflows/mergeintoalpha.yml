@@ -1,7 +1,11 @@
 name: Accept PRs into alpha
+# Run only on last label
 on:
   pull_request:
     types: [synchronize, reopened, labeled]
+concurrency:
+  group: ${{ github.event.pull_request.number }}
+  cancel-in-progress: true
 
 jobs:
 
