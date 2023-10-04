@@ -59,7 +59,7 @@ jobs:
               exit 0
             fi
             # check retry-after header
-            retry_after=$(grep -i "retry-after" pull_request_headers.txt | awk '{print $2}')
+            retry_after=$(grep -iP "^retry-after" pull_request_headers.txt | awk '{print $2}')
             if [ -n "$retry_after" ]; then
               echo "WARNING: retry-after header found with value $retry_after"
               exit 0
