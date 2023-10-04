@@ -7,6 +7,7 @@ on:
       - alpha
 #      - update-dependency-* # ignore branches created by the update-dependencies workflow
       - dependabot/** # ignore branches created by dependabot
+      - temp-branch-** # ignore branches created by the auto-merge workflow
 
 jobs:
 
