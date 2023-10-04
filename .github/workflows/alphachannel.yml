@@ -7,6 +7,7 @@ on:
       - alpha
 #      - update-dependency-* # ignore branches created by the update-dependencies workflow
       - dependabot/** # ignore branches created by dependabot
+      - temp-branch-** # ignore branches created by the auto-merge workflow
 
 jobs:
 
@@ -34,7 +35,15 @@ jobs:
 
         - name: Create Pull Request Using REST API
           run: |
-            # Make the request without labels. Export it to a file so we can add labels later
+            # Make the request without labels. Export it to a file so we can add labels later. Also save response headers
+            # curl \
+            #   -s \
+            #   -X POST \
+            #   -H "Accept: application/vnd.github.v3+json" \
+            #   -H "Authorization: token ${{ secrets.PULL_REQUEST_TOKEN }}" \
+            #   https://api.github.com/repos/${{ github.repository }}/pulls \
+            #   -d '{"title":"Merge ${{ github.ref }} into alpha","body":"Merge ${{ github.ref }} into alpha","head":"${{ github.ref }}","base":"alpha"}' \
+            #   -o pull_request.json
             curl \
               -s \
               -X POST \
@@ -42,13 +51,19 @@ jobs:
               -H "Authorization: token ${{ secrets.PULL_REQUEST_TOKEN }}" \
               https://api.github.com/repos/${{ github.repository }}/pulls \
               -d '{"title":"Merge ${{ github.ref }} into alpha","body":"Merge ${{ github.ref }} into alpha","head":"${{ github.ref }}","base":"alpha"}' \
-              -o pull_request.json
+              -D pull_request_headers.txt \
+              -o pull_request.json 
             result=$?
             if [ $result -ne 0 ]; then
               echo "WARNING: curl failed with exit code $result"
               exit 0
             fi
-
+            # check retry-after header
+            retry_after=$(grep -iP "^retry-after" pull_request_headers.txt | awk '{print $2}')
+            if [ -n "$retry_after" ]; then
+              echo "WARNING: retry-after header found with value $retry_after"
+              exit 0
+            fi
             # Add the labels to the pull request
             issue_url=$(jq -r '.issue_url' pull_request.json)
             echo "Adding labels to pull request $issue_url"
@@ -65,9 +80,16 @@ jobs:
               "$issue_url/labels" \
               -d '["auto-merge","auto-merge-squash"]'
 
-        - name: Always upload artifacts
+        - name: Always upload pull_request.json
           if: always()
           uses: actions/upload-artifact@v2
           with:
             name: pull_request.json
             path: pull_request.json
+
+        - name: Always upload pull_request_headers.txt
+          if: always()
+          uses: actions/upload-artifact@v2
+          with:
+              name: pull_request_headers.txt
+              path: pull_request_headers.txt
