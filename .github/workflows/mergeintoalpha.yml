@@ -227,19 +227,19 @@ jobs:
 
         - name: Push
           run: |
-            git fetch
-            # Push local temp branch to remote base branch
-            git checkout -b ${{ github.event.pull_request.base.ref }} origin/${{ github.event.pull_request.base.ref }}
-            git pull
-            git config --global user.email "github-actions[bot]@users.noreply.github.com"
-            git config --global user.name "github-actions[bot]"
-            # git merge --no-edit temp-branch-${{ github.run_id }}
-            # git push origin ${{ github.event.pull_request.base.ref }}
-            # if head starts with temp-branch-, then push to base ref. Test with regex
-            # if [[ "${{ github.event.pull_request.head.ref }}" =~ ^temp-branch-.* ]]; then
-            #   git push origin ${{ github.event.pull_request.base.ref }}
-            # else
-            #   # merge the current PR using Rest API, check response, and if not ok, exit with error
+            # git fetch
+            # # Push local temp branch to remote base branch
+            # git checkout -b ${{ github.event.pull_request.base.ref }} origin/${{ github.event.pull_request.base.ref }}
+            # git pull
+            # git config --global user.email "github-actions[bot]@users.noreply.github.com"
+            # git config --global user.name "github-actions[bot]"
+            # # git merge --no-edit temp-branch-${{ github.run_id }}
+            # # git push origin ${{ github.event.pull_request.base.ref }}
+            # # if head starts with temp-branch-, then push to base ref. Test with regex
+            # # if [[ "${{ github.event.pull_request.head.ref }}" =~ ^temp-branch-.* ]]; then
+            # #   git push origin ${{ github.event.pull_request.base.ref }}
+            # # else
+            # #   # merge the current PR using Rest API, check response, and if not ok, exit with error
             curl \
                 -s \
                 -X PUT \
@@ -257,23 +257,23 @@ jobs:
               echo "ERROR: Merge failed"
               exit 1
             fi
-            # fi
-            # Get current commit hash
-            commit_hash=$(git rev-parse HEAD)
-            git checkout -b v-${{ steps.latest_tag.outputs.tag }}-alpha HEAD
-            git branch --set-upstream-to=origin/v-${{ steps.latest_tag.outputs.tag }}-alpha v-${{ steps.latest_tag.outputs.tag }}-alpha || true
-            # git pull --rebase || true
-            # git merge --no-edit temp-branch-${{ github.run_id }}
-            git reset --hard $commit_hash
-            # git push -f origin v-${{ steps.latest_tag.outputs.tag }}-alpha
-            # reset origin v-${{ steps.latest_tag.outputs.tag }}-alpha to $commit_hash using Rest API
-            # curl \
-            #     -s \
-            #     -X PATCH \
-            #     -H "Accept: application/vnd.github.v3+json" \
-            #     -H "Authorization: token ${{ secrets.PULL_REQUEST_TOKEN }}" \
-            #     https://api.github.com/repos/${{ github.repository }}/git/refs/heads/v-${{ steps.latest_tag.outputs.tag }}-alpha \
-            #     -d '{"sha":"'$commit_hash'"}'
+            # # fi
+            # # Get current commit hash
+            # commit_hash=$(git rev-parse HEAD)
+            # git checkout -b v-${{ steps.latest_tag.outputs.tag }}-alpha HEAD
+            # git branch --set-upstream-to=origin/v-${{ steps.latest_tag.outputs.tag }}-alpha v-${{ steps.latest_tag.outputs.tag }}-alpha || true
+            # # git pull --rebase || true
+            # # git merge --no-edit temp-branch-${{ github.run_id }}
+            # git reset --hard $commit_hash
+            # # git push -f origin v-${{ steps.latest_tag.outputs.tag }}-alpha
+            # # reset origin v-${{ steps.latest_tag.outputs.tag }}-alpha to $commit_hash using Rest API
+            # # curl \
+            # #     -s \
+            # #     -X PATCH \
+            # #     -H "Accept: application/vnd.github.v3+json" \
+            # #     -H "Authorization: token ${{ secrets.PULL_REQUEST_TOKEN }}" \
+            # #     https://api.github.com/repos/${{ github.repository }}/git/refs/heads/v-${{ steps.latest_tag.outputs.tag }}-alpha \
+            # #     -d '{"sha":"'$commit_hash'"}'
 
     close_pr_success:
       runs-on: ubuntu-latest
