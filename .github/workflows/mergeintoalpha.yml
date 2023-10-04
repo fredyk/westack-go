@@ -73,6 +73,10 @@ jobs:
 
         - name: Test WeStack
           run: |
+            if [ -z "$WST_DB0_USERNAME" ]; then
+              echo "WST_DB0_USERNAME is not set. Exiting"
+              exit 1
+            fi
             if [ -d ${{ github.workspace }}/.cache/go-build ]; then
               echo "Restoring from cache"
               cp -r ${{ github.workspace }}/.cache/go-build ${{ github.workspace }}/go/pkg
