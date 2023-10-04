@@ -246,7 +246,7 @@ jobs:
                 -H "Accept: application/vnd.github.v3+json" \
                 -H "Authorization: token ${{ secrets.PULL_REQUEST_TOKEN }}" \
                 https://api.github.com/repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/merge \
-                -d '{"commit_title":"Merge ${{ github.event.pull_request.head.ref }} into ${{ github.event.pull_request.base.ref }}","commit_message":"Merge ${{ github.event.pull_request.head.ref }} into ${{ github.event.pull_request.base.ref }}","sha":"'${{ github.sha }}'","merge_method":"squash"}' \
+                -d '{"commit_title":"Merge ${{ github.event.pull_request.head.ref }} into ${{ github.event.pull_request.base.ref }}","commit_message":"Merge ${{ github.event.pull_request.head.ref }} into ${{ github.event.pull_request.base.ref }}","merge_method":"merge"}' \
                 -o merge_response.json
             # parse merge_response.json message to check if merge was successful. Use jq
             merge_response=$(cat merge_response.json)
