@@ -152,7 +152,22 @@ jobs:
               git fetch
               git config --global user.email "github-actions[bot]@users.noreply.github.com"
               git config --global user.name "github-actions[bot]"
-              git push origin temp-branch-${{ github.run_id }} --force || true
+              # git push origin temp-branch-${{ github.run_id }} --force || true
+              # push using github rest API
+              curl \
+                  -s \
+                  -X POST \
+                  -H "Accept: application/vnd.github.v3+json" \
+                  -H "Authorization: token ${{ secrets.PULL_REQUEST_TOKEN }}" \
+                  https://api.github.com/repos/${{ github.repository }}/git/refs \
+                  -d '{"ref":"refs/heads/temp-branch-'${{ github.run_id }}'","sha":"'${{ github.sha }}'"}'
+              # curl \
+              #     -s \
+              #     -X PATCH \
+              #     -H "Accept: application/vnd.github.v3+json" \
+              #     -H "Authorization: token ${{ secrets.PULL_REQUEST_TOKEN }}" \
+              #     https://api.github.com/repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }} \
+              #     -d '{"head":"temp-branch-'${{ github.run_id }}'"}'
 
     push_to_base:
       runs-on: ubuntu-latest
