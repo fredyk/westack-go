@@ -124,7 +124,7 @@ jobs:
             go tool test2json -t ./output.test -test.v -test.paniconexit0 -test.coverprofile ../../coverage.txt | jq -r 'select(.Output != "" and .Output != null) | .Output' | sed '/^$/d' | tee ../../test_output.txt 
             cd ../..
             # Select from test_output.txt only lines containing "coverage: "
-            cat test_output.txt | grep "coverage: " > coverage.summary.txt
+            cat test_output.txt | grep --text "coverage: " > coverage.summary.txt
             # Where is go???
             echo "Go is at $(which go)"
 
