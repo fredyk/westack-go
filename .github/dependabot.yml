@@ -14,3 +14,21 @@ updates:
       - "auto-merge"
       - "close-on-success"
       - "delete-branch"
+  - package-ecosystem: "gomod"
+    directory: "/examples/basic-auth-example"
+    schedule:
+      interval: "weekly"
+    target-branch: "update-dependencies"
+    labels:
+      - "auto-merge"
+      - "close-on-success"
+      - "delete-branch"
+  - package-ecosystem: "gomod"
+    directory: "/examples/westack-go-example"
+    schedule:
+      interval: "weekly"
+    target-branch: "update-dependencies"
+    labels:
+      - "auto-merge"
+      - "close-on-success"
+      - "delete-branch"
