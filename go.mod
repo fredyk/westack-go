@@ -3,7 +3,7 @@ module github.com/fredyk/westack-go
 go 1.20
 
 require (
-	github.com/andybalholm/brotli v1.0.5
+	github.com/andybalholm/brotli v1.0.6
 	github.com/casbin/casbin/v2 v2.77.1
 	github.com/goccy/go-json v0.10.2
 	github.com/gofiber/fiber/v2 v2.49.2
