@@ -65,6 +65,7 @@ jobs:
         WST_DB_EXPECTED_TO_BE_CLOSED_PASSWORD: ${{ secrets.MONGO_DEV_PWD }}
         JWT_SECRET: abcd1234.
         GO_ENV: TESTING
+        DEBUG: true
       steps:
         - name: Checkout master
           uses: actions/checkout@v3
