@@ -52,7 +52,7 @@ jobs:
         PPROF_AUTH_USERNAME: test
         PPROF_AUTH_PASSWORD: abcd1234.
         GITHUB_TOKEN: ${{ secrets.PULL_REQUEST_TOKEN }}
-        MIN_COVERAGE_THRESHOLD: 78.3
+        MIN_COVERAGE_THRESHOLD: 79.6
         WST_DB0_USERNAME: ${{ secrets.MONGO_DEV_USERNAME }}
         WST_DB0_PASSWORD: ${{ secrets.MONGO_DEV_PWD }}
         WST_DB1_USERNAME: ${{ secrets.MONGO_DEV_USERNAME }}
@@ -65,6 +65,7 @@ jobs:
         WST_DB_EXPECTED_TO_BE_CLOSED_PASSWORD: ${{ secrets.MONGO_DEV_PWD }}
         JWT_SECRET: abcd1234.
         GO_ENV: TESTING
+        DEBUG: true
       steps:
         - name: Checkout master
           uses: actions/checkout@v3

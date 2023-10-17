@@ -311,3 +311,12 @@ func Test_ForceError1719(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, result.GetM("error").GetString("code"), "ERR_1719")
 }
+
+func Test_FindMe(t *testing.T) {
+	t.Parallel()
+
+	result, err := invokeApiAsRandomUser(t, "GET", "/users/me", nil, nil)
+	assert.NoError(t, err)
+	assert.Equal(t, result.GetString("id"), randomUser.GetString("id"))
+
+}
