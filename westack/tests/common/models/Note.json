@@ -74,8 +74,11 @@
   "casbin": {
     "policies": [
       "$authenticated,*,create,allow",
-      "$everyone,*,read,allow",
-      "$everyone,*,__get__footer,allow"
+      "$authenticated,*,read,allow",
+      "$owner,*,write,allow",
+      "$owner,*,__get__user,allow",
+      "$owner,*,__get__footer1,allow",
+      "$owner,*,__get__footer2,allow"
     ]
   },
   "cache": {

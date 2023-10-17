@@ -85,7 +85,12 @@ func init() {
 			log.Fatalf("failed to find model: %v", err)
 		}
 		userModel.Observe("before save", func(ctx *model.EventContext) error {
-			fmt.Println("saving user")
+			if !ctx.IsNewInstance && ctx.Data.GetString("testEphemeral") == "ephemeralAttribute1503" {
+				delete(*ctx.Data, "testEphemeral")
+				ctx.BaseContext.UpdateEphemeral(&wst.M{
+					"ephemeralAttribute1503": "ephemeralValue1503",
+				})
+			}
 			return nil
 		})
 

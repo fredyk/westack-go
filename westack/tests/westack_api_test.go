@@ -52,7 +52,9 @@ func Test_FindMany(t *testing.T) {
 	assert.NotNilf(t, note, "Note is nil: %v", note)
 	assert.NotEmpty(t, note["id"].(string))
 
-	parsed, err := invokeApiJsonA(t, "GET", `/notes?filter={"include":[{"relation":"user"},{"relation":"footer1"},{"relation":"footer2"}]}`, nil, nil)
+	parsed, err := invokeApiJsonA(t, "GET", `/notes?filter={"include":[{"relation":"user"},{"relation":"footer1"},{"relation":"footer2"}]}`, nil, wst.M{
+		"Authorization": fmt.Sprintf("Bearer %v", token["id"].(string)),
+	})
 	assert.NoError(t, err)
 
 	assert.Greaterf(t, len(parsed), 0, "parsed: %v\n", parsed)
@@ -173,7 +175,9 @@ func Test_EmptyArray(t *testing.T) {
 
 	t.Parallel()
 
-	parsed, err := invokeApiJsonA(t, "GET", "/empties", nil, nil)
+	parsed, err := invokeApiJsonA(t, "GET", "/empties", nil, wst.M{
+		"Authorization": fmt.Sprintf("Bearer %v", randomUserToken.GetString("id")),
+	})
 	assert.NoError(t, err)
 
 	assert.Equal(t, 0, len(parsed), "parsed: %v", parsed)
@@ -307,7 +311,9 @@ func Test_EndpointUsingCodecs(t *testing.T) {
 func Test_ForceError1719(t *testing.T) {
 	t.Parallel()
 
-	result, err := invokeApiJsonM(t, "GET", "/notes?forceError1719=true", nil, nil)
+	result, err := invokeApiJsonM(t, "GET", "/notes?forceError1719=true", nil, wst.M{
+		"Authorization": fmt.Sprintf("Bearer %v", randomUserToken.GetString("id")),
+	})
 	assert.NoError(t, err)
 	assert.Equal(t, result.GetM("error").GetString("code"), "ERR_1719")
 }
@@ -318,5 +324,119 @@ func Test_FindMe(t *testing.T) {
 	result, err := invokeApiAsRandomUser(t, "GET", "/users/me", nil, nil)
 	assert.NoError(t, err)
 	assert.Equal(t, result.GetString("id"), randomUser.GetString("id"))
+
+}
+
+func Test_Patch(t *testing.T) {
+	t.Parallel()
+
+	result, err := invokeApiAsRandomUser(t, "PATCH", "/users/"+randomUser.GetString("id"), wst.M{
+		"attribute1452": "value1452",
+	}, wst.M{
+		"Content-Type": "application/json",
+	})
+	assert.NoError(t, err)
+	assert.Equal(t, result.GetString("attribute1452"), "value1452")
+
+}
+
+func Test_PatchWithEphemeral(t *testing.T) {
+	t.Parallel()
+
+	result, err := invokeApiAsRandomUser(t, "PATCH", "/users/"+randomUser.GetString("id"), wst.M{
+		"testEphemeral": "ephemeralAttribute1503",
+	}, wst.M{
+		"Content-Type": "application/json",
+	})
+	assert.NoError(t, err)
+	assert.Equal(t, "ephemeralValue1503", result.GetString("ephemeralAttribute1503"))
+
+	// Find user again and check that the ephemeral attribute is not there
+	result, err = invokeApiAsRandomUser(t, "GET", "/users/me", nil, nil)
+	assert.NoError(t, err)
+	assert.Equal(t, "", result.GetString("ephemeralAttribute1503"))
+
+}
+
+// First random user creates a note
+// Then the same user updates the note
+func Test_UserUpdatesNote(t *testing.T) {
+
+	t.Parallel()
+
+	// Create a note
+	note, err := invokeApiAsRandomUser(t, "POST", "/notes", wst.M{
+		"title":  "Test Note",
+		"userId": randomUser.GetString("id"),
+	}, wst.M{
+		"Content-Type": "application/json",
+	})
+	assert.NoError(t, err)
+	assert.NotNil(t, note)
+	assert.NotEmptyf(t, note.GetString("id"), "Note ID is nil: %v", note)
+	assert.Equal(t, "Test Note", note.GetString("title"))
+
+	// Update the note
+	updatedNote, err := invokeApiAsRandomUser(t, "PATCH", "/notes/"+note.GetString("id"), wst.M{
+		"title": "Test Note Updated",
+	}, wst.M{
+		"Content-Type": "application/json",
+	})
+	assert.NoError(t, err)
+	assert.NotNil(t, updatedNote)
+	assert.Equal(t, "Test Note Updated", updatedNote.GetString("title"))
+
+	// Now recursive permissions. Create a footer associated to the note, and then update the footer
+	footer, err := invokeApiAsRandomUser(t, "POST", "/footers", wst.M{
+		"noteId": note.GetString("id"),
+		"text":   "Test Footer",
+	}, wst.M{
+		"Content-Type": "application/json",
+	})
+	assert.NoError(t, err)
+	assert.NotNil(t, footer)
+	assert.NotEmptyf(t, footer.GetString("id"), "Footer ID is nil: %v", footer)
+	assert.Equal(t, note.GetString("id"), footer.GetString("noteId"))
+
+	// Update the footer
+	updatedFooter, err := invokeApiAsRandomUser(t, "PATCH", "/footers/"+footer.GetString("id"), wst.M{
+		"text": "Test Footer Updated",
+	}, wst.M{
+		"Content-Type": "application/json",
+	})
+	assert.NoError(t, err)
+	assert.NotNil(t, updatedFooter)
+	assert.Equal(t, "Test Footer Updated", updatedFooter.GetString("text"))
+
+	// Now another user tries to update the same footer
+	user2Username := fmt.Sprintf("user-%d", createRandomInt())
+	createUser(t, wst.M{
+		"username": user2Username,
+		"password": "abcd1234.",
+	})
+
+	user2Token, err := loginUser(user2Username, "abcd1234.", t)
+	assert.NoError(t, err)
+	assert.NotEmpty(t, user2Token.GetString("id"))
+
+	// Update the footer
+	updatedFooter, err = invokeApiJsonM(t, "PATCH", "/footers/"+footer.GetString("id"), wst.M{
+		"text": "Test Footer Updated 2",
+	}, wst.M{
+		"Content-Type":  "application/json",
+		"Authorization": fmt.Sprintf("Bearer %v", user2Token.GetString("id")),
+	})
+	assert.NoError(t, err)
+	assert.Equal(t, fiber.StatusUnauthorized, updatedFooter.GetM("error").GetInt("statusCode"))
+
+	// Also check that user2 cannot modify the note
+	updatedNote, err = invokeApiJsonM(t, "PATCH", "/notes/"+note.GetString("id"), wst.M{
+		"title": "Test Note Updated 2",
+	}, wst.M{
+		"Content-Type":  "application/json",
+		"Authorization": fmt.Sprintf("Bearer %v", user2Token.GetString("id")),
+	})
+	assert.NoError(t, err)
+	assert.Equal(t, fiber.StatusUnauthorized, updatedNote.GetM("error").GetInt("statusCode"))
 
 }

@@ -679,7 +679,9 @@ func testSpecialDatePlaceholder(t *testing.T, specialDateKey string, specialDate
 	endpointWithFilter := fmt.Sprintf("/notes?filter=%s", encodedFilter)
 	fmt.Printf("Original filter: %s\n", filter)
 	fmt.Printf("Sending query: %s\n", endpointWithFilter)
-	out, err := invokeApiJsonA(t, "GET", endpointWithFilter, nil, nil)
+	out, err := invokeApiJsonA(t, "GET", endpointWithFilter, nil, wst.M{
+		"Authorization": "Bearer " + randomUserToken.GetString("id"),
+	})
 	assert.NoError(t, err)
 	return out, err
 }

@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 )
 
 var app *westack.WeStack
@@ -103,7 +104,9 @@ func invokeApiFullResponse(t *testing.T, method string, url string, body wst.M, 
 		req.Header.Add(k, v.(string))
 	}
 	//resp, err := app.Server.Test(req, 600000)
-	client := &http.Client{}
+	client := &http.Client{
+		Timeout: 15 * time.Second,
+	}
 	client.CheckRedirect = func(req *http.Request, via []*http.Request) error {
 		return http.ErrUseLastResponse
 	}

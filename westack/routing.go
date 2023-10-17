@@ -413,13 +413,7 @@ func (app *WeStack) loadModelsDynamicRoutes() {
 			if err != nil {
 				return err
 			}
-			//var data *wst.M
-			//err = json.Unmarshal(eventContext.Ctx.Body(), &data)
-			//if err != nil {
-			//	return err
-			//}
 			eventContext.ModelID = &id
-			//eventContext.Data = data
 			return handleEvent(eventContext, loadedModel, "instance_updateAttributes")
 		}, model.RemoteMethodOptions{
 			Name: "instance_updateAttributes",
@@ -486,17 +480,13 @@ func handleEvent(eventContext *model.EventContext, loadedModel *model.Model, eve
 		if eventContext.StatusCode == 0 {
 			eventContext.StatusCode = fiber.StatusNotImplemented
 		}
-		if eventContext.Ephemeral != nil {
-			for k, v := range *eventContext.Ephemeral {
-				(eventContext.Result.(wst.M))[k] = v
-			}
-		}
 		err = eventContext.Ctx.Status(eventContext.StatusCode).JSON(eventContext.Result)
 	}
 	return
 }
 
 func casbinOwnerFn(loadedModel *model.Model) func(arguments ...interface{}) (interface{}, error) {
+	modelConfigsByName := make(map[string]*model.Config)
 	return func(arguments ...interface{}) (interface{}, error) {
 
 		subId := arguments[0]
@@ -507,32 +497,32 @@ func casbinOwnerFn(loadedModel *model.Model) func(arguments ...interface{}) (int
 			log.Println(fmt.Sprintf("isOwner() of %v ?", policyObj))
 		}
 
-		switch objId.(type) {
-		case primitive.ObjectID:
-			objId = objId.(primitive.ObjectID).Hex()
-			break
-		case string:
-			break
-		default:
-			objId = fmt.Sprintf("%v", objId)
-			break
-		}
+		//switch objId.(type) {
+		//case primitive.ObjectID:
+		//	objId = objId.(primitive.ObjectID).Hex()
+		//	break
+		//case string:
+		//	break
+		//default:
+		//	objId = fmt.Sprintf("%v", objId)
+		//	break
+		//}
 		objId = strings.TrimSpace(objId.(string))
 
 		if objId == "" || objId == "*" {
 			return false, nil
 		}
 
-		switch subId.(type) {
-		case primitive.ObjectID:
-			subId = subId.(primitive.ObjectID).Hex()
-			break
-		case string:
-			break
-		default:
-			subId = fmt.Sprintf("%v", subId)
-			break
-		}
+		//switch subId.(type) {
+		//case primitive.ObjectID:
+		//	subId = subId.(primitive.ObjectID).Hex()
+		//	break
+		//case string:
+		//	break
+		//default:
+		//	subId = fmt.Sprintf("%v", subId)
+		//	break
+		//}
 		subId = strings.TrimSpace(subId.(string))
 
 		if subId == "" || subId == "*" {
@@ -555,43 +545,30 @@ func casbinOwnerFn(loadedModel *model.Model) func(arguments ...interface{}) (int
 				}
 
 			} else {
-				for key, r := range *loadedModel.Config.Relations {
+				var recursiveSearchStart time.Time
+				if loadedModel.App.Debug {
+					recursiveSearchStart = time.Now()
+				}
+				sortedRelationKeys := obtainSortedRelationKeys(loadedModel, modelConfigsByName)
+				for _, key := range sortedRelationKeys {
 
-					if *r.ForeignKey == "userId" {
-
-						thisInstance, err := loadedModel.FindById(objId, &wst.Filter{
-							Include: &wst.Include{{Relation: key}},
-						}, &model.EventContext{
-							Bearer: &model.BearerToken{
-								User: &model.BearerUser{System: true},
-							},
-						})
-						if err != nil {
-							return false, err
-						}
-
-						user := thisInstance.GetOne(key)
-
-						if user != nil {
-							objUserId = model.GetIDAsString(user.Id)
-
-							_, err := loadedModel.Enforcer.AddRoleForUser(objUserId, roleKey)
-							if err != nil {
-								return nil, err
-							}
-							err = loadedModel.Enforcer.SavePolicy()
-							if err != nil {
-								return nil, err
-							}
-
-						}
-
-						break
-
-					} else {
-						//log.Printf("Invalid foreign key in relation %v.%v (%v.%v --> %v.%v)\n", loadedModel.Name, key, loadedModel.Name, r.ForeignKey, r.Model, r.PrimaryKey)
+					var foundUser bool
+					var relatedUserInstance *model.Instance
+					foundUser, objUserId, relatedUserInstance, err = findUserRecursiveInRelation(loadedModel, modelConfigsByName, key, objId, roleKey)
+					if err != nil {
+						return false, err
 					}
 
+					if foundUser {
+						if loadedModel.App.Debug {
+							// Print path
+							loadedModel.App.Logger().Printf("[DEBUG] Found related user instance %v[%v]-->%v[%v]\n", loadedModel.Name, objId, relatedUserInstance.Model.Name, relatedUserInstance.Id)
+						}
+						break
+					}
+				}
+				if loadedModel.App.Debug {
+					loadedModel.App.Logger().Printf("[DEBUG] Recursive owner check for %v took %v ms\n", loadedModel.Name, time.Since(recursiveSearchStart).Milliseconds())
 				}
 			}
 
@@ -608,4 +585,102 @@ func casbinOwnerFn(loadedModel *model.Model) func(arguments ...interface{}) (int
 
 	}
 
+}
+
+func obtainSortedRelationKeys(loadedModel *model.Model, modelConfigsByName map[string]*model.Config) []string {
+	allRelatedKeys := make([]string, 0)
+	for key, r := range *loadedModel.Config.Relations {
+		relatedModelConfig := modelConfigsByName[r.Model]
+		if relatedModelConfig == nil {
+			// Ignore error because we already checked for it at boot time
+			relatedModelI, err := loadedModel.App.FindModel(r.Model)
+			if err != nil {
+				continue
+			}
+			relatedModel := relatedModelI.(*model.Model)
+			relatedModelConfig = relatedModel.Config
+		}
+		// userId goes first, others later
+		if r.Type == "belongsTo" && relatedModelConfig.Base == "User" {
+			allRelatedKeys = append([]string{key}, allRelatedKeys...)
+		} else {
+			allRelatedKeys = append(allRelatedKeys, key)
+		}
+	}
+	return allRelatedKeys
+}
+
+func findUserRecursiveInRelation(loadedModel *model.Model, modelConfigsByName map[string]*model.Config, key string, objId interface{}, roleKey string) (bool, string, *model.Instance, error) {
+	foundUser := false
+	var objUserId string
+	var relatedUserInstance *model.Instance
+	r := (*loadedModel.Config.Relations)[key]
+
+	if r.Type == "belongsTo" {
+
+		thisInstance, err := loadedModel.FindById(objId, &wst.Filter{
+			Include: &wst.Include{{Relation: key}},
+		}, &model.EventContext{
+			Bearer: &model.BearerToken{
+				User: &model.BearerUser{System: true},
+			},
+		})
+		if err != nil {
+			return false, objUserId, nil, err
+		}
+
+		relatedInstance := thisInstance.GetOne(key)
+		if relatedInstance == nil {
+			if loadedModel.App.Debug {
+				loadedModel.App.Logger().Printf("[DEBUG] Related instance %v[%v]-->%v[%v] unreachable\n", loadedModel.Name, objId, r.Model, thisInstance.ToJSON()[*r.ForeignKey])
+			}
+			return false, objUserId, nil, nil
+		}
+		relatedModel := relatedInstance.Model
+
+		if relatedModel.Config.Base == "User" && *r.ForeignKey == "userId" {
+			user := relatedInstance
+
+			if user != nil {
+				objUserId = model.GetIDAsString(user.Id)
+
+				_, err := loadedModel.Enforcer.AddRoleForUser(objUserId, roleKey)
+				if err != nil {
+					return false, objUserId, nil, err
+				}
+				err = loadedModel.Enforcer.SavePolicy()
+				if err != nil {
+					return false, objUserId, nil, err
+				}
+				relatedUserInstance = user
+
+			}
+
+			foundUser = true
+
+		} else {
+			if loadedModel.App.Debug {
+				loadedModel.App.Logger().Printf("[DEBUG] Recursive owner check for %v\n", relatedModel.Name)
+			}
+			sortedRelationKeys := obtainSortedRelationKeys(relatedModel, modelConfigsByName)
+			for _, key := range sortedRelationKeys {
+				if loadedModel.App.Debug {
+					loadedModel.App.Logger().Printf("[DEBUG] Recursive owner check for %v[%v]-->%v[%v]\n", loadedModel.Name, objId, relatedModel.Name, relatedInstance.Id)
+				}
+				foundUser, objUserId, relatedUserInstance, err = findUserRecursiveInRelation(relatedModel, modelConfigsByName, key, relatedInstance.Id, roleKey)
+				if err != nil {
+					return false, objUserId, nil, err
+				}
+				if foundUser {
+					if loadedModel.App.Debug {
+						// Print path
+						loadedModel.App.Logger().Printf("[DEBUG] Found nested child %v[%v]-->%v[%v]-->%v[%v]\n", loadedModel.Name, objId, relatedModel.Name, relatedInstance.Id, relatedUserInstance.Model.Name, relatedUserInstance.Id)
+					}
+					break
+				}
+
+			}
+		}
+	}
+	return foundUser, objUserId, relatedUserInstance, nil
 }

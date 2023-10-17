@@ -8,7 +8,7 @@
   "hidden": [],
   "casbin": {
     "policies": [
-      "$everyone,*,read,allow"
+      "$authenticated,*,read,allow"
     ]
   },
   "cache": {

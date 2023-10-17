@@ -4,11 +4,19 @@
   "base": "PersistedModel",
   "public": true,
   "properties": {},
-  "relations": {},
+  "relations": {
+    "note": {
+      "type": "belongsTo",
+      "model": "Note"
+    }
+  },
   "hidden": [],
   "casbin": {
     "policies": [
-      "$everyone,*,*,allow"
+      "$authenticated,*,create,allow",
+      "$authenticated,*,read,allow",
+      "$owner,*,write,allow",
+      "$owner,*,__get__note,allow"
     ]
   },
   "cache": {
