@@ -271,7 +271,7 @@ func Test_AFromPrimitiveSlice_ValidEntries(t *testing.T) {
 
 	t.Parallel()
 
-	var slice *primitive.A = &primitive.A{primitive.M{"a": 1}, primitive.M{"a": 2}, primitive.M{"a": 3}}
+	slice := &primitive.A{primitive.M{"a": 1}, primitive.M{"a": 2}, primitive.M{"a": 3}}
 	var a = *wst.AFromPrimitiveSlice(slice)
 	assert.Equal(t, 3, len(a))
 	assert.Equal(t, 1, a[0]["a"])
@@ -317,7 +317,7 @@ func Test_MMarshalEasyJSON(t *testing.T) {
 	t.Parallel()
 
 	m := wst.M{"a": 1, "b": "2"}
-	b, err := easyjson.Marshal(m)
+	b, err := easyjson.Marshal(&m)
 	assert.NoError(t, err)
 	assert.Contains(t, string(b), `"a":1`)
 	assert.Contains(t, string(b), `"b":"2"`)
@@ -327,7 +327,7 @@ func Test_MMarshalEasyJSONNil(t *testing.T) {
 
 	t.Parallel()
 
-	var m wst.M
+	var m *wst.M
 	b, err := easyjson.Marshal(m)
 	assert.NoError(t, err)
 	assert.Equal(t, `null`, string(b))
@@ -353,7 +353,7 @@ func Test_MMarshalEasyJSONSpecialNumbers(t *testing.T) {
 		"m": float64(10),
 		"n": true,
 	}
-	b, err := easyjson.Marshal(m)
+	b, err := easyjson.Marshal(&m)
 	assert.NoError(t, err)
 	assert.Contains(t, string(b), `"a":+Inf`)
 	assert.Contains(t, string(b), `"b":-Inf`)
@@ -377,7 +377,7 @@ func Test_MMarshalEasyJSONDateTime(t *testing.T) {
 	t.Parallel()
 
 	m := wst.M{"a": primitive.NewDateTimeFromTime(time.Date(2023, 2, 28, 19, 42, 42, 824000000, time.UTC))}
-	b, err := easyjson.Marshal(m)
+	b, err := easyjson.Marshal(&m)
 	assert.NoError(t, err)
 
 	// The time is converted to the local timezone
