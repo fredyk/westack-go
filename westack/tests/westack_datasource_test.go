@@ -90,6 +90,9 @@ func Test_Datasource_Ping_Will_Fail(t *testing.T) {
 	// Wait 5.1 seconds to cover datasource ping interval
 	time.Sleep(5100 * time.Millisecond)
 
+	err = db.Close()
+	assert.NoError(t, err)
+
 }
 
 func Test_DatasourceDeleteManyNilWhere(t *testing.T) {

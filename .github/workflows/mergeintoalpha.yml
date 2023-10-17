@@ -66,6 +66,7 @@ jobs:
         JWT_SECRET: abcd1234.
         GO_ENV: TESTING
         DEBUG: true
+        PORT: 8019
       steps:
         - name: Checkout master
           uses: actions/checkout@v3

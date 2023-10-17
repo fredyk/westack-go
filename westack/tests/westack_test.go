@@ -29,8 +29,8 @@ func init() {
 		DatasourceOptions: &map[string]*datasource.Options{
 			"db": {
 				MongoDB: &datasource.MongoDBDatasourceOptions{
-					//Registry: FakeMongoDbRegistry(),
-					Monitor: FakeMongoDbMonitor(),
+					Registry: wst.CreateDefaultMongoRegistry(),
+					Monitor:  FakeMongoDbMonitor(),
 					//Timeout:  3,
 				},
 				RetryOnError: true,
@@ -423,7 +423,7 @@ func Test_InitAndServe(t *testing.T) {
 	t.Parallel()
 
 	go func() {
-		westack.InitAndServe(westack.Options{Port: 8021})
+		westack.InitAndServe(westack.Options{Port: 8021, DisablePortEnvVar: true})
 	}()
 
 	time.Sleep(5 * time.Second)
@@ -497,5 +497,56 @@ func Test_InvalidCasbinOutputDirectory2(t *testing.T) {
 	}()
 
 	app.Boot()
+
+}
+
+func Test_FindModelNonExistent(t *testing.T) {
+
+	t.Parallel()
+
+	_, err := app.FindModel("NonExistent")
+	assert.EqualError(t, err, "model NonExistent not found")
+
+}
+
+func Test_FindDatasourceNonExistent(t *testing.T) {
+
+	t.Parallel()
+
+	_, err := app.FindDatasource("NonExistent")
+	assert.EqualError(t, err, "datasource NonExistent not found")
+
+}
+
+func Test_WeStackStop(t *testing.T) {
+
+	t.Parallel()
+
+	app := westack.New(westack.Options{
+		Port:              8022,
+		DisablePortEnvVar: true,
+	})
+	app.Boot()
+
+	go func() {
+		time.Sleep(3 * time.Second)
+		err := app.Stop()
+		assert.NoError(t, err)
+	}()
+
+	err := app.Start()
+	assert.NoError(t, err)
+	//err = app.Stop()
+	//assert.NoError(t, err)
+
+}
+
+func Test_GetWeStackLoggerPrefix(t *testing.T) {
+
+	t.Parallel()
+
+	logger := app.Logger()
+	logger.SetPrefix("test")
+	assert.Equal(t, "test", logger.Prefix())
 
 }

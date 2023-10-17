@@ -82,6 +82,13 @@ func (ds *Datasource) Initialize() error {
 		for {
 			time.Sleep(time.Second * 5)
 
+			// Check initialCtx.Done() first to avoid reconnecting after the datasource has been closed
+			select {
+			case <-initialCtx.Done():
+				return
+			default:
+			}
+
 			err := connector.Ping(initialCtx)
 			if err != nil {
 				log.Printf("Reconnecting datasource %v...\n", ds.Key)

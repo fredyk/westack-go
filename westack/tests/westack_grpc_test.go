@@ -13,16 +13,12 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"reflect"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/bson/bsoncodec"
-	"go.mongodb.org/mongo-driver/bson/bsonrw"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/event"
 	"google.golang.org/grpc"
@@ -712,7 +708,8 @@ func TestMain(m *testing.M) {
 
 	// start server
 	server = westack.New(westack.Options{
-		Port: 8020,
+		Port:              8020,
+		DisablePortEnvVar: true,
 		DatasourceOptions: &map[string]*datasource.Options{
 			"db": {
 				MongoDB: &datasource.MongoDBDatasourceOptions{
@@ -826,22 +823,6 @@ func FakeMongoDbMonitor() *event.CommandMonitor {
 		Failed: func(ctx context.Context, cmd *event.CommandFailedEvent) {
 		},
 	}
-}
-
-func FakeMongoDbRegistry() *bsoncodec.Registry {
-	// create a new registry
-	registryBuilder := bson.NewRegistryBuilder().
-		//RegisterTypeMapEntry(bson.TypeEmbeddedDocument, reflect.TypeOf(bson.M{})).
-		RegisterTypeMapEntry(bson.TypeEmbeddedDocument, reflect.TypeOf(wst.M{})).
-		//RegisterTypeMapEntry(bson.TypeArray, reflect.TypeOf([]bson.M{}))
-		RegisterTypeMapEntry(bson.TypeArray, reflect.TypeOf(wst.A{}))
-
-	// register the custom types
-	registryBuilder.RegisterTypeEncoder(reflect.TypeOf(time.Time{}), bsoncodec.ValueEncoderFunc(func(ec bsoncodec.EncodeContext, vw bsonrw.ValueWriter, val reflect.Value) error {
-		return vw.WriteDateTime(val.Interface().(time.Time).UnixNano() / int64(time.Millisecond))
-	}))
-
-	return registryBuilder.Build()
 }
 
 func revertAllTests() error {
