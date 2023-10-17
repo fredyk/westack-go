@@ -16,7 +16,7 @@
       "foreignKey": "storeId"
     }
   },
-  "hidden": [],
+  "hidden": ["someProperty"],
   "casbin": {
     "requestDefinition": "",
     "policyDefinition": "",

@@ -38,10 +38,7 @@ func (modelInstance *Instance) ToJSON() wst.M {
 	for relationName, relationConfig := range *modelInstance.Model.Config.Relations {
 		if modelInstance.data[relationName] != nil {
 			rawRelatedData := modelInstance.data[relationName]
-			relatedModel, err := modelInstance.Model.App.FindModel(relationConfig.Model)
-			if err != nil {
-				return nil
-			}
+			relatedModel, _ := modelInstance.Model.App.FindModel(relationConfig.Model)
 			if relatedModel != nil {
 				switch {
 				case isSingleRelation(relationConfig.Type):
@@ -90,7 +87,18 @@ func (modelInstance *Instance) GetMany(relationName string) InstanceA {
 func (modelInstance *Instance) HideProperties() {
 	for _, propertyName := range modelInstance.Model.Config.Hidden {
 		delete(modelInstance.data, propertyName)
-		// TODO: Hide in nested
+	}
+	// Hide in nested
+	for relationKey, relationConfig := range *modelInstance.Model.Config.Relations {
+		if relationConfig.Type == "hasMany" || relationConfig.Type == "hasAndBelongsToMany" {
+			for _, instance := range modelInstance.GetMany(relationKey) {
+				instance.HideProperties()
+			}
+		} else if relationConfig.Type == "hasOne" || relationConfig.Type == "belongsTo" {
+			if instance := modelInstance.GetOne(relationKey); instance != nil {
+				instance.HideProperties()
+			}
+		}
 	}
 }
 
@@ -200,7 +208,7 @@ func (modelInstance *Instance) UpdateAttributes(data interface{}, baseContext *E
 				v := eventContext.Result.(Instance)
 				return &v, nil
 			case wst.M:
-				v, err := modelInstance.Model.Build(eventContext.Result.(wst.M), NewBuildCache(), targetBaseContext)
+				v, err := modelInstance.Model.Build(eventContext.Result.(wst.M), targetBaseContext)
 				if err != nil {
 					return nil, err
 				}
@@ -399,7 +407,7 @@ func (modelInstance *Instance) GetA(path string) *wst.A {
 		}
 		return out
 	default:
-		log.Printf("WARNING: GetA: %v <%s> is not an array\n", path, modelInstance.data[path])
+		log.Printf("[WARNING] GetA: %v <%s> is not an array\n", path, modelInstance.data[path])
 		return nil
 	}
 }
@@ -415,14 +423,14 @@ func (modelInstance *Instance) requireBytes() (err error) {
 		//bson.DefaultRegistry.RegisterDecoder(primitive.ObjectID{}, bson.ObjectIDDecoder{})
 
 		if modelInstance.Model.App.Debug {
-			log.Printf("DEBUG: marshalling at requireBytes(): %v\n", modelInstance.data)
+			log.Printf("[DEBUG] marshalling at requireBytes(): %v\n", modelInstance.data)
 		}
 		//modelInstance.bytes, Err = bson.MarshalWithRegistry(modelInstance.Model.App.Bson.Registry, modelInstance.data)
 		modelInstance.bytes, err = modelInstance.MarshalBSON()
 		//modelInstance.bytes, Err = easyjson.Marshal(modelInstance.data)
 	}
 	if err != nil && modelInstance.Model.App.Debug {
-		log.Printf("ERROR: while marshalling Instance: %v\n", err)
+		log.Printf("[ERROR] while marshalling Instance: %v\n", err)
 	}
 	return err
 }
@@ -433,7 +441,7 @@ func (modelInstance *Instance) MarshalBSON() (out []byte, err error) {
 	// marshal modelInstance.data
 	toMarshal := modelInstance.data
 	if modelInstance.Model.App.Debug {
-		log.Printf("DEBUG: marshalling Instance: %v\n", toMarshal)
+		log.Printf("[DEBUG] marshalling Instance: %v\n", toMarshal)
 	}
 	insertedId := false
 	if v, ok0 := toMarshal["id"]; ok0 {
@@ -445,7 +453,7 @@ func (modelInstance *Instance) MarshalBSON() (out []byte, err error) {
 	//bytes, Err := easyjson.Marshal(toMarshal)
 	//w.Raw(bytes, Err)
 	//if modelInstance.Model.App.Debug {
-	//	log.Printf("DEBUG: marshalled Instance: %v\n", len(bytes))
+	//	log.Printf("[DEBUG] marshalled Instance: %v\n", len(bytes))
 	//}
 	bytes, err := bson.MarshalWithRegistry(modelInstance.Model.App.Bson.Registry, toMarshal)
 	if insertedId {
@@ -469,7 +477,7 @@ func (instances InstanceA) ToJSON() []wst.M {
 //	//	toMarshal[idx] = instance.data
 //	//}
 //	if instances[0].Model.App.Debug {
-//		log.Printf("DEBUG: marshalling InstanceA: %v\n", instances)
+//		log.Printf("[DEBUG] marshalling InstanceA: %v\n", instances)
 //	}
 //	//
 //	for idx, instance := range instances {

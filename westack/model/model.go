@@ -159,17 +159,7 @@ type RegistryEntry struct {
 	Model *Model
 }
 
-type buildCache struct {
-	singleRelatedDocumentsById map[string]Instance
-}
-
-func NewBuildCache() *buildCache {
-	return &buildCache{
-		singleRelatedDocumentsById: make(map[string]Instance),
-	}
-}
-
-func (loadedModel *Model) Build(data wst.M, sameLevelCache *buildCache, currentContext *EventContext) (Instance, error) {
+func (loadedModel *Model) Build(data wst.M, currentContext *EventContext) (Instance, error) {
 
 	//if loadedModel.App.Stats.BuildsByModel[loadedModel.Name] == nil {
 	//	loadedModel.App.Stats.BuildsByModel[loadedModel.Name] = map[string]float64{
@@ -211,41 +201,20 @@ func (loadedModel *Model) Build(data wst.M, sameLevelCache *buildCache, currentC
 	}
 
 	for relationName, relationConfig := range *loadedModel.Config.Relations {
-		if data[relationName] != nil {
-			if relationConfig.Type == "" {
-				// relation not found
-				continue
-			}
+		if data[relationName] != nil && relationConfig.Type != "" {
 			rawRelatedData := data[relationName]
-			relatedModel, err := loadedModel.App.FindModel(relationConfig.Model)
-			if err != nil {
-				fmt.Printf("ERROR: Model.Build() --> %v\n", err)
-				return Instance{}, nil
-			}
+			var err error
+			relatedModel, _ := loadedModel.App.FindModel(relationConfig.Model)
 			if relatedModel != nil {
 				switch relationConfig.Type {
 				case "belongsTo", "hasOne":
-					// Check if this parent instance is already in the same level cache
-					// If so, check app.Viper.GetBool("strictSingleRelatedDocumentCheck") and if true, return an error
-					// If not, print a warning
-					strict := loadedModel.App.Viper.GetBool("strictSingleRelatedDocumentCheck")
-					if v, ok := sameLevelCache.singleRelatedDocumentsById[modelInstance.Id.(primitive.ObjectID).Hex()]; ok {
-						if strict {
-							fmt.Printf("ERROR: Model.Build() --> Found multiple single related documents at %v.%v with the same parent %v.Id=%v\n", loadedModel.Name, relationName, loadedModel.Name, v.Id.(primitive.ObjectID).Hex())
-							return Instance{}, fmt.Errorf("found multiple single related documents at %v.%v with the same parent %v.Id=%v", loadedModel.Name, relationName, loadedModel.Name, v.Id.(primitive.ObjectID).Hex())
-						} else {
-							fmt.Printf("WARNING: Model.Build() --> Found multiple single related documents at %v.%v with the same parent %v.Id=%v\n", loadedModel.Name, relationName, loadedModel.Name, v.Id.(primitive.ObjectID).Hex())
-						}
-					} else {
-						sameLevelCache.singleRelatedDocumentsById[modelInstance.Id.(primitive.ObjectID).Hex()] = modelInstance
-					}
 					var relatedInstance Instance
 					if asInstance, asInstanceOk := rawRelatedData.(Instance); asInstanceOk {
 						relatedInstance = asInstance
 					} else {
-						relatedInstance, err = relatedModel.(*Model).Build(rawRelatedData.(wst.M), sameLevelCache, targetBaseContext)
+						relatedInstance, err = relatedModel.(*Model).Build(rawRelatedData.(wst.M), targetBaseContext)
 						if err != nil {
-							fmt.Printf("ERROR: Model.Build() --> %v\n", err)
+							fmt.Printf("[ERROR] Model.Build() --> %v\n", err)
 							return Instance{}, err
 						}
 					}
@@ -258,9 +227,9 @@ func (loadedModel *Model) Build(data wst.M, sameLevelCache *buildCache, currentC
 					} else {
 						result = make(InstanceA, len(rawRelatedData.(primitive.A)))
 						for idx, v := range rawRelatedData.(primitive.A) {
-							result[idx], err = relatedModel.(*Model).Build(v.(wst.M), sameLevelCache, targetBaseContext)
+							result[idx], err = relatedModel.(*Model).Build(v.(wst.M), targetBaseContext)
 							if err != nil {
-								fmt.Printf("ERROR: Model.Build() --> %v\n", err)
+								fmt.Printf("[ERROR] Model.Build() --> %v\n", err)
 								return Instance{}, err
 							}
 						}
@@ -335,8 +304,7 @@ func (loadedModel *Model) FindMany(filterMap *wst.Filter, baseContext *EventCont
 				return newFixedLengthCursor(copyInstanceSlice(currentOperationContext.Result.([]*Instance)))
 			case wst.A:
 				var result InstanceA
-				sameLevelCache := NewBuildCache()
-				result, err = loadedModel.buildInstanceAFromA(currentOperationContext.Result.(wst.A), sameLevelCache, targetBaseContext)
+				result, err = loadedModel.buildInstanceAFromA(currentOperationContext.Result.(wst.A), currentOperationContext)
 				if err != nil {
 					return newErrorCursor(err)
 				}
@@ -388,10 +356,10 @@ func FindBaseContext(currentContext *EventContext) *EventContext {
 	return targetBaseContext
 }
 
-func (loadedModel *Model) buildInstanceAFromA(v wst.A, sameLevelCache *buildCache, targetBaseContext *EventContext) (result InstanceA, err error) {
+func (loadedModel *Model) buildInstanceAFromA(v wst.A, targetBaseContext *EventContext) (result InstanceA, err error) {
 	result = make(InstanceA, len(v))
 	for idx, v := range v {
-		result[idx], err = loadedModel.Build(v, sameLevelCache, targetBaseContext)
+		result[idx], err = loadedModel.Build(v, targetBaseContext)
 		if err != nil {
 			return nil, err
 		}
@@ -402,11 +370,7 @@ func (loadedModel *Model) buildInstanceAFromA(v wst.A, sameLevelCache *buildCach
 func copyInstanceSlice(src []*Instance) InstanceA {
 	var result = make(InstanceA, len(src))
 	for idx, v := range src {
-		if v != nil {
-			result[idx] = *v
-		} else {
-			result[idx] = Instance{}
-		}
+		result[idx] = *v
 	}
 	return result
 }
@@ -627,7 +591,7 @@ func (loadedModel *Model) Create(data interface{}, baseContext *EventContext) (*
 				v := eventContext.Result.(Instance)
 				return &v, nil
 			case wst.M:
-				v, err := loadedModel.Build(eventContext.Result.(wst.M), NewBuildCache(), targetBaseContext)
+				v, err := loadedModel.Build(eventContext.Result.(wst.M), targetBaseContext)
 				if err != nil {
 					return nil, err
 				}
@@ -645,7 +609,7 @@ func (loadedModel *Model) Create(data interface{}, baseContext *EventContext) (*
 	if err != nil {
 		return nil, err
 	} else {
-		result, err := loadedModel.Build(*document, NewBuildCache(), eventContext)
+		result, err := loadedModel.Build(*document, eventContext)
 		if err != nil {
 			return nil, err
 		}
@@ -662,7 +626,7 @@ func (loadedModel *Model) Create(data interface{}, baseContext *EventContext) (*
 
 }
 
-func (loadedModel *Model) DeleteById(id interface{}) (datasource.DeleteResult, error) {
+func (loadedModel *Model) DeleteById(id interface{}, baseContext *EventContext) (datasource.DeleteResult, error) {
 
 	var finalId interface{}
 	switch id.(type) {
@@ -681,11 +645,38 @@ func (loadedModel *Model) DeleteById(id interface{}) (datasource.DeleteResult, e
 		break
 	default:
 		if loadedModel.App.Debug {
-			fmt.Println(fmt.Sprintf("WARNING: Invalid input for Model.DeleteById() <- %s", id))
+			fmt.Println(fmt.Sprintf("[WARNING] Invalid input for Model.DeleteById() <- %s", id))
 		}
 	}
-	//TODO: Invoke hook for __operation__before_delete and __operation__after_delete
-	return loadedModel.Datasource.DeleteById(loadedModel.CollectionName, finalId)
+
+	var targetBaseContext = baseContext
+	for {
+		if targetBaseContext.BaseContext != nil {
+			targetBaseContext = targetBaseContext.BaseContext
+		} else {
+			break
+		}
+	}
+	eventContext := &EventContext{
+		BaseContext:   targetBaseContext,
+		ModelID:       finalId,
+		OperationName: wst.OperationNameDeleteById,
+	}
+	if loadedModel.DisabledHandlers["__operation__before_delete"] != true {
+		err := loadedModel.GetHandler("__operation__before_delete")(eventContext)
+		if err != nil {
+			return datasource.DeleteResult{}, err
+		}
+	}
+
+	deleteResult, err := loadedModel.Datasource.DeleteById(loadedModel.CollectionName, finalId)
+	if err != nil {
+		return deleteResult, err
+	}
+	if loadedModel.DisabledHandlers["__operation__after_delete"] != true {
+		err = loadedModel.GetHandler("__operation__after_delete")(eventContext)
+	}
+	return deleteResult, err
 }
 
 func (loadedModel *Model) DeleteMany(where *wst.Where, ctx *EventContext) (result datasource.DeleteResult, err error) {
@@ -788,7 +779,7 @@ func wrapEventHandler(model *Model, eventKey string, handler func(eventContext *
 			currentHandlerError := currentHandler(eventContext)
 			if currentHandlerError != nil {
 				if model.App.Debug {
-					fmt.Println("WARNING: Stop handling on error", currentHandlerError)
+					fmt.Println("[WARNING] Stop handling on error", currentHandlerError)
 					debug.PrintStack()
 				}
 				return currentHandlerError
@@ -840,17 +831,16 @@ func (loadedModel *Model) dispatchFindManyResults(cursor *ChannelCursor, dsCurso
 			//time.Sleep(1600 * time.Millisecond)
 			err := cursor.Close()
 			if err != nil {
-				fmt.Printf("ERROR: Could not close cursor: %v\n", err)
+				fmt.Printf("[ERROR] Could not close cursor: %v\n", err)
 			}
 		}(cursor)
 		defer func(dsCursor datasource.MongoCursorI, ctx context.Context) {
 			err := dsCursor.Close(ctx)
 			if err != nil {
-				fmt.Printf("ERROR: Could not close cursor: %v\n", err)
+				fmt.Printf("[ERROR] Could not close cursor: %v\n", err)
 			}
 		}(dsCursor, context.Background())
 		disabledCache := loadedModel.App.Viper.GetBool("disableCache")
-		sameLevelCache := NewBuildCache()
 		var safeCacheDs *datasource.Datasource
 		if loadedModel.Config.Cache.Datasource != "" && !disabledCache {
 
@@ -864,8 +854,8 @@ func (loadedModel *Model) dispatchFindManyResults(cursor *ChannelCursor, dsCurso
 		}
 
 		documentsToCacheByKey := make(map[string]wst.A)
-		for dsCursor.Next(context.Background()) {
-			inst, err := loadedModel.dispatchFindManySingleDocument(dsCursor, targetInclude, currentContext, sameLevelCache, filterMap, disabledCache, safeCacheDs, documentsToCacheByKey)
+		for dsCursor.Next(loadedModel.Datasource.Context) {
+			inst, err := loadedModel.dispatchFindManySingleDocument(dsCursor, targetInclude, currentContext, filterMap, disabledCache, safeCacheDs, documentsToCacheByKey)
 			if err != nil {
 				cursor.Error(err)
 				return err
@@ -895,7 +885,7 @@ func (loadedModel *Model) dispatchFindManyResults(cursor *ChannelCursor, dsCurso
 	}
 }
 
-func (loadedModel *Model) dispatchFindManySingleDocument(dsCursor datasource.MongoCursorI, targetInclude *wst.Include, currentContext *EventContext, sameLevelCache *buildCache, filterMap *wst.Filter, disabledCache bool, safeCacheDs *datasource.Datasource, documentsToCacheByKey map[string]wst.A) (*Instance, error) {
+func (loadedModel *Model) dispatchFindManySingleDocument(dsCursor datasource.MongoCursorI, targetInclude *wst.Include, currentContext *EventContext, filterMap *wst.Filter, disabledCache bool, safeCacheDs *datasource.Datasource, documentsToCacheByKey map[string]wst.A) (*Instance, error) {
 	var document wst.M
 	err := dsCursor.Decode(&document)
 	if err != nil {
@@ -920,7 +910,7 @@ func (loadedModel *Model) dispatchFindManySingleDocument(dsCursor datasource.Mon
 		}
 	}
 
-	inst, err := loadedModel.Build(document, sameLevelCache, currentContext)
+	inst, err := loadedModel.Build(document, currentContext)
 	if err != nil {
 		return nil, err
 	}
@@ -939,7 +929,7 @@ func (loadedModel *Model) dispatchFindManySingleDocument(dsCursor datasource.Mon
 		}
 		includePrefix += fmt.Sprintf("_whr_%s_", marshalledWhere)
 	}
-	if safeCacheDs != nil {
+	if safeCacheDs != nil && !disabledCache {
 
 		for _, keyGroup := range loadedModel.Config.Cache.Keys {
 			toCache := wst.CopyMap(document)
@@ -1011,4 +1001,15 @@ func GetIDAsString(idToConvert interface{}) string {
 		break
 	}
 	return foundObjUserId.(string)
+}
+
+func CreateBearer(subjectId interface{}, createdAtSeconds float64, ttlSeconds float64, roles []string) *BearerToken {
+	return &BearerToken{
+		User: &BearerUser{Id: subjectId},
+		Claims: jwt.MapClaims{
+			"created": createdAtSeconds,
+			"ttl":     ttlSeconds,
+			"roles":   roles,
+		},
+	}
 }
