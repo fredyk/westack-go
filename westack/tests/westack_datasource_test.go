@@ -90,6 +90,9 @@ func Test_Datasource_Ping_Will_Fail(t *testing.T) {
 	// Wait 5.1 seconds to cover datasource ping interval
 	time.Sleep(5100 * time.Millisecond)
 
+	err = db.Close()
+	assert.NoError(t, err)
+
 }
 
 func Test_DatasourceDeleteManyNilWhere(t *testing.T) {
@@ -224,4 +227,64 @@ func Test_DatasourceDeleteManyOK(t *testing.T) {
 	assert.NoError(t, err)
 	assert.EqualValuesf(t, 2, result.DeletedCount, "result: %v", result)
 
+}
+
+func Test_ReplaceObjectIdsNil(t *testing.T) {
+
+	t.Parallel()
+
+	result, err := datasource.ReplaceObjectIds(nil)
+	assert.NoError(t, err)
+	assert.Nil(t, result)
+}
+
+func Test_ReplaceObjectIdsInvalidDate(t *testing.T) {
+
+	t.Parallel()
+
+	result, err := datasource.ReplaceObjectIds("2023-02-30T12:34:56.789Z")
+	assert.NoError(t, err)
+	assert.EqualValues(t, int64(-62135596800), result.(time.Time).Unix())
+}
+
+func Test_ReplaceObjectIdsInvalidInput(t *testing.T) {
+
+	t.Parallel()
+
+	data := make(chan int)
+	result, err := datasource.ReplaceObjectIds(data)
+	assert.NoError(t, err)
+	assert.Equal(t, data, result)
+}
+
+func Test_ReplaceObjectInterfaceList(t *testing.T) {
+
+	t.Parallel()
+
+	data := wst.M{
+		"foo": []interface{}{
+			wst.M{
+				"bar": "baz",
+			},
+		},
+	}
+	result, err := datasource.ReplaceObjectIds(data)
+	assert.NoError(t, err)
+	assert.EqualValues(t, data, result)
+}
+
+func Test_ReplaceObjectMList(t *testing.T) {
+
+	t.Parallel()
+
+	data := wst.M{
+		"foo": []wst.M{
+			{
+				"bar": "baz",
+			},
+		},
+	}
+	result, err := datasource.ReplaceObjectIds(data)
+	assert.NoError(t, err)
+	assert.EqualValues(t, data, result)
 }

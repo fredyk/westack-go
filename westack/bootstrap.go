@@ -15,8 +15,6 @@ import (
 	"time"
 
 	"github.com/fredyk/westack-go/westack/lib/swaggerhelper"
-	swaggerhelper2 "github.com/fredyk/westack-go/westack/lib/swaggerhelperinterface"
-
 	"github.com/spf13/viper"
 	"golang.org/x/crypto/bcrypt"
 
@@ -28,6 +26,8 @@ import (
 type UpserRequestBody struct {
 	Roles []string `json:"roles"`
 }
+
+var ValidEmailRegex = regexp.MustCompile(`^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$`)
 
 func isAllowedForProtectedFields(roles []model.BearerRole) bool {
 	for i := 0; i < len(roles); i++ {
@@ -108,14 +108,65 @@ func (app *WeStack) loadModels() error {
 		}
 	}
 
+	err2 := fixRelations(app)
+	if err2 != nil {
+		return err2
+	}
+	buildRelationsGraph(app)
+	return nil
+}
+
+type UniqueNessRestriction struct {
+	Code      string
+	Message   string
+	ErrorName string
+}
+
+func buildRelationsGraph(app *WeStack) {
+	for _, thisModel := range *app.modelRegistry {
+		for _, otherModel := range *app.modelRegistry {
+			if thisModel.Name == otherModel.Name {
+				continue
+			}
+			for _, relation := range *otherModel.Config.Relations {
+				if relation.Model == thisModel.Name {
+					if relation.Type == "hasOne" {
+						// Possible inverse relation bulding:
+						//if thisModel.Config.Relations == nil {
+						//	thisModel.Config.Relations = &map[string]*model.Relation{}
+						//}
+						//(*thisModel.Config.Relations)[relationName] = &model.Relation{
+						//	Type:  "belongsTo",
+						//	Model: otherModel.Name,
+						//}
+
+						// Restrict hasOne relations to be only one-to-one
+						if _, ok := app.restrictModelUniquenessByField[thisModel.Name]; !ok {
+							app.restrictModelUniquenessByField[thisModel.Name] = make(map[string]UniqueNessRestriction)
+						}
+						app.restrictModelUniquenessByField[thisModel.Name][*relation.ForeignKey] = UniqueNessRestriction{
+							Code:      "UNIQUENESS",
+							Message:   fmt.Sprintf("The `%v` instance is not valid. Details: %v already exists.", thisModel.Name, *relation.ForeignKey),
+							ErrorName: "ValidationError",
+						}
+					}
+					break
+				}
+			}
+		}
+	}
+}
+
+func fixRelations(app *WeStack) error {
 	for _, loadedModel := range *app.modelRegistry {
-		err := fixRelations(loadedModel)
+		err := fixModelRelations(loadedModel)
 		if err != nil {
 			return err
 		}
 	}
 	return nil
 }
+
 func (app *WeStack) loadDataSources() error {
 
 	dsViper := viper.New()
@@ -138,7 +189,7 @@ func (app *WeStack) loadDataSources() error {
 	if err != nil {               // Handle errors reading the config file
 		switch err.(type) {
 		case viper.ConfigFileNotFoundError:
-			log.Println(fmt.Sprintf("WARNING: %v.json not found, fallback to datasources.json", fileToLoad))
+			log.Println(fmt.Sprintf("[WARNING] %v.json not found, fallback to datasources.json", fileToLoad))
 			dsViper.SetConfigName("datasources") // name of config file (without extension)
 			err := dsViper.ReadInConfig()        // Find and read the config file
 			if err != nil {
@@ -315,6 +366,15 @@ func (app *WeStack) setupModel(loadedModel *model.Model, dataSource *datasource.
 
 				if config.Base == "User" {
 					username := (*data)["username"]
+					email := (*data)["email"]
+					if (username == nil || strings.TrimSpace(username.(string)) == "") && (email == nil || strings.TrimSpace(email.(string)) == "") {
+						return wst.CreateError(fiber.ErrBadRequest, "EMAIL_PRESENCE", fiber.Map{"message": "Either username or email is required", "codes": wst.M{"email": []string{"presence"}}}, "ValidationError")
+					}
+
+					if email != nil && !ValidEmailRegex.MatchString(email.(string)) {
+						return wst.CreateError(fiber.ErrBadRequest, "EMAIL_FORMAT", fiber.Map{"message": "Invalid email format", "codes": wst.M{"email": []string{"format"}}}, "ValidationError")
+					}
+
 					if username != nil && strings.TrimSpace(username.(string)) != "" {
 						filter := wst.Filter{Where: &wst.Where{"username": username}}
 						existent, err2 := loadedModel.FindOne(&filter, ctx)
@@ -326,13 +386,7 @@ func (app *WeStack) setupModel(loadedModel *model.Model, dataSource *datasource.
 						}
 					}
 
-					// TODO: Jhon Validate Email
-					if username == nil || strings.TrimSpace(username.(string)) == "" {
-						email := (*data)["email"]
-						if email == nil || strings.TrimSpace(email.(string)) == "" {
-							// TODO: Validate email
-							return wst.CreateError(fiber.ErrBadRequest, "EMAIL_PRESENCE", fiber.Map{"message": "Invalid email", "codes": wst.M{"email": []string{"presence"}}}, "ValidationError")
-						}
+					if email != nil && strings.TrimSpace(email.(string)) != "" {
 						filter := wst.Filter{Where: &wst.Where{"email": email}}
 						existent, err2 := loadedModel.FindOne(&filter, ctx)
 						if err2 != nil {
@@ -346,7 +400,7 @@ func (app *WeStack) setupModel(loadedModel *model.Model, dataSource *datasource.
 					if (*data)["password"] == nil || strings.TrimSpace((*data)["password"].(string)) == "" {
 						return wst.CreateError(fiber.ErrBadRequest, "PASSWORD_BLANK", fiber.Map{"message": "Invalid password"}, "ValidationError")
 					}
-					hashed, err := bcrypt.GenerateFromPassword([]byte((*data)["password"].(string)), 10)
+					hashed, err := bcrypt.GenerateFromPassword([]byte(fmt.Sprintf("%s%s", string(loadedModel.App.JwtSecretKey), (*data)["password"].(string))), 10)
 					if err != nil {
 						return err
 					}
@@ -357,11 +411,30 @@ func (app *WeStack) setupModel(loadedModel *model.Model, dataSource *datasource.
 					}
 				}
 
+				// Check inverse hasOne uniqueness
+				if _, ok := app.restrictModelUniquenessByField[loadedModel.Name]; ok {
+					for foreignKey, restriction := range app.restrictModelUniquenessByField[loadedModel.Name] {
+						if (*data)[foreignKey] != nil {
+							filter := wst.Filter{Where: &wst.Where{foreignKey: (*data)[foreignKey]}}
+							existent, err2 := loadedModel.FindOne(&filter, &model.EventContext{Bearer: &model.BearerToken{User: &model.BearerUser{System: true}}})
+							if err2 != nil {
+								return err2
+							}
+							if existent != nil {
+								if app.debug {
+									fmt.Printf("[ERROR] inverse hasOne restriction triggered for [%v %v=%v]\n", loadedModel.Name, foreignKey, (*data)[foreignKey])
+								}
+								return wst.CreateError(fiber.ErrConflict, restriction.Code, fiber.Map{"message": restriction.Message, "codes": wst.M{foreignKey: []string{strings.ToLower(restriction.Code)}}}, restriction.ErrorName)
+							}
+						}
+					}
+				}
+
 			} else {
 				if config.Base == "User" {
 					if (*data)["password"] != nil && (*data)["password"] != "" {
 						log.Println("Update User password")
-						hashed, err := bcrypt.GenerateFromPassword([]byte((*data)["password"].(string)), 10)
+						hashed, err := bcrypt.GenerateFromPassword([]byte(fmt.Sprintf("%s%s", string(loadedModel.App.JwtSecretKey), (*data)["password"].(string))), 10)
 						if err != nil {
 							return err
 						}
@@ -401,6 +474,9 @@ func (app *WeStack) setupModel(loadedModel *model.Model, dataSource *datasource.
 			if eventContext.BaseContext.Bearer != nil && eventContext.BaseContext.Bearer.User != nil && !eventContext.BaseContext.Bearer.User.System && !skipOperationForBeforeBuild(eventContext.OperationName) {
 				foundUserId := eventContext.ModelID.(primitive.ObjectID).Hex()
 				requesterUserId := eventContext.BaseContext.Bearer.User.Id
+				if v, ok := requesterUserId.(primitive.ObjectID); ok {
+					requesterUserId = v.Hex()
+				}
 				if foundUserId != requesterUserId.(string) && !isAllowedForProtectedFields(eventContext.BaseContext.Bearer.Roles) {
 					for _, hiddenProperty := range loadedModel.Config.Protected {
 						delete(*eventContext.Data, hiddenProperty)
@@ -411,17 +487,16 @@ func (app *WeStack) setupModel(loadedModel *model.Model, dataSource *datasource.
 		})
 
 		deleteByIdHandler := func(ctx *model.EventContext) error {
-			deleteResult, err := loadedModel.DeleteById(ctx.ModelID)
-			if err != nil {
-				return err
+			deleteResult, err := loadedModel.DeleteById(ctx.ModelID, ctx)
+			if err == nil {
+				deletedCount := deleteResult.DeletedCount
+				if deletedCount != 1 {
+					return wst.CreateError(fiber.ErrBadRequest, "BAD_REQUEST", fiber.Map{"message": fmt.Sprintf("Deleted %v instances for %v", deletedCount, ctx.ModelID)}, "Error")
+				}
+				ctx.StatusCode = fiber.StatusNoContent
+				ctx.Result = ""
 			}
-			deletedCount := deleteResult.DeletedCount
-			if deletedCount != 1 {
-				return wst.CreateError(fiber.ErrBadRequest, "BAD_REQUEST", fiber.Map{"message": fmt.Sprintf("Deleted %v instances for %v", deletedCount, ctx.ModelID)}, "Error")
-			}
-			ctx.StatusCode = fiber.StatusNoContent
-			ctx.Result = ""
-			return nil
+			return err
 		}
 		loadedModel.On("instance_delete", deleteByIdHandler)
 
@@ -429,16 +504,14 @@ func (app *WeStack) setupModel(loadedModel *model.Model, dataSource *datasource.
 			upsertUserRolesHandler := func(ctx *model.EventContext) error {
 				var body UpserRequestBody
 				err := ctx.Ctx.BodyParser(&body)
-				if err != nil {
-					return err
+				if err == nil {
+					err = UpsertUserRoles(app, ctx.ModelID, body.Roles, ctx)
+					if err == nil {
+						ctx.StatusCode = fiber.StatusOK
+						ctx.Result = wst.M{"result": "OK"}
+					}
 				}
-				err = UpsertUserRoles(app, ctx.ModelID, body.Roles, ctx)
-				if err != nil {
-					return err
-				}
-				ctx.StatusCode = fiber.StatusOK
-				ctx.Result = wst.M{"result": "OK"}
-				return nil
+				return err
 			}
 			loadedModel.On("user_upsertRoles", upsertUserRolesHandler)
 		}
@@ -449,12 +522,17 @@ func (app *WeStack) setupModel(loadedModel *model.Model, dataSource *datasource.
 
 func handleFindMany(app *WeStack, loadedModel *model.Model, ctx *model.EventContext) error {
 	if loadedModel.App.Debug {
-		fmt.Println("DEBUG: handleFindMany")
+		fmt.Println("[DEBUG] handleFindMany")
 	}
 
 	cursor := loadedModel.FindMany(ctx.Filter, ctx)
 	if v, ok := cursor.(*model.ErrorCursor); ok {
-		defer v.Close()
+		defer func(v *model.ErrorCursor) {
+			err := v.Close()
+			if err != nil {
+				log.Println("Error while closing cursor at handleFindMany(): ", err)
+			}
+		}(v)
 		var err error
 		ctx.Result, err = v.Next()
 		return err
@@ -514,7 +592,7 @@ func traceChunkGenerator(app *WeStack, loadedModel *model.Model, ctx *model.Even
 		filterSt += ":f:" + string(bytes)
 	}
 	if app.debug {
-		fmt.Printf("DEBUG: traceChunkGenerator: %v\n", filterSt)
+		fmt.Printf("[DEBUG] traceChunkGenerator: %v\n", filterSt)
 	}
 	lastErrorEntries, err := findLastErrorEntries(internalDs, filterSt)
 	if err != nil {
@@ -593,7 +671,7 @@ func (app *WeStack) asInterface() *wst.IApp {
 		FindDatasource: func(datasource string) (interface{}, error) {
 			return app.FindDatasource(datasource)
 		},
-		SwaggerHelper: func() swaggerhelper2.SwaggerHelper {
+		SwaggerHelper: func() wst.SwaggerHelper {
 			return app.swaggerHelper
 		},
 		Logger: func() wst.ILogger {
@@ -602,7 +680,7 @@ func (app *WeStack) asInterface() *wst.IApp {
 	}
 }
 
-func fixRelations(loadedModel *model.Model) error {
+func fixModelRelations(loadedModel *model.Model) error {
 	for relationName, relation := range *loadedModel.Config.Relations {
 
 		if relation.Type == "" {
@@ -613,10 +691,7 @@ func fixRelations(loadedModel *model.Model) error {
 		relatedLoadedModel := (*loadedModel.GetModelRegistry())[relatedModelName]
 
 		if relatedLoadedModel == nil {
-			log.Println()
-			log.Printf("WARNING: related model %v not found for relation %v.%v", relatedModelName, loadedModel.Name, relationName)
-			log.Println()
-			continue
+			return fmt.Errorf("related model %v not found for relation %v.%v", relatedModelName, loadedModel.Name, relationName)
 		}
 
 		if relation.PrimaryKey == nil {

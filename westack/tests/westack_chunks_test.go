@@ -1,9 +1,9 @@
 package tests
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/mailru/easyjson"
 	"io"
 	"net/http"
 	"testing"
@@ -25,7 +25,7 @@ func Test_GenerateNextChunk_Error(t *testing.T) {
 		"title":   "Note 0015",
 		"body":    "This is a note",
 		"invalid": make(chan int),
-	}, model.NewBuildCache(), systemContext)
+	}, systemContext)
 	assert.NoError(t, err)
 	var input = model.InstanceA{build}
 
@@ -49,7 +49,7 @@ func Test_ChannelChunkGeneratorError(t *testing.T) {
 		"title":   "Note 0015",
 		"body":    "This is a note",
 		"invalid": make(chan int),
-	}, model.NewBuildCache(), systemContext)
+	}, systemContext)
 	assert.NoError(t, err)
 	var input chan *model.Instance = make(chan *model.Instance)
 	go func() {
@@ -101,7 +101,9 @@ func Test_FixedBeforeLoadMock124401(t *testing.T) {
 
 	t.Parallel()
 
-	resp := invokeApiFullResponse(t, "GET", "/notes?mockResultTest124401=true", nil, nil)
+	resp := invokeApiFullResponse(t, "GET", "/notes?mockResultTest124401=true", nil, wst.M{
+		"Authorization": fmt.Sprintf("Bearer %s", randomUserToken.GetString("id")),
+	})
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 	responseBody, err := parseResultAsJsonArray(resp)
 	assert.NoError(t, err)
@@ -115,7 +117,9 @@ func Test_FixedBeforeLoadMock124402(t *testing.T) {
 
 	t.Parallel()
 
-	resp := invokeApiFullResponse(t, "GET", "/notes?mockResultTest124402=true", nil, nil)
+	resp := invokeApiFullResponse(t, "GET", "/notes?mockResultTest124402=true", nil, wst.M{
+		"Authorization": fmt.Sprintf("Bearer %s", randomUserToken.GetString("id")),
+	})
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 	responseBody, err := parseResultAsJsonArray(resp)
 	assert.NoError(t, err)
@@ -129,7 +133,9 @@ func Test_FixedBeforeLoadMock124403(t *testing.T) {
 
 	t.Parallel()
 
-	resp := invokeApiFullResponse(t, "GET", "/notes?mockResultTest124403=true", nil, nil)
+	resp := invokeApiFullResponse(t, "GET", "/notes?mockResultTest124403=true", nil, wst.M{
+		"Authorization": fmt.Sprintf("Bearer %s", randomUserToken.GetString("id")),
+	})
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 	responseBody, err := parseResultAsJsonArray(resp)
 	assert.NoError(t, err)
@@ -143,7 +149,9 @@ func Test_FixedBeforeLoadMock124404(t *testing.T) {
 
 	t.Parallel()
 
-	resp := invokeApiFullResponse(t, "GET", "/notes?mockResultTest124404=true", nil, nil)
+	resp := invokeApiFullResponse(t, "GET", "/notes?mockResultTest124404=true", nil, wst.M{
+		"Authorization": fmt.Sprintf("Bearer %s", randomUserToken.GetString("id")),
+	})
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 	responseBody, err := parseResultAsJsonArray(resp)
 	assert.NoError(t, err)
@@ -167,12 +175,21 @@ func Test_AfterLoadShouldReturnEmpty(t *testing.T) {
 		assert.NotEmpty(t, note.GetString("id"))
 	}
 
-	resp, err := invokeApiJsonM(t, "GET", "/notes?forceError1753=true", nil, nil)
+	resp, err := invokeApiAsRandomUser(t, "GET", "/notes?forceError1753=true", nil, nil)
 	assert.NoError(t, err)
-	assert.Equal(t, "forced error 1753", resp.GetM("error").GetString("message"))
+	assert.Equal(t, "forced error 1753", resp.GetString("error.message"))
 	// "after load" cannot handle errors. It skips failed instances.
 	//assert.Equal(t, 0, len(resp))
 
+}
+
+func Test_BeforeBuildReturnsError(t *testing.T) {
+
+	t.Parallel()
+
+	resp, err := invokeApiAsRandomUser(t, "GET", "/notes?forceError1556=true", nil, nil)
+	assert.NoError(t, err)
+	assert.Equal(t, "error in __operation__before_build: forced error 1556", resp.GetString("error.message"))
 }
 
 func parseResultAsJsonArray(resp *http.Response) (responseBody wst.A, err error) {
@@ -181,7 +198,7 @@ func parseResultAsJsonArray(resp *http.Response) (responseBody wst.A, err error)
 	if err != nil {
 		return nil, err
 	}
-	err = json.Unmarshal(bytes, &responseBody)
+	err = easyjson.Unmarshal(bytes, &responseBody)
 	return responseBody, err
 
 }

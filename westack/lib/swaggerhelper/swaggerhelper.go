@@ -2,7 +2,6 @@ package swaggerhelper
 
 import (
 	wst "github.com/fredyk/westack-go/westack/common"
-	"github.com/fredyk/westack-go/westack/lib/swaggerhelperinterface"
 	"github.com/gofiber/fiber/v2"
 	"github.com/mailru/easyjson"
 	"github.com/mailru/easyjson/jwriter"
@@ -19,7 +18,7 @@ type swaggerHelper struct {
 	swaggerMap SwaggerMap
 }
 
-func (sH *swaggerHelper) GetOpenAPI() (map[string]interface{}, error) {
+func (sH *swaggerHelper) GetOpenAPI() (wst.M, error) {
 	// Load data/swagger.json
 	swagger, err := os.ReadFile("data/swagger.json")
 	if err != nil {
@@ -35,7 +34,7 @@ func (sH *swaggerHelper) GetOpenAPI() (map[string]interface{}, error) {
 }
 
 func (sH *swaggerHelper) CreateOpenAPI() error {
-	sH.swaggerMap = wst.M{
+	sH.swaggerMap = &wst.M{
 		//"schemes": []string{"http"},
 		"openapi": "3.0.1",
 		"info": fiber.Map{
@@ -69,9 +68,9 @@ func (sH *swaggerHelper) CreateOpenAPI() error {
 		//		"bearerFormat": "JWT",
 		//	},
 		//},
-		"servers": make([]map[string]interface{}, 0),
+		"servers": make([]wst.M, 0),
 		//"basePath": "/",
-		"paths": make(map[string]interface{}),
+		"paths": make(wst.M),
 	}
 	// Marshal
 	//swagger, err := easyjson.Marshal(sH.swaggerMap)
@@ -98,12 +97,12 @@ func (sH *swaggerHelper) CreateOpenAPI() error {
 	return err2
 }
 
-func (sH *swaggerHelper) AddPathSpec(path string, verb string, verbSpec map[string]interface{}) {
+func (sH *swaggerHelper) AddPathSpec(path string, verb string, verbSpec wst.M) {
 	// Add verbSpec to [path][verb]
-	if _, ok := sH.swaggerMap.(wst.M)["paths"].(map[string]interface{})[path]; !ok {
-		sH.swaggerMap.(wst.M)["paths"].(map[string]interface{})[path] = make(map[string]interface{})
+	if _, ok := (*sH.swaggerMap.(*wst.M))["paths"].(wst.M)[path]; !ok {
+		(*sH.swaggerMap.(*wst.M))["paths"].(wst.M)[path] = make(wst.M)
 	}
-	sH.swaggerMap.(wst.M)["paths"].(map[string]interface{})[path].(map[string]interface{})[verb] = verbSpec
+	(*sH.swaggerMap.(*wst.M))["paths"].(wst.M)[path].(wst.M)[verb] = verbSpec
 	return
 }
 
@@ -133,6 +132,6 @@ func (sH *swaggerHelper) free() {
 	runtime.GC()
 }
 
-func NewSwaggerHelper() swaggerhelperinterface.SwaggerHelper {
+func NewSwaggerHelper() wst.SwaggerHelper {
 	return &swaggerHelper{}
 }

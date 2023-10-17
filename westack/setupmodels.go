@@ -97,11 +97,7 @@ func createCasbinModel(loadedModel *model.Model, app *WeStack, config *model.Con
 	loadedModel.CasbinModel = &casbModel
 	loadedModel.CasbinAdapter = &adapter
 
-	err = adapter.SavePolicy(casbModel)
-	if err != nil {
-		return fmt.Errorf("could not save policy %v: %v", loadedModel.Name, err)
-	}
-	return nil
+	return adapter.SavePolicy(casbModel)
 }
 
 func setupUserModel(loadedModel *model.Model, app *WeStack) {
@@ -135,7 +131,18 @@ func setupUserModel(loadedModel *model.Model, app *WeStack) {
 
 		firstUserData := firstUser.ToJSON()
 		savedPassword := firstUserData["password"]
-		err = bcrypt.CompareHashAndPassword([]byte(savedPassword.(string)), []byte((*data)["password"].(string)))
+		saltedPassword := fmt.Sprintf("%s%s", string(loadedModel.App.JwtSecretKey), (*data)["password"].(string))
+		err = bcrypt.CompareHashAndPassword([]byte(savedPassword.(string)), []byte(saltedPassword))
+		if err != nil {
+			if loadedModel.App.Debug {
+				loadedModel.App.Logger().Printf("bcrypt.CompareHashAndPassword error: %v\n", err)
+			}
+			err = bcrypt.CompareHashAndPassword([]byte(savedPassword.(string)), []byte((*data)["password"].(string)))
+		} else {
+			if loadedModel.App.Debug {
+				loadedModel.App.Logger().Printf("bcrypt.CompareHashAndPassword success with salt\n")
+			}
+		}
 		if err != nil {
 			return wst.CreateError(fiber.ErrUnauthorized, "LOGIN_FAILED", fiber.Map{"message": "login failed"}, "Error")
 		}

@@ -2,6 +2,7 @@ package model
 
 import (
 	"fmt"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"log"
 	"strings"
 	"sync"
@@ -19,7 +20,7 @@ func (loadedModel *Model) EnforceEx(token *BearerToken, objId string, action str
 	}
 
 	if token == nil {
-		log.Printf("WARNING: Trying to enforce without token at %v.%v\n", loadedModel.Name, action)
+		log.Printf("[WARNING] Trying to enforce without token at %v.%v\n", loadedModel.Name, action)
 	}
 
 	var bearerUserIdSt string
@@ -33,7 +34,7 @@ func (loadedModel *Model) EnforceEx(token *BearerToken, objId string, action str
 		AuthMutex.RLock()
 		if result, isPresent := loadedModel.authCache[bearerUserIdSt][targetObjId][action]; isPresent {
 			if loadedModel.App.Debug || !result {
-				log.Printf("DEBUG: Cache hit for %v.%v ---> %v\n", loadedModel.Name, action, result)
+				log.Printf("[DEBUG] Cache hit for %v.%v ---> %v\n", loadedModel.Name, action, result)
 			}
 			AuthMutex.RUnlock()
 			return nil, result
@@ -43,7 +44,14 @@ func (loadedModel *Model) EnforceEx(token *BearerToken, objId string, action str
 
 	} else {
 
-		bearerUserIdSt = fmt.Sprintf("%v", token.User.Id)
+		bearerUserIdSt = ""
+		if v, ok := token.User.Id.(string); ok {
+			bearerUserIdSt = v
+		} else if vv, ok := token.User.Id.(primitive.ObjectID); ok {
+			bearerUserIdSt = vv.Hex()
+		} else {
+			bearerUserIdSt = fmt.Sprintf("%v", token.User.Id)
+		}
 		targetObjId = objId
 
 		var created int64
@@ -69,7 +77,7 @@ func (loadedModel *Model) EnforceEx(token *BearerToken, objId string, action str
 
 		if result, isPresent := loadedModel.authCache[bearerUserIdSt][targetObjId][action]; isPresent {
 			if loadedModel.App.Debug || !result {
-				log.Printf("DEBUG: Cache hit for %v.%v ---> %v\n", loadedModel.Name, action, result)
+				log.Printf("[DEBUG] Cache hit for %v.%v ---> %v\n", loadedModel.Name, action, result)
 			}
 			return nil, result
 		}
@@ -110,9 +118,9 @@ func (loadedModel *Model) EnforceEx(token *BearerToken, objId string, action str
 		if len(exp) > 0 {
 			log.Println("Explain", exp)
 		}
-		fmt.Printf("DEBUG: EnforceEx for %v.%v (subj=%v,obj=%v) ---> %v\n", loadedModel.Name, action, bearerUserIdSt, targetObjId, allow)
+		fmt.Printf("[DEBUG] EnforceEx for %v.%v (subj=%v,obj=%v) ---> %v\n", loadedModel.Name, action, bearerUserIdSt, targetObjId, allow)
 		if eventContext.Remote != nil && eventContext.Remote.Name != "" {
-			fmt.Printf("DEBUG: ... at remote method %v %v%v\n", strings.ToUpper(eventContext.Remote.Http.Verb), loadedModel.BaseUrl, eventContext.Remote.Http.Path)
+			fmt.Printf("[DEBUG] ... at remote method %v %v%v\n", strings.ToUpper(eventContext.Remote.Http.Verb), loadedModel.BaseUrl, eventContext.Remote.Http.Path)
 		}
 	}
 	if err != nil {
