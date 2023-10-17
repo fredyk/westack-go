@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/fredyk/westack-go/westack/lib/swaggerhelperinterface"
 	"log"
 	"os"
 	"os/signal"
@@ -47,14 +46,14 @@ type WeStack struct {
 	dataSourceOptions *map[string]*datasource.Options
 	init              time.Time
 	jwtSecretKey      []byte
-	swaggerHelper     swaggerhelperinterface.SwaggerHelper
+	swaggerHelper     wst.SwaggerHelper
 	logger            wst.ILogger
 }
 
 func (app *WeStack) FindModel(modelName string) (*model.Model, error) {
 	result := (*app.modelRegistry)[modelName]
 	if result == nil {
-		return nil, errors.New(fmt.Sprintf("Model %v not found", modelName))
+		return nil, fmt.Errorf("model %v not found", modelName)
 	}
 	return result, nil
 }
@@ -63,7 +62,7 @@ func (app *WeStack) FindDatasource(dsName string) (*datasource.Datasource, error
 	result := (*app.datasources)[dsName]
 
 	if result == nil {
-		return nil, errors.New(fmt.Sprintf("Datasource %v not found", dsName))
+		return nil, fmt.Errorf("datasource %v not found", dsName)
 	}
 
 	return result, nil
@@ -101,11 +100,7 @@ func (app *WeStack) Stop() error {
 			return err
 		}
 	}
-	err := app.Server.Shutdown()
-	if err != nil {
-		return err
-	}
-	return nil
+	return app.Server.Shutdown()
 }
 
 func (app *WeStack) Logger() wst.ILogger {
@@ -128,10 +123,11 @@ type Options struct {
 	EnableCompression bool
 	CompressionConfig compress.Config
 
-	debug         bool
-	adminUsername string
-	adminPwd      string
-	Logger        wst.ILogger
+	debug             bool
+	adminUsername     string
+	adminPwd          string
+	Logger            wst.ILogger
+	DisablePortEnvVar bool
 }
 
 func New(options ...Options) *WeStack {
@@ -162,9 +158,8 @@ func New(options ...Options) *WeStack {
 			finalOptions.JwtSecretKey = s
 		}
 	}
-	_debug := false
 	if envDebug, _ := os.LookupEnv("DEBUG"); envDebug == "true" {
-		_debug = true
+		finalOptions.debug = true
 	}
 
 	adminUsername, present := os.LookupEnv("WST_ADMIN_USERNAME")
@@ -196,17 +191,17 @@ func New(options ...Options) *WeStack {
 
 	err := appViper.ReadInConfig() // Find and read the config file
 	if err != nil {                // Handle errors reading the config file
-		switch err.(type) {
-		case viper.ConfigFileNotFoundError:
+		switch {
+		case errors.As(err, &viper.ConfigFileNotFoundError{}):
 			log.Println(fmt.Sprintf("WARNING: %v.json not found, fallback to config.json", fileToLoad))
 			appViper.SetConfigName("config") // name of config file (without extension)
 			err := appViper.ReadInConfig()   // Find and read the config file
 			if err != nil {
-				log.Fatalf("fatal error config file: %w", err)
+				log.Fatalf("fatal error config file: %v", err)
 			}
 			break
 		default:
-			log.Fatalf("fatal error config file: %w", err)
+			log.Fatalf("fatal error config file: %v", err)
 		}
 	}
 
@@ -216,7 +211,7 @@ func New(options ...Options) *WeStack {
 	if finalOptions.Port == 0 {
 		finalOptions.Port = appViper.GetInt("port")
 	}
-	if os.Getenv("PORT") != "" {
+	if os.Getenv("PORT") != "" && !finalOptions.DisablePortEnvVar {
 		portFromEnv, err := strconv.Atoi(os.Getenv("PORT"))
 		if err != nil {
 			logger.Fatalf("Invalid PORT environment variable: %v", err)
@@ -249,7 +244,7 @@ func New(options ...Options) *WeStack {
 
 		modelRegistry:     &modelRegistry,
 		datasources:       &datasources,
-		debug:             _debug,
+		debug:             finalOptions.debug,
 		restApiRoot:       finalOptions.RestApiRoot,
 		port:              finalOptions.Port,
 		jwtSecretKey:      []byte(finalOptions.JwtSecretKey),

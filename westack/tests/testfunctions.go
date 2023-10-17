@@ -14,11 +14,13 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 )
 
 var app *westack.WeStack
 var randomUser wst.M
 var randomUserToken wst.M
+var adminUserToken wst.M
 
 // Decode the jwtInfo as JSON
 type jwtInfo struct {
@@ -103,7 +105,9 @@ func invokeApiFullResponse(t *testing.T, method string, url string, body wst.M, 
 		req.Header.Add(k, v.(string))
 	}
 	//resp, err := app.Server.Test(req, 600000)
-	client := &http.Client{}
+	client := &http.Client{
+		Timeout: 45 * time.Second,
+	}
 	client.CheckRedirect = func(req *http.Request, via []*http.Request) error {
 		return http.ErrUseLastResponse
 	}

@@ -1,8 +1,8 @@
 package tests
 
 import (
-	"encoding/json"
 	"fmt"
+	"github.com/mailru/easyjson"
 	"github.com/stretchr/testify/assert"
 	"io"
 	"net/http"
@@ -24,17 +24,17 @@ func Test_Get_Swagger_Docs(t *testing.T) {
 
 	// test for error
 	res, err := client.Get("http://localhost:8020/swagger/doc.json")
-	assert.Nilf(t, err, "Get Swagger Error while getting response: %s", err)
+	assert.Nilf(t, err, "GetAt Swagger Error while getting response: %s", err)
 
 	// read response
 	var out wst.M
 	body, err := io.ReadAll(res.Body)
-	assert.Nilf(t, err, "Get Swagger Error while reading body: %s", err)
+	assert.Nilf(t, err, "GetAt Swagger Error while reading body: %s", err)
 
-	assert.Equalf(t, 200, res.StatusCode, "Get Swagger Error invalid status code: %d body: %s", res.StatusCode, string(body))
+	assert.Equalf(t, 200, res.StatusCode, "GetAt Swagger Error invalid status code: %d body: %s", res.StatusCode, string(body))
 
-	err = json.Unmarshal(body, &out)
-	assert.Nilf(t, err, "Get Swagger Error while unmarshaling body: %s", err)
+	err = easyjson.Unmarshal(body, &out)
+	assert.Nilf(t, err, "GetAt Swagger Error while unmarshaling body: %s", err)
 
 	assert.Equalf(t, "3.0.1", out["openapi"], "Invalid openapi version %v", out["openapi"])
 	assert.Equalf(t, "Swagger API", out.GetM("info").GetString("title"), "Invalid title %v", out.GetM("info").GetString("title"))
@@ -52,24 +52,24 @@ func Test_Get_Swagger_UI(t *testing.T) {
 	// test for error
 	res, err := client.Get("http://localhost:8020/swagger/")
 	if err != nil {
-		t.Errorf("Get Swagger Error: %s", err)
+		t.Errorf("GetAt Swagger Error: %s", err)
 		return
 	}
 
 	if res.StatusCode != 200 {
-		t.Errorf("Get Swagger Error: %d", res.StatusCode)
+		t.Errorf("GetAt Swagger Error: %d", res.StatusCode)
 		return
 	}
 
 	// read response
 	body, err := io.ReadAll(brotli.NewReader(res.Body))
 	if err != nil {
-		t.Errorf("Get Swagger Error: %s", err)
+		t.Errorf("GetAt Swagger Error: %s", err)
 		return
 	}
 
 	if len(body) == 0 {
-		t.Errorf("Get Swagger Error: empty response")
+		t.Errorf("GetAt Swagger Error: empty response")
 		return
 	}
 
@@ -94,6 +94,7 @@ func Test_GetCorruptSwagger(t *testing.T) {
 	resp, err := client.Get("http://localhost:8020/swagger/doc.json")
 	assert.NoError(t, err)
 	assert.EqualValues(t, 500, resp.StatusCode)
+	//goland:noinspection GoUnhandledErrorResult
 	defer resp.Body.Close()
 	body, err := io.ReadAll(resp.Body)
 	assert.NoError(t, err)

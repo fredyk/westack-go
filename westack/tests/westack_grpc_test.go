@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/gofiber/fiber/v2"
+	"github.com/mailru/easyjson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"io"
 	"log"
@@ -13,16 +14,12 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"reflect"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/bson/bsoncodec"
-	"go.mongodb.org/mongo-driver/bson/bsonrw"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/event"
 	"google.golang.org/grpc"
@@ -34,11 +31,6 @@ import (
 
 	pb "github.com/fredyk/westack-go/westack/tests/proto"
 )
-
-type InstanceFromTests struct {
-	id    primitive.ObjectID
-	model *model.Model
-}
 
 var server *westack.WeStack
 var userId primitive.ObjectID
@@ -85,10 +77,10 @@ func testGRPCCallWithQueryParamsWithQueryParamsTimeout(t *testing.T) {
 	bytes, err := io.ReadAll(res.Body)
 	assert.NoError(t, err)
 	var parsedResp wst.M
-	err = json.Unmarshal(bytes, &parsedResp)
+	err = easyjson.Unmarshal(bytes, &parsedResp)
 	assert.NoError(t, err)
-	assert.EqualValues(t, fiber.StatusInternalServerError, parsedResp.GetM("error").GetInt("statusCode"))
-	assert.Equal(t, "context deadline exceeded", parsedResp.GetM("error").GetString("message"))
+	assert.EqualValues(t, fiber.StatusInternalServerError, parsedResp.GetInt("error.statusCode"))
+	assert.Equal(t, "context deadline exceeded", parsedResp.GetString("error.message"))
 
 }
 
@@ -103,10 +95,10 @@ func testGRPCCallWithQueryParamsWithBodyTimeout(t *testing.T) {
 	bytes, err := io.ReadAll(res.Body)
 	assert.NoError(t, err)
 	var parsedResp wst.M
-	err = json.Unmarshal(bytes, &parsedResp)
+	err = easyjson.Unmarshal(bytes, &parsedResp)
 	assert.NoError(t, err)
-	assert.EqualValues(t, fiber.StatusInternalServerError, parsedResp.GetM("error").GetInt("statusCode"))
-	assert.Equal(t, "context deadline exceeded", parsedResp.GetM("error").GetString("message"))
+	assert.EqualValues(t, fiber.StatusInternalServerError, parsedResp.GetInt("error.statusCode"))
+	assert.Equal(t, "context deadline exceeded", parsedResp.GetString("error.message"))
 
 }
 
@@ -245,7 +237,7 @@ func testGRPCCallWithBodyParamsWithBadBody(t *testing.T) {
 //	}
 //
 //	// test for error
-//	res, err := client.Get("http://localhost:8020/test-grpc-get-invalid?foo=1")
+//	res, err := client.GetAt("http://localhost:8020/test-grpc-get-invalid?foo=1")
 //	if err != nil {
 //		t.Errorf("GRPCCallWithQueryParams Error: %s", err)
 //		return
@@ -683,7 +675,9 @@ func testSpecialDatePlaceholder(t *testing.T, specialDateKey string, specialDate
 	endpointWithFilter := fmt.Sprintf("/notes?filter=%s", encodedFilter)
 	fmt.Printf("Original filter: %s\n", filter)
 	fmt.Printf("Sending query: %s\n", endpointWithFilter)
-	out, err := invokeApiJsonA(t, "GET", endpointWithFilter, nil, nil)
+	out, err := invokeApiJsonA(t, "GET", endpointWithFilter, nil, wst.M{
+		"Authorization": "Bearer " + randomUserToken.GetString("id"),
+	})
 	assert.NoError(t, err)
 	return out, err
 }
@@ -712,7 +706,8 @@ func TestMain(m *testing.M) {
 
 	// start server
 	server = westack.New(westack.Options{
-		Port: 8020,
+		Port:              8020,
+		DisablePortEnvVar: true,
 		DatasourceOptions: &map[string]*datasource.Options{
 			"db": {
 				MongoDB: &datasource.MongoDBDatasourceOptions{
@@ -780,6 +775,14 @@ func TestMain(m *testing.M) {
 		log.Fatalf("failed to login user: %v", err)
 	}
 
+	adminUserToken, err = loginUser(os.Getenv("WST_ADMIN_USERNAME"), os.Getenv("WST_ADMIN_PWD"), t)
+	if err != nil {
+		log.Fatalf("failed to login admin user: %v", err)
+	}
+	if adminUserToken.GetString("id") == "" {
+		log.Fatalf("failed to login admin user: %v", err)
+	}
+
 	go func() {
 		err := server.Start()
 		if err != nil {
@@ -826,22 +829,6 @@ func FakeMongoDbMonitor() *event.CommandMonitor {
 		Failed: func(ctx context.Context, cmd *event.CommandFailedEvent) {
 		},
 	}
-}
-
-func FakeMongoDbRegistry() *bsoncodec.Registry {
-	// create a new registry
-	registryBuilder := bson.NewRegistryBuilder().
-		//RegisterTypeMapEntry(bson.TypeEmbeddedDocument, reflect.TypeOf(bson.M{})).
-		RegisterTypeMapEntry(bson.TypeEmbeddedDocument, reflect.TypeOf(wst.M{})).
-		//RegisterTypeMapEntry(bson.TypeArray, reflect.TypeOf([]bson.M{}))
-		RegisterTypeMapEntry(bson.TypeArray, reflect.TypeOf(wst.A{}))
-
-	// register the custom types
-	registryBuilder.RegisterTypeEncoder(reflect.TypeOf(time.Time{}), bsoncodec.ValueEncoderFunc(func(ec bsoncodec.EncodeContext, vw bsonrw.ValueWriter, val reflect.Value) error {
-		return vw.WriteDateTime(val.Interface().(time.Time).UnixNano() / int64(time.Millisecond))
-	}))
-
-	return registryBuilder.Build()
 }
 
 func revertAllTests() error {

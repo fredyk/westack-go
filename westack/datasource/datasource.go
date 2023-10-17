@@ -31,7 +31,7 @@ type Datasource struct {
 	app               *wst.IApp
 }
 
-func getConnectorByName(name string, dsKey string, dsViper *viper.Viper, options *Options) (PersistedConnector, error) {
+func getConnectorByName(name string, dsKey string, options *Options) (PersistedConnector, error) {
 	switch name {
 	case "mongodb":
 		var mongoOptions *MongoDBDatasourceOptions
@@ -51,7 +51,7 @@ func (ds *Datasource) Initialize() error {
 	var connectorName = dsViper.GetString("connector")
 	var connector PersistedConnector
 	var err error
-	connector, err = getConnectorByName(connectorName, ds.Key, dsViper, ds.Options)
+	connector, err = getConnectorByName(connectorName, ds.Key, ds.Options)
 	if err != nil {
 		return err
 	}
@@ -82,19 +82,31 @@ func (ds *Datasource) Initialize() error {
 		for {
 			time.Sleep(time.Second * 5)
 
+			// Check initialCtx.Done() first to avoid reconnecting after the datasource has been closed
+			select {
+			case <-initialCtx.Done():
+				return
+			default:
+			}
+
 			err := connector.Ping(initialCtx)
 			if err != nil {
-				log.Printf("Reconnecting datasource %v...\n", ds.Key)
+				log.Printf("[%v] Reconnecting datasource...\n", ds.Key)
 				err := connector.Connect(initialCtx)
 				if err != nil {
 					if ds.Options == nil || !ds.Options.RetryOnError {
-						ds.app.Logger().Fatalf("Could not reconnect %v: %v\n", ds.Key, err)
+						ds.app.Logger().Fatalf("[%v] Could not reconnect: %v\n", ds.Key, err)
 					}
 				} else {
 					err = connector.Ping(initialCtx)
 					if err != nil {
+						select {
+						case <-initialCtx.Done():
+							return
+						default:
+						}
 						if ds.Options == nil || !ds.Options.RetryOnError {
-							ds.app.Logger().Fatalf("Mongo client disconnected after %vms: %v", time.Now().UnixMilli()-init, err)
+							ds.app.Logger().Fatalf("[%v] Mongo client disconnected after %vms: %v", ds.Key, time.Now().UnixMilli()-init, err)
 						}
 					} else {
 						log.Printf("successfully reconnected to %v\n", ds.Key)

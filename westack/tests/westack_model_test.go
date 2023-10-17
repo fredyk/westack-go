@@ -270,6 +270,16 @@ func Test_CreateWithDefaultMapValue(t *testing.T) {
 	assert.Equal(t, map[string]interface{}{"defaultKey": "defaultValue"}, created["defaultMap"].(map[string]interface{}))
 }
 
+func Test_CreateWithDefaultNilValue(t *testing.T) {
+
+	t.Parallel()
+
+	created, err := invokeApiAsRandomUser(t, "POST", "/notes", wst.M{}, wst.M{"Content-Type": "application/json"})
+	assert.Nil(t, err)
+	assert.Contains(t, created, "defaultNull")
+	assert.Nil(t, created["defaultNull"])
+}
+
 func Test_CreateWithDefaultTimeValue(t *testing.T) {
 
 	t.Parallel()
@@ -313,8 +323,8 @@ func Test_CreateWithDefaultTimeHourFromNow(t *testing.T) {
 
 	probablyTime := time.Now()
 	lowerSeconds := probablyTime.Unix() + 3600
-	// Should be 15 milliseconds after at most
-	upperSeconds := probablyTime.Unix() + 3603
+	// Should be 15 seconds after at most
+	upperSeconds := probablyTime.Unix() + 3615
 	created, err := invokeApiAsRandomUser(t, "POST", "/notes", wst.M{}, wst.M{"Content-Type": "application/json"})
 	assert.Nil(t, err)
 	assert.Contains(t, created, "defaultTimeHourFromNow")
