@@ -270,6 +270,16 @@ func Test_CreateWithDefaultMapValue(t *testing.T) {
 	assert.Equal(t, map[string]interface{}{"defaultKey": "defaultValue"}, created["defaultMap"].(map[string]interface{}))
 }
 
+func Test_CreateWithDefaultNilValue(t *testing.T) {
+
+	t.Parallel()
+
+	created, err := invokeApiAsRandomUser(t, "POST", "/notes", wst.M{}, wst.M{"Content-Type": "application/json"})
+	assert.Nil(t, err)
+	assert.Contains(t, created, "defaultNull")
+	assert.Nil(t, created["defaultNull"])
+}
+
 func Test_CreateWithDefaultTimeValue(t *testing.T) {
 
 	t.Parallel()

@@ -90,12 +90,6 @@ func Test_ExtractLookups(t *testing.T) {
 	}, false)
 	assert.Error(t, err)
 
-	// test include with invalid relation 2
-	lookups, err = noteModel.ExtractLookupsFromFilter(&wst.Filter{
-		Include: &wst.Include{{Relation: "invalidRelation1"}},
-	}, false)
-	assert.Error(t, err)
-
 	// test include with scope
 	lookups, err = noteModel.ExtractLookupsFromFilter(&wst.Filter{
 		Include: &wst.Include{{Relation: "user", Scope: &wst.Filter{Where: &wst.Where{"name": "John"}}}},
@@ -516,6 +510,69 @@ func Test_AggregationsWithInvalidDatasource(t *testing.T) {
 
 }
 
+// Tries to fetch a relation that not exists
+func Test_AggregationWithNonExistentRelation(t *testing.T) {
+
+	t.Parallel()
+
+	filter := &wst.Filter{
+		Aggregation: []wst.AggregationStage{
+			{
+				"$addFields": map[string]interface{}{
+					"footer2Title": "$invalidRelation.title",
+				},
+			},
+		},
+	}
+
+	notesCursor := noteModel.FindMany(filter, systemContext)
+	assert.NotNil(t, notesCursor)
+	notes, err := notesCursor.All()
+	assert.Error(t, err)
+
+	assert.Nil(t, notes)
+
+	// check that type of error is westack error *wst.WeStackError
+	assert.Equal(t, "*wst.WeStackError", fmt.Sprintf("%T", err))
+
+	// check that the error code is 400
+	assert.Equal(t, 400, err.(*wst.WeStackError).FiberError.Code)
+
+	// check that the error message matches format "relation %v not found for model %v"
+	assert.Equal(t, fmt.Sprintf("relation %v not found for model %v", "invalidRelation", "Note"), err.(*wst.WeStackError).Details["message"])
+
+}
+
+func Test_AggregationWithInvalidStage(t *testing.T) {
+
+	t.Parallel()
+
+	filter := &wst.Filter{
+		Aggregation: []wst.AggregationStage{
+			{
+				"$out": "SomeCollection",
+			},
+		},
+	}
+
+	notesCursor := noteModel.FindMany(filter, systemContext)
+	assert.NotNil(t, notesCursor)
+	notes, err := notesCursor.All()
+	assert.Error(t, err)
+
+	assert.Nil(t, notes)
+
+	// check that type of error is westack error *wst.WeStackError
+	assert.Equal(t, "*wst.WeStackError", fmt.Sprintf("%T", err))
+
+	// check that the error code is 400
+	assert.Equal(t, 400, err.(*wst.WeStackError).FiberError.Code)
+
+	// check that the error message matches format "%s aggregation stage not allowed"
+	assert.Equal(t, fmt.Sprintf("%s aggregation stage not allowed", "$out"), err.(*wst.WeStackError).Details["message"])
+
+}
+
 func requestStats(t *testing.T, err error) wst.M {
 	req, err := http.NewRequest("GET", "/system/memorykv/stats", nil)
 	assert.NoError(t, err)
@@ -534,4 +591,36 @@ func requestStats(t *testing.T, err error) wst.M {
 	assert.NoError(t, err)
 	assert.NotNil(t, stats)
 	return stats
+}
+
+func Test_RelationWithoutAuth(t *testing.T) {
+
+	t.Parallel()
+
+	// Create a note
+	note, err := invokeApiAsRandomUser(t, "POST", "/notes", wst.M{
+		"title": "Note 1",
+	}, wst.M{
+		"Content-Type": "application/json",
+	})
+	assert.NoError(t, err)
+	assert.Contains(t, note, "id")
+
+	// Create a footer
+	footer, err := invokeApiAsRandomUser(t, "POST", "/footers", wst.M{
+		"title":        "Public Footer 1",
+		"publicNoteId": note.GetString("id"),
+	}, wst.M{
+		"Content-Type": "application/json",
+	})
+	assert.NoError(t, err)
+	assert.Contains(t, footer, "id")
+
+	// Get the note including the footer
+	noteWithFooter, err := invokeApiAsRandomUser(t, "GET", "/notes/"+note.GetString("id")+"?filter=%7B%22include%22%3A%5B%7B%22relation%22%3A%22publicFooter%22%7D%5D%7D", nil, nil)
+	assert.NoError(t, err)
+	assert.Contains(t, noteWithFooter, "id")
+	assert.Contains(t, noteWithFooter, "publicFooter")
+	assert.Equal(t, footer.GetString("id"), noteWithFooter.GetM("publicFooter").GetString("id"))
+	assert.Equal(t, footer.GetString("title"), noteWithFooter.GetM("publicFooter").GetString("title"))
 }

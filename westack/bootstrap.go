@@ -29,6 +29,8 @@ type UpserRequestBody struct {
 	Roles []string `json:"roles"`
 }
 
+var ValidEmailRegex = regexp.MustCompile(`^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$`)
+
 func isAllowedForProtectedFields(roles []model.BearerRole) bool {
 	for i := 0; i < len(roles); i++ {
 		if roles[i].Name == "admin" || roles[i].Name == "__protectedFieldsPrivileged" {
@@ -315,6 +317,15 @@ func (app *WeStack) setupModel(loadedModel *model.Model, dataSource *datasource.
 
 				if config.Base == "User" {
 					username := (*data)["username"]
+					email := (*data)["email"]
+					if (username == nil || strings.TrimSpace(username.(string)) == "") && (email == nil || strings.TrimSpace(email.(string)) == "") {
+						return wst.CreateError(fiber.ErrBadRequest, "EMAIL_PRESENCE", fiber.Map{"message": "Either username or email is required", "codes": wst.M{"email": []string{"presence"}}}, "ValidationError")
+					}
+
+					if email != nil && !ValidEmailRegex.MatchString(email.(string)) {
+						return wst.CreateError(fiber.ErrBadRequest, "EMAIL_FORMAT", fiber.Map{"message": "Invalid email format", "codes": wst.M{"email": []string{"format"}}}, "ValidationError")
+					}
+
 					if username != nil && strings.TrimSpace(username.(string)) != "" {
 						filter := wst.Filter{Where: &wst.Where{"username": username}}
 						existent, err2 := loadedModel.FindOne(&filter, ctx)
@@ -326,13 +337,7 @@ func (app *WeStack) setupModel(loadedModel *model.Model, dataSource *datasource.
 						}
 					}
 
-					// TODO: Jhon Validate Email
-					if username == nil || strings.TrimSpace(username.(string)) == "" {
-						email := (*data)["email"]
-						if email == nil || strings.TrimSpace(email.(string)) == "" {
-							// TODO: Validate email
-							return wst.CreateError(fiber.ErrBadRequest, "EMAIL_PRESENCE", fiber.Map{"message": "Invalid email", "codes": wst.M{"email": []string{"presence"}}}, "ValidationError")
-						}
+					if email != nil && strings.TrimSpace(email.(string)) != "" {
 						filter := wst.Filter{Where: &wst.Where{"email": email}}
 						existent, err2 := loadedModel.FindOne(&filter, ctx)
 						if err2 != nil {
@@ -346,7 +351,7 @@ func (app *WeStack) setupModel(loadedModel *model.Model, dataSource *datasource.
 					if (*data)["password"] == nil || strings.TrimSpace((*data)["password"].(string)) == "" {
 						return wst.CreateError(fiber.ErrBadRequest, "PASSWORD_BLANK", fiber.Map{"message": "Invalid password"}, "ValidationError")
 					}
-					hashed, err := bcrypt.GenerateFromPassword([]byte((*data)["password"].(string)), 10)
+					hashed, err := bcrypt.GenerateFromPassword([]byte(fmt.Sprintf("%s%s", string(loadedModel.App.JwtSecretKey), (*data)["password"].(string))), 10)
 					if err != nil {
 						return err
 					}
@@ -361,7 +366,7 @@ func (app *WeStack) setupModel(loadedModel *model.Model, dataSource *datasource.
 				if config.Base == "User" {
 					if (*data)["password"] != nil && (*data)["password"] != "" {
 						log.Println("Update User password")
-						hashed, err := bcrypt.GenerateFromPassword([]byte((*data)["password"].(string)), 10)
+						hashed, err := bcrypt.GenerateFromPassword([]byte(fmt.Sprintf("%s%s", string(loadedModel.App.JwtSecretKey), (*data)["password"].(string))), 10)
 						if err != nil {
 							return err
 						}
@@ -412,16 +417,15 @@ func (app *WeStack) setupModel(loadedModel *model.Model, dataSource *datasource.
 
 		deleteByIdHandler := func(ctx *model.EventContext) error {
 			deleteResult, err := loadedModel.DeleteById(ctx.ModelID)
-			if err != nil {
-				return err
+			if err == nil {
+				deletedCount := deleteResult.DeletedCount
+				if deletedCount != 1 {
+					return wst.CreateError(fiber.ErrBadRequest, "BAD_REQUEST", fiber.Map{"message": fmt.Sprintf("Deleted %v instances for %v", deletedCount, ctx.ModelID)}, "Error")
+				}
+				ctx.StatusCode = fiber.StatusNoContent
+				ctx.Result = ""
 			}
-			deletedCount := deleteResult.DeletedCount
-			if deletedCount != 1 {
-				return wst.CreateError(fiber.ErrBadRequest, "BAD_REQUEST", fiber.Map{"message": fmt.Sprintf("Deleted %v instances for %v", deletedCount, ctx.ModelID)}, "Error")
-			}
-			ctx.StatusCode = fiber.StatusNoContent
-			ctx.Result = ""
-			return nil
+			return err
 		}
 		loadedModel.On("instance_delete", deleteByIdHandler)
 
@@ -429,16 +433,14 @@ func (app *WeStack) setupModel(loadedModel *model.Model, dataSource *datasource.
 			upsertUserRolesHandler := func(ctx *model.EventContext) error {
 				var body UpserRequestBody
 				err := ctx.Ctx.BodyParser(&body)
-				if err != nil {
-					return err
+				if err == nil {
+					err = UpsertUserRoles(app, ctx.ModelID, body.Roles, ctx)
+					if err == nil {
+						ctx.StatusCode = fiber.StatusOK
+						ctx.Result = wst.M{"result": "OK"}
+					}
 				}
-				err = UpsertUserRoles(app, ctx.ModelID, body.Roles, ctx)
-				if err != nil {
-					return err
-				}
-				ctx.StatusCode = fiber.StatusOK
-				ctx.Result = wst.M{"result": "OK"}
-				return nil
+				return err
 			}
 			loadedModel.On("user_upsertRoles", upsertUserRolesHandler)
 		}
@@ -613,10 +615,7 @@ func fixRelations(loadedModel *model.Model) error {
 		relatedLoadedModel := (*loadedModel.GetModelRegistry())[relatedModelName]
 
 		if relatedLoadedModel == nil {
-			log.Println()
-			log.Printf("WARNING: related model %v not found for relation %v.%v", relatedModelName, loadedModel.Name, relationName)
-			log.Println()
-			continue
+			return fmt.Errorf("related model %v not found for relation %v.%v", relatedModelName, loadedModel.Name, relationName)
 		}
 
 		if relation.PrimaryKey == nil {

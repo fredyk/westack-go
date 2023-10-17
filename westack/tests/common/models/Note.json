@@ -33,6 +33,10 @@
         "defaultKey": "defaultValue"
       }
     },
+    "defaultNull": {
+      "type": "string",
+      "default": "null"
+    },
     "defaultTimeNow": {
       "type": "date",
       "default": "$now"
@@ -55,10 +59,6 @@
       "type": "hasMany",
       "model": "NoteEntry"
     },
-    "invalidRelation1": {
-      "type": "belongsTo",
-      "model": "InvalidModel"
-    },
     "footer1": {
       "type": "hasOne",
       "model": "Footer"
@@ -68,6 +68,14 @@
       "model": "Footer",
       "foreignKey": "footerId",
       "primaryKey": "_id"
+    },
+    "publicFooter": {
+      "type": "hasOne",
+      "model": "Footer",
+      "foreignKey": "publicNoteId",
+      "options": {
+        "skipAuth": true
+      }
     }
   },
   "hidden": [],
@@ -78,7 +86,9 @@
       "$owner,*,write,allow",
       "$owner,*,__get__user,allow",
       "$owner,*,__get__footer1,allow",
-      "$owner,*,__get__footer2,allow"
+      "$owner,*,__get__footer2,allow",
+      "$owner,*,__get__publicFooter,allow",
+      "$owner,*,__get__entries,allow"
     ]
   },
   "cache": {

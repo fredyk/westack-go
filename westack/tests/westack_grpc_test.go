@@ -779,6 +779,14 @@ func TestMain(m *testing.M) {
 		log.Fatalf("failed to login user: %v", err)
 	}
 
+	adminUserToken, err = loginUser(os.Getenv("WST_ADMIN_USERNAME"), os.Getenv("WST_ADMIN_PWD"), t)
+	if err != nil {
+		log.Fatalf("failed to login admin user: %v", err)
+	}
+	if adminUserToken.GetString("id") == "" {
+		log.Fatalf("failed to login admin user: %v", err)
+	}
+
 	go func() {
 		err := server.Start()
 		if err != nil {

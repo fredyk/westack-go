@@ -217,11 +217,8 @@ func (loadedModel *Model) Build(data wst.M, sameLevelCache *buildCache, currentC
 				continue
 			}
 			rawRelatedData := data[relationName]
-			relatedModel, err := loadedModel.App.FindModel(relationConfig.Model)
-			if err != nil {
-				fmt.Printf("ERROR: Model.Build() --> %v\n", err)
-				return Instance{}, nil
-			}
+			var err error
+			relatedModel, _ := loadedModel.App.FindModel(relationConfig.Model)
 			if relatedModel != nil {
 				switch relationConfig.Type {
 				case "belongsTo", "hasOne":

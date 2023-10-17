@@ -440,3 +440,209 @@ func Test_UserUpdatesNote(t *testing.T) {
 	assert.Equal(t, fiber.StatusUnauthorized, updatedNote.GetM("error").GetInt("statusCode"))
 
 }
+
+func Test_CreateUserTwiceByUsername(t *testing.T) {
+
+	t.Parallel()
+
+	user := createUser(t, wst.M{
+		"username": fmt.Sprintf("user-%d", createRandomInt()),
+		"password": "abcd1234.",
+	})
+	assert.NotNil(t, user)
+	assert.NotEmpty(t, user.GetString("id"))
+
+	user2, err := invokeApiJsonM(t, "POST", "/users", wst.M{
+		"username": user.GetString("username"),
+		"password": "abcd1234.",
+	}, wst.M{
+		"Content-Type": "application/json",
+	})
+	assert.NoError(t, err)
+	assert.NotNil(t, user2)
+	assert.Equal(t, "USERNAME_UNIQUENESS", user2.GetM("error").GetString("code"))
+
+}
+
+func Test_CreateUserTwiceByEmail(t *testing.T) {
+
+	t.Parallel()
+
+	user := createUser(t, wst.M{
+		"email":    fmt.Sprintf("user-%d@example.com", createRandomInt()),
+		"password": "abcd1234.",
+	})
+	assert.NotNil(t, user)
+	assert.NotEmpty(t, user.GetString("id"))
+
+	user2, err := invokeApiJsonM(t, "POST", "/users", wst.M{
+		"email":    user.GetString("email"),
+		"password": "abcd1234.",
+	}, wst.M{
+		"Content-Type": "application/json",
+	})
+	assert.NoError(t, err)
+	assert.NotNil(t, user2)
+	assert.Equal(t, "EMAIL_UNIQUENESS", user2.GetM("error").GetString("code"))
+
+}
+
+func Test_CreateUserInvalidEmail(t *testing.T) {
+
+	t.Parallel()
+
+	user, err := invokeApiJsonM(t, "POST", "/users", wst.M{
+		"email":    "invalidEmail",
+		"password": "abcd1234.",
+	}, wst.M{
+		"Content-Type": "application/json",
+	})
+	assert.NoError(t, err)
+	assert.NotNil(t, user)
+	assert.Equal(t, "EMAIL_FORMAT", user.GetM("error").GetString("code"))
+
+}
+
+func Test_CreateUserPasswordBlank(t *testing.T) {
+
+	t.Parallel()
+
+	user, err := invokeApiJsonM(t, "POST", "/users", wst.M{
+		"username": fmt.Sprintf("user-%d", createRandomInt()),
+		"password": "",
+	}, wst.M{
+		"Content-Type": "application/json",
+	})
+	assert.NoError(t, err)
+	assert.NotNil(t, user)
+	assert.Equal(t, "PASSWORD_BLANK", user.GetM("error").GetString("code"))
+
+}
+
+// First creates a user
+// Then the user changes the password
+func Test_UpdateUserPassword(t *testing.T) {
+
+	t.Parallel()
+
+	user := createUser(t, wst.M{
+		"username": fmt.Sprintf("user-%d", createRandomInt()),
+		"password": "abcd1234.",
+	})
+	assert.NotNil(t, user)
+	assert.NotEmpty(t, user.GetString("id"))
+
+	token, err := loginUser(user.GetString("username"), "abcd1234.", t)
+	assert.NoError(t, err)
+	assert.Contains(t, token, "id")
+
+	user2, err := invokeApiJsonM(t, "PATCH", "/users/"+user.GetString("id"), wst.M{
+		"password": "efgh5678,",
+	}, wst.M{
+		"Content-Type":  "application/json",
+		"Authorization": fmt.Sprintf("Bearer %v", token.GetString("id")),
+	})
+	assert.NoError(t, err)
+	assert.NotNil(t, user2)
+	assert.Equal(t, user.GetString("id"), user2.GetString("id"))
+
+	token2, err := loginUser(user.GetString("username"), "efgh5678,", t)
+	assert.NoError(t, err)
+	assert.Contains(t, token2, "id")
+
+	// Find self
+	user3, err := invokeApiJsonM(t, "GET", "/users/me", nil, wst.M{
+		"Authorization": fmt.Sprintf("Bearer %v", token2.GetString("id")),
+	})
+	assert.NoError(t, err)
+	assert.Equal(t, user.GetString("id"), user3.GetString("id"))
+
+}
+
+// Tries to delete note with id 000000000000000000000000
+func Test_DeleteNonExistentNote(t *testing.T) {
+
+	t.Parallel()
+
+	// Delete note
+	result, err := invokeApiJsonM(t, "DELETE", "/notes/000000000000000000000000", nil, wst.M{
+		"Authorization": fmt.Sprintf("Bearer %s", adminUserToken.GetString("id")),
+	})
+	assert.NoError(t, err)
+	assert.Equal(t, fiber.StatusNotFound, result.GetM("error").GetInt("statusCode"))
+
+}
+
+// First creates a note
+// Then the user deletes the note twice. First time it should succeed, second time it should fail.
+
+func Test_DeleteNoteTwice(t *testing.T) {
+
+	t.Parallel()
+
+	// Create a note
+	note, err := invokeApiAsRandomUser(t, "POST", "/notes", wst.M{
+		"title":  "Test Note",
+		"userId": randomUser.GetString("id"),
+	}, wst.M{
+		"Content-Type": "application/json",
+	})
+	assert.NoError(t, err)
+	assert.NotNil(t, note)
+	assert.NotEmptyf(t, note.GetString("id"), "Note ID is nil: %v", note)
+	assert.Equal(t, "Test Note", note.GetString("title"))
+
+	// Delete note
+	result := invokeApiFullResponse(t, "DELETE", "/notes/"+note.GetString("id"), nil, wst.M{
+		"Authorization": fmt.Sprintf("Bearer %s", randomUserToken.GetString("id")),
+	})
+	assert.Equal(t, fiber.StatusNoContent, result.StatusCode)
+
+	// Delete note again
+	result2, err := invokeApiJsonM(t, "DELETE", "/notes/"+note.GetString("id"), nil, wst.M{
+		"Authorization": fmt.Sprintf("Bearer %s", randomUserToken.GetString("id")),
+	})
+	assert.NoError(t, err)
+	assert.Equal(t, fiber.StatusBadRequest, result2.GetM("error").GetInt("statusCode"))
+	assert.Equal(t, fmt.Sprintf(`Deleted 0 instances for ObjectID("%v")`, note.GetString("id")), result2.GetM("error").GetM("details").GetString("message"))
+
+}
+
+func Test_FindWithNestedRelations(t *testing.T) {
+
+	t.Parallel()
+
+	// Create a note
+	note, err := invokeApiAsRandomUser(t, "POST", "/notes", wst.M{
+		"title":  "Test Note",
+		"userId": randomUser.GetString("id"),
+	}, wst.M{
+		"Content-Type": "application/json",
+	})
+	assert.NoError(t, err)
+	assert.NotNil(t, note)
+	assert.NotEmptyf(t, note.GetString("id"), "Note ID is nil: %v", note)
+	assert.Equal(t, "Test Note", note.GetString("title"))
+
+	// Create a footer
+	footer, err := invokeApiAsRandomUser(t, "POST", "/footers", wst.M{
+		"noteId": note.GetString("id"),
+		"text":   "Test Footer",
+	}, wst.M{
+		"Content-Type": "application/json",
+	})
+	assert.NoError(t, err)
+	assert.NotNil(t, footer)
+	assert.NotEmptyf(t, footer.GetString("id"), "Footer ID is nil: %v", footer)
+	assert.Equal(t, note.GetString("id"), footer.GetString("noteId"))
+
+	// Find note with nested relations
+	note2, err := invokeApiJsonM(t, "GET", "/notes/"+note.GetString("id")+`?filter={"include":[{"relation":"footer1","scope":{"include":[{"relation":"note"}]}}]}`, nil, wst.M{
+		"Authorization": fmt.Sprintf("Bearer %s", randomUserToken.GetString("id")),
+	})
+	assert.NoError(t, err)
+	assert.Equal(t, note.GetString("id"), note2.GetString("id"))
+	assert.Equal(t, footer.GetString("id"), note2.GetM("footer1").GetString("id"))
+	assert.Equal(t, note.GetString("id"), note2.GetM("footer1").GetM("note").GetString("id"))
+
+}
