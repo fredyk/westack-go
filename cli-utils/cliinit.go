@@ -55,12 +55,17 @@ var DefaultDatasources = map[string]model.DataSourceConfig{
 	},
 }
 
+type AppCasbinConfigModels struct {
+	DumpDirectory string `json:"dumpDirectory"`
+}
+
 type AppCasbinConfigPolicies struct {
 	OutputDirectory string `json:"outputDirectory"`
 }
 
 type AppCasbinConfig struct {
 	DumpModels bool                    `json:"dumpModels"`
+	Models     AppCasbinConfigModels   `json:"models"`
 	Policies   AppCasbinConfigPolicies `json:"policies"`
 }
 
@@ -83,6 +88,9 @@ var DefaultConfig = AppConfig{
 	Port:        8023,
 	Casbin: AppCasbinConfig{
 		DumpModels: false,
+		Models: AppCasbinConfigModels{
+			DumpDirectory: "./data",
+		},
 		Policies: AppCasbinConfigPolicies{
 			OutputDirectory: "./common/models",
 		},

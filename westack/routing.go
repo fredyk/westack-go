@@ -47,7 +47,7 @@ func (app *WeStack) loadModelsFixedRoutes() error {
 		e.EnableAutoSave(true)
 		e.AddFunction("isOwner", casbinOwnerFn(loadedModel))
 
-		err = addDefaultCasbinRoles(err, e)
+		err = addDefaultCasbinRoles(app, err, e)
 		if err != nil {
 			return err
 		}
@@ -68,7 +68,11 @@ func (app *WeStack) loadModelsFixedRoutes() error {
 
 		if app.Viper.GetBool("casbin.dumpModels") {
 			text := loadedModel.CasbinModel.ToText()
-			err = os.WriteFile(fmt.Sprintf("common/models/%v.casbin.dump.conf", loadedModel.Name), []byte(text), os.ModePerm)
+			modelsDumpDir := "common/models"
+			if v := app.Viper.GetString("casbin.models.dumpDirectory"); v != "" {
+				modelsDumpDir = v
+			}
+			err = os.WriteFile(fmt.Sprintf("%v/%v.casbin.dump.conf", modelsDumpDir, loadedModel.Name), []byte(text), os.ModePerm)
 			if err != nil {
 				return fmt.Errorf("could not write casbin dump: %v", err)
 			}
@@ -321,40 +325,38 @@ func mountBaseModelFixedRoutes(app *WeStack, loadedModel *model.Model) {
 	})
 }
 
-func addDefaultCasbinRoles(err error, e *casbin.Enforcer) error {
+func addDefaultCasbinRoles(app *WeStack, err error, e *casbin.Enforcer) error {
 	_, err = e.AddRoleForUser("findMany", replaceVarNames("read"))
-	if err != nil {
-		return err
+	if app.debug {
+		app.logger.Printf("[DEBUG] Added role findMany for user %v, err: %v\n", replaceVarNames("read"), err)
 	}
 	_, err = e.AddRoleForUser("findById", replaceVarNames("read"))
-	if err != nil {
-		return err
+	if app.debug {
+		app.logger.Printf("[DEBUG] Added role findById for user %v, err: %v\n", replaceVarNames("read"), err)
 	}
 	_, err = e.AddRoleForUser("count", replaceVarNames("read"))
-	if err != nil {
-		return err
+	if app.debug {
+		app.logger.Printf("[DEBUG] Added role count for user %v, err: %v\n", replaceVarNames("read"), err)
 	}
-
 	_, err = e.AddRoleForUser("create", replaceVarNames("write"))
-	if err != nil {
-		return err
+	if app.debug {
+		app.logger.Printf("[DEBUG] Added role create for user %v, err: %v\n", replaceVarNames("write"), err)
 	}
 	_, err = e.AddRoleForUser("instance_updateAttributes", replaceVarNames("write"))
-	if err != nil {
-		return err
+	if app.debug {
+		app.logger.Printf("[DEBUG] Added role instance_updateAttributes for user %v, err: %v\n", replaceVarNames("write"), err)
 	}
 	_, err = e.AddRoleForUser("instance_delete", replaceVarNames("write"))
-	if err != nil {
-		return err
+	if app.debug {
+		app.logger.Printf("[DEBUG] Added role instance_delete for user %v, err: %v\n", replaceVarNames("write"), err)
 	}
-
 	_, err = e.AddRoleForUser("read", replaceVarNames("*"))
-	if err != nil {
-		return err
+	if app.debug {
+		app.logger.Printf("[DEBUG] Added role read for user %v, err: %v\n", replaceVarNames("*"), err)
 	}
 	_, err = e.AddRoleForUser("write", replaceVarNames("*"))
-	if err != nil {
-		return err
+	if app.debug {
+		app.logger.Printf("[DEBUG] Added role write for user %v, err: %v\n", replaceVarNames("*"), err)
 	}
 	return nil
 }
@@ -375,9 +377,12 @@ func (app *WeStack) loadModelsDynamicRoutes() {
 		loadedModel.RemoteMethod(func(eventContext *model.EventContext) error {
 
 			id := eventContext.Ctx.Params("id")
-			if eventContext.ModelID == nil {
-				eventContext.ModelID = id
-			} else if asSt, asStOk := eventContext.ModelID.(string); asStOk && len(strings.TrimSpace(asSt)) == 0 {
+			var asSt string
+			var asStOk bool
+			if eventContext.ModelID != nil {
+				asSt, asStOk = eventContext.ModelID.(string)
+			}
+			if eventContext.ModelID == nil || asStOk && len(strings.TrimSpace(asSt)) == 0 {
 				eventContext.ModelID = id
 			}
 
