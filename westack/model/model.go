@@ -217,11 +217,8 @@ func (loadedModel *Model) Build(data wst.M, sameLevelCache *buildCache, currentC
 				continue
 			}
 			rawRelatedData := data[relationName]
-			relatedModel, err := loadedModel.App.FindModel(relationConfig.Model)
-			if err != nil {
-				fmt.Printf("ERROR: Model.Build() --> %v\n", err)
-				return Instance{}, nil
-			}
+			var err error
+			relatedModel, _ := loadedModel.App.FindModel(relationConfig.Model)
 			if relatedModel != nil {
 				switch relationConfig.Type {
 				case "belongsTo", "hasOne":
@@ -229,7 +226,7 @@ func (loadedModel *Model) Build(data wst.M, sameLevelCache *buildCache, currentC
 					// If so, check app.Viper.GetBool("strictSingleRelatedDocumentCheck") and if true, return an error
 					// If not, print a warning
 					strict := loadedModel.App.Viper.GetBool("strictSingleRelatedDocumentCheck")
-					if v, ok := sameLevelCache.singleRelatedDocumentsById[modelInstance.Id.(primitive.ObjectID).Hex()]; ok {
+					if v, ok := sameLevelCache.singleRelatedDocumentsById[fmt.Sprintf("%s:%s", relationName, modelInstance.Id.(primitive.ObjectID).Hex())]; ok {
 						if strict {
 							fmt.Printf("ERROR: Model.Build() --> Found multiple single related documents at %v.%v with the same parent %v.Id=%v\n", loadedModel.Name, relationName, loadedModel.Name, v.Id.(primitive.ObjectID).Hex())
 							return Instance{}, fmt.Errorf("found multiple single related documents at %v.%v with the same parent %v.Id=%v", loadedModel.Name, relationName, loadedModel.Name, v.Id.(primitive.ObjectID).Hex())
@@ -237,7 +234,7 @@ func (loadedModel *Model) Build(data wst.M, sameLevelCache *buildCache, currentC
 							fmt.Printf("WARNING: Model.Build() --> Found multiple single related documents at %v.%v with the same parent %v.Id=%v\n", loadedModel.Name, relationName, loadedModel.Name, v.Id.(primitive.ObjectID).Hex())
 						}
 					} else {
-						sameLevelCache.singleRelatedDocumentsById[modelInstance.Id.(primitive.ObjectID).Hex()] = modelInstance
+						sameLevelCache.singleRelatedDocumentsById[fmt.Sprintf("%s:%s", relationName, modelInstance.Id.(primitive.ObjectID).Hex())] = modelInstance
 					}
 					var relatedInstance Instance
 					if asInstance, asInstanceOk := rawRelatedData.(Instance); asInstanceOk {
@@ -336,7 +333,7 @@ func (loadedModel *Model) FindMany(filterMap *wst.Filter, baseContext *EventCont
 			case wst.A:
 				var result InstanceA
 				sameLevelCache := NewBuildCache()
-				result, err = loadedModel.buildInstanceAFromA(currentOperationContext.Result.(wst.A), sameLevelCache, targetBaseContext)
+				result, err = loadedModel.buildInstanceAFromA(currentOperationContext.Result.(wst.A), sameLevelCache, currentOperationContext)
 				if err != nil {
 					return newErrorCursor(err)
 				}
@@ -864,7 +861,7 @@ func (loadedModel *Model) dispatchFindManyResults(cursor *ChannelCursor, dsCurso
 		}
 
 		documentsToCacheByKey := make(map[string]wst.A)
-		for dsCursor.Next(context.Background()) {
+		for dsCursor.Next(loadedModel.Datasource.Context) {
 			inst, err := loadedModel.dispatchFindManySingleDocument(dsCursor, targetInclude, currentContext, sameLevelCache, filterMap, disabledCache, safeCacheDs, documentsToCacheByKey)
 			if err != nil {
 				cursor.Error(err)

@@ -156,51 +156,31 @@ func ReplaceObjectIds(data interface{}) (interface{}, error) {
 		}
 		if newValue == nil {
 			switch value.(type) {
-			case string, wst.Where, *wst.Where, wst.M, *wst.M, int, int32, int64, float32, float64, bool, primitive.ObjectID, *primitive.ObjectID, time.Time, primitive.DateTime:
+			case string, wst.Where, *wst.Where, wst.M, *wst.M, map[string]interface{}, int, int32, int64, float32, float64, bool, primitive.ObjectID, *primitive.ObjectID, time.Time, primitive.DateTime:
 				newValue, err = ReplaceObjectIds(value)
-				if err != nil {
-					return nil, err
-				}
-				break
 			default:
-				asMap, asMapOk := value.(wst.M)
-				if asMapOk {
-					newValue, err = ReplaceObjectIds(asMap)
-					if err != nil {
-						return nil, err
+				asList, asListOk := value.([]interface{})
+				if asListOk {
+					for i, asListItem := range asList {
+						asList[i], err = ReplaceObjectIds(asListItem)
+						if err != nil {
+							break
+						}
 					}
 				} else {
-					asList, asListOk := value.([]interface{})
-					if asListOk {
-						for i, asListItem := range asList {
-							asList[i], err = ReplaceObjectIds(asListItem)
-							if err != nil {
-								return nil, err
-							}
-						}
-					} else {
-						_, asStringListOk := value.([]string)
-						if !asStringListOk {
-							asMap, asMapOk := value.(map[string]interface{})
-							if asMapOk {
-								newValue, err = ReplaceObjectIds(asMap)
+					_, asStringListOk := value.([]string)
+					if !asStringListOk {
+						asList, asMListOk := value.([]wst.M)
+						if asMListOk {
+							for i, asListItem := range asList {
+								v, err := ReplaceObjectIds(asListItem)
 								if err != nil {
-									return nil, err
+									break
 								}
-							} else {
-								asList, asMListOk := value.([]wst.M)
-								if asMListOk {
-									for i, asListItem := range asList {
-										v, err := ReplaceObjectIds(asListItem)
-										if err != nil {
-											return nil, err
-										}
-										asList[i] = v.(wst.M)
-									}
-								} else {
-									log.Println(fmt.Sprintf("WARNING: What to do with %v (%s)?", value, value))
-								}
+								asList[i] = v.(wst.M)
 							}
+						} else {
+							log.Println(fmt.Sprintf("WARNING: What to do with %v (%s)?", value, value))
 						}
 					}
 				}
@@ -220,8 +200,9 @@ func ReplaceObjectIds(data interface{}) (interface{}, error) {
 				log.Println(fmt.Sprintf("WARNING: invalid input ReplaceObjectIds() <- %s", data))
 				break
 			}
-		} else if err != nil {
-			log.Println("WARNING: ", err)
+		}
+		if err != nil {
+			log.Println("WARNING: ReplaceObjectIds() err:", err)
 		}
 	}
 	return data, nil

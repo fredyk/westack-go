@@ -101,7 +101,9 @@ func Test_FixedBeforeLoadMock124401(t *testing.T) {
 
 	t.Parallel()
 
-	resp := invokeApiFullResponse(t, "GET", "/notes?mockResultTest124401=true", nil, nil)
+	resp := invokeApiFullResponse(t, "GET", "/notes?mockResultTest124401=true", nil, wst.M{
+		"Authorization": fmt.Sprintf("Bearer %s", randomUserToken.GetString("id")),
+	})
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 	responseBody, err := parseResultAsJsonArray(resp)
 	assert.NoError(t, err)
@@ -115,7 +117,9 @@ func Test_FixedBeforeLoadMock124402(t *testing.T) {
 
 	t.Parallel()
 
-	resp := invokeApiFullResponse(t, "GET", "/notes?mockResultTest124402=true", nil, nil)
+	resp := invokeApiFullResponse(t, "GET", "/notes?mockResultTest124402=true", nil, wst.M{
+		"Authorization": fmt.Sprintf("Bearer %s", randomUserToken.GetString("id")),
+	})
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 	responseBody, err := parseResultAsJsonArray(resp)
 	assert.NoError(t, err)
@@ -129,7 +133,9 @@ func Test_FixedBeforeLoadMock124403(t *testing.T) {
 
 	t.Parallel()
 
-	resp := invokeApiFullResponse(t, "GET", "/notes?mockResultTest124403=true", nil, nil)
+	resp := invokeApiFullResponse(t, "GET", "/notes?mockResultTest124403=true", nil, wst.M{
+		"Authorization": fmt.Sprintf("Bearer %s", randomUserToken.GetString("id")),
+	})
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 	responseBody, err := parseResultAsJsonArray(resp)
 	assert.NoError(t, err)
@@ -143,7 +149,9 @@ func Test_FixedBeforeLoadMock124404(t *testing.T) {
 
 	t.Parallel()
 
-	resp := invokeApiFullResponse(t, "GET", "/notes?mockResultTest124404=true", nil, nil)
+	resp := invokeApiFullResponse(t, "GET", "/notes?mockResultTest124404=true", nil, wst.M{
+		"Authorization": fmt.Sprintf("Bearer %s", randomUserToken.GetString("id")),
+	})
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 	responseBody, err := parseResultAsJsonArray(resp)
 	assert.NoError(t, err)
@@ -167,7 +175,9 @@ func Test_AfterLoadShouldReturnEmpty(t *testing.T) {
 		assert.NotEmpty(t, note.GetString("id"))
 	}
 
-	resp, err := invokeApiJsonM(t, "GET", "/notes?forceError1753=true", nil, nil)
+	resp, err := invokeApiJsonM(t, "GET", "/notes?forceError1753=true", nil, wst.M{
+		"Authorization": fmt.Sprintf("Bearer %s", randomUserToken.GetString("id")),
+	})
 	assert.NoError(t, err)
 	assert.Equal(t, "forced error 1753", resp.GetM("error").GetString("message"))
 	// "after load" cannot handle errors. It skips failed instances.
