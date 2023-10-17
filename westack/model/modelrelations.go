@@ -88,10 +88,7 @@ func (loadedModel *Model) ExtractLookupsFromFilter(filterMap *wst.Filter, disabl
 								} else {
 									// ensure that the relation is in the same datasource
 
-									relatedModel, err := loadedModel.App.FindModel(relation.Model)
-									if err != nil {
-										return nil, err
-									}
+									relatedModel, _ := loadedModel.App.FindModel(relation.Model)
 
 									if relatedModel.(*Model).Datasource.Name != loadedModel.Datasource.Name {
 										return nil, wst.CreateError(fiber.ErrBadRequest,
@@ -129,7 +126,12 @@ func (loadedModel *Model) ExtractLookupsFromFilter(filterMap *wst.Filter, disabl
 				}
 			}
 			if !validStageFound {
-				return nil, fmt.Errorf("%s aggregation stage not allowed", firstKeyFound)
+				//return nil, fmt.Errorf("%s aggregation stage not allowed", firstKeyFound)
+				return nil, wst.CreateError(fiber.ErrBadRequest,
+					"BAD_AGGREGATION_STAGE",
+					fiber.Map{"message": fmt.Sprintf("%s aggregation stage not allowed", firstKeyFound)},
+					"ValidationError",
+				)
 			}
 		}
 	}
@@ -144,7 +146,7 @@ func (loadedModel *Model) ExtractLookupsFromFilter(filterMap *wst.Filter, disabl
 	var targetSkip = filterMap.Skip
 	var targetLimit = filterMap.Limit
 
-	var lookups *wst.A = &wst.A{}
+	var lookups = &wst.A{}
 	for _, aggregationStage := range targetAggregationBeforeLookups {
 		*lookups = append(*lookups, wst.CopyMap(wst.M(aggregationStage)))
 	}
@@ -459,15 +461,6 @@ func (loadedModel *Model) mergeRelated(relationDeepLevel byte, documents *wst.A,
 	parentModel := loadedModel
 	parentRelationName := relationName
 
-	if relatedLoadedModel == nil {
-		log.Println()
-		log.Printf("WARNING: related model %v not found for relation %v.%v", relatedModelName, loadedModel.Name, relationName)
-		log.Println()
-		return nil
-	}
-
-	//if relation.Options.SkipAuth && relationDeepLevel > 1 {
-	// Only skip auth checking for relations above the level 1
 	if relation.Options.SkipAuth {
 		if loadedModel.App.Debug {
 			log.Printf("DEBUG: SkipAuth %v.%v\n", loadedModel.Name, relationName)
@@ -486,7 +479,7 @@ func (loadedModel *Model) mergeRelated(relationDeepLevel byte, documents *wst.A,
 		if err != nil && err != fiber.ErrUnauthorized {
 			return err
 		}
-		if !allowed {
+		if !allowed || err == fiber.ErrUnauthorized {
 			for _, doc := range *documents {
 				delete(doc, relationName)
 			}
@@ -554,12 +547,6 @@ func (loadedModel *Model) mergeRelated(relationDeepLevel byte, documents *wst.A,
 				} else {
 					if loadedModel.App.Debug {
 						log.Printf("Found cache for %v.%v[%v]\n", loadedModel.Name, relationName, documentIdx)
-					}
-				}
-
-				if loadedModel.hasHiddenProperties {
-					for _, relatedInstance := range relatedInstances {
-						relatedInstance.HideProperties()
 					}
 				}
 

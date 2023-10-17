@@ -38,10 +38,7 @@ func (modelInstance *Instance) ToJSON() wst.M {
 	for relationName, relationConfig := range *modelInstance.Model.Config.Relations {
 		if modelInstance.data[relationName] != nil {
 			rawRelatedData := modelInstance.data[relationName]
-			relatedModel, err := modelInstance.Model.App.FindModel(relationConfig.Model)
-			if err != nil {
-				return nil
-			}
+			relatedModel, _ := modelInstance.Model.App.FindModel(relationConfig.Model)
 			if relatedModel != nil {
 				switch {
 				case isSingleRelation(relationConfig.Type):
@@ -90,7 +87,18 @@ func (modelInstance *Instance) GetMany(relationName string) InstanceA {
 func (modelInstance *Instance) HideProperties() {
 	for _, propertyName := range modelInstance.Model.Config.Hidden {
 		delete(modelInstance.data, propertyName)
-		// TODO: Hide in nested
+	}
+	// Hide in nested
+	for relationKey, relationConfig := range *modelInstance.Model.Config.Relations {
+		if relationConfig.Type == "hasMany" || relationConfig.Type == "hasAndBelongsToMany" {
+			for _, instance := range modelInstance.GetMany(relationKey) {
+				instance.HideProperties()
+			}
+		} else if relationConfig.Type == "hasOne" || relationConfig.Type == "belongsTo" {
+			if instance := modelInstance.GetOne(relationKey); instance != nil {
+				instance.HideProperties()
+			}
+		}
 	}
 }
 

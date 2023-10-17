@@ -60,7 +60,7 @@ func (chunkGenerator *InstanceAChunkGenerator) GenerateNextChunk() (err error) {
 		nextInstance.HideProperties()
 		asM := nextInstance.ToJSON()
 		var asBytes []byte
-		asBytes, err = easyjson.Marshal(asM)
+		asBytes, err = easyjson.Marshal(&asM)
 		if err != nil {
 			if chunkGenerator.Debug {
 				fmt.Printf("ERROR: ChunkGenerator.GenerateNextChunk() failed to marshal instance %d/%d: %v\n", chunkGenerator.currentChunkIndex, chunkGenerator.totalChunks, err)

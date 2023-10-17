@@ -2,6 +2,7 @@ package model
 
 import (
 	"fmt"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"log"
 	"strings"
 	"sync"
@@ -43,7 +44,14 @@ func (loadedModel *Model) EnforceEx(token *BearerToken, objId string, action str
 
 	} else {
 
-		bearerUserIdSt = fmt.Sprintf("%v", token.User.Id)
+		bearerUserIdSt = ""
+		if v, ok := token.User.Id.(string); ok {
+			bearerUserIdSt = v
+		} else if vv, ok := token.User.Id.(primitive.ObjectID); ok {
+			bearerUserIdSt = vv.Hex()
+		} else {
+			bearerUserIdSt = fmt.Sprintf("%v", token.User.Id)
+		}
 		targetObjId = objId
 
 		var created int64

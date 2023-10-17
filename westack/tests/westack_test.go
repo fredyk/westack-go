@@ -8,6 +8,7 @@ import (
 	"github.com/fredyk/westack-go/westack/datasource"
 	"github.com/fredyk/westack-go/westack/model"
 	"github.com/gofiber/fiber/v2"
+	"github.com/mailru/easyjson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"io"
 	"log"
@@ -29,8 +30,8 @@ func init() {
 		DatasourceOptions: &map[string]*datasource.Options{
 			"db": {
 				MongoDB: &datasource.MongoDBDatasourceOptions{
-					//Registry: FakeMongoDbRegistry(),
-					Monitor: FakeMongoDbMonitor(),
+					Registry: wst.CreateDefaultMongoRegistry(),
+					Monitor:  FakeMongoDbMonitor(),
 					//Timeout:  3,
 				},
 				RetryOnError: true,
@@ -85,7 +86,12 @@ func init() {
 			log.Fatalf("failed to find model: %v", err)
 		}
 		userModel.Observe("before save", func(ctx *model.EventContext) error {
-			fmt.Println("saving user")
+			if !ctx.IsNewInstance && ctx.Data.GetString("testEphemeral") == "ephemeralAttribute1503" {
+				delete(*ctx.Data, "testEphemeral")
+				ctx.BaseContext.UpdateEphemeral(&wst.M{
+					"ephemeralAttribute1503": "ephemeralValue1503",
+				})
+			}
 			return nil
 		})
 
@@ -133,6 +139,10 @@ func init() {
 			log.Fatalf("failed to find model: %v", err)
 		}
 		footerModel, err = app.FindModel("Footer")
+		if err != nil {
+			log.Fatalf("failed to find model: %v", err)
+		}
+		appModel, err = app.FindModel("App")
 		if err != nil {
 			log.Fatalf("failed to find model: %v", err)
 		}
@@ -188,6 +198,15 @@ func init() {
 			if ctx.BaseContext.Remote != nil {
 				if ctx.BaseContext.Query.GetString("forceError1753") == "true" && ctx.Instance.GetString("title") == "Note 3" {
 					return fmt.Errorf("forced error 1753")
+				}
+			}
+			return nil
+		})
+
+		noteModel.Observe("before build", func(ctx *model.EventContext) error {
+			if ctx.BaseContext.Remote != nil {
+				if ctx.BaseContext.Query.GetString("forceError1556") == "true" {
+					return fmt.Errorf("forced error 1556")
 				}
 			}
 			return nil
@@ -331,7 +350,7 @@ func login(t *testing.T, body wst.M) (string, string) {
 	}
 
 	var loginResponse wst.M
-	err = json.Unmarshal(responseBytes, &loginResponse)
+	err = easyjson.Unmarshal(responseBytes, &loginResponse)
 	if err != nil {
 		t.Error(err)
 		return "", ""
@@ -423,7 +442,7 @@ func Test_InitAndServe(t *testing.T) {
 	t.Parallel()
 
 	go func() {
-		westack.InitAndServe(westack.Options{Port: 8021})
+		westack.InitAndServe(westack.Options{Port: 8021, DisablePortEnvVar: true})
 	}()
 
 	time.Sleep(5 * time.Second)
@@ -488,7 +507,7 @@ func Test_InvalidCasbinOutputDirectory2(t *testing.T) {
 	// recover from panic
 	defer func() {
 		if r := recover(); r != nil {
-			assert.Regexp(t, `Error while loading models: could not open policies file Customer: open /lib/Customer.policies.csv: permission denied`, r)
+			assert.Regexp(t, `Error while loading models: could not open policies file App: open /lib/App.policies.csv: permission denied`, r)
 			// mark as ok
 			t.Log("OK")
 		} else {
@@ -497,5 +516,56 @@ func Test_InvalidCasbinOutputDirectory2(t *testing.T) {
 	}()
 
 	app.Boot()
+
+}
+
+func Test_FindModelNonExistent(t *testing.T) {
+
+	t.Parallel()
+
+	_, err := app.FindModel("NonExistent")
+	assert.EqualError(t, err, "model NonExistent not found")
+
+}
+
+func Test_FindDatasourceNonExistent(t *testing.T) {
+
+	t.Parallel()
+
+	_, err := app.FindDatasource("NonExistent")
+	assert.EqualError(t, err, "datasource NonExistent not found")
+
+}
+
+func Test_WeStackStop(t *testing.T) {
+
+	t.Parallel()
+
+	app := westack.New(westack.Options{
+		Port:              8022,
+		DisablePortEnvVar: true,
+	})
+	app.Boot()
+
+	go func() {
+		time.Sleep(3 * time.Second)
+		err := app.Stop()
+		assert.NoError(t, err)
+	}()
+
+	err := app.Start()
+	assert.NoError(t, err)
+	//err = app.Stop()
+	//assert.NoError(t, err)
+
+}
+
+func Test_GetWeStackLoggerPrefix(t *testing.T) {
+
+	t.Parallel()
+
+	logger := app.Logger()
+	logger.SetPrefix("test")
+	assert.Equal(t, "test", logger.Prefix())
 
 }
