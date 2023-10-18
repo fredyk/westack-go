@@ -60,9 +60,6 @@ func (m *M) GetString(path string) string {
 			return vv
 		} else if vv, ok := v.(primitive.ObjectID); ok {
 			return vv.Hex()
-		} else {
-			log.Printf("WARNING: GetString: not a string: %v\n", reflect.TypeOf(v))
-			return ""
 		}
 	} else {
 		source := obtainSourceFromM(m, segments[:len(segments)-1])
@@ -73,6 +70,7 @@ func (m *M) GetString(path string) string {
 			return ""
 		}
 	}
+	return ""
 }
 
 func (m *M) GetInt(path string) int {
@@ -85,7 +83,7 @@ func (m *M) GetInt(path string) int {
 	} else {
 		source := obtainSourceFromM(m, segments[:len(segments)-1])
 		if v, ok := source.(M); ok {
-			return asInt(v[segments[len(segments)-1]])
+			return v.GetInt(segments[len(segments)-1])
 		} else {
 			log.Printf("WARNING: GetInt: not an M: %v\n", reflect.TypeOf(source))
 			return 0

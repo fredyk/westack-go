@@ -78,8 +78,8 @@ func testGRPCCallWithQueryParamsWithQueryParamsTimeout(t *testing.T) {
 	var parsedResp wst.M
 	err = json.Unmarshal(bytes, &parsedResp)
 	assert.NoError(t, err)
-	assert.EqualValues(t, fiber.StatusInternalServerError, parsedResp.GetM("error").GetInt("statusCode"))
-	assert.Equal(t, "context deadline exceeded", parsedResp.GetM("error").GetString("message"))
+	assert.EqualValues(t, fiber.StatusInternalServerError, parsedResp.GetInt("error.statusCode"))
+	assert.Equal(t, "context deadline exceeded", parsedResp.GetString("error.message"))
 
 }
 
