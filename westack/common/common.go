@@ -65,6 +65,19 @@ func (m *M) GetString(path string) string {
 		source := obtainSourceFromM(m, segments[:len(segments)-1])
 		if v, ok := source.(M); ok {
 			return v.GetString(segments[len(segments)-1])
+		} else if v, ok := source.(map[string]interface{}); ok {
+			vv := v[segments[len(segments)-1]]
+			if vv == nil {
+				return ""
+			}
+			if vvv, ok := vv.(string); ok {
+				return vvv
+			} else if vvv, ok := vv.(primitive.ObjectID); ok {
+				return vvv.Hex()
+			} else {
+				log.Printf("WARNING: GetString: not a string: %v\n", reflect.TypeOf(vv))
+				return ""
+			}
 		} else {
 			log.Printf("WARNING: GetString: not an M: %v\n", reflect.TypeOf(source))
 			return ""
