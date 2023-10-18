@@ -31,11 +31,6 @@ import (
 	pb "github.com/fredyk/westack-go/westack/tests/proto"
 )
 
-type InstanceFromTests struct {
-	id    primitive.ObjectID
-	model *model.Model
-}
-
 var server *westack.WeStack
 var userId primitive.ObjectID
 var noteId primitive.ObjectID
@@ -241,7 +236,7 @@ func testGRPCCallWithBodyParamsWithBadBody(t *testing.T) {
 //	}
 //
 //	// test for error
-//	res, err := client.Get("http://localhost:8020/test-grpc-get-invalid?foo=1")
+//	res, err := client.GetAt("http://localhost:8020/test-grpc-get-invalid?foo=1")
 //	if err != nil {
 //		t.Errorf("GRPCCallWithQueryParams Error: %s", err)
 //		return

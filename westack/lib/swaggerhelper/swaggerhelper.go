@@ -35,7 +35,7 @@ func (sH *swaggerHelper) GetOpenAPI() (map[string]interface{}, error) {
 }
 
 func (sH *swaggerHelper) CreateOpenAPI() error {
-	sH.swaggerMap = wst.M{
+	sH.swaggerMap = &wst.M{
 		//"schemes": []string{"http"},
 		"openapi": "3.0.1",
 		"info": fiber.Map{
@@ -100,10 +100,10 @@ func (sH *swaggerHelper) CreateOpenAPI() error {
 
 func (sH *swaggerHelper) AddPathSpec(path string, verb string, verbSpec map[string]interface{}) {
 	// Add verbSpec to [path][verb]
-	if _, ok := sH.swaggerMap.(wst.M)["paths"].(map[string]interface{})[path]; !ok {
-		sH.swaggerMap.(wst.M)["paths"].(map[string]interface{})[path] = make(map[string]interface{})
+	if _, ok := (*sH.swaggerMap.(*wst.M))["paths"].(map[string]interface{})[path]; !ok {
+		(*sH.swaggerMap.(*wst.M))["paths"].(map[string]interface{})[path] = make(map[string]interface{})
 	}
-	sH.swaggerMap.(wst.M)["paths"].(map[string]interface{})[path].(map[string]interface{})[verb] = verbSpec
+	(*sH.swaggerMap.(*wst.M))["paths"].(map[string]interface{})[path].(map[string]interface{})[verb] = verbSpec
 	return
 }
 

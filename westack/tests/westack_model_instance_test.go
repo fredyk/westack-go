@@ -46,8 +46,8 @@ func Test_ToJSON_BelongsToRelation(t *testing.T) {
 	json := instance.ToJSON()
 	user := json.GetM("user")
 	assert.NotNil(t, user)
-	assert.Equal(t, userId.Hex(), user["id"].(primitive.ObjectID).Hex())
-	assert.Equal(t, originalUser.GetObjectId("id").Hex(), user["id"].(primitive.ObjectID).Hex())
+	assert.Equal(t, userId.Hex(), user.GetString("id"))
+	assert.Equal(t, originalUser.GetObjectId("id").Hex(), user.GetString("id"))
 
 }
 
