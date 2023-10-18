@@ -84,6 +84,8 @@ func (m *M) GetInt(path string) int {
 		source := obtainSourceFromM(m, segments[:len(segments)-1])
 		if v, ok := source.(M); ok {
 			return v.GetInt(segments[len(segments)-1])
+		} else if v, ok := source.(map[string]interface{}); ok {
+			return asInt(v[segments[len(segments)-1]])
 		} else {
 			log.Printf("WARNING: GetInt: not an M: %v\n", reflect.TypeOf(source))
 			return 0
