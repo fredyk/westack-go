@@ -253,7 +253,7 @@ func (a *A) MarshalEasyJSON(w *jwriter.Writer) {
 		} else {
 			w.RawByte(',')
 		}
-		bytes, err := easyjson.Marshal(&v)
+		bytes, err := easyjson.Marshal(&v) // #nosec G601
 		w.Raw(bytes, err)
 	}
 	w.RawByte(']')
