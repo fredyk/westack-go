@@ -15,7 +15,7 @@ import (
 	"github.com/mailru/easyjson/jlexer"
 
 	"github.com/goccy/go-json"
-	fiber "github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2"
 	"github.com/mailru/easyjson"
 	"github.com/mailru/easyjson/jwriter"
 	"github.com/spf13/viper"
@@ -316,7 +316,7 @@ func (a *A) GetM(path string) *M {
 
 func obtainSourceFromA(a *A, segments []string) interface{} {
 	if len(segments) > 1 {
-		var prevSource interface{} = obtainSourceFromA(a, segments[:len(segments)-1])
+		var prevSource = obtainSourceFromA(a, segments[:len(segments)-1])
 		if v, ok := prevSource.(M); ok {
 			return v[segments[len(segments)-1]]
 		} else if v, ok := prevSource.(A); ok {
@@ -335,7 +335,7 @@ func obtainSourceFromA(a *A, segments []string) interface{} {
 
 func obtainSourceFromM(m *M, segments []string) interface{} {
 	if len(segments) > 1 {
-		var prevSource interface{} = obtainSourceFromM(m, segments[:len(segments)-1])
+		var prevSource = obtainSourceFromM(m, segments[:len(segments)-1])
 		if v, ok := prevSource.(M); ok {
 			return v[segments[len(segments)-1]]
 		} else if v, ok := prevSource.(A); ok {
@@ -421,8 +421,8 @@ const (
 )
 
 var (
-	NilMap          M = M{"<wst.NilMap>": 1}
-	DashedCaseRegex   = regexp.MustCompile("([A-Z])")
+	NilMap          = M{"<wst.NilMap>": 1}
+	DashedCaseRegex = regexp.MustCompile("([A-Z])")
 )
 
 // AFromGenericSlice converts a generic slice of M to a *A
@@ -448,7 +448,7 @@ func AFromGenericSlice(in *[]interface{}) *A {
 	return &out
 }
 
-// AFromPrimitiveSlice converts a primitive slice of primivite.M or M to a *A
+// AFromPrimitiveSlice converts a primitive slice of primitive.M or M to a *A
 // This is used to convert the result of a query to a *A
 // Returns nil if in is nil
 func AFromPrimitiveSlice(in *primitive.A) *A {
@@ -576,7 +576,7 @@ func CopyMap(src M) M {
 	return targetMap
 }
 
-// High-cost operation...
+// Transform High-cost operation...
 func Transform(in interface{}, out interface{}) error {
 	// TODO: move marshal and unmarshal to easyjson
 	bytes, err := bson.Marshal(in)
