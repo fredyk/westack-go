@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/fredyk/westack-go/westack/lib/swaggerhelperinterface"
 	"log"
 	"os"
 	"os/signal"
@@ -47,7 +46,7 @@ type WeStack struct {
 	dataSourceOptions *map[string]*datasource.Options
 	init              time.Time
 	jwtSecretKey      []byte
-	swaggerHelper     swaggerhelperinterface.SwaggerHelper
+	swaggerHelper     wst.SwaggerHelper
 	logger            wst.ILogger
 }
 

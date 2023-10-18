@@ -3,14 +3,13 @@ package tests
 import (
 	"fmt"
 	"github.com/fredyk/westack-go/westack/model"
+	"github.com/mailru/easyjson"
 	"go.mongodb.org/mongo-driver/bson"
 	"io"
 	"net/http"
 	"sync"
 	"testing"
 	"time"
-
-	"github.com/goccy/go-json"
 
 	wst "github.com/fredyk/westack-go/westack/common"
 	"github.com/stretchr/testify/assert"
@@ -76,7 +75,7 @@ func Test_ExtractLookups(t *testing.T) {
 	assert.Equal(t, "$$userId", wst.GetTypedList[string](lookups.GetM("[0].$lookup.pipeline.[0].$match.$expr.$and.[0]"), "$eq")[1])
 
 	assert.Equal(t, "$user", lookups.GetM("[1].$unwind").GetString("path"))
-	assert.Equal(t, true, lookups.GetM("[1].$unwind").GetBoolean("preserveNullAndEmptyArrays"))
+	assert.Equal(t, true, lookups.GetM("[1]").GetBoolean("$unwind.preserveNullAndEmptyArrays"))
 
 	// test include with invalid relation 1
 	lookups, err = noteModel.ExtractLookupsFromFilter(&wst.Filter{
@@ -97,7 +96,7 @@ func Test_ExtractLookups(t *testing.T) {
 	assert.Equal(t, "$_id", wst.GetTypedList[string](lookups.GetM("[0].$lookup.pipeline.[0].$match.$expr.$and.[0]"), "$eq")[0])
 	assert.Equal(t, "$$userId", wst.GetTypedList[string](lookups.GetM("[0].$lookup.pipeline.[0].$match.$expr.$and.[0]"), "$eq")[1])
 	assert.Equal(t, false, lookups.GetM("[0].$lookup.pipeline.[1].$project").GetBoolean("password"))
-	assert.Equal(t, "John", lookups.GetM("[0].$lookup.pipeline.[2].$match").GetString("name"))
+	assert.Equal(t, "John", lookups.GetString("[0].$lookup.pipeline.[2].$match.name"))
 
 	assert.Contains(t, *lookups.GetAt(1), "$unwind")
 	assert.Equal(t, "$user", lookups.GetM("[1].$unwind").GetString("path"))
@@ -222,13 +221,15 @@ func Test_CustomerOrderStore(t *testing.T) {
 	stats := requestStats(t, err)
 
 	// Check that the cache has been used, present at stats["stats"]["datasorces"]["memorykv"]["Order"]
-	allStats := stats["stats"].(map[string]interface{})
-	datasourcesStats := allStats["datasources"].(map[string]interface{})
-	memoryKvStats := datasourcesStats["memorykv"].(map[string]interface{})
-	orderStats := memoryKvStats["Order"].(map[string]interface{})
-	assert.Greater(t, int(orderStats["entries"].(float64)), 0)
+	//allStats := stats["stats"].(map[string]interface{})
+	//datasourcesStats := allStats["datasources"].(map[string]interface{})
+	//memoryKvStats := datasourcesStats["memorykv"].(map[string]interface{})
+	//orderStats := memoryKvStats["Order"].(map[string]interface{})
+	//assert.Greater(t, int(orderStats["entries"].(float64)), 0)
+	assert.Greater(t, stats.GetInt("stats.datasources.memorykv.Order.entries"), 0)
 	// Exactly 1 miss, because the cache was empty
-	assert.Equal(t, 1, int(orderStats["misses"].(float64)))
+	//assert.Equal(t, 1, int(orderStats["misses"].(float64)))
+	assert.EqualValues(t, 1, stats.GetInt("stats.datasources.memorykv.Order.misses"))
 
 	// Get the customer including the orders and the store, again
 	start = time.Now()
@@ -248,7 +249,8 @@ func Test_CustomerOrderStore(t *testing.T) {
 	stats = requestStats(t, err)
 
 	// Check that the cache has been used, present at stats["stats"]["datasorces"]["memorykv"]["Order"], with more hits
-	assert.GreaterOrEqual(t, int(stats["stats"].(map[string]interface{})["datasources"].(map[string]interface{})["memorykv"].(map[string]interface{})["Order"].(map[string]interface{})["hits"].(float64)), 1)
+	//assert.GreaterOrEqual(t, int(stats["stats"].(map[string]interface{})["datasources"].(map[string]interface{})["memorykv"].(map[string]interface{})["Order"].(map[string]interface{})["hits"].(float64)), 1)
+	assert.GreaterOrEqual(t, stats.GetInt("stats.datasources.memorykv.Order.hits"), 1)
 
 	// Wait 11 seconds for the cache to expire
 	time.Sleep(11 * time.Second)
@@ -581,7 +583,7 @@ func requestStats(t *testing.T, err error) wst.M {
 
 	fmt.Printf("cache stats response: %v\n", string(body))
 	stats := wst.M{}
-	err = json.Unmarshal(body, &stats)
+	err = easyjson.Unmarshal(body, &stats)
 	assert.NoError(t, err)
 	assert.NotNil(t, stats)
 	return stats

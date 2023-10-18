@@ -1,8 +1,8 @@
 package tests
 
 import (
-	"encoding/json"
 	"fmt"
+	"github.com/mailru/easyjson"
 	"github.com/stretchr/testify/assert"
 	"io"
 	"net/http"
@@ -33,7 +33,7 @@ func Test_Get_Swagger_Docs(t *testing.T) {
 
 	assert.Equalf(t, 200, res.StatusCode, "GetAt Swagger Error invalid status code: %d body: %s", res.StatusCode, string(body))
 
-	err = json.Unmarshal(body, &out)
+	err = easyjson.Unmarshal(body, &out)
 	assert.Nilf(t, err, "GetAt Swagger Error while unmarshaling body: %s", err)
 
 	assert.Equalf(t, "3.0.1", out["openapi"], "Invalid openapi version %v", out["openapi"])

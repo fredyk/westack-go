@@ -8,6 +8,7 @@ import (
 	"github.com/fredyk/westack-go/westack/datasource"
 	"github.com/fredyk/westack-go/westack/model"
 	"github.com/gofiber/fiber/v2"
+	"github.com/mailru/easyjson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"io"
 	"log"
@@ -336,7 +337,7 @@ func login(t *testing.T, body wst.M) (string, string) {
 	}
 
 	var loginResponse wst.M
-	err = json.Unmarshal(responseBytes, &loginResponse)
+	err = easyjson.Unmarshal(responseBytes, &loginResponse)
 	if err != nil {
 		t.Error(err)
 		return "", ""

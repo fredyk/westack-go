@@ -11,7 +11,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/fredyk/westack-go/westack/lib/swaggerhelperinterface"
 	"github.com/mailru/easyjson/jlexer"
 
 	"github.com/goccy/go-json"
@@ -67,20 +66,7 @@ func (m *M) GetString(path string) string {
 			return v.GetString(segments[len(segments)-1])
 		} else if v, ok := source.(map[string]interface{}); ok {
 			vv := v[segments[len(segments)-1]]
-			if vv == nil {
-				return ""
-			}
-			if vvv, ok := vv.(string); ok {
-				return vvv
-			} else if vvv, ok := vv.(primitive.ObjectID); ok {
-				return vvv.Hex()
-			} else {
-				log.Printf("WARNING: GetString: not a string: %v\n", reflect.TypeOf(vv))
-				return ""
-			}
-		} else {
-			log.Printf("WARNING: GetString: not an M: %v\n", reflect.TypeOf(source))
-			return ""
+			return vv.(string)
 		}
 	}
 	return ""
@@ -99,49 +85,9 @@ func (m *M) GetInt(path string) int {
 			return v.GetInt(segments[len(segments)-1])
 		} else if v, ok := source.(map[string]interface{}); ok {
 			return asInt(v[segments[len(segments)-1]])
-		} else {
-			log.Printf("WARNING: GetInt: not an M: %v\n", reflect.TypeOf(source))
-			return 0
 		}
 	}
-}
-
-func (m *M) GetA(key string) *A {
-	if m == nil {
-		return nil
-	}
-	if v, ok := (*m)[key]; ok {
-		if vv, ok := v.(A); ok {
-			return &vv
-		} else if vv1, ok := v.(bson.D); ok {
-			var out = make(A, len(vv1))
-			for idx, v := range vv1 {
-				if vv, ok := v.Value.(M); ok {
-					out[idx] = vv
-				} else {
-					log.Printf("WARNING: GetA: not an M: v.Value=%T\n", v.Value)
-					out[idx] = M{
-						"<value>": v.Value,
-					}
-				}
-			}
-			return &out
-		} else if vv2, ok := v.([]interface{}); ok {
-			var out = make(A, len(vv2))
-			for idx, v := range vv2 {
-				if vv, ok := v.(M); ok {
-					out[idx] = vv
-				} else {
-					log.Printf("WARNING: GetA: not an M: vlue=%T\n", v)
-					out[idx] = M{
-						"<value>": v,
-					}
-				}
-			}
-			return &out
-		}
-	}
-	return nil
+	return 0
 }
 
 func (m *M) MarshalEasyJSON(w *jwriter.Writer) {
@@ -208,11 +154,49 @@ func (m *M) MarshalEasyJSON(w *jwriter.Writer) {
 }
 
 func (m *M) UnmarshalEasyJSON(l *jlexer.Lexer) {
-	inputBytes := l.Raw()
-	err := json.Unmarshal(inputBytes, &m)
-	if err != nil {
-		l.AddError(err)
-		return
+	l.Delim('{')
+	*m = make(M)
+	for {
+		l.FetchToken()
+		if l.IsDelim('}') {
+			return
+		}
+		key := l.String()
+		l.WantColon()
+		l.FetchToken()
+		rawValue := l.Raw()
+		if rawValue[0] == '{' {
+			subM := make(M)
+			//goland:noinspection GoUnhandledErrorResult
+			easyjson.Unmarshal(rawValue, &subM) // #nosec G601
+			//if err != nil {
+			//	l.AddError(err)
+			//	return
+			//}
+			(*m)[key] = subM
+		} else if rawValue[0] == '[' {
+			subA := make(A, 0)
+			//goland:noinspection GoUnhandledErrorResult
+			easyjson.Unmarshal(rawValue, &subA) // #nosec G601
+			//if err != nil {
+			//	l.AddError(err)
+			//	return
+			//}
+			(*m)[key] = subA
+		} else {
+			var v interface{}
+			//goland:noinspection GoUnhandledErrorResult
+			json.Unmarshal(rawValue, &v)
+			//if err != nil {
+			//	l.AddError(err)
+			//	return
+			//}
+			(*m)[key] = v
+		}
+		l.WantComma()
+		//if l.Error() != nil {
+		//	return
+		//}
 	}
 }
 
@@ -227,61 +211,78 @@ func (m *M) GetBoolean(path string) bool {
 		source := obtainSourceFromM(m, segments[:len(segments)-1])
 		if v, ok := source.(M); ok {
 			return v[segments[len(segments)-1]].(bool)
-		} else {
-			log.Printf("WARNING: GetBoolean: not an M: %v\n", reflect.TypeOf(source))
-			return false
 		}
 	}
+	return false
 }
 
 func asInt(v interface{}) int {
 	switch v := v.(type) {
-	case int:
-		return v
-	case int32:
-		return int(v)
 	case int64:
-		return int(v)
-	case float32:
 		return int(v)
 	case float64:
 		return int(v)
-	default:
-		return 0
 	}
+	return 0
 }
 
 type A []M
 
-func (a *A) MarshalEasyJSON(w *jwriter.Writer) {
-	if a == nil {
-		w.Raw(NilBytes, nil)
-		return
-	}
-	w.RawByte('[')
-	first := true
-	for _, v := range *a {
-		if first {
-			first = false
-		} else {
-			w.RawByte(',')
-		}
-		bytes, err := easyjson.Marshal(&v) // #nosec G601
-		w.Raw(bytes, err)
-	}
-	w.RawByte(']')
-}
+//func (a *A) MarshalEasyJSON(w *jwriter.Writer) {
+//	if a == nil {
+//		w.Raw(NilBytes, nil)
+//		return
+//	}
+//	w.RawByte('[')
+//	first := true
+//	for _, v := range *a {
+//		if first {
+//			first = false
+//		} else {
+//			w.RawByte(',')
+//		}
+//		bytes, err := easyjson.Marshal(&v) // #nosec G601
+//		w.Raw(bytes, err)
+//	}
+//	w.RawByte(']')
+//}
 
 func (a *A) UnmarshalEasyJSON(l *jlexer.Lexer) {
 	if l.IsNull() {
 		l.Skip()
 		return
 	}
-	inputBytes := l.Raw()
-	err := json.Unmarshal(inputBytes, &a)
-	if err != nil {
-		l.AddError(err)
-		return
+	l.Delim('[')
+	*a = make(A, 0)
+	for {
+		l.FetchToken()
+		if l.IsDelim(']') {
+			return
+		}
+		rawValue := l.Raw()
+		if rawValue[0] == '{' {
+			subM := make(M)
+			err := easyjson.Unmarshal(rawValue, &subM) // #nosec G601
+			if err != nil {
+				l.AddError(err)
+				return
+			}
+			*a = append(*a, subM)
+		} else {
+			var v interface{}
+			err := json.Unmarshal(rawValue, &v)
+			if err != nil {
+				l.AddError(err)
+				return
+			}
+			*a = append(*a, M{
+				"<value>": v,
+			})
+		}
+		l.WantComma()
+		if l.Error() != nil {
+			return
+		}
 	}
 }
 
@@ -293,19 +294,6 @@ func (a *A) GetAt(idx int) *M {
 		return nil
 	}
 	return &(*a)[idx]
-}
-
-func (a *A) GetBsonE(idx int) bson.E {
-	if a == nil {
-		return bson.E{}
-	}
-	if idx < 0 || idx >= len(*a) {
-		return bson.E{}
-	}
-	for k, v := range (*a)[idx] {
-		return bson.E{Key: k, Value: v}
-	}
-	return bson.E{}
 }
 
 func (a *A) GetM(path string) *M {
@@ -326,6 +314,32 @@ func (a *A) GetM(path string) *M {
 			log.Printf("WARNING: GetM: not an M: %v\n", reflect.TypeOf(source))
 			return nil
 		}
+	}
+}
+
+func (a *A) GetString(path string) string {
+	if a == nil {
+		return ""
+	}
+	segments := strings.Split(path, ".")
+	segmentIdx := 0
+	var source interface{}
+	for {
+		if source == nil {
+			if segmentIdx == 0 {
+				source = obtainSourceFromA(a, segments[:1])
+			} else {
+				return ""
+			}
+		} else if v, ok := source.(A); ok {
+			source = obtainSourceFromA(&v, segments[segmentIdx:segmentIdx+1])
+		} else if v, ok := source.(M); ok {
+			return v.GetString(strings.Join(segments[segmentIdx:], "."))
+		} else {
+			log.Printf("WARNING: GetString: not an M: %v\n", reflect.TypeOf(source))
+			return ""
+		}
+		segmentIdx++
 	}
 }
 
@@ -523,7 +537,7 @@ type BsonOptions struct {
 
 type IApp struct {
 	Debug          bool
-	SwaggerHelper  func() swaggerhelperinterface.SwaggerHelper
+	SwaggerHelper  func() SwaggerHelper
 	FindModel      func(modelName string) (interface{}, error)
 	FindDatasource func(datasource string) (interface{}, error)
 	Logger         func() ILogger

@@ -1,9 +1,9 @@
 package tests
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/mailru/easyjson"
 	"io"
 	"net/http"
 	"testing"
@@ -179,7 +179,7 @@ func Test_AfterLoadShouldReturnEmpty(t *testing.T) {
 		"Authorization": fmt.Sprintf("Bearer %s", randomUserToken.GetString("id")),
 	})
 	assert.NoError(t, err)
-	assert.Equal(t, "forced error 1753", resp.GetM("error").GetString("message"))
+	assert.Equal(t, "forced error 1753", resp.GetString("error.message"))
 	// "after load" cannot handle errors. It skips failed instances.
 	//assert.Equal(t, 0, len(resp))
 
@@ -191,7 +191,7 @@ func parseResultAsJsonArray(resp *http.Response) (responseBody wst.A, err error)
 	if err != nil {
 		return nil, err
 	}
-	err = json.Unmarshal(bytes, &responseBody)
+	err = easyjson.Unmarshal(bytes, &responseBody)
 	return responseBody, err
 
 }

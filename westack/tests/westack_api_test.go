@@ -110,6 +110,10 @@ func Test_UserFindSelf(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Contains(t, foundUser, "id")
 	assert.Equal(t, randomUser.GetString("id"), foundUser.GetString("id"))
+	assert.Equal(t, "", foundUser.GetString("password"))
+	assert.Nil(t, foundUser.GetM("error"))
+	assert.Nil(t, foundUser.GetM("error").GetM("details"))
+	assert.Equal(t, "", foundUser.GetM("error").GetString("code"))
 
 }
 
@@ -216,8 +220,8 @@ func Test_CreateUserWithoutUsername(t *testing.T) {
 		"Content-Type": "application/json",
 	})
 	assert.NoError(t, err)
-	assert.EqualValues(t, fiber.StatusBadRequest, user.GetM("error").GetInt("statusCode"))
-	assert.Equal(t, "EMAIL_PRESENCE", user.GetM("error").GetString("code"))
+	assert.EqualValues(t, fiber.StatusBadRequest, user.GetInt("error.statusCode"))
+	assert.Equal(t, "EMAIL_PRESENCE", user.GetString("error.code"))
 
 }
 
@@ -231,8 +235,8 @@ func Test_LoginUserWithoutUserOrEmail(t *testing.T) {
 		"Content-Type": "application/json",
 	})
 	assert.NoError(t, err)
-	assert.EqualValues(t, fiber.StatusBadRequest, user.GetM("error").GetInt("statusCode"))
-	assert.Equal(t, "USERNAME_EMAIL_REQUIRED", user.GetM("error").GetString("code"))
+	assert.EqualValues(t, fiber.StatusBadRequest, user.GetInt("error.statusCode"))
+	assert.Equal(t, "USERNAME_EMAIL_REQUIRED", user.GetString("error.code"))
 
 }
 
@@ -246,8 +250,8 @@ func Test_LoginUserWithoutPassword(t *testing.T) {
 		"Content-Type": "application/json",
 	})
 	assert.NoError(t, err)
-	assert.EqualValues(t, fiber.StatusUnauthorized, user.GetM("error").GetInt("statusCode"))
-	assert.Equal(t, "LOGIN_FAILED", user.GetM("error").GetString("code"))
+	assert.EqualValues(t, fiber.StatusUnauthorized, user.GetInt("error.statusCode"))
+	assert.Equal(t, "LOGIN_FAILED", user.GetString("error.code"))
 
 }
 
@@ -262,8 +266,8 @@ func Test_LoginUserWithWrongPassword(t *testing.T) {
 		"Content-Type": "application/json",
 	})
 	assert.NoError(t, err)
-	assert.EqualValues(t, fiber.StatusUnauthorized, user.GetM("error").GetInt("statusCode"))
-	assert.Equal(t, "LOGIN_FAILED", user.GetM("error").GetString("code"))
+	assert.EqualValues(t, fiber.StatusUnauthorized, user.GetInt("error.statusCode"))
+	assert.Equal(t, "LOGIN_FAILED", user.GetString("error.code"))
 
 }
 
@@ -315,7 +319,7 @@ func Test_ForceError1719(t *testing.T) {
 		"Authorization": fmt.Sprintf("Bearer %v", randomUserToken.GetString("id")),
 	})
 	assert.NoError(t, err)
-	assert.Equal(t, result.GetM("error").GetString("code"), "ERR_1719")
+	assert.Equal(t, "ERR_1719", result.GetString("error.code"))
 }
 
 func Test_FindMe(t *testing.T) {
@@ -427,7 +431,7 @@ func Test_UserUpdatesNote(t *testing.T) {
 		"Authorization": fmt.Sprintf("Bearer %v", user2Token.GetString("id")),
 	})
 	assert.NoError(t, err)
-	assert.Equal(t, fiber.StatusUnauthorized, updatedFooter.GetM("error").GetInt("statusCode"))
+	assert.Equal(t, fiber.StatusUnauthorized, updatedFooter.GetInt("error.statusCode"))
 
 	// Also check that user2 cannot modify the note
 	updatedNote, err = invokeApiJsonM(t, "PATCH", "/notes/"+note.GetString("id"), wst.M{
@@ -437,7 +441,7 @@ func Test_UserUpdatesNote(t *testing.T) {
 		"Authorization": fmt.Sprintf("Bearer %v", user2Token.GetString("id")),
 	})
 	assert.NoError(t, err)
-	assert.Equal(t, fiber.StatusUnauthorized, updatedNote.GetM("error").GetInt("statusCode"))
+	assert.Equal(t, fiber.StatusUnauthorized, updatedNote.GetInt("error.statusCode"))
 
 }
 
@@ -460,7 +464,7 @@ func Test_CreateUserTwiceByUsername(t *testing.T) {
 	})
 	assert.NoError(t, err)
 	assert.NotNil(t, user2)
-	assert.Equal(t, "USERNAME_UNIQUENESS", user2.GetM("error").GetString("code"))
+	assert.Equal(t, "USERNAME_UNIQUENESS", user2.GetString("error.code"))
 
 }
 
@@ -483,7 +487,7 @@ func Test_CreateUserTwiceByEmail(t *testing.T) {
 	})
 	assert.NoError(t, err)
 	assert.NotNil(t, user2)
-	assert.Equal(t, "EMAIL_UNIQUENESS", user2.GetM("error").GetString("code"))
+	assert.Equal(t, "EMAIL_UNIQUENESS", user2.GetString("error.code"))
 
 }
 
@@ -499,7 +503,7 @@ func Test_CreateUserInvalidEmail(t *testing.T) {
 	})
 	assert.NoError(t, err)
 	assert.NotNil(t, user)
-	assert.Equal(t, "EMAIL_FORMAT", user.GetM("error").GetString("code"))
+	assert.Equal(t, "EMAIL_FORMAT", user.GetString("error.code"))
 
 }
 
@@ -515,7 +519,7 @@ func Test_CreateUserPasswordBlank(t *testing.T) {
 	})
 	assert.NoError(t, err)
 	assert.NotNil(t, user)
-	assert.Equal(t, "PASSWORD_BLANK", user.GetM("error").GetString("code"))
+	assert.Equal(t, "PASSWORD_BLANK", user.GetString("error.code"))
 
 }
 
@@ -569,7 +573,7 @@ func Test_DeleteNonExistentNote(t *testing.T) {
 		"Authorization": fmt.Sprintf("Bearer %s", adminUserToken.GetString("id")),
 	})
 	assert.NoError(t, err)
-	assert.Equal(t, fiber.StatusNotFound, result.GetM("error").GetInt("statusCode"))
+	assert.Equal(t, fiber.StatusNotFound, result.GetInt("error.statusCode"))
 
 }
 
@@ -603,8 +607,8 @@ func Test_DeleteNoteTwice(t *testing.T) {
 		"Authorization": fmt.Sprintf("Bearer %s", randomUserToken.GetString("id")),
 	})
 	assert.NoError(t, err)
-	assert.Equal(t, fiber.StatusBadRequest, result2.GetM("error").GetInt("statusCode"))
-	assert.Equal(t, fmt.Sprintf(`Deleted 0 instances for ObjectID("%v")`, note.GetString("id")), result2.GetM("error").GetM("details").GetString("message"))
+	assert.Equal(t, fiber.StatusBadRequest, result2.GetInt("error.statusCode"))
+	assert.Equal(t, fmt.Sprintf(`Deleted 0 instances for ObjectID("%v")`, note.GetString("id")), result2.GetString("error.details.message"))
 
 }
 

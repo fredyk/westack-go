@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/gofiber/fiber/v2"
+	"github.com/mailru/easyjson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"io"
 	"log"
@@ -76,7 +77,7 @@ func testGRPCCallWithQueryParamsWithQueryParamsTimeout(t *testing.T) {
 	bytes, err := io.ReadAll(res.Body)
 	assert.NoError(t, err)
 	var parsedResp wst.M
-	err = json.Unmarshal(bytes, &parsedResp)
+	err = easyjson.Unmarshal(bytes, &parsedResp)
 	assert.NoError(t, err)
 	assert.EqualValues(t, fiber.StatusInternalServerError, parsedResp.GetInt("error.statusCode"))
 	assert.Equal(t, "context deadline exceeded", parsedResp.GetString("error.message"))
@@ -94,10 +95,10 @@ func testGRPCCallWithQueryParamsWithBodyTimeout(t *testing.T) {
 	bytes, err := io.ReadAll(res.Body)
 	assert.NoError(t, err)
 	var parsedResp wst.M
-	err = json.Unmarshal(bytes, &parsedResp)
+	err = easyjson.Unmarshal(bytes, &parsedResp)
 	assert.NoError(t, err)
-	assert.EqualValues(t, fiber.StatusInternalServerError, parsedResp.GetM("error").GetInt("statusCode"))
-	assert.Equal(t, "context deadline exceeded", parsedResp.GetM("error").GetString("message"))
+	assert.EqualValues(t, fiber.StatusInternalServerError, parsedResp.GetInt("error.statusCode"))
+	assert.Equal(t, "context deadline exceeded", parsedResp.GetString("error.message"))
 
 }
 
