@@ -100,6 +100,11 @@ func (ds *Datasource) Initialize() error {
 				} else {
 					err = connector.Ping(initialCtx)
 					if err != nil {
+						select {
+						case <-initialCtx.Done():
+							return
+						default:
+						}
 						if ds.Options == nil || !ds.Options.RetryOnError {
 							ds.app.Logger().Fatalf("Mongo client disconnected after %vms: %v", time.Now().UnixMilli()-init, err)
 						}
