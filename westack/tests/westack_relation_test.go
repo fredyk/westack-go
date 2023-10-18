@@ -113,7 +113,7 @@ func Test_ExtractLookups(t *testing.T) {
 	assert.Equal(t, "notes", lookups.GetM("[0].$lookup").GetString("as"))
 	assert.Equal(t, "$_id", lookups.GetM("[0].$lookup.let").GetString("userId"))
 	assert.Equal(t, "$userId", wst.GetTypedList[string](lookups.GetM("[0].$lookup.pipeline.[0].$match.$expr.$and.[0]"), "$eq")[0])
-	assert.Equal(t, "$$userId", wst.GetTypedList[string](lookups.GetM("[0].$lookup.pipeline.[0].$match.$expr.$and.[0]"), "$eq")[1])
+	assert.Equal(t, "$$userId", wst.GetTypedList[string](lookups.GetAt(0), "$lookup.pipeline.[0].$match.$expr.$and.[0].$eq")[1])
 
 	// test invalid scope
 	lookups, err = noteModel.ExtractLookupsFromFilter(&wst.Filter{

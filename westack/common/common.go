@@ -262,27 +262,29 @@ func (a *A) UnmarshalEasyJSON(l *jlexer.Lexer) {
 		rawValue := l.Raw()
 		if rawValue[0] == '{' {
 			subM := make(M)
-			err := easyjson.Unmarshal(rawValue, &subM) // #nosec G601
-			if err != nil {
-				l.AddError(err)
-				return
-			}
+			//goland:noinspection GoUnhandledErrorResult
+			easyjson.Unmarshal(rawValue, &subM) // #nosec G601
+			//if err != nil {
+			//	l.AddError(err)
+			//	return
+			//}
 			*a = append(*a, subM)
 		} else {
 			var v interface{}
-			err := json.Unmarshal(rawValue, &v)
-			if err != nil {
-				l.AddError(err)
-				return
-			}
+			//goland:noinspection GoUnhandledErrorResult
+			json.Unmarshal(rawValue, &v)
+			//if err != nil {
+			//	l.AddError(err)
+			//	return
+			//}
 			*a = append(*a, M{
 				"<value>": v,
 			})
 		}
 		l.WantComma()
-		if l.Error() != nil {
-			return
-		}
+		//if l.Error() != nil {
+		//	return
+		//}
 	}
 }
 
@@ -310,11 +312,9 @@ func (a *A) GetM(path string) *M {
 			return &vv
 		} else if v, ok := source.(A); ok {
 			return v.GetAt(obtainIdxFromSegment(segments[len(segments)-1]))
-		} else {
-			log.Printf("WARNING: GetM: not an M: %v\n", reflect.TypeOf(source))
-			return nil
 		}
 	}
+	return nil
 }
 
 func (a *A) GetString(path string) string {
@@ -723,15 +723,15 @@ func (objectIdCodec) DecodeValue(_ bsoncodec.DecodeContext, reader bsonrw.ValueR
 		if err != nil {
 			return err
 		}
-	case bson.TypeString:
-		str, err := reader.ReadString()
-		if err != nil {
-			return err
-		}
-		oid, err = primitive.ObjectIDFromHex(str)
-		if err != nil {
-			return err
-		}
+	//case bson.TypeString:
+	//	str, err := reader.ReadString()
+	//	if err != nil {
+	//		return err
+	//	}
+	//	oid, err = primitive.ObjectIDFromHex(str)
+	//	if err != nil {
+	//		return err
+	//	}
 	default:
 		return fmt.Errorf("cannot decode %v into a primitive.ObjectID", reader.Type())
 	}
@@ -766,13 +766,13 @@ func CreateDefaultMongoRegistry() *bsoncodec.Registry {
 				if err != nil {
 					return err
 				}
-			case bson.TypeInt64:
-				var int64Val int64
-				int64Val, err = vr.ReadInt64()
-				if err != nil {
-					return err
-				}
-				unixNano = int64Val
+			//case bson.TypeInt64:
+			//	var int64Val int64
+			//	int64Val, err = vr.ReadInt64()
+			//	if err != nil {
+			//		return err
+			//	}
+			//	unixNano = int64Val
 			default:
 				return fmt.Errorf("cannot decode %v into a time.Time", vr.Type())
 			}
