@@ -175,14 +175,21 @@ func Test_AfterLoadShouldReturnEmpty(t *testing.T) {
 		assert.NotEmpty(t, note.GetString("id"))
 	}
 
-	resp, err := invokeApiJsonM(t, "GET", "/notes?forceError1753=true", nil, wst.M{
-		"Authorization": fmt.Sprintf("Bearer %s", randomUserToken.GetString("id")),
-	})
+	resp, err := invokeApiAsRandomUser(t, "GET", "/notes?forceError1753=true", nil, nil)
 	assert.NoError(t, err)
 	assert.Equal(t, "forced error 1753", resp.GetString("error.message"))
 	// "after load" cannot handle errors. It skips failed instances.
 	//assert.Equal(t, 0, len(resp))
 
+}
+
+func Test_BeforeBuildReturnsError(t *testing.T) {
+
+	t.Parallel()
+
+	resp, err := invokeApiAsRandomUser(t, "GET", "/notes?forceError1556=true", nil, nil)
+	assert.NoError(t, err)
+	assert.Equal(t, "error in __operation__before_build: forced error 1556", resp.GetString("error.message"))
 }
 
 func parseResultAsJsonArray(resp *http.Response) (responseBody wst.A, err error) {

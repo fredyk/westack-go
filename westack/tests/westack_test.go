@@ -199,6 +199,15 @@ func init() {
 			return nil
 		})
 
+		noteModel.Observe("before build", func(ctx *model.EventContext) error {
+			if ctx.BaseContext.Remote != nil {
+				if ctx.BaseContext.Query.GetString("forceError1556") == "true" {
+					return fmt.Errorf("forced error 1556")
+				}
+			}
+			return nil
+		})
+
 		app.Server.Get("/api/v1/endpoint-using-codecs", func(ctx *fiber.Ctx) error {
 			type localNote struct {
 				ID      primitive.ObjectID `json:"id" bson:"_id"`
