@@ -416,7 +416,7 @@ func (app *WeStack) setupModel(loadedModel *model.Model, dataSource *datasource.
 		})
 
 		deleteByIdHandler := func(ctx *model.EventContext) error {
-			deleteResult, err := loadedModel.DeleteById(ctx.ModelID)
+			deleteResult, err := loadedModel.DeleteById(ctx.ModelID, ctx)
 			if err == nil {
 				deletedCount := deleteResult.DeletedCount
 				if deletedCount != 1 {
@@ -456,7 +456,12 @@ func handleFindMany(app *WeStack, loadedModel *model.Model, ctx *model.EventCont
 
 	cursor := loadedModel.FindMany(ctx.Filter, ctx)
 	if v, ok := cursor.(*model.ErrorCursor); ok {
-		defer v.Close()
+		defer func(v *model.ErrorCursor) {
+			err := v.Close()
+			if err != nil {
+				log.Println("Error while closing cursor at handleFindMany(): ", err)
+			}
+		}(v)
 		var err error
 		ctx.Result, err = v.Next()
 		return err
