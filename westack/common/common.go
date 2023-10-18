@@ -52,6 +52,8 @@ func (m M) GetString(key string) string {
 	if v, ok := m[key]; ok {
 		if vv, ok := v.(string); ok {
 			return vv
+		} else if vv, ok := v.(primitive.ObjectID); ok {
+			return vv.Hex()
 		}
 	}
 	return ""
