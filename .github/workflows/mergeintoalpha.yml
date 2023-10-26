@@ -45,7 +45,7 @@ jobs:
       timeout-minutes: 5
       strategy:
         matrix:
-          go: [ '1.18', '1.19', '1.20.1', '1.20.6' ]
+          go: [ '1.19', '1.20.1', '1.20.6' ]
       env:
         WST_ADMIN_USERNAME: admin
         WST_ADMIN_PWD: testadmin
