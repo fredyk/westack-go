@@ -558,21 +558,22 @@ func casbinOwnerFn(loadedModel *model.Model) func(arguments ...interface{}) (int
 			sortedRelationKeys := obtainSortedRelationKeys(loadedModel, modelConfigsByName)
 			for _, relationKey := range sortedRelationKeys {
 
-				var foundUser bool
-				var relatedUserInstance *model.Instance
-				foundUser, objUserId, relatedUserInstance, err = findUserRecursiveInRelation(loadedModel, modelConfigsByName, relationKey, objId, roleKey)
+				//var foundUser bool
+				//var relatedUserInstance *model.Instance
+				err = findUserRecursiveInRelation(loadedModel, modelConfigsByName, relationKey, objId, roleKey, &usersForRole)
 				if err != nil {
 					return false, err
 				}
 
-				if foundUser {
-					if loadedModel.App.Debug {
-						// Print path
-						loadedModel.App.Logger().Printf("[DEBUG] Found related user instance %v[%v]-->%v[%v]\n", loadedModel.Name, objId, relatedUserInstance.Model.Name, relatedUserInstance.Id)
-					}
-					usersForRole = append(usersForRole, objUserId)
-					break
-				}
+				//if foundUser {
+				//	if loadedModel.App.Debug {
+				//		// Print path
+				//		loadedModel.App.Logger().Printf("[DEBUG] Found related user instance %v[%v]-->%v[%v]\n", loadedModel.Name, objId, relatedUserInstance.Model.Name, relatedUserInstance.Id)
+				//	}
+				//	usersForRole = append(usersForRole, objUserId)
+				//	// TODO: check another way of breaking
+				//	//break
+				//}
 			}
 			if loadedModel.App.Debug {
 				loadedModel.App.Logger().Printf("[DEBUG] Recursive owner check for %v took %v ms\n", loadedModel.Name, time.Since(recursiveSearchStart).Milliseconds())
@@ -612,10 +613,7 @@ func obtainSortedRelationKeys(loadedModel *model.Model, modelConfigsByName map[s
 	return allRelatedKeys
 }
 
-func findUserRecursiveInRelation(loadedModel *model.Model, modelConfigsByName map[string]*model.Config, relationKey string, objId interface{}, roleKey string) (bool, string, *model.Instance, error) {
-	foundUser := false
-	var objUserId string
-	var relatedUserInstance *model.Instance
+func findUserRecursiveInRelation(loadedModel *model.Model, modelConfigsByName map[string]*model.Config, relationKey string, objId interface{}, roleKey string, usersForRole *[]string) error {
 	r := (*loadedModel.Config.Relations)[relationKey]
 
 	if r.Type == "belongsTo" {
@@ -628,13 +626,13 @@ func findUserRecursiveInRelation(loadedModel *model.Model, modelConfigsByName ma
 			},
 		})
 		if err != nil {
-			return false, objUserId, nil, err
+			return err
 		}
 		if thisInstance == nil {
 			if loadedModel.App.Debug {
 				loadedModel.App.Logger().Printf("[DEBUG] Instance %v[%v] not found\n", loadedModel.Name, objId)
 			}
-			return false, objUserId, nil, wst.CreateError(fiber.ErrNotFound, "NOT_FOUND", fiber.Map{"message": fmt.Sprintf("document %v not found", objId)}, "Error")
+			return wst.CreateError(fiber.ErrNotFound, "NOT_FOUND", fiber.Map{"message": fmt.Sprintf("document %v not found", objId)}, "Error")
 		}
 
 		relatedInstance := thisInstance.GetOne(relationKey)
@@ -642,7 +640,7 @@ func findUserRecursiveInRelation(loadedModel *model.Model, modelConfigsByName ma
 			if loadedModel.App.Debug {
 				loadedModel.App.Logger().Printf("[DEBUG] Related instance %v[%v]-->%v[%v] unreachable\n", loadedModel.Name, objId, r.Model, thisInstance.ToJSON()[*r.ForeignKey])
 			}
-			return false, objUserId, nil, nil
+			return nil
 		}
 		relatedModel := relatedInstance.Model
 
@@ -650,21 +648,20 @@ func findUserRecursiveInRelation(loadedModel *model.Model, modelConfigsByName ma
 			user := relatedInstance
 
 			if user != nil {
-				objUserId = model.GetIDAsString(user.Id)
+				objUserId := model.GetIDAsString(user.Id)
 
 				_, err := loadedModel.Enforcer.AddRoleForUser(objUserId, roleKey)
 				if err != nil {
-					return false, objUserId, nil, err
+					return err
 				}
 				err = loadedModel.Enforcer.SavePolicy()
 				if err != nil {
-					return false, objUserId, nil, err
+					return err
 				}
-				relatedUserInstance = user
+
+				*usersForRole = append(*usersForRole, objUserId)
 
 			}
-
-			foundUser = true
 
 		} else if relatedModel.Config.Base != "User" && relatedModel.Config.Base != "App" {
 			if loadedModel.App.Debug {
@@ -675,20 +672,13 @@ func findUserRecursiveInRelation(loadedModel *model.Model, modelConfigsByName ma
 				if loadedModel.App.Debug {
 					loadedModel.App.Logger().Printf("[DEBUG] Recursive owner check for %v[%v]-->%v[%v]\n", loadedModel.Name, objId, relatedModel.Name, relatedInstance.Id)
 				}
-				foundUser, objUserId, relatedUserInstance, err = findUserRecursiveInRelation(relatedModel, modelConfigsByName, key, relatedInstance.Id, roleKey)
+				err = findUserRecursiveInRelation(relatedModel, modelConfigsByName, key, relatedInstance.Id, roleKey, usersForRole)
 				if err != nil {
-					return false, objUserId, nil, err
-				}
-				if foundUser {
-					if loadedModel.App.Debug {
-						// Print path
-						loadedModel.App.Logger().Printf("[DEBUG] Found nested child %v[%v]-->%v[%v]-->%v[%v]\n", loadedModel.Name, objId, relatedModel.Name, relatedInstance.Id, relatedUserInstance.Model.Name, relatedUserInstance.Id)
-					}
-					break
+					return err
 				}
 
 			}
 		}
 	}
-	return foundUser, objUserId, relatedUserInstance, nil
+	return nil
 }
