@@ -206,11 +206,15 @@ func (m *M) GetBoolean(path string) bool {
 	}
 	segments := strings.Split(path, ".")
 	if len(segments) == 1 {
-		return (*m)[segments[0]].(bool)
+		if v, ok := (*m)[segments[0]]; ok {
+			return v.(bool)
+		}
 	} else {
 		source := obtainSourceFromM(m, segments[:len(segments)-1])
 		if v, ok := source.(M); ok {
-			return v[segments[len(segments)-1]].(bool)
+			if vv, ok := v[segments[len(segments)-1]]; ok {
+				return vv.(bool)
+			}
 		}
 	}
 	return false
