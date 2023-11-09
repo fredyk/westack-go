@@ -332,7 +332,7 @@ jobs:
       runs-on: ubuntu-latest
       timeout-minutes: 5
       if: always() && needs.check_pr.outputs.pr_state == 'open' && contains(github.event.pull_request.labels.*.name, 'delete-branch') && !contains(github.event.pull_request.labels.*.name, 'close-on-success')
-      needs: [run_tests, merge_pr, close_pr_success, close_pr_failure]
+      needs: [run_tests, merge_pr, close_pr_failure]
       steps:
 
         - name: Checkout master
