@@ -200,7 +200,7 @@ jobs:
       timeout-minutes: 5
 #      if: needs.check_pr.outputs.pr_state == 'open' && contains(github.event.pull_request.labels.*.name, 'auto-merge')
       # in addition, only if it is not a draft
-      if: needs.check_pr.outputs.pr_state == 'open' && contains(github.event.pull_request.labels.*.name, 'auto-merge') && !needs.check_pr.outputs.pr_draft
+      if: needs.check_pr.outputs.pr_state == 'open' && contains(github.event.pull_request.labels.*.name, 'auto-merge') && needs.check_pr.outputs.pr_draft == 'false'
       needs: [check_pr, run_tests]
       env:
         GITHUB_TOKEN: ${{ secrets.PULL_REQUEST_TOKEN }}
