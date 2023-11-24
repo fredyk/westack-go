@@ -268,14 +268,12 @@ func ParseFilter(filter string) *wst.Filter {
 	return filterMap
 }
 
-func (loadedModel *Model) FindMany(filterMap *wst.Filter, baseContext *EventContext) Cursor {
+func (loadedModel *Model) FindMany(filterMap *wst.Filter, currentContext *EventContext) Cursor {
 
-	if baseContext == nil {
-		baseContext = &EventContext{}
-	}
-	targetBaseContext := FindBaseContext(baseContext)
+	currentContext = existingOrEmpty(currentContext)
+	targetBaseContext := FindBaseContext(currentContext)
 
-	lookups, err := loadedModel.ExtractLookupsFromFilter(filterMap, baseContext.DisableTypeConversions)
+	lookups, err := loadedModel.ExtractLookupsFromFilter(filterMap, currentContext.DisableTypeConversions)
 	if err != nil {
 		return newErrorCursor(err)
 	}
@@ -284,8 +282,8 @@ func (loadedModel *Model) FindMany(filterMap *wst.Filter, baseContext *EventCont
 		BaseContext: targetBaseContext,
 	}
 	currentOperationContext.Model = loadedModel
-	if baseContext.OperationName != "" {
-		currentOperationContext.OperationName = baseContext.OperationName
+	if currentContext.OperationName != "" {
+		currentOperationContext.OperationName = currentContext.OperationName
 	} else {
 		currentOperationContext.OperationName = wst.OperationNameFindMany
 	}
@@ -387,11 +385,9 @@ func insertCacheEntries(safeCacheDs *datasource.Datasource, loadedModel *Model, 
 	return nil
 }
 
-func doExpireCacheKey(safeCacheDs *datasource.Datasource, loadedModel *Model, canonicalId string) error {
+func doExpireCacheKey(safeCacheDs *datasource.Datasource, loadedModel *Model, canonicalId string) (err error) {
 	connectorName := safeCacheDs.SubViper.GetString("connector")
 	switch connectorName {
-	case "redis":
-		return errors.New("redis cache connector not implemented")
 	case "memorykv":
 		db := safeCacheDs.Db.(memorykv.MemoryKvDb)
 		bucket := db.GetBucket(loadedModel.CollectionName)
@@ -405,35 +401,28 @@ func doExpireCacheKey(safeCacheDs *datasource.Datasource, loadedModel *Model, ca
 		if loadedModel.App.Debug {
 			fmt.Printf("[DEBUG] trying to expire %v in %v seconds\n", canonicalId, ttl)
 		}
-		err := bucket.Expire(canonicalId, ttl)
-		if err != nil {
-			return err
-		}
+		err = bucket.Expire(canonicalId, ttl)
 		if loadedModel.App.Debug {
-			fmt.Printf("[DEBUG] expiring %v in %v seconds\n", canonicalId, ttl)
+			fmt.Printf("[DEBUG] expiring %v in %v seconds, err=%v\n", canonicalId, ttl, err)
 		}
 	default:
 		return errors.New(fmt.Sprintf("Unsupported cache connector %v", connectorName))
 	}
-	return nil
+	return err
 }
 
-func (loadedModel *Model) Count(filterMap *wst.Filter, baseContext *EventContext) (int64, error) {
-	if baseContext == nil {
-		baseContext = &EventContext{}
+func existingOrEmpty[T any](existing *T) *T {
+	if existing != nil {
+		return existing
 	}
-	var targetBaseContext = baseContext
-	deepLevel := 0
-	for {
-		if targetBaseContext.BaseContext != nil {
-			targetBaseContext = targetBaseContext.BaseContext
-		} else {
-			break
-		}
-		deepLevel++
-	}
+	return new(T)
+}
 
-	lookups, err := loadedModel.ExtractLookupsFromFilter(filterMap, baseContext.DisableTypeConversions)
+func (loadedModel *Model) Count(filterMap *wst.Filter, currentContext *EventContext) (int64, error) {
+	currentContext = existingOrEmpty(currentContext)
+	var targetBaseContext = FindBaseContext(currentContext)
+
+	lookups, err := loadedModel.ExtractLookupsFromFilter(filterMap, currentContext.DisableTypeConversions)
 	if err != nil {
 		return 0, err
 	}
@@ -442,13 +431,13 @@ func (loadedModel *Model) Count(filterMap *wst.Filter, baseContext *EventContext
 		BaseContext: targetBaseContext,
 	}
 	eventContext.Model = loadedModel
-	if baseContext.OperationName != "" {
-		eventContext.OperationName = baseContext.OperationName
+	if currentContext.OperationName != "" {
+		eventContext.OperationName = currentContext.OperationName
 	} else {
 		eventContext.OperationName = wst.OperationNameCount
 	}
 
-	eventContext.DisableTypeConversions = baseContext.DisableTypeConversions
+	eventContext.DisableTypeConversions = currentContext.DisableTypeConversions
 
 	eventContext.Filter = filterMap
 
@@ -507,7 +496,7 @@ func (loadedModel *Model) FindById(id interface{}, filterMap *wst.Filter, baseCo
 	return nil, nil
 }
 
-func (loadedModel *Model) Create(data interface{}, baseContext *EventContext) (*Instance, error) {
+func (loadedModel *Model) Create(data interface{}, currentContext *EventContext) (*Instance, error) {
 
 	var finalData wst.M
 	switch data.(type) {
@@ -553,18 +542,9 @@ func (loadedModel *Model) Create(data interface{}, baseContext *EventContext) (*
 		}
 	}
 
-	if baseContext == nil {
-		baseContext = &EventContext{}
-	}
-	var targetBaseContext = baseContext
-	for {
-		if targetBaseContext.BaseContext != nil {
-			targetBaseContext = targetBaseContext.BaseContext
-		} else {
-			break
-		}
-	}
-	if !baseContext.DisableTypeConversions {
+	currentContext = existingOrEmpty(currentContext)
+	var targetBaseContext = FindBaseContext(currentContext)
+	if !currentContext.DisableTypeConversions {
 		_, err := datasource.ReplaceObjectIds(finalData)
 		if err != nil {
 			return nil, err
@@ -626,7 +606,7 @@ func (loadedModel *Model) Create(data interface{}, baseContext *EventContext) (*
 
 }
 
-func (loadedModel *Model) DeleteById(id interface{}, baseContext *EventContext) (datasource.DeleteResult, error) {
+func (loadedModel *Model) DeleteById(id interface{}, currentContext *EventContext) (datasource.DeleteResult, error) {
 
 	var finalId interface{}
 	switch id.(type) {
@@ -649,14 +629,8 @@ func (loadedModel *Model) DeleteById(id interface{}, baseContext *EventContext) 
 		}
 	}
 
-	var targetBaseContext = baseContext
-	for {
-		if targetBaseContext.BaseContext != nil {
-			targetBaseContext = targetBaseContext.BaseContext
-		} else {
-			break
-		}
-	}
+	currentContext = existingOrEmpty(currentContext)
+	var targetBaseContext = FindBaseContext(currentContext)
 	eventContext := &EventContext{
 		BaseContext:   targetBaseContext,
 		ModelID:       finalId,
@@ -679,7 +653,7 @@ func (loadedModel *Model) DeleteById(id interface{}, baseContext *EventContext) 
 	return deleteResult, err
 }
 
-func (loadedModel *Model) DeleteMany(where *wst.Where, ctx *EventContext) (result datasource.DeleteResult, err error) {
+func (loadedModel *Model) DeleteMany(where *wst.Where, currentContext *EventContext) (result datasource.DeleteResult, err error) {
 	if where == nil {
 		return result, errors.New("where cannot be nil")
 	}
@@ -691,19 +665,9 @@ func (loadedModel *Model) DeleteMany(where *wst.Where, ctx *EventContext) (resul
 			"$match": wst.M(*where),
 		},
 	}
-	var baseContext = ctx
-	if baseContext == nil {
-		baseContext = &EventContext{}
-	}
-	var targetBaseContext = baseContext
-	for {
-		if targetBaseContext.BaseContext != nil {
-			targetBaseContext = targetBaseContext.BaseContext
-		} else {
-			break
-		}
-	}
-	if !baseContext.DisableTypeConversions {
+	currentContext = existingOrEmpty(currentContext)
+	var targetBaseContext = FindBaseContext(currentContext)
+	if !currentContext.DisableTypeConversions {
 		_, err := datasource.ReplaceObjectIds(&(*whereLookups)[0])
 		if err != nil {
 			return result, err
