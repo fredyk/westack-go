@@ -5,7 +5,7 @@ go 1.19
 require (
 	github.com/fredyk/westack-go v1.7.3
 	github.com/gofiber/fiber/v2 v2.51.0
-	go.mongodb.org/mongo-driver v1.13.0
+	go.mongodb.org/mongo-driver v1.13.1
 )
 
 require (
