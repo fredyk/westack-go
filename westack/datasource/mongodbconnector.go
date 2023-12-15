@@ -43,7 +43,7 @@ func (connector *MongoDBConnector) Connect(parentContext context.Context) error 
 	var mongoCtx context.Context
 	var cancelFn context.CancelFunc
 	if connector.options != nil && connector.options.Timeout > 0 {
-		fmt.Printf("DEBUG: Setting timeout to %v seconds\n", connector.options.Timeout)
+		fmt.Printf("[DEBUG] Setting timeout to %v seconds\n", connector.options.Timeout)
 		mongoCtx, cancelFn = context.WithTimeout(parentContext, time.Duration(connector.options.Timeout)*time.Second)
 		defer cancelFn()
 	} else {
