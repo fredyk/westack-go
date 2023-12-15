@@ -222,7 +222,7 @@ func (loadedModel *Model) HandleRemoteMethod(name string, eventContext *EventCon
 	action := options.Name
 
 	if loadedModel.App.Debug {
-		log.Println(fmt.Sprintf("DEBUG: Check auth for %v.%v (%v %v)", loadedModel.Name, options.Name, c.Method(), c.Path()))
+		log.Println(fmt.Sprintf("[DEBUG] Check auth for %v.%v (%v %v)", loadedModel.Name, options.Name, c.Method(), c.Path()))
 	}
 
 	objId := "*"
@@ -338,14 +338,24 @@ func (loadedModel *Model) HandleRemoteMethod(name string, eventContext *EventCon
 		} else if eventContext.StatusCode == fiber.StatusNoContent {
 			return eventContext.Ctx.Status(fiber.StatusNoContent).SendString("")
 		}
+		if v, ok := eventContext.Result.(*wst.M); ok {
+			if v != nil {
+				eventContext.Result = *v
+			}
+		}
 		switch eventContext.Result.(type) {
 		case wst.M:
 			if eventContext.Result.(wst.M)["<wst.NilMap>"] == 1 {
 				eventContext.Ctx.Set("Content-Type", "application/json")
 				return eventContext.Ctx.Status(eventContext.StatusCode).Send([]byte{'n', 'u', 'l', 'l'})
 			}
+			if eventContext.Ephemeral != nil {
+				for k, v := range *eventContext.Ephemeral {
+					(eventContext.Result.(wst.M))[k] = v
+				}
+			}
 			return eventContext.Ctx.Status(eventContext.StatusCode).JSON(eventContext.Result)
-		case *wst.M, wst.A, *wst.A, fiber.Map, *fiber.Map, map[string]interface{}, *map[string]interface{}, []interface{}, *[]interface{}, int, int32, int64, float32, float64, bool:
+		case wst.A, *wst.A, fiber.Map, *fiber.Map, map[string]interface{}, *map[string]interface{}, []interface{}, *[]interface{}, int, int32, int64, float32, float64, bool:
 			return eventContext.Ctx.Status(eventContext.StatusCode).JSON(eventContext.Result)
 		case string:
 			return eventContext.Ctx.Status(eventContext.StatusCode).SendString(eventContext.Result.(string))
@@ -373,7 +383,7 @@ func (loadedModel *Model) HandleRemoteMethod(name string, eventContext *EventCon
 	}
 	resp := eventContext.Ctx.Response()
 	if resp.StatusCode() == 0 {
-		fmt.Printf("WARNING: No result found after remote method %v\n", name)
+		fmt.Printf("[WARNING] No result found after remote method %v\n", name)
 		return eventContext.Ctx.Status(fiber.StatusNoContent).SendString("")
 	}
 	return nil

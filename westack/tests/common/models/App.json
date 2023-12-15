@@ -1,15 +1,18 @@
 {
-  "name": "Empty",
+  "name": "App",
   "plural": "",
-  "base": "PersistedModel",
+  "base": "App",
   "public": true,
   "properties": {},
   "relations": {},
   "hidden": [],
   "casbin": {
-    "policies": [
-      "$authenticated,*,read,allow"
-    ]
+    "requestDefinition": "",
+    "policyDefinition": "",
+    "roleDefinition": "",
+    "policyEffect": "",
+    "matchersDefinition": "",
+    "policies": null
   },
   "cache": {
     "datasource": "",

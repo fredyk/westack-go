@@ -144,8 +144,8 @@ func appBoot(customRoutesCallbacks []func(app *WeStack), app *WeStack) {
 				return err
 			}
 
-			fmt.Printf("DEBUG: Fetched swagger ui static html (%v bytes)\n", len(swaggerUIStatic))
-			fmt.Printf("DEBUG: Swagger Content-Encoding: %v\n", swaggerContentEncoding)
+			fmt.Printf("[DEBUG] Fetched swagger ui static html (%v bytes)\n", len(swaggerUIStatic))
+			fmt.Printf("[DEBUG] Swagger Content-Encoding: %v\n", swaggerContentEncoding)
 		}
 
 		ctx.Status(fiber.StatusOK).Set("Content-Type", "text/html; charset=utf-8")

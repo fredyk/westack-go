@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/fredyk/westack-go/westack"
 	wst "github.com/fredyk/westack-go/westack/common"
+	"github.com/fredyk/westack-go/westack/model"
 	"github.com/goccy/go-json"
 	"github.com/golang-jwt/jwt"
 	"github.com/stretchr/testify/assert"
@@ -14,11 +15,15 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 )
 
 var app *westack.WeStack
 var randomUser wst.M
 var randomUserToken wst.M
+var adminUserToken wst.M
+var appInstance *model.Instance
+var appBearer *model.BearerToken
 
 // Decode the jwtInfo as JSON
 type jwtInfo struct {
@@ -103,7 +108,9 @@ func invokeApiFullResponse(t *testing.T, method string, url string, body wst.M, 
 		req.Header.Add(k, v.(string))
 	}
 	//resp, err := app.Server.Test(req, 600000)
-	client := &http.Client{}
+	client := &http.Client{
+		Timeout: 45 * time.Second,
+	}
 	client.CheckRedirect = func(req *http.Request, via []*http.Request) error {
 		return http.ErrUseLastResponse
 	}

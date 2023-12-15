@@ -31,17 +31,17 @@ type ChunkGeneratorReader struct {
 
 func (reader *ChunkGeneratorReader) Read(p []byte) (n int, err error) {
 	if reader.debug {
-		fmt.Printf("DEBUG: ChunkGeneratorReader.Read() called with len(p)=%d\n", len(p))
+		fmt.Printf("[DEBUG] ChunkGeneratorReader.Read() called with len(p)=%d\n", len(p))
 	}
 	if reader.currentChunkReadIndex == reader.currentChunk.length {
 		if reader.debug {
-			fmt.Printf("DEBUG: ChunkGeneratorReader.Read() reached end of chunk (%d, %d)\n", reader.currentChunkReadIndex, reader.currentChunk.length)
+			fmt.Printf("[DEBUG] ChunkGeneratorReader.Read() reached end of chunk (%d, %d)\n", reader.currentChunkReadIndex, reader.currentChunk.length)
 		}
 		reader.currentChunk, err = reader.chunkGenerator.NextChunk()
 		if err != nil {
 			if err == io.EOF {
 				if reader.debug {
-					fmt.Printf("DEBUG: ChunkGeneratorReader.Read() reached EOF\n")
+					fmt.Printf("[DEBUG] ChunkGeneratorReader.Read() reached EOF\n")
 				}
 			}
 			return n, err
@@ -52,7 +52,7 @@ func (reader *ChunkGeneratorReader) Read(p []byte) (n int, err error) {
 	reader.currentChunkReadIndex += n
 
 	if reader.debug {
-		fmt.Printf("DEBUG: ChunkGeneratorReader.Read() returning %d bytes\n", n)
+		fmt.Printf("[DEBUG] ChunkGeneratorReader.Read() returning %d bytes\n", n)
 	}
 
 	return
@@ -92,7 +92,7 @@ func (chunkGenerator *cursorChunkGenerator) GenerateNextChunk() (err error) {
 		nextInstance, err = chunkGenerator.cursor.Next()
 		if err != nil {
 			if chunkGenerator.Debug {
-				fmt.Printf("ERROR: ChunkGenerator.GenerateNextChunk() failed to get next instance: %v\n", err)
+				fmt.Printf("[ERROR] ChunkGenerator.GenerateNextChunk() failed to get next instance: %v\n", err)
 			}
 			return err
 
@@ -105,10 +105,10 @@ func (chunkGenerator *cursorChunkGenerator) GenerateNextChunk() (err error) {
 			nextInstance.HideProperties()
 			asM := nextInstance.ToJSON()
 			var asBytes []byte
-			asBytes, err = easyjson.Marshal(asM)
+			asBytes, err = easyjson.Marshal(&asM)
 			if err != nil {
 				if chunkGenerator.Debug {
-					fmt.Printf("ERROR: ChunkGenerator.GenerateNextChunk() failed to marshal instance: %v\n", err)
+					fmt.Printf("[ERROR] ChunkGenerator.GenerateNextChunk() failed to marshal instance: %v\n", err)
 				}
 				return err
 			}

@@ -1,4 +1,7 @@
 {
+  "App": {
+    "dataSource": "db0"
+  },
   "Customer": {
     "dataSource": "db0"
   },
@@ -23,13 +26,13 @@
   "Store": {
     "dataSource": "db2"
   },
+  "publicUser": {
+    "dataSource": "db0"
+  },
   "role": {
     "dataSource": "db0"
   },
   "user": {
-    "dataSource": "db0"
-  },
-  "publicUser": {
     "dataSource": "db0"
   }
 }
