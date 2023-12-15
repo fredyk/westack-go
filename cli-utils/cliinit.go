@@ -220,9 +220,20 @@ func addModel(config model.Config, datasource string) error {
 		return fmt.Errorf("model %v already exists", config.Name)
 	}
 
+	var existingDatasources map[string]model.DataSourceConfig
+	bytes, err := os.ReadFile("server/datasources.json")
+	err = json.Unmarshal(bytes, &existingDatasources)
+	if err != nil {
+		return err
+	}
+
+	if _, ok := existingDatasources[datasource]; !ok {
+		return fmt.Errorf("datasource '%v' does not exist", datasource)
+	}
+
 	log.Printf("Adding model %v attached to datasource %v\n", config.Name, datasource)
 
-	bytes, err := json.MarshalIndent(config, "", "  ")
+	bytes, err = json.MarshalIndent(config, "", "  ")
 	err = os.WriteFile(path, bytes, 0600)
 	if err != nil {
 		return err
