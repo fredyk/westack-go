@@ -3,7 +3,7 @@ module github.com/fredyk/westack-go/examples/basic-auth-example
 go 1.19
 
 require (
-	github.com/fredyk/westack-go v1.7.3
+	github.com/fredyk/westack-go v1.8.0
 	github.com/gofiber/fiber/v2 v2.51.0
 	go.mongodb.org/mongo-driver v1.13.1
 )
