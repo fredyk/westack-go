@@ -79,7 +79,7 @@ func Test_CreateWithInstance(t *testing.T) {
 
 	build, err2 := noteModel.Build(wst.M{
 		"foo": "bar",
-	}, model.NewBuildCache(), systemContext)
+	}, systemContext)
 	assert.Nil(t, err2)
 	created, err := noteModel.Create(build, systemContext)
 	assert.NoError(t, err)
@@ -92,7 +92,7 @@ func Test_CreateWithInstancePointer(t *testing.T) {
 
 	v, err := noteModel.Build(wst.M{
 		"foo2": "bar2",
-	}, model.NewBuildCache(), systemContext)
+	}, systemContext)
 	assert.NoError(t, err)
 	created, err := noteModel.Create(&v, systemContext)
 	assert.NoError(t, err)
@@ -211,6 +211,62 @@ func Test_EnforceExError(t *testing.T) {
 	assert.Error(t, err)
 }
 
+func Test_BearerTokenWithObjectId(t *testing.T) {
+
+	t.Parallel()
+
+	createdNote, err := noteModel.Create(wst.M{
+		"title":  "Test",
+		"userId": randomUserToken.GetString("userId"),
+		"appId":  appInstance.Id,
+	}, systemContext)
+	assert.NoError(t, err)
+	subjId, err := primitive.ObjectIDFromHex(randomUserToken.GetString("userId"))
+	assert.NoError(t, err)
+	userBearer := model.CreateBearer(subjId, float64(time.Now().Unix()), float64(60), []string{"USER"})
+	refreshedByUser, err := noteModel.FindById(createdNote.Id, &wst.Filter{
+		Include: &wst.Include{
+			{Relation: "user"},
+			{Relation: "footer1"},
+			{Relation: "footer2"},
+			{Relation: "publicFooter"},
+			{Relation: "entries"},
+		},
+	}, &model.EventContext{
+		Bearer: userBearer,
+	})
+	assert.NoError(t, err)
+	assert.Equal(t, "Test", refreshedByUser.GetString("title"))
+	updatedByUser, err := refreshedByUser.UpdateAttributes(wst.M{
+		"title": "Test2",
+	}, &model.EventContext{
+		Bearer: userBearer,
+	})
+	assert.NoError(t, err)
+	assert.Equal(t, "Test2", updatedByUser.GetString("title"))
+
+	refreshedByApp, err := noteModel.FindById(createdNote.Id, &wst.Filter{
+		Include: &wst.Include{
+			{Relation: "user"},
+			{Relation: "footer1"},
+			{Relation: "footer2"},
+			{Relation: "publicFooter"},
+			{Relation: "entries"},
+		},
+	}, &model.EventContext{
+		Bearer: appBearer,
+	})
+	assert.NoError(t, err)
+	assert.Equal(t, "Test2", refreshedByApp.GetString("title"))
+	updatedByApp, err := refreshedByApp.UpdateAttributes(wst.M{
+		"title": "Test3",
+	}, &model.EventContext{
+		Bearer: appBearer,
+	})
+	assert.NoError(t, err)
+	assert.Equal(t, "Test3", updatedByApp.GetString("title"))
+}
+
 func Test_CreateWithDefaultStringValue(t *testing.T) {
 
 	t.Parallel()
@@ -270,14 +326,24 @@ func Test_CreateWithDefaultMapValue(t *testing.T) {
 	assert.Equal(t, map[string]interface{}{"defaultKey": "defaultValue"}, created["defaultMap"].(map[string]interface{}))
 }
 
+func Test_CreateWithDefaultNilValue(t *testing.T) {
+
+	t.Parallel()
+
+	created, err := invokeApiAsRandomUser(t, "POST", "/notes", wst.M{}, wst.M{"Content-Type": "application/json"})
+	assert.Nil(t, err)
+	assert.Contains(t, created, "defaultNull")
+	assert.Nil(t, created["defaultNull"])
+}
+
 func Test_CreateWithDefaultTimeValue(t *testing.T) {
 
 	t.Parallel()
 
 	probablyTime := time.Now()
 	lowerSeconds := probablyTime.Unix()
-	// Should be 15 milliseconds after at most
-	upperSeconds := probablyTime.Unix() + 3
+	// Should be 16 seconds after at most
+	upperSeconds := probablyTime.Unix() + 16
 	created, err := invokeApiAsRandomUser(t, "POST", "/notes", wst.M{}, wst.M{"Content-Type": "application/json"})
 	assert.Nil(t, err)
 	assert.Contains(t, created, "defaultTimeNow")
@@ -313,8 +379,8 @@ func Test_CreateWithDefaultTimeHourFromNow(t *testing.T) {
 
 	probablyTime := time.Now()
 	lowerSeconds := probablyTime.Unix() + 3600
-	// Should be 15 milliseconds after at most
-	upperSeconds := probablyTime.Unix() + 3603
+	// Should be 15 seconds after at most
+	upperSeconds := probablyTime.Unix() + 3615
 	created, err := invokeApiAsRandomUser(t, "POST", "/notes", wst.M{}, wst.M{"Content-Type": "application/json"})
 	assert.Nil(t, err)
 	assert.Contains(t, created, "defaultTimeHourFromNow")

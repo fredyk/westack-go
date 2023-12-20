@@ -7,14 +7,14 @@ import (
 	"os"
 	"reflect"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
-	"github.com/fredyk/westack-go/westack/lib/swaggerhelperinterface"
 	"github.com/mailru/easyjson/jlexer"
 
 	"github.com/goccy/go-json"
-	fiber "github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2"
 	"github.com/mailru/easyjson"
 	"github.com/mailru/easyjson/jwriter"
 	"github.com/spf13/viper"
@@ -27,40 +27,77 @@ var NilBytes = []byte{'n', 'u', 'l', 'l'}
 
 type M map[string]interface{}
 
-func (m M) GetM(key string) M {
+func (m *M) GetM(key string) *M {
 	if m == nil {
 		return nil
 	}
-	if v, ok := m[key]; ok {
+	if v, ok := (*m)[key]; ok {
 		if vv, ok := v.(M); ok {
-			return vv
+			return &vv
 		} else if vv, ok := v.(map[string]interface{}); ok {
 			var out = make(M, len(vv))
 			for k, v := range vv {
 				out[k] = v
 			}
-			return out
+			return &out
 		}
 	}
 	return nil
 }
 
-func (m M) GetString(key string) string {
+func (m *M) GetString(path string) string {
 	if m == nil {
 		return ""
 	}
-	if v, ok := m[key]; ok {
+	segments := strings.Split(path, ".")
+	if len(segments) == 1 {
+		v := (*m)[segments[0]]
+		if v == nil {
+			return ""
+		}
 		if vv, ok := v.(string); ok {
 			return vv
+		} else if vv, ok := v.(primitive.ObjectID); ok {
+			return vv.Hex()
+		}
+	} else {
+		source := obtainSourceFromM(m, segments[:len(segments)-1])
+		if v, ok := source.(M); ok {
+			return v.GetString(segments[len(segments)-1])
+		} else if v, ok := source.(map[string]interface{}); ok {
+			vv := v[segments[len(segments)-1]]
+			return vv.(string)
 		}
 	}
 	return ""
 }
 
-func (m M) MarshalEasyJSON(w *jwriter.Writer) {
+func (m *M) GetInt(path string) int {
+	if m == nil {
+		return 0
+	}
+	segments := strings.Split(path, ".")
+	if len(segments) == 1 {
+		return asInt((*m)[segments[0]])
+	} else {
+		source := obtainSourceFromM(m, segments[:len(segments)-1])
+		if v, ok := source.(M); ok {
+			return v.GetInt(segments[len(segments)-1])
+		} else if v, ok := source.(map[string]interface{}); ok {
+			return asInt(v[segments[len(segments)-1]])
+		}
+	}
+	return 0
+}
+
+func (m *M) MarshalEasyJSON(w *jwriter.Writer) {
+	if m == nil {
+		w.Raw(NilBytes, nil)
+		return
+	}
 	w.RawByte('{')
 	first := true
-	for k, v := range m {
+	for k, v := range *m {
 		if first {
 			first = false
 		} else {
@@ -117,75 +154,277 @@ func (m M) MarshalEasyJSON(w *jwriter.Writer) {
 }
 
 func (m *M) UnmarshalEasyJSON(l *jlexer.Lexer) {
-	inputBytes := l.Raw()
-	err := json.Unmarshal(inputBytes, &m)
-	if err != nil {
-		l.AddError(err)
-		return
+	l.Delim('{')
+	*m = make(M)
+	for {
+		l.FetchToken()
+		if l.IsDelim('}') {
+			return
+		}
+		key := l.String()
+		l.WantColon()
+		l.FetchToken()
+		rawValue := l.Raw()
+		if rawValue[0] == '{' {
+			subM := make(M)
+			//goland:noinspection GoUnhandledErrorResult
+			easyjson.Unmarshal(rawValue, &subM) // #nosec G601
+			//if err != nil {
+			//	l.AddError(err)
+			//	return
+			//}
+			(*m)[key] = subM
+		} else if rawValue[0] == '[' {
+			subA := make(A, 0)
+			//goland:noinspection GoUnhandledErrorResult
+			easyjson.Unmarshal(rawValue, &subA) // #nosec G601
+			//if err != nil {
+			//	l.AddError(err)
+			//	return
+			//}
+			(*m)[key] = subA
+		} else {
+			var v interface{}
+			//goland:noinspection GoUnhandledErrorResult
+			json.Unmarshal(rawValue, &v)
+			//if err != nil {
+			//	l.AddError(err)
+			//	return
+			//}
+			(*m)[key] = v
+		}
+		l.WantComma()
+		//if l.Error() != nil {
+		//	return
+		//}
 	}
 }
 
-func (m M) GetInt(path string) (result int) {
-	pathSegments := strings.Split(path, ".")
-	var currentMap = m
-	for idx, pathSegment := range pathSegments {
-		if idx == len(pathSegments)-1 {
-			result = asInt(currentMap[pathSegment])
-		} else {
-			currentMap = currentMap.GetM(pathSegment)
+func (m *M) GetBoolean(path string) bool {
+	if m == nil {
+		return false
+	}
+	segments := strings.Split(path, ".")
+	if len(segments) == 1 {
+		if v, ok := (*m)[segments[0]]; ok {
+			return v.(bool)
+		}
+	} else {
+		source := obtainSourceFromM(m, segments[:len(segments)-1])
+		if v, ok := source.(M); ok {
+			if vv, ok := v[segments[len(segments)-1]]; ok {
+				return vv.(bool)
+			}
 		}
 	}
-	return
+	return false
 }
 
 func asInt(v interface{}) int {
 	switch v := v.(type) {
-	case int:
-		return v
-	case int32:
-		return int(v)
 	case int64:
-		return int(v)
-	case float32:
 		return int(v)
 	case float64:
 		return int(v)
-	default:
-		return 0
 	}
+	return 0
 }
 
 type A []M
 
-func (a A) MarshalEasyJSON(w *jwriter.Writer) {
-	if a == nil {
-		w.Raw(NilBytes, nil)
-		return
-	}
-	w.RawByte('[')
-	first := true
-	for _, v := range a {
-		if first {
-			first = false
-		} else {
-			w.RawByte(',')
-		}
-		bytes, err := easyjson.Marshal(v)
-		w.Raw(bytes, err)
-	}
-	w.RawByte(']')
-}
+//func (a *A) MarshalEasyJSON(w *jwriter.Writer) {
+//	if a == nil {
+//		w.Raw(NilBytes, nil)
+//		return
+//	}
+//	w.RawByte('[')
+//	first := true
+//	for _, v := range *a {
+//		if first {
+//			first = false
+//		} else {
+//			w.RawByte(',')
+//		}
+//		bytes, err := easyjson.Marshal(&v) // #nosec G601
+//		w.Raw(bytes, err)
+//	}
+//	w.RawByte(']')
+//}
 
-func (a A) UnmarshalEasyJSON(l *jlexer.Lexer) {
+func (a *A) UnmarshalEasyJSON(l *jlexer.Lexer) {
 	if l.IsNull() {
 		l.Skip()
 		return
 	}
-	inputBytes := l.Raw()
-	err := json.Unmarshal(inputBytes, &a)
-	if err != nil {
-		l.AddError(err)
-		return
+	l.Delim('[')
+	*a = make(A, 0)
+	for {
+		l.FetchToken()
+		if l.IsDelim(']') {
+			return
+		}
+		rawValue := l.Raw()
+		if rawValue[0] == '{' {
+			subM := make(M)
+			//goland:noinspection GoUnhandledErrorResult
+			easyjson.Unmarshal(rawValue, &subM) // #nosec G601
+			//if err != nil {
+			//	l.AddError(err)
+			//	return
+			//}
+			*a = append(*a, subM)
+		} else {
+			var v interface{}
+			//goland:noinspection GoUnhandledErrorResult
+			json.Unmarshal(rawValue, &v)
+			//if err != nil {
+			//	l.AddError(err)
+			//	return
+			//}
+			*a = append(*a, M{
+				"<value>": v,
+			})
+		}
+		l.WantComma()
+		//if l.Error() != nil {
+		//	return
+		//}
+	}
+}
+
+func (a *A) GetAt(idx int) *M {
+	if a == nil {
+		return nil
+	}
+	if idx < 0 || idx >= len(*a) {
+		return nil
+	}
+	return &(*a)[idx]
+}
+
+func (a *A) GetM(path string) *M {
+	if a == nil {
+		return nil
+	}
+	segments := strings.Split(path, ".")
+	if len(segments) == 1 {
+		return a.GetAt(obtainIdxFromSegment(segments[0]))
+	} else {
+		source := obtainSourceFromA(a, segments[:len(segments)-1])
+		if v, ok := source.(M); ok {
+			vv := v[segments[len(segments)-1]].(M)
+			return &vv
+		} else if v, ok := source.(A); ok {
+			return v.GetAt(obtainIdxFromSegment(segments[len(segments)-1]))
+		}
+	}
+	return nil
+}
+
+func (a *A) GetString(path string) string {
+	if a == nil {
+		return ""
+	}
+	segments := strings.Split(path, ".")
+	segmentIdx := 0
+	var source interface{}
+	for {
+		if source == nil {
+			if segmentIdx == 0 {
+				source = obtainSourceFromA(a, segments[:1])
+			} else {
+				return ""
+			}
+		} else if v, ok := source.(A); ok {
+			source = obtainSourceFromA(&v, segments[segmentIdx:segmentIdx+1])
+		} else if v, ok := source.(M); ok {
+			return v.GetString(strings.Join(segments[segmentIdx:], "."))
+		} else {
+			log.Printf("[WARNING] GetString: not an M: %v\n", reflect.TypeOf(source))
+			return ""
+		}
+		segmentIdx++
+	}
+}
+
+func obtainSourceFromA(a *A, segments []string) interface{} {
+	if len(segments) > 1 {
+		var prevSource = obtainSourceFromA(a, segments[:len(segments)-1])
+		if v, ok := prevSource.(M); ok {
+			return v[segments[len(segments)-1]]
+		} else if v, ok := prevSource.(A); ok {
+			// last segment is an index wrapped by brackets
+			// e.g. "a.b[0].c"
+			// so we need to remove the brackets
+			idx := obtainIdxFromSegment(segments[len(segments)-1])
+			if idx < 0 || idx >= len(v) {
+				return nil
+			}
+			return v[idx]
+		}
+	}
+	return (*a)[obtainIdxFromSegment(segments[0])]
+}
+
+func obtainSourceFromM(m *M, segments []string) interface{} {
+	if len(segments) > 1 {
+		var prevSource = obtainSourceFromM(m, segments[:len(segments)-1])
+		if v, ok := prevSource.(M); ok {
+			return v[segments[len(segments)-1]]
+		} else if v, ok := prevSource.(A); ok {
+			// last segment is an index wrapped by brackets
+			// e.g. "a.b[0].c"
+			// so we need to remove the brackets
+			idx := obtainIdxFromSegment(segments[len(segments)-1])
+			if idx < 0 || idx >= len(v) {
+				return nil
+			}
+			return v[idx]
+		}
+	}
+	return (*m)[segments[0]]
+}
+
+func obtainIdxFromSegment(segment string) int {
+	segment = segment[1 : len(segment)-1]
+	idx, _ := strconv.Atoi(segment)
+	return idx
+}
+
+func GetTypedList[T any](m *M, path string) []T {
+	if m == nil {
+		return nil
+	}
+	segments := strings.Split(path, ".")
+	if len(segments) == 1 {
+		return (*m)[segments[0]].([]T)
+	} else {
+		source := obtainSourceFromM(m, segments[:len(segments)-1])
+		if v, ok := source.(M); ok {
+			return v[segments[len(segments)-1]].([]T)
+		} else {
+			log.Printf("[WARNING] GetTypedList: not an M: %v\n", reflect.TypeOf(source))
+			return nil
+		}
+	}
+}
+
+func GetTypedItem[T any](m *M, path string) T {
+	var defaultResult T
+	if m == nil {
+		return defaultResult
+	}
+	segments := strings.Split(path, ".")
+	if len(segments) == 1 {
+		return (*m)[segments[0]].(T)
+	} else {
+		source := obtainSourceFromM(m, segments[:len(segments)-1])
+		if v, ok := source.(M); ok {
+			return v[segments[len(segments)-1]].(T)
+		} else {
+			log.Printf("[WARNING] GetTypedItem: not an M: %v\n", reflect.TypeOf(source))
+			return defaultResult
+		}
 	}
 }
 
@@ -215,8 +454,8 @@ const (
 )
 
 var (
-	NilMap          M = M{"<wst.NilMap>": 1}
-	DashedCaseRegex   = regexp.MustCompile("([A-Z])")
+	NilMap          = M{"<wst.NilMap>": 1}
+	DashedCaseRegex = regexp.MustCompile("([A-Z])")
 )
 
 // AFromGenericSlice converts a generic slice of M to a *A
@@ -234,7 +473,7 @@ func AFromGenericSlice(in *[]interface{}) *A {
 		if vv, ok := inDoc.(M); ok {
 			out[idx] = vv
 		} else {
-			log.Println("ERROR: AFromGenericSlice: not an M")
+			log.Println("[ERROR] AFromGenericSlice: not an M")
 			out[idx] = M{}
 		}
 	}
@@ -242,7 +481,7 @@ func AFromGenericSlice(in *[]interface{}) *A {
 	return &out
 }
 
-// AFromPrimitiveSlice converts a primitive slice of primivite.M or M to a *A
+// AFromPrimitiveSlice converts a primitive slice of primitive.M or M to a *A
 // This is used to convert the result of a query to a *A
 // Returns nil if in is nil
 func AFromPrimitiveSlice(in *primitive.A) *A {
@@ -264,7 +503,7 @@ func AFromPrimitiveSlice(in *primitive.A) *A {
 		} else if vv, ok := inDoc.(M); ok {
 			out[idx] = vv
 		} else {
-			log.Println("ERROR: AFromPrimitiveSlice: not a primitive.M")
+			log.Println("[ERROR] AFromPrimitiveSlice: not a primitive.M")
 			out[idx] = M{}
 		}
 	}
@@ -302,7 +541,7 @@ type BsonOptions struct {
 
 type IApp struct {
 	Debug          bool
-	SwaggerHelper  func() swaggerhelperinterface.SwaggerHelper
+	SwaggerHelper  func() SwaggerHelper
 	FindModel      func(modelName string) (interface{}, error)
 	FindDatasource func(datasource string) (interface{}, error)
 	Logger         func() ILogger
@@ -370,7 +609,7 @@ func CopyMap(src M) M {
 	return targetMap
 }
 
-// High-cost operation...
+// Transform High-cost operation...
 func Transform(in interface{}, out interface{}) error {
 	// TODO: move marshal and unmarshal to easyjson
 	bytes, err := bson.Marshal(in)
@@ -390,7 +629,7 @@ func ParseDate(data string) (time.Time, error) {
 	prevData := data
 	data = regexpTrimMilliseconds.ReplaceAllString(data, "$1$2")
 	if prevData != data {
-		log.Printf("WARNING: ParseDate: trimming input to 3 digits of milliseconds: %v -> %v", prevData, data)
+		log.Printf("[WARNING] ParseDate: trimming input to 3 digits of milliseconds: %v -> %v", prevData, data)
 	}
 	if IsDate1(data) {
 		layout := "2006-01-02T15:04:05-0700"
@@ -474,12 +713,12 @@ type ILogger interface {
 
 type objectIdCodec struct{}
 
-func (objectIdCodec) EncodeValue(encodeContext bsoncodec.EncodeContext, writer bsonrw.ValueWriter, val reflect.Value) error {
+func (objectIdCodec) EncodeValue(_ bsoncodec.EncodeContext, writer bsonrw.ValueWriter, val reflect.Value) error {
 	oid := val.Interface().(primitive.ObjectID)
 	return writer.WriteObjectID(oid)
 }
 
-func (objectIdCodec) DecodeValue(decodeContext bsoncodec.DecodeContext, reader bsonrw.ValueReader, val reflect.Value) error {
+func (objectIdCodec) DecodeValue(_ bsoncodec.DecodeContext, reader bsonrw.ValueReader, val reflect.Value) error {
 	var oid primitive.ObjectID
 	var err error
 	switch reader.Type() {
@@ -488,15 +727,15 @@ func (objectIdCodec) DecodeValue(decodeContext bsoncodec.DecodeContext, reader b
 		if err != nil {
 			return err
 		}
-	case bson.TypeString:
-		str, err := reader.ReadString()
-		if err != nil {
-			return err
-		}
-		oid, err = primitive.ObjectIDFromHex(str)
-		if err != nil {
-			return err
-		}
+	//case bson.TypeString:
+	//	str, err := reader.ReadString()
+	//	if err != nil {
+	//		return err
+	//	}
+	//	oid, err = primitive.ObjectIDFromHex(str)
+	//	if err != nil {
+	//		return err
+	//	}
 	default:
 		return fmt.Errorf("cannot decode %v into a primitive.ObjectID", reader.Type())
 	}
@@ -531,13 +770,13 @@ func CreateDefaultMongoRegistry() *bsoncodec.Registry {
 				if err != nil {
 					return err
 				}
-			case bson.TypeInt64:
-				var int64Val int64
-				int64Val, err = vr.ReadInt64()
-				if err != nil {
-					return err
-				}
-				unixNano = int64Val
+			//case bson.TypeInt64:
+			//	var int64Val int64
+			//	int64Val, err = vr.ReadInt64()
+			//	if err != nil {
+			//		return err
+			//	}
+			//	unixNano = int64Val
 			default:
 				return fmt.Errorf("cannot decode %v into a time.Time", vr.Type())
 			}

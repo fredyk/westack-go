@@ -9,6 +9,8 @@
       <env name="PPROF_AUTH_PASSWORD" value="abcd1234." />
       <env name="JWT_SECRET" value="abcd1234." />
       <env name="GO_ENV" value="TESTING" />
+      <env name="DEBUG" value="true" />
+      <env name="PORT" value="8019" />
     </envs>
     <root_directory value="$PROJECT_DIR$" />
     <kind value="PACKAGE" />

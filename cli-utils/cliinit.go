@@ -55,12 +55,17 @@ var DefaultDatasources = map[string]model.DataSourceConfig{
 	},
 }
 
+type AppCasbinConfigModels struct {
+	DumpDirectory string `json:"dumpDirectory"`
+}
+
 type AppCasbinConfigPolicies struct {
 	OutputDirectory string `json:"outputDirectory"`
 }
 
 type AppCasbinConfig struct {
 	DumpModels bool                    `json:"dumpModels"`
+	Models     AppCasbinConfigModels   `json:"models"`
 	Policies   AppCasbinConfigPolicies `json:"policies"`
 }
 
@@ -83,6 +88,9 @@ var DefaultConfig = AppConfig{
 	Port:        8023,
 	Casbin: AppCasbinConfig{
 		DumpModels: false,
+		Models: AppCasbinConfigModels{
+			DumpDirectory: "./data",
+		},
 		Policies: AppCasbinConfigPolicies{
 			OutputDirectory: "./common/models",
 		},
@@ -212,9 +220,20 @@ func addModel(config model.Config, datasource string) error {
 		return fmt.Errorf("model %v already exists", config.Name)
 	}
 
+	var existingDatasources map[string]model.DataSourceConfig
+	bytes, err := os.ReadFile("server/datasources.json")
+	err = json.Unmarshal(bytes, &existingDatasources)
+	if err != nil {
+		return err
+	}
+
+	if _, ok := existingDatasources[datasource]; !ok {
+		return fmt.Errorf("datasource '%v' does not exist", datasource)
+	}
+
 	log.Printf("Adding model %v attached to datasource %v\n", config.Name, datasource)
 
-	bytes, err := json.MarshalIndent(config, "", "  ")
+	bytes, err = json.MarshalIndent(config, "", "  ")
 	err = os.WriteFile(path, bytes, 0600)
 	if err != nil {
 		return err

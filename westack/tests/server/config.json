@@ -3,12 +3,14 @@
   "version": "0.0.1",
   "description": "Example app",
   "casbin": {
-    "dumpModels": false,
+    "dumpModels": true,
+    "models": {
+      "dumpDirectory": "./data"
+    },
     "policies": {
       "outputDirectory": "./data"
     }
   },
   "restApiRoot": "/api/v1",
-  "port": 8019,
-  "strictSingleRelatedDocumentCheck": true
+  "port": 8019
 }
