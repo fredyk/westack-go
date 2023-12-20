@@ -15,7 +15,7 @@ require (
 	github.com/spf13/viper v1.15.0
 	github.com/stretchr/testify v1.8.4
 	go.mongodb.org/mongo-driver v1.13.1
-	golang.org/x/crypto v0.16.0
+	golang.org/x/crypto v0.17.0
 	google.golang.org/grpc v1.59.0
 )
 
