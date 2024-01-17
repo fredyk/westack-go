@@ -50,7 +50,7 @@ var DefaultDatasources = map[string]model.DataSourceConfig{
 		Host:      "localhost",
 		Port:      27017,
 		Database:  "example_db",
-		User:      "",
+		Username:  "",
 		Password:  "",
 	},
 }
