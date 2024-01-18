@@ -47,6 +47,14 @@ func (loadedModel *Model) ExtractLookupsFromFilter(filterMap *wst.Filter, disabl
 		targetWhere = nil
 	}
 
+	var targetFields *wst.Fields
+	if filterMap != nil && filterMap.Fields != nil {
+		fieldsCopy := *filterMap.Fields
+		targetFields = &fieldsCopy
+	} else {
+		targetFields = nil
+	}
+
 	var targetAggregationBeforeLookups []wst.AggregationStage
 	var targetAggregationAfterLookups []wst.AggregationStage
 	var newFoundFields = make(map[string]bool)
@@ -168,6 +176,29 @@ func (loadedModel *Model) ExtractLookupsFromFilter(filterMap *wst.Filter, disabl
 		if len(extractedMatch) > 0 {
 			targetMatchAfterLookups = wst.M{"$match": extractedMatch}
 		}
+	}
+
+	if targetFields != nil {
+		fieldsStage := wst.M{}
+		idFound := false
+		for _, fieldName := range *targetFields {
+			if fieldName == "id" {
+				fieldName = "_id"
+				idFound = true
+			} else if fieldName == "_id" {
+				idFound = true
+			}
+			if strings.Contains(fieldName, ".") {
+				fieldName = strings.ReplaceAll(fieldName, ".", "_")
+			}
+			fieldsStage[fieldName] = 1
+		}
+		if !idFound {
+			fieldsStage["_id"] = 1
+		}
+		*lookups = append(*lookups, wst.M{
+			"$project": fieldsStage,
+		})
 	}
 
 	if targetOrder != nil && len(*targetOrder) > 0 {
