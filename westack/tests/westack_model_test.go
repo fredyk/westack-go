@@ -2,6 +2,7 @@ package tests
 
 import (
 	"fmt"
+	"github.com/goccy/go-json"
 	"os"
 	"testing"
 	"time"
@@ -474,6 +475,31 @@ func Test_ProtectedFields(t *testing.T) {
 		},
 	)
 	assert.NoError(t, err)
+	assert.Equal(t, user1.GetString("id"), user1RetrievedWithUser2.GetString("id"))
+	assert.Equal(t, user1.GetString("username"), user1RetrievedWithUser2.GetString("username"))
+	assert.NotContainsf(t, user1RetrievedWithUser2, "password", "Password should not be returned")
+	assert.NotContainsf(t, user1RetrievedWithUser2, "phone", "Phone should not be returned")
+
+	// Get the user 1 through API with the user2
+	// Phone should not be returned with user2
+	encodedFilter, err := json.Marshal(wst.M{
+		"where": wst.M{
+			"_id": user1.GetString("id"),
+		},
+	})
+	users1RetrievedWithUser2, err := invokeApiJsonA(
+		t,
+		"GET",
+		fmt.Sprintf("/public-users?filter=%v", string(encodedFilter)),
+		nil,
+		wst.M{
+			"Authorization": fmt.Sprintf("Bearer %v", user2Token["id"]),
+		},
+	)
+	assert.NoError(t, err)
+	assert.EqualValues(t, 1, len(users1RetrievedWithUser2))
+	user1RetrievedWithUser2 = users1RetrievedWithUser2[0]
+
 	assert.Equal(t, user1.GetString("id"), user1RetrievedWithUser2.GetString("id"))
 	assert.Equal(t, user1.GetString("username"), user1RetrievedWithUser2.GetString("username"))
 	assert.NotContainsf(t, user1RetrievedWithUser2, "password", "Password should not be returned")
