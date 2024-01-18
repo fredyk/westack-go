@@ -178,8 +178,8 @@ func (loadedModel *Model) ExtractLookupsFromFilter(filterMap *wst.Filter, disabl
 		}
 	}
 
-	var fieldsStage wst.M
 	if targetFields != nil {
+		fieldsStage := wst.M{}
 		idFound := false
 		for _, fieldName := range *targetFields {
 			if fieldName == "id" {
