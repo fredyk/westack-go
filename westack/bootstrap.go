@@ -479,21 +479,25 @@ func (app *WeStack) setupModel(loadedModel *model.Model, dataSource *datasource.
 		protectedFieldsCount := len(loadedModel.Config.Protected)
 		loadedModel.Observe("before build", func(eventContext *model.EventContext) error {
 			if protectedFieldsCount > 0 {
-				if !eventContext.BaseContext.Bearer.User.System {
-					if !skipOperationForBeforeBuild(eventContext.OperationName) {
-						isDifferentUser := true
-						if eventContext.BaseContext.Bearer != nil && eventContext.BaseContext.Bearer.User != nil {
-							foundUserId := eventContext.ModelID.(primitive.ObjectID).Hex()
-							requesterUserId := eventContext.BaseContext.Bearer.User.Id
-							if v, ok := requesterUserId.(primitive.ObjectID); ok {
-								requesterUserId = v.Hex()
-							}
-							isDifferentUser = foundUserId != requesterUserId.(string)
+
+				//if !eventContext.BaseContext.Bearer.User.System {
+				//}
+				if eventContext.BaseContext.Bearer != nil && eventContext.BaseContext.Bearer.User != nil && eventContext.BaseContext.Bearer.User.System {
+					return nil
+				}
+				if !skipOperationForBeforeBuild(eventContext.OperationName) {
+					isDifferentUser := true
+					if eventContext.BaseContext.Bearer != nil && eventContext.BaseContext.Bearer.User != nil {
+						foundUserId := eventContext.ModelID.(primitive.ObjectID).Hex()
+						requesterUserId := eventContext.BaseContext.Bearer.User.Id
+						if v, ok := requesterUserId.(primitive.ObjectID); ok {
+							requesterUserId = v.Hex()
 						}
-						if isDifferentUser && !isAllowedForProtectedFields(eventContext.BaseContext.Bearer) {
-							for _, hiddenProperty := range loadedModel.Config.Protected {
-								delete(*eventContext.Data, hiddenProperty)
-							}
+						isDifferentUser = foundUserId != requesterUserId.(string)
+					}
+					if isDifferentUser && !isAllowedForProtectedFields(eventContext.BaseContext.Bearer) {
+						for _, hiddenProperty := range loadedModel.Config.Protected {
+							delete(*eventContext.Data, hiddenProperty)
 						}
 					}
 				}
