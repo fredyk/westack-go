@@ -3,7 +3,7 @@ module westack-go-example
 go 1.19
 
 require (
-	github.com/fredyk/westack-go v1.8.1
+	github.com/fredyk/westack-go v1.8.2
 	github.com/gofiber/fiber/v2 v2.52.0
 )
 
