@@ -1,7 +1,6 @@
 package westack
 
 import (
-	"errors"
 	"fmt"
 	casbinmodel "github.com/casbin/casbin/v2/model"
 	fileadapter "github.com/casbin/casbin/v2/persist/file-adapter"
@@ -12,7 +11,6 @@ import (
 	"github.com/golang-jwt/jwt"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"golang.org/x/crypto/bcrypt"
-	"log"
 	"os"
 	"strings"
 	"time"
@@ -199,65 +197,6 @@ func setupUserModel(loadedModel *model.Model, app *WeStack) {
 		ctx.Result = fiber.Map{"id": tokenString, "userId": userIdHex}
 		return nil
 	})
-
-	loadedModel.RemoteMethod(func(eventContext *model.EventContext) error {
-		authHeader := strings.TrimSpace(string(eventContext.Ctx.Request().Header.Peek("Authorization")))
-
-		authBearerPair := strings.Split(authHeader, "Bearer ")
-		tokenString := ""
-		userIdHex := ""
-
-		if len(authBearerPair) == 2 {
-
-			bearerValue := authBearerPair[1]
-			token, err := jwt.Parse(bearerValue, func(token *jwt.Token) (interface{}, error) {
-
-				if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-					return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
-				}
-
-				return loadedModel.App.JwtSecretKey, nil
-			})
-
-			if token != nil {
-
-				if claims, ok := token.Claims.(jwt.MapClaims); ok && token.Valid {
-					userIdHex = claims["userId"].(string)
-					userId, _ := primitive.ObjectIDFromHex(userIdHex)
-					roleNames, err := GetRoleNames(app.roleMappingModel, userIdHex, userId)
-					if err != nil {
-						return err
-					}
-
-					newToken, err := CreateNewToken(userIdHex, loadedModel, roleNames)
-					if err != nil {
-						return err
-					}
-					tokenString = newToken
-				} else {
-					log.Println(err)
-
-					return errors.New("invalid token")
-				}
-
-			} else {
-				return errors.New("invalid token")
-			}
-
-		} else {
-			return errors.New("invalid Authorization header")
-		}
-
-		return eventContext.Ctx.JSON(fiber.Map{"id": tokenString, "userId": userIdHex})
-	}, model.RemoteMethodOptions{
-		Name:        "refreshToken",
-		Description: "Obtains current user",
-		Http: model.RemoteMethodOptionsHttp{
-			Path: "/refresh-token",
-			Verb: "post",
-		},
-	})
-
 }
 
 func setupRoleModel(config *model.Config, app *WeStack, dataSource *datasource.Datasource) {
