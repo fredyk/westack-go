@@ -88,6 +88,7 @@ func createCasbinModel(loadedModel *model.Model, app *WeStack, config *model.Con
 		casbModel.AddPolicy("p", "p", []string{replaceVarNames("$authenticated,*,findSelf,allow")})
 		casbModel.AddPolicy("p", "p", []string{replaceVarNames("$authenticated,*,sendVerificationEmail,allow")})
 		casbModel.AddPolicy("p", "p", []string{replaceVarNames("$authenticated,*,performEmailVerification,allow")})
+		casbModel.AddPolicy("p", "p", []string{replaceVarNames("$authenticated,*,refreshToken,allow")})
 		casbModel.AddPolicy("p", "p", []string{replaceVarNames("$owner,*,findById,allow")})
 		casbModel.AddPolicy("p", "p", []string{replaceVarNames("$owner,*,instance_updateAttributes,allow")})
 		// TODO: check https://github.com/fredyk/westack-go/issues/447
@@ -232,4 +233,54 @@ func setupRoleModel(config *model.Config, app *WeStack, dataSource *datasource.D
 	roleMappingModel.Datasource = dataSource
 
 	app.roleMappingModel = roleMappingModel
+}
+
+func GetRoleNames(RoleMappingModel *model.Model, userIdHex string, userId primitive.ObjectID) ([]string, error) {
+	roleNames := []string{"USER"}
+
+	if RoleMappingModel != nil {
+		ctx := &model.EventContext{Bearer: &model.BearerToken{
+			User: &model.BearerUser{
+				System: true,
+			},
+			Roles: []model.BearerRole{},
+		}}
+		roleContext := &model.EventContext{
+			BaseContext:            ctx,
+			DisableTypeConversions: true,
+		}
+		roleEntries, err := RoleMappingModel.FindMany(&wst.Filter{Where: &wst.Where{
+			"principalType": "USER",
+			"$or": []wst.M{
+				{
+					"principalId": userIdHex,
+				},
+				{
+					"principalId": userId,
+				},
+			},
+		}, Include: &wst.Include{{Relation: "role"}}}, roleContext).All()
+		if err != nil {
+			return roleNames, err
+		}
+		for _, roleEntry := range roleEntries {
+			role := roleEntry.GetOne("role")
+			roleNames = append(roleNames, role.ToJSON()["name"].(string))
+		}
+	}
+	return roleNames, nil
+}
+
+func CreateNewToken(userIdHex string, UserModel *model.Model, roles []string) (string, error) {
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+		"userId":  userIdHex,
+		"created": time.Now().UnixMilli(),
+		"ttl":     604800 * 2 * 1000,
+		"roles":   roles,
+	})
+	tokenString, err := token.SignedString(UserModel.App.JwtSecretKey)
+	if err != nil {
+		return "", err
+	}
+	return tokenString, nil
 }
