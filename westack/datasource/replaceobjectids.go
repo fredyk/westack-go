@@ -41,6 +41,8 @@ func ReplaceObjectIds(data interface{}) (interface{}, error) {
 		return data, nil
 	case int32:
 		return data, nil
+	case uint32:
+		return data, nil
 	case float64:
 		return data, nil
 	case bool:
