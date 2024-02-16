@@ -253,18 +253,36 @@ func (loadedModel *Model) HandleRemoteMethod(name string, eventContext *EventCon
 	}
 
 	if strings.ToLower(options.Http.Verb) == "post" || strings.ToLower(options.Http.Verb) == "put" || strings.ToLower(options.Http.Verb) == "patch" {
-		var data wst.M
-		//bytes := eventContext.Ctx.Body()
-		//if len(bytes) > 0 {
-		//Err := json.Unmarshal(bytes, &data)
-		err := eventContext.Ctx.BodyParser(&data)
-		if err != nil {
-			return wst.CreateError(fiber.ErrBadRequest, "INVALID_BODY", fiber.Map{"message": err.Error()}, "ValidationError")
+		// if application/json
+		if c.Get("Content-Type") == "application/json" {
+			var data wst.M
+			err := eventContext.Ctx.BodyParser(&data)
+			if err != nil {
+				return wst.CreateError(fiber.ErrBadRequest, "INVALID_BODY", fiber.Map{"message": err.Error()}, "ValidationError")
+			}
+			eventContext.Data = &data
+		} else if /*form-data*/ c.Get("Content-Type") == "multipart/form-data" {
+			form, err := c.MultipartForm()
+			if err != nil {
+				return wst.CreateError(fiber.ErrBadRequest, "INVALID_BODY", fiber.Map{"message": err.Error()}, "ValidationError")
+			}
+			for k, v := range form.Value {
+				(*eventContext.Data)[k] = v
+			}
+		} else if /*application/x-www-form-urlencoded*/ c.Get("Content-Type") == "application/x-www-form-urlencoded" {
+			rawBodyBytes := c.BodyRaw()
+			rawBody := string(rawBodyBytes)
+			parts := strings.Split(rawBody, "&")
+			for _, part := range parts {
+				kv := strings.Split(part, "=")
+				(*eventContext.Data)[kv[0]] = kv[1]
+				for i := 2; i < len(kv); i++ {
+					(*eventContext.Data)[kv[0]] = (*eventContext.Data)[kv[0]].(string) + "=" + kv[i]
+				}
+			}
+		} else {
+			return wst.CreateError(fiber.ErrUnsupportedMediaType, "UNSUPPORTED_MEDIA_TYPE", fiber.Map{"message": "Unsupported media type"}, "ValidationError")
 		}
-		eventContext.Data = &data
-		//} else {
-		//	// Empty body is allowed
-		//}
 	}
 
 	foundSomeQuery := false
