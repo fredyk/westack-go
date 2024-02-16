@@ -261,14 +261,6 @@ func (loadedModel *Model) HandleRemoteMethod(name string, eventContext *EventCon
 				return wst.CreateError(fiber.ErrBadRequest, "INVALID_BODY", fiber.Map{"message": err.Error()}, "ValidationError")
 			}
 			eventContext.Data = &data
-		} else if /*form-data*/ c.Get("Content-Type") == "multipart/form-data" {
-			form, err := c.MultipartForm()
-			if err != nil {
-				return wst.CreateError(fiber.ErrBadRequest, "INVALID_BODY", fiber.Map{"message": err.Error()}, "ValidationError")
-			}
-			for k, v := range form.Value {
-				(*eventContext.Data)[k] = v
-			}
 		} else if /*application/x-www-form-urlencoded*/ c.Get("Content-Type") == "application/x-www-form-urlencoded" {
 			rawBodyBytes := c.BodyRaw()
 			rawBody := string(rawBodyBytes)
@@ -279,6 +271,14 @@ func (loadedModel *Model) HandleRemoteMethod(name string, eventContext *EventCon
 				for i := 2; i < len(kv); i++ {
 					(*eventContext.Data)[kv[0]] = (*eventContext.Data)[kv[0]].(string) + "=" + kv[i]
 				}
+			}
+		} else if /*form-data*/ strings.Contains(c.Get("Content-Type"), "multipart/form-data") {
+			form, err := c.MultipartForm()
+			if err != nil {
+				return wst.CreateError(fiber.ErrBadRequest, "INVALID_BODY", fiber.Map{"message": err.Error()}, "ValidationError")
+			}
+			for k, v := range form.Value {
+				(*eventContext.Data)[k] = v
 			}
 		} else {
 			return wst.CreateError(fiber.ErrUnsupportedMediaType, "UNSUPPORTED_MEDIA_TYPE", fiber.Map{"message": "Unsupported media type"}, "ValidationError")
