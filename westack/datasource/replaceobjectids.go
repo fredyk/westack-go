@@ -41,6 +41,8 @@ func ReplaceObjectIds(data interface{}) (interface{}, error) {
 		return data, nil
 	case int32:
 		return data, nil
+	case uint32:
+		return data, nil
 	case float64:
 		return data, nil
 	case bool:
@@ -156,7 +158,7 @@ func ReplaceObjectIds(data interface{}) (interface{}, error) {
 		}
 		if newValue == nil {
 			switch value.(type) {
-			case string, wst.Where, *wst.Where, wst.M, *wst.M, map[string]interface{}, int, int32, int64, float32, float64, bool, primitive.ObjectID, *primitive.ObjectID, time.Time, primitive.DateTime:
+			case string, wst.Where, *wst.Where, wst.M, *wst.M, map[string]interface{}, int, int32, uint32, int64, float32, float64, bool, primitive.ObjectID, *primitive.ObjectID, time.Time, primitive.DateTime:
 				newValue, err = ReplaceObjectIds(value)
 			default:
 				asList, asListOk := value.([]interface{})
