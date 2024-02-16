@@ -265,7 +265,9 @@ func mountUserModelFixedRoutes(loadedModel *model.Model, app *WeStack) {
 				return loadedModel.App.JwtSecretKey, nil
 			})
 
-			if token != nil {
+			if err != nil {
+				fmt.Printf("[DEBUG] Invalid token: %s\n", err.Error())
+			} else if token != nil {
 
 				if claims, ok := token.Claims.(jwt.MapClaims); ok && token.Valid {
 					userIdHex = claims["userId"].(string)
@@ -281,7 +283,7 @@ func mountUserModelFixedRoutes(loadedModel *model.Model, app *WeStack) {
 					}
 					tokenString = newToken
 				} else {
-					log.Println(err)
+					fmt.Printf("[DEBUG] Invalid token: %s\n", err.Error())
 
 					return errors.New("invalid token")
 				}
