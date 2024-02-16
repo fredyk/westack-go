@@ -1,6 +1,7 @@
 package westack
 
 import (
+	"errors"
 	"fmt"
 	casbinmodel "github.com/casbin/casbin/v2/model"
 	fileadapter "github.com/casbin/casbin/v2/persist/file-adapter"
@@ -11,6 +12,7 @@ import (
 	"github.com/golang-jwt/jwt"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"golang.org/x/crypto/bcrypt"
+	"log"
 	"os"
 	"strings"
 	"time"
@@ -88,6 +90,7 @@ func createCasbinModel(loadedModel *model.Model, app *WeStack, config *model.Con
 		casbModel.AddPolicy("p", "p", []string{replaceVarNames("$authenticated,*,findSelf,allow")})
 		casbModel.AddPolicy("p", "p", []string{replaceVarNames("$authenticated,*,sendVerificationEmail,allow")})
 		casbModel.AddPolicy("p", "p", []string{replaceVarNames("$authenticated,*,performEmailVerification,allow")})
+		casbModel.AddPolicy("p", "p", []string{replaceVarNames("$authenticated,*,refreshToken,allow")})
 		casbModel.AddPolicy("p", "p", []string{replaceVarNames("$owner,*,findById,allow")})
 		casbModel.AddPolicy("p", "p", []string{replaceVarNames("$owner,*,instance_updateAttributes,allow")})
 		// TODO: check https://github.com/fredyk/westack-go/issues/447
@@ -196,6 +199,65 @@ func setupUserModel(loadedModel *model.Model, app *WeStack) {
 		ctx.Result = fiber.Map{"id": tokenString, "userId": userIdHex}
 		return nil
 	})
+
+	loadedModel.RemoteMethod(func(eventContext *model.EventContext) error {
+		authHeader := strings.TrimSpace(string(eventContext.Ctx.Request().Header.Peek("Authorization")))
+
+		authBearerPair := strings.Split(authHeader, "Bearer ")
+		tokenString := ""
+		userIdHex := ""
+
+		if len(authBearerPair) == 2 {
+
+			bearerValue := authBearerPair[1]
+			token, err := jwt.Parse(bearerValue, func(token *jwt.Token) (interface{}, error) {
+
+				if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+					return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+				}
+
+				return loadedModel.App.JwtSecretKey, nil
+			})
+
+			if token != nil {
+
+				if claims, ok := token.Claims.(jwt.MapClaims); ok && token.Valid {
+					userIdHex = claims["userId"].(string)
+					userId, _ := primitive.ObjectIDFromHex(userIdHex)
+					roleNames, err := GetRoleNames(app.roleMappingModel, userIdHex, userId)
+					if err != nil {
+						return err
+					}
+
+					newToken, err := CreateNewToken(userIdHex, loadedModel, roleNames)
+					if err != nil {
+						return err
+					}
+					tokenString = newToken
+				} else {
+					log.Println(err)
+
+					return errors.New("invalid token")
+				}
+
+			} else {
+				return errors.New("invalid token")
+			}
+
+		} else {
+			return errors.New("invalid Authorization header")
+		}
+
+		return eventContext.Ctx.JSON(fiber.Map{"id": tokenString, "userId": userIdHex})
+	}, model.RemoteMethodOptions{
+		Name:        "refreshToken",
+		Description: "Obtains current user",
+		Http: model.RemoteMethodOptionsHttp{
+			Path: "/refresh-token",
+			Verb: "post",
+		},
+	})
+
 }
 
 func setupRoleModel(config *model.Config, app *WeStack, dataSource *datasource.Datasource) {
@@ -232,4 +294,54 @@ func setupRoleModel(config *model.Config, app *WeStack, dataSource *datasource.D
 	roleMappingModel.Datasource = dataSource
 
 	app.roleMappingModel = roleMappingModel
+}
+
+func GetRoleNames(RoleMappingModel *model.Model, userIdHex string, userId primitive.ObjectID) ([]string, error) {
+	roleNames := []string{"USER"}
+
+	if RoleMappingModel != nil {
+		ctx := &model.EventContext{Bearer: &model.BearerToken{
+			User: &model.BearerUser{
+				System: true,
+			},
+			Roles: []model.BearerRole{},
+		}}
+		roleContext := &model.EventContext{
+			BaseContext:            ctx,
+			DisableTypeConversions: true,
+		}
+		roleEntries, err := RoleMappingModel.FindMany(&wst.Filter{Where: &wst.Where{
+			"principalType": "USER",
+			"$or": []wst.M{
+				{
+					"principalId": userIdHex,
+				},
+				{
+					"principalId": userId,
+				},
+			},
+		}, Include: &wst.Include{{Relation: "role"}}}, roleContext).All()
+		if err != nil {
+			return roleNames, err
+		}
+		for _, roleEntry := range roleEntries {
+			role := roleEntry.GetOne("role")
+			roleNames = append(roleNames, role.ToJSON()["name"].(string))
+		}
+	}
+	return roleNames, nil
+}
+
+func CreateNewToken(userIdHex string, UserModel *model.Model, roles []string) (string, error) {
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+		"userId":  userIdHex,
+		"created": time.Now().UnixMilli(),
+		"ttl":     604800 * 2 * 1000,
+		"roles":   roles,
+	})
+	tokenString, err := token.SignedString(UserModel.App.JwtSecretKey)
+	if err != nil {
+		return "", err
+	}
+	return tokenString, nil
 }
