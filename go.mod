@@ -14,7 +14,7 @@ require (
 	github.com/oliveagle/jsonpath v0.0.0-20180606110733-2e52cf6e6852
 	github.com/spf13/viper v1.14.0
 	github.com/stretchr/testify v1.8.4
-	go.mongodb.org/mongo-driver v1.13.1
+	go.mongodb.org/mongo-driver v1.14.0
 	golang.org/x/crypto v0.19.0
 	google.golang.org/grpc v1.61.1
 )
