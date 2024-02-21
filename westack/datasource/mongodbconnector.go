@@ -13,6 +13,7 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"go.mongodb.org/mongo-driver/mongo/readpref"
 	"log"
+	"strings"
 	"time"
 )
 
@@ -208,10 +209,23 @@ func (connector *MongoDBConnector) UpdateById(collectionName string, id interfac
 	collection := database.Collection(collectionName)
 	delete(*data, "id")
 	delete(*data, "_id")
-	if _, err := collection.UpdateOne(connector.context, wst.M{"_id": id}, wst.M{"$set": *data}); err != nil {
-		return nil, err
+	m, err := updateOneWithRetries(collection, connector, id, data, 2)
+	if err != nil {
+		return m, err
 	}
 	return connector.findByObjectId(collectionName, id, nil)
+}
+
+func updateOneWithRetries(collection *mongo.Collection, connector *MongoDBConnector, id interface{}, data *wst.M, remainingRetries int) (*wst.M, error) {
+	if _, err := collection.UpdateOne(connector.context, wst.M{"_id": id}, wst.M{"$set": *data}); err != nil {
+		// broken pipe
+		if remainingRetries > 0 && strings.Contains(err.Error(), "broken pipe") {
+			fmt.Printf("[WARNING] Retrying updateOne for %v\n", id)
+			return updateOneWithRetries(collection, connector, id, data, remainingRetries-1)
+		}
+		return nil, err
+	}
+	return nil, nil
 }
 
 func (connector *MongoDBConnector) DeleteById(collectionName string, id interface{}) (result DeleteResult, err error) {
