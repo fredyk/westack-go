@@ -4,7 +4,7 @@ go 1.19
 
 require (
 	github.com/fredyk/westack-go v1.8.2
-	github.com/gofiber/fiber/v2 v2.52.0
+	github.com/gofiber/fiber/v2 v2.52.1
 )
 
 require (
