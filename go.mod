@@ -4,7 +4,7 @@ go 1.20
 
 require (
 	github.com/andybalholm/brotli v1.1.0
-	github.com/casbin/casbin/v2 v2.85.0
+	github.com/casbin/casbin/v2 v2.86.0
 	github.com/goccy/go-json v0.10.2
 	github.com/gofiber/fiber/v2 v2.52.4
 	github.com/golang-jwt/jwt v3.2.2+incompatible
