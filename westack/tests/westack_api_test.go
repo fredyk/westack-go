@@ -2,12 +2,13 @@ package tests
 
 import (
 	"fmt"
+	"testing"
+	"time"
+
 	"github.com/fredyk/westack-go/westack/model"
 	"github.com/gofiber/fiber/v2"
 	"github.com/stretchr/testify/assert"
 	"go.mongodb.org/mongo-driver/bson/primitive"
-	"testing"
-	"time"
 
 	wst "github.com/fredyk/westack-go/westack/common"
 )
@@ -658,7 +659,7 @@ func Test_FindWithNestedRelations(t *testing.T) {
 
 func Test_NoteWith2Footers(t *testing.T) {
 
-	t.Parallel()
+	// t.Parallel()
 
 	// Create a note
 	note, err := invokeApiAsRandomUser(t, "POST", "/notes", wst.M{
