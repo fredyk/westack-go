@@ -29,10 +29,16 @@ type UpserRequestBody struct {
 
 var ValidEmailRegex = regexp.MustCompile(`^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$`)
 
-func isAllowedForProtectedFields(roles []model.BearerRole) bool {
-	for i := 0; i < len(roles); i++ {
-		if roles[i].Name == "admin" || roles[i].Name == "__protectedFieldsPrivileged" {
-			return true
+func isAllowedForProtectedFields(bearer *model.BearerToken) bool {
+	var roles []model.BearerRole
+	if bearer != nil {
+		roles = bearer.Roles
+		if len(roles) > 0 {
+			for i := 0; i < len(roles); i++ {
+				if roles[i].Name == "admin" || roles[i].Name == "__protectedFieldsPrivileged" {
+					return true
+				}
+			}
 		}
 	}
 	return false
@@ -470,16 +476,29 @@ func (app *WeStack) setupModel(loadedModel *model.Model, dataSource *datasource.
 			return nil
 		})
 
+		protectedFieldsCount := len(loadedModel.Config.Protected)
 		loadedModel.Observe("before build", func(eventContext *model.EventContext) error {
-			if eventContext.BaseContext.Bearer != nil && eventContext.BaseContext.Bearer.User != nil && !eventContext.BaseContext.Bearer.User.System && !skipOperationForBeforeBuild(eventContext.OperationName) {
-				foundUserId := eventContext.ModelID.(primitive.ObjectID).Hex()
-				requesterUserId := eventContext.BaseContext.Bearer.User.Id
-				if v, ok := requesterUserId.(primitive.ObjectID); ok {
-					requesterUserId = v.Hex()
+			if protectedFieldsCount > 0 {
+
+				//if !eventContext.BaseContext.Bearer.User.System {
+				//}
+				if eventContext.BaseContext.Bearer != nil && eventContext.BaseContext.Bearer.User != nil && eventContext.BaseContext.Bearer.User.System {
+					return nil
 				}
-				if foundUserId != requesterUserId.(string) && !isAllowedForProtectedFields(eventContext.BaseContext.Bearer.Roles) {
-					for _, hiddenProperty := range loadedModel.Config.Protected {
-						delete(*eventContext.Data, hiddenProperty)
+				if !skipOperationForBeforeBuild(eventContext.OperationName) {
+					isDifferentUser := true
+					if eventContext.BaseContext.Bearer != nil && eventContext.BaseContext.Bearer.User != nil {
+						foundUserId := eventContext.ModelID.(primitive.ObjectID).Hex()
+						requesterUserId := eventContext.BaseContext.Bearer.User.Id
+						if v, ok := requesterUserId.(primitive.ObjectID); ok {
+							requesterUserId = v.Hex()
+						}
+						isDifferentUser = foundUserId != requesterUserId.(string)
+					}
+					if isDifferentUser && !isAllowedForProtectedFields(eventContext.BaseContext.Bearer) {
+						for _, hiddenProperty := range loadedModel.Config.Protected {
+							delete(*eventContext.Data, hiddenProperty)
+						}
 					}
 				}
 			}
@@ -718,5 +737,5 @@ func fixModelRelations(loadedModel *model.Model) error {
 }
 
 func skipOperationForBeforeBuild(operationName wst.OperationName) bool {
-	return operationName == wst.OperationNameCreate || operationName == wst.OperationNameCount || operationName == wst.OperationNameFindMany
+	return operationName == wst.OperationNameCreate || operationName == wst.OperationNameCount /* || operationName == wst.OperationNameFindMany*/
 }

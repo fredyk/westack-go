@@ -2,12 +2,13 @@ package tests
 
 import (
 	"fmt"
+	"testing"
+	"time"
+
 	"github.com/fredyk/westack-go/westack/model"
 	"github.com/gofiber/fiber/v2"
 	"github.com/stretchr/testify/assert"
 	"go.mongodb.org/mongo-driver/bson/primitive"
-	"testing"
-	"time"
 
 	wst "github.com/fredyk/westack-go/westack/common"
 )
