@@ -2,12 +2,12 @@ package tests
 
 import (
 	"fmt"
-	"github.com/fredyk/westack-go/westack/model"
+	"testing"
+	"time"
+
 	"github.com/gofiber/fiber/v2"
 	"github.com/stretchr/testify/assert"
 	"go.mongodb.org/mongo-driver/bson/primitive"
-	"testing"
-	"time"
 
 	wst "github.com/fredyk/westack-go/westack/common"
 )
@@ -67,30 +67,30 @@ func Test_Count(t *testing.T) {
 	// This test is not parallel, because it is counting the number of notes in the database and creating a new note
 	// to check if the count is increased by one.
 	// If this test is run in parallel, the count will be increased by more than one and the test will fail.
-	// t.Parallel()
+	t.Parallel()
 
-	deleteResult, err := noteModel.DeleteMany(&wst.Where{"_id": wst.M{"$ne": nil}}, &model.EventContext{Bearer: &model.BearerToken{User: &model.BearerUser{System: true}}})
-	assert.NoError(t, err)
-	assert.NotNil(t, deleteResult)
+	// deleteResult, err := noteModel.DeleteMany(&wst.Where{"_id": wst.M{"$ne": nil}}, &model.EventContext{Bearer: &model.BearerToken{User: &model.BearerUser{System: true}}})
+	// assert.NoError(t, err)
+	// assert.NotNil(t, deleteResult)
 
 	// Count notes
-	countResponse, err := invokeApiAsRandomUser(t, "GET", "/notes/count", nil, nil)
+	countResponse, err := invokeApiAsRandomUser(t, "GET", "/notes/count?filter={\"where\":{\"title\":\"Note+for+count\"}}", nil, nil)
 	assert.NoError(t, err)
 	assert.EqualValues(t, 0, countResponse["count"])
 
 	// Create a note
 	note, err := invokeApiAsRandomUser(t, "POST", "/notes", wst.M{
-		"title": "Test Note",
+		"title": "Note for count",
 	}, wst.M{
 		"Content-Type": "application/json",
 	})
 	assert.NoError(t, err)
 	assert.NotNil(t, note)
 	assert.NotEmptyf(t, note.GetString("id"), "Note ID is nil: %v", note)
-	assert.Equal(t, "Test Note", note.GetString("title"))
+	assert.Equal(t, "Note for count", note.GetString("title"))
 
 	// Count notes again
-	newCount, err := invokeApiAsRandomUser(t, "GET", "/notes/count", nil, nil)
+	newCount, err := invokeApiAsRandomUser(t, "GET", "/notes/count?filter={\"where\":{\"title\":\"Note+for+count\"}}", nil, nil)
 	assert.NoError(t, err)
 	assert.EqualValuesf(t, countResponse["count"].(float64)+1, newCount["count"], "Count is not increased: %v", newCount)
 

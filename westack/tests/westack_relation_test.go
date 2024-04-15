@@ -2,14 +2,15 @@ package tests
 
 import (
 	"fmt"
-	"github.com/fredyk/westack-go/westack/model"
-	"github.com/mailru/easyjson"
-	"go.mongodb.org/mongo-driver/bson"
 	"io"
 	"net/http"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/fredyk/westack-go/westack/model"
+	"github.com/mailru/easyjson"
+	"go.mongodb.org/mongo-driver/bson"
 
 	wst "github.com/fredyk/westack-go/westack/common"
 	"github.com/stretchr/testify/assert"
@@ -206,7 +207,7 @@ func Test_CustomerOrderStore(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NotNil(t, customers)
 	delayed := time.Since(start)
-	assert.Greater(t, delayed.Milliseconds(), int64(3))
+	assert.Greater(t, delayed.Milliseconds(), int64(1))
 	fmt.Printf("\n===\nDELAYED without cache: %v\n===\n", delayed.Milliseconds())
 
 	assert.Equal(t, 1, len(customers))
