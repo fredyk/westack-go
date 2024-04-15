@@ -3,7 +3,7 @@ module github.com/fredyk/westack-go
 go 1.20
 
 require (
-	github.com/andybalholm/brotli v1.0.6
+	github.com/andybalholm/brotli v1.1.0
 	github.com/casbin/casbin/v2 v2.87.1
 	github.com/goccy/go-json v0.10.2
 	github.com/gofiber/fiber/v2 v2.52.4
@@ -14,7 +14,7 @@ require (
 	github.com/oliveagle/jsonpath v0.0.0-20180606110733-2e52cf6e6852
 	github.com/spf13/viper v1.18.2
 	github.com/stretchr/testify v1.9.0
-	go.mongodb.org/mongo-driver v1.13.1
+	go.mongodb.org/mongo-driver v1.15.0
 	golang.org/x/crypto v0.22.0
 	google.golang.org/grpc v1.63.2
 )
