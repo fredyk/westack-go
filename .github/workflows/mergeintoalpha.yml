@@ -9,6 +9,9 @@ concurrency:
 
 jobs:
 
+    check_code_quality:
+      uses: ./.github/workflows/securityscan.yml
+
     check_pr:
       runs-on: ubuntu-latest
       env:
@@ -208,7 +211,7 @@ jobs:
 #      if: needs.check_pr.outputs.pr_state == 'open' && contains(github.event.pull_request.labels.*.name, 'auto-merge')
       # in addition, only if it is not a draft
       if: needs.check_pr.outputs.pr_state == 'open' && contains(github.event.pull_request.labels.*.name, 'auto-merge') && needs.check_pr.outputs.pr_draft == 'false'
-      needs: [check_pr, run_tests]
+      needs: [check_pr, check_code_quality, run_tests]
       env:
         GITHUB_TOKEN: ${{ secrets.PULL_REQUEST_TOKEN }}
       outputs:
