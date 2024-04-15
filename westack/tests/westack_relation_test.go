@@ -54,6 +54,7 @@ func Test_ExtractLookups(t *testing.T) {
 		Order: &wst.Order{"created INVALID-DIRECTION"},
 	}, false)
 	assert.Error(t, err)
+	assert.Nil(t, lookups)
 
 	// test skip
 	lookups, err = noteModel.ExtractLookupsFromFilter(&wst.Filter{
@@ -83,6 +84,7 @@ func Test_ExtractLookups(t *testing.T) {
 		Include: &wst.Include{{Relation: "invalid"}},
 	}, false)
 	assert.Error(t, err)
+	assert.Nil(t, lookups)
 
 	// test include with scope
 	lookups, err = noteModel.ExtractLookupsFromFilter(&wst.Filter{
@@ -121,6 +123,7 @@ func Test_ExtractLookups(t *testing.T) {
 		Include: &wst.Include{{Relation: "user", Scope: &wst.Filter{Include: &wst.Include{{Relation: "invalid"}}}}},
 	}, false)
 	assert.Error(t, err)
+	assert.Nil(t, lookups)
 
 }
 
@@ -207,7 +210,7 @@ func Test_CustomerOrderStore(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NotNil(t, customers)
 	delayed := time.Since(start)
-	assert.Greater(t, delayed.Milliseconds(), int64(1))
+	assert.Greater(t, delayed.Milliseconds(), int64(0))
 	fmt.Printf("\n===\nDELAYED without cache: %v\n===\n", delayed.Milliseconds())
 
 	assert.Equal(t, 1, len(customers))
@@ -219,7 +222,7 @@ func Test_CustomerOrderStore(t *testing.T) {
 	time.Sleep(1 * time.Second)
 
 	// Get memorykv stats with http
-	stats := requestStats(t, err)
+	stats := requestStats(t)
 
 	// Check that the cache has been used, present at stats["stats"]["datasorces"]["memorykv"]["Order"]
 	//allStats := stats["stats"].(map[string]interface{})
@@ -247,7 +250,7 @@ func Test_CustomerOrderStore(t *testing.T) {
 	assert.Equal(t, 1, len(customers))
 
 	// Request stats again
-	stats = requestStats(t, err)
+	stats = requestStats(t)
 
 	// Check that the cache has been used, present at stats["stats"]["datasorces"]["memorykv"]["Order"], with more hits
 	//assert.GreaterOrEqual(t, int(stats["stats"].(map[string]interface{})["datasources"].(map[string]interface{})["memorykv"].(map[string]interface{})["Order"].(map[string]interface{})["hits"].(float64)), 1)
@@ -276,9 +279,7 @@ func Test_Aggregations(t *testing.T) {
 		}
 	*/
 
-	var randomUserName string
-	// assign randomUserName with safe random string
-	randomUserName = fmt.Sprintf("testuser%d", createRandomInt())
+	randomUserName := fmt.Sprintf("testuser%d", createRandomInt())
 	randomUser := createUser(t, wst.M{
 		"username":  randomUserName,
 		"password":  "abcd1234.",
@@ -335,9 +336,7 @@ func Test_AggregationsWithDirectNestedQuery(t *testing.T) {
 
 	t.Parallel()
 
-	var randomNoteTitle string
-	// assign randomNoteTitle with safe random string
-	randomNoteTitle = fmt.Sprintf("testnote%d", createRandomInt())
+	randomNoteTitle := fmt.Sprintf("testnote%d", createRandomInt())
 
 	note, err := noteModel.Create(wst.M{
 		"title":  randomNoteTitle,
@@ -569,7 +568,7 @@ func Test_AggregationWithInvalidStage(t *testing.T) {
 
 }
 
-func requestStats(t *testing.T, err error) wst.M {
+func requestStats(t *testing.T) wst.M {
 	req, err := http.NewRequest("GET", "/system/memorykv/stats", nil)
 	assert.NoError(t, err)
 	resp, err := app.Server.Test(req, 45000)

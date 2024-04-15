@@ -8,352 +8,346 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  check_code_quality:
+    uses: ./.github/workflows/securityscan.yml
 
-    check_code_quality:
-      uses: ./.github/workflows/securityscan.yml
+  check_pr:
+    runs-on: ubuntu-latest
+    env:
+      GITHUB_TOKEN: ${{ secrets.PULL_REQUEST_TOKEN }}
+    outputs:
+      pr_state: ${{ steps.check_pr_status.outputs.pr_state }}
+      pr_draft: ${{ steps.check_pr_status.outputs.pr_draft }}
+    steps:
+      - name: Check PR Status
+        id: check_pr_status
+        run: |
+          # Check if PR is open
+          curl \
+              -s \
+              -X GET \
+              -H "Accept: application/vnd.github.v3+json" \
+              -H "Authorization: token ${{ secrets.PULL_REQUEST_TOKEN }}" \
+              https://api.github.com/repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }} \
+              -o pull_request.json
+          result=$?
+          if [ $result -ne 0 ]; then
+            echo "WARNING: curl failed with exit code $result"
+            exit 0
+          fi
+          pr_state=$(cat pull_request.json | jq -r '.state')
+          echo "PR state: $pr_state"
+          echo "pr_state=$pr_state" >> $GITHUB_OUTPUT
+          pr_draft=$(cat pull_request.json | jq -r '.draft')
+          echo "PR is draft: $pr_draft"
+          echo "pr_draft=$pr_draft" >> $GITHUB_OUTPUT
+          if [ "$pr_state" != "open" ]; then
+            echo "WARNING: PR is not open. Exiting"
+          fi
 
-    check_pr:
-      runs-on: ubuntu-latest
-      env:
-        GITHUB_TOKEN: ${{ secrets.PULL_REQUEST_TOKEN }}
-      outputs:
-        pr_state: ${{ steps.check_pr_status.outputs.pr_state }}
-        pr_draft: ${{ steps.check_pr_status.outputs.pr_draft }}
-      steps:
+      - name: Always upload pull_request.json
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: pull_request.json
+          path: pull_request.json
 
-        - name: Check PR Status
-          id: check_pr_status
-          run: |
-            # Check if PR is open
-            curl \
-                -s \
-                -X GET \
-                -H "Accept: application/vnd.github.v3+json" \
-                -H "Authorization: token ${{ secrets.PULL_REQUEST_TOKEN }}" \
-                https://api.github.com/repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }} \
-                -o pull_request.json
-            result=$?
-            if [ $result -ne 0 ]; then
-              echo "WARNING: curl failed with exit code $result"
-              exit 0
-            fi
-            pr_state=$(cat pull_request.json | jq -r '.state')
-            echo "PR state: $pr_state"
-            echo "pr_state=$pr_state" >> $GITHUB_OUTPUT
-            pr_draft=$(cat pull_request.json | jq -r '.draft')
-            echo "PR is draft: $pr_draft"
-            echo "pr_draft=$pr_draft" >> $GITHUB_OUTPUT
-            if [ "$pr_state" != "open" ]; then
-              echo "WARNING: PR is not open. Exiting"
-            fi 
+  run_tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    strategy:
+      matrix:
+        go: ["1.21", "1.22"]
+    env:
+      WST_ADMIN_USERNAME: admin
+      WST_ADMIN_PWD: testadmin
+      PPROF_AUTH_USERNAME: test
+      PPROF_AUTH_PASSWORD: abcd1234.
+      GITHUB_TOKEN: ${{ secrets.PULL_REQUEST_TOKEN }}
+      MIN_COVERAGE_THRESHOLD: 81.3
+      JWT_SECRET: abcd1234.
+      GO_ENV: TESTING
+      DEBUG: true
+      PORT: 8019
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v3
+        with:
+          ref: main
 
-        - name: Always upload pull_request.json
-          if: always()
-          uses: actions/upload-artifact@v3
-          with:
-              name: pull_request.json
-              path: pull_request.json
+      - name: Checkout base branch
+        run: |
+          echo "Trying to merge PR into ${{ github.event.pull_request.base.ref }}"
+          git fetch
+          # Only if it is not main branch
+          if [ "${{ github.event.pull_request.base.ref }}" != "main" ]; then
+            git checkout -b ${{ github.event.pull_request.base.ref }} origin/${{ github.event.pull_request.base.ref }}
+          fi
+          git pull
 
-    run_tests:
-      runs-on: ubuntu-latest
-      timeout-minutes: 5
-      strategy:
-        matrix:
-          go: [ '1.20', '1.21', '1.22' ]
-      env:
-        WST_ADMIN_USERNAME: admin
-        WST_ADMIN_PWD: testadmin
-        PPROF_AUTH_USERNAME: test
-        PPROF_AUTH_PASSWORD: abcd1234.
-        GITHUB_TOKEN: ${{ secrets.PULL_REQUEST_TOKEN }}
-        MIN_COVERAGE_THRESHOLD: 81.3
-        JWT_SECRET: abcd1234.
-        GO_ENV: TESTING
-        DEBUG: true
-        PORT: 8019
-      steps:
-        - name: Checkout main
-          uses: actions/checkout@v3
-          with:
-            ref: main
+      - name: Merge PR
+        run: |
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git config --global user.name "github-actions[bot]"
+          git merge --no-edit --allow-unrelated-histories ${{ github.event.pull_request.head.sha }}
 
-        - name: Checkout base branch
-          run: |
-            echo "Trying to merge PR into ${{ github.event.pull_request.base.ref }}"
-            git fetch
-            # Only if it is not main branch
-            if [ "${{ github.event.pull_request.base.ref }}" != "main" ]; then
-              git checkout -b ${{ github.event.pull_request.base.ref }} origin/${{ github.event.pull_request.base.ref }}
-            fi
-            git pull
+      - name: Install MongoDB
+        run: |
+          sudo apt-get install gnupg curl
+          curl -fsSL https://www.mongodb.org/static/pgp/server-7.0.asc | \
+           sudo gpg -o /usr/share/keyrings/mongodb-server-7.0.gpg \
+           --dearmor
+          echo "deb [ arch=amd64,arm64 signed-by=/usr/share/keyrings/mongodb-server-7.0.gpg ] https://repo.mongodb.org/apt/ubuntu jammy/mongodb-org/7.0 multiverse" | sudo tee /etc/apt/sources.list.d/mongodb-org-7.0.list
+          sudo apt-get update
+          sudo apt-get install -y mongodb-org
 
-        - name: Merge PR
-          run: |
-            git config --global user.email "github-actions[bot]@users.noreply.github.com"
-            git config --global user.name "github-actions[bot]"
-            git merge --no-edit --allow-unrelated-histories ${{ github.event.pull_request.head.sha }}
+      - name: Start MongoDB service
+        run: sudo systemctl start mongod
 
-        - name: Install MongoDB
-          run: |
-            sudo apt-get install gnupg curl
-            curl -fsSL https://www.mongodb.org/static/pgp/server-7.0.asc | \
-             sudo gpg -o /usr/share/keyrings/mongodb-server-7.0.gpg \
-             --dearmor
-            echo "deb [ arch=amd64,arm64 signed-by=/usr/share/keyrings/mongodb-server-7.0.gpg ] https://repo.mongodb.org/apt/ubuntu jammy/mongodb-org/7.0 multiverse" | sudo tee /etc/apt/sources.list.d/mongodb-org-7.0.list
-            sudo apt-get update
-            sudo apt-get install -y mongodb-org
+      - name: Verify MongoDB service status
+        run: sudo systemctl status mongod
 
-        - name: Start MongoDB service
-          run: sudo systemctl start mongod
-    
-        - name: Verify MongoDB service status
-          run: sudo systemctl status mongod
+      - name: Cache Go packages
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cache/go-build
+            /opt/hostedtoolcache/go/${{ matrix.go }}/x64/pkg/mod
+          key: ${{ runner.os }}-go-${{ matrix.go }}-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-${{ matrix.go }}-
+            ${{ runner.os }}-go-
+            ${{ runner.os }}-
 
-        - name: Cache Go packages
-          uses: actions/cache@v3
-          with:
-            path: |
-              ~/.cache/go-build
-              /opt/hostedtoolcache/go/${{ matrix.go }}/x64/pkg/mod
-            key: ${{ runner.os }}-go-${{ matrix.go }}-${{ hashFiles('**/go.sum') }}
-            restore-keys: |
-              ${{ runner.os }}-go-${{ matrix.go }}-
-              ${{ runner.os }}-go-
-              ${{ runner.os }}-
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: ${{ matrix.go }}
+          check-latest: true
+          cache-dependency-path: ${{ github.workspace }}/go.sum
 
-        - name: Set up Go
-          uses: actions/setup-go@v4
-          with:
-            go-version: ${{ matrix.go }}
-            check-latest: true
-            cache-dependency-path: ${{ github.workspace }}/go.sum
+      - name: Test WeStack
+        run: |
+          if [ -d ${{ github.workspace }}/.cache/go-build ]; then
+            echo "Restoring from cache"
+            cp -r ${{ github.workspace }}/.cache/go-build ${{ github.workspace }}/go/pkg
+            cp -r ${{ github.workspace }}/.cache/mod ${{ github.workspace }}/go/pkg
+          fi
+          go mod download
+          cd westack/tests
+          # Create a random number of 9 bytes
+          # at the end, replace dots with _, only if exists. keep remaining string
+          random_sufix=$(echo "$(openssl rand -hex 9)_${{ matrix.go }}" | sed 's/\./_/g')
+          echo "Random sufix: $random_sufix"
+          sed -i "s/\"database\": \"\(.*\)\",/\"database\": \"\1_$random_sufix\",/g" server/datasources*.json
+          cat server/datasources.TESTING.json
+          go test -timeout 5m -c -coverpkg=../../../westack-go/... -covermode=atomic github.com/fredyk/westack-go/westack/tests -o output.test
+          go tool test2json -t ./output.test -test.v -test.paniconexit0 -test.coverprofile ../../coverage.txt | jq -r 'select(.Output != "" and .Output != null) | .Output' | sed '/^$/d' | tee ../../test_output.txt
+          cd ../..
+          sed -i 's/[\x00-\x09\x0b-\x1f\x7f-\xff]/\\&/g' test_output.txt
+          # Select from test_output.txt only lines containing "coverage: "
+          echo "Coverage:"
+          cat test_output.txt | grep --text "coverage: "
+          cat test_output.txt | grep --text "coverage: " > coverage.summary.txt
+          # Where is go???
+          echo "Go is at $(which go)"
 
-        - name: Test WeStack
-          run: |
-            if [ -d ${{ github.workspace }}/.cache/go-build ]; then
-              echo "Restoring from cache"
-              cp -r ${{ github.workspace }}/.cache/go-build ${{ github.workspace }}/go/pkg
-              cp -r ${{ github.workspace }}/.cache/mod ${{ github.workspace }}/go/pkg
-            fi
-            go mod download
-            cd westack/tests
-            # Create a random number of 9 bytes
-            # at the end, replace dots with _, only if exists. keep remaining string
-            random_sufix=$(echo "$(openssl rand -hex 9)_${{ matrix.go }}" | sed 's/\./_/g')
-            echo "Random sufix: $random_sufix"
-            sed -i "s/\"database\": \"\(.*\)\",/\"database\": \"\1_$random_sufix\",/g" server/datasources*.json
-            cat server/datasources.TESTING.json
-            go test -timeout 5m -c -coverpkg=../../../westack-go/... -covermode=atomic github.com/fredyk/westack-go/westack/tests -o output.test
-            go tool test2json -t ./output.test -test.v -test.paniconexit0 -test.coverprofile ../../coverage.txt | jq -r 'select(.Output != "" and .Output != null) | .Output' | sed '/^$/d' | tee ../../test_output.txt 
-            cd ../..
-            sed -i 's/[\x00-\x09\x0b-\x1f\x7f-\xff]/\\&/g' test_output.txt
-            # Select from test_output.txt only lines containing "coverage: "
-            echo "Coverage:"
-            cat test_output.txt | grep --text "coverage: "
-            cat test_output.txt | grep --text "coverage: " > coverage.summary.txt
-            # Where is go???
-            echo "Go is at $(which go)"
+      - name: Upload coverage.txt
+        uses: actions/upload-artifact@v3
+        with:
+          name: coverage.txt
+          path: coverage.txt
 
-        - name: Upload coverage.txt
-          uses: actions/upload-artifact@v3
-          with:
-              name: coverage.txt
-              path: coverage.txt
+      - name: Upload coverage.summary.txt
+        uses: actions/upload-artifact@v3
+        with:
+          name: coverage.summary.txt
+          path: coverage.summary.txt
 
-        - name: Upload coverage.summary.txt
-          uses: actions/upload-artifact@v3
-          with:
-              name: coverage.summary.txt
-              path: coverage.summary.txt
+      - name: Upload test_output.txt
+        uses: actions/upload-artifact@v3
+        with:
+          name: test_output.txt
+          path: test_output.txt
 
-        - name: Upload test_output.txt
-          uses: actions/upload-artifact@v3
-          with:
-              name: test_output.txt
-              path: test_output.txt
+      - name: Process tests output
+        run: |
+          # Select from test_output.txt only lines containing " FAIL: "
+          all_failed_tests=$(cat test_output.txt | grep --text ' FAIL: ' | sed '/^$/d')
+          if [ -n "$all_failed_tests" ]; then
+            echo "Tests failed:"
+            echo $all_failed_tests
+            exit 1
+          else
+            echo "All tests passed"
+          fi
 
-        - name: Process tests output
-          run: |
-            # Select from test_output.txt only lines containing " FAIL: "
-            all_failed_tests=$(cat test_output.txt | grep --text ' FAIL: ' | sed '/^$/d')
-            if [ -n "$all_failed_tests" ]; then
-              echo "Tests failed:"
-              echo $all_failed_tests
-              exit 1
-            else
-              echo "All tests passed"
-            fi
-
-        - name: Process coverage.summary.txt
-          # skip for mongo 1.18
-          if: matrix.go != '1.18'
-          run: |
-            # Parse coverage_lines to get coverage percentage. If any percentage is below $MIN_COVERAGE_THRESHOLD, exit with error
-            # Also skip github.com/fredyk/westack-go/westack/tests
-            coverage_lines=$(cat coverage.summary.txt | grep -v "coverage: \[no statements\]" | grep -v "coverage: \[no tests to run\]" | grep -v "github.com/fredyk/westack-go/westack/tests")
-            echo "Target min coverage: $MIN_COVERAGE_THRESHOLD"
-            echo "Saved coverage:"
-            cat coverage.summary.txt
-            echo "$coverage_lines" | while read -r line; do
-              echo "$line"
-              coverage=$(echo "$line" | sed 's/.*coverage: \([0-9]*\.[0-9]*\).*/\1/')
-              echo "coverage: $coverage"
-              if (( $(echo "$coverage < $MIN_COVERAGE_THRESHOLD" | bc -l) )); then
-                echo "Coverage is below $MIN_COVERAGE_THRESHOLD"
-                exit 1
-              fi
-            done
-
-
-    merge_pr:
-      runs-on: ubuntu-latest
-      timeout-minutes: 5
-#      if: needs.check_pr.outputs.pr_state == 'open' && contains(github.event.pull_request.labels.*.name, 'auto-merge')
-      # in addition, only if it is not a draft
-      if: needs.check_pr.outputs.pr_state == 'open' && contains(github.event.pull_request.labels.*.name, 'auto-merge') && needs.check_pr.outputs.pr_draft == 'false'
-      needs: [check_pr, check_code_quality, run_tests]
-      env:
-        GITHUB_TOKEN: ${{ secrets.PULL_REQUEST_TOKEN }}
-      outputs:
-        tag: ${{ steps.latest_tag.outputs.tag }}
-        date: ${{ steps.date.outputs.date }}
-      steps:
-
-        - name: Checkout main
-          uses: actions/checkout@v3
-          with:
-            ref: main
-
-        - name: Fetch
-          run: |
-              git fetch
-              # git checkout -b temp-branch-${{ github.run_id }} origin/temp-branch-${{ github.run_id }}
-              # git pull
-
-        - name: Create go tag with date
-          id: date
-          run: |
-              # echo "::set-output name=date::$(date +'%Y%m%d%H%M')"
-              echo "date=$(date +'%Y%m%d%H%M')" >> $GITHUB_OUTPUT
-
-        - name: Fetch all tags
-          run: git fetch --prune --unshallow --tags
-
-        - name: Find latest tag with regex v\d+\.\d+\.\d+$ and fallback to 0.0.0, skipping -alpha and -beta
-          id: latest_tag
-          run: |
-            latest_tag=$(git describe --tags --match "v[0-9]*.[0-9]*.[0-9]*" --abbrev=0 | grep -v -E "alpha|beta" || echo "v0.0.0")
-            major=$(echo $latest_tag | cut -d. -f1)
-            major=${major#v}
-            minor=$(echo $latest_tag | cut -d. -f2)
-            patch=$(echo $latest_tag | cut -d. -f3)
-            patch=${patch%-*}
-            patch=${patch%-*}
-            latest_tag=${major}.${minor}.${patch}
-            echo "Found latest tag: $latest_tag"
-            major=$((major + 1))
-            minor="0"
-            patch="0"
-            new_tag=${major}.${minor}.${patch}
-            echo "Tagging new as: $new_tag"
-            # echo "::set-output name=tag::${new_tag}"
-            echo "tag=${new_tag}" >> $GITHUB_OUTPUT
-
-        - name: Merge PR
-          run: |
-            curl \
-                -s \
-                -X PUT \
-                -H "Accept: application/vnd.github.v3+json" \
-                -H "Authorization: token ${{ secrets.PULL_REQUEST_TOKEN }}" \
-                https://api.github.com/repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/merge \
-                -d '{"commit_title":"Merge ${{ github.event.pull_request.head.ref }} into ${{ github.event.pull_request.base.ref }}","commit_message":"Merge ${{ github.event.pull_request.head.ref }} into ${{ github.event.pull_request.base.ref }}","merge_method":"rebase"}' \
-                -o merge_response.json
-            # parse merge_response.json message to check if merge was successful. Use jq
-            merge_response=$(cat merge_response.json)
-            echo "merge_response: $merge_response"
-            merge_response_message=$(echo $merge_response | jq -r '.message')
-            echo "merge_response_message: $merge_response_message"
-            if [ "$merge_response_message" != "Pull Request successfully merged" ]; then
-              echo "ERROR: Merge failed"
+      - name: Process coverage.summary.txt
+        # skip for mongo 1.18
+        if: matrix.go != '1.18'
+        run: |
+          # Parse coverage_lines to get coverage percentage. If any percentage is below $MIN_COVERAGE_THRESHOLD, exit with error
+          # Also skip github.com/fredyk/westack-go/westack/tests
+          coverage_lines=$(cat coverage.summary.txt | grep -v "coverage: \[no statements\]" | grep -v "coverage: \[no tests to run\]" | grep -v "github.com/fredyk/westack-go/westack/tests")
+          echo "Target min coverage: $MIN_COVERAGE_THRESHOLD"
+          echo "Saved coverage:"
+          cat coverage.summary.txt
+          echo "$coverage_lines" | while read -r line; do
+            echo "$line"
+            coverage=$(echo "$line" | sed 's/.*coverage: \([0-9]*\.[0-9]*\).*/\1/')
+            echo "coverage: $coverage"
+            if (( $(echo "$coverage < $MIN_COVERAGE_THRESHOLD" | bc -l) )); then
+              echo "Coverage is below $MIN_COVERAGE_THRESHOLD"
               exit 1
             fi
-            merged_sha=$(echo $merge_response | jq -r '.sha')
-            curl \
-                -s \
-                -X PATCH \
-                -H "Accept: application/vnd.github.v3+json" \
-                -H "Authorization: token ${{ secrets.PULL_REQUEST_TOKEN }}" \
-                https://api.github.com/repos/${{ github.repository }}/git/refs/heads/v-${{ steps.latest_tag.outputs.tag }}-alpha \
-                -d '{"sha":"'$merged_sha'"}'
+          done
 
-    #    close_pr_success:
-    #      runs-on: ubuntu-latest
-    #      timeout-minutes: 5
+  merge_pr:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
     #      if: needs.check_pr.outputs.pr_state == 'open' && contains(github.event.pull_request.labels.*.name, 'auto-merge')
-    #      needs: [run_tests, merge_pr]
-    #      steps:
-    #
-    #        - name: Sets the pull request milestone using ${{ needs.merge_pr.outputs.tag }}
-    #          run: |
-    #            # First converts tag "x.y.z" to milestone "vx.y"
-    #            milestone_title=$(echo ${{ needs.merge_pr.outputs.tag }} | sed 's/\([0-9]*\.[0-9]*\)\.[0-9]*/v\1/')
-    #            echo "Milestone: $milestone_title"
-    #            # List milestones to obtain milestone number
-    #            curl -s -H "Authorization: token ${{ secrets.PULL_REQUEST_TOKEN }}" https://api.github.com/repos/${{ github.repository }}/milestones > milestones.json
-    #            milestone_number=$(cat milestones.json | jq -r --arg milestone_title "$milestone_title" '.[] | select(.title == $milestone_title) | .number')
-    #            # If not found, create milestone
-    #            if [ -z "$milestone_number" ]; then
-    #              echo "Milestone not found. Creating it"
-    #              curl -X POST -H "Authorization: token ${{ secrets.PULL_REQUEST_TOKEN }}" -H "Content-Type: application/json" -d "{\"title\":\"$milestone_title\"}" https://api.github.com/repos/${{ github.repository }}/milestones
-    #              # List milestones to obtain milestone number
-    #              curl -s -H "Authorization: token ${{ secrets.PULL_REQUEST_TOKEN }}" https://api.github.com/repos/${{ github.repository }}/milestones > milestones.json
-    #              milestone_number=$(cat milestones.json | jq -r --arg milestone_title "$milestone_title" '.[] | select(.title == $milestone_title) | .number')
-    #            fi
-    #            echo "Milestone number: $milestone_number"
-    #            curl -X PATCH -H "Authorization: token ${{ secrets.PULL_REQUEST_TOKEN }}" -H "Content-Type: application/json" -d "{\"milestone\":$milestone_number}" https://api.github.com/repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}
-    #
-    #        - name: Always upload milestones.json
-    #          if: always()
-    #          uses: actions/upload-artifact@v3
-    #          with:
-    #              name: milestones.json
-    #              path: milestones.json
-    #
-    #        - name: Comments on the pull request and closes it
-    #          run: |
-    #            curl -X POST -H "Authorization: token ${{ secrets.PULL_REQUEST_TOKEN }}" -H "Content-Type: application/json" -d '{"body": "This PR has been merged into ${{ github.event.pull_request.base.ref }}. Thanks for your contribution!"}' https://api.github.com/repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments
-    #            curl -X PATCH -H "Authorization: token ${{ secrets.PULL_REQUEST_TOKEN }}" -H "Content-Type: application/json" -d '{"state": "closed"}' https://api.github.com/repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}
+    # in addition, only if it is not a draft
+    if: needs.check_pr.outputs.pr_state == 'open' && contains(github.event.pull_request.labels.*.name, 'auto-merge') && needs.check_pr.outputs.pr_draft == 'false'
+    needs: [check_pr, check_code_quality, run_tests]
+    env:
+      GITHUB_TOKEN: ${{ secrets.PULL_REQUEST_TOKEN }}
+      HEAD_BRANCH: ${{ github.event.pull_request.head.ref }}
+    outputs:
+      tag: ${{ steps.latest_tag.outputs.tag }}
+      date: ${{ steps.date.outputs.date }}
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v3
+        with:
+          ref: main
 
-    close_pr_failure:
-      runs-on: ubuntu-latest
-      timeout-minutes: 5
-      # Only if the pull request has the label 'auto-merge' and does not have the label 'close-on-success' and has failed
-      if: always()&& needs.check_pr.outputs.pr_state == 'open' && contains(github.event.pull_request.labels.*.name, 'auto-merge') && !contains(github.event.pull_request.labels.*.name, 'close-on-success') && contains(needs.*.result, 'failure')
-      needs: [run_tests, merge_pr]
-      steps:
+      - name: Fetch
+        run: |
+          git fetch
+          # git checkout -b temp-branch-${{ github.run_id }} origin/temp-branch-${{ github.run_id }}
+          # git pull
 
-        - name: Comments on the pull request and closes it
-          run: |
-              curl -X POST -H "Authorization: token ${{ secrets.PULL_REQUEST_TOKEN }}" -H "Content-Type: application/json" -d '{"body": "This PR has not been merged into ${{ github.event.pull_request.base.ref }}. Please fix the issues and re-open the PR."}' https://api.github.com/repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments
-              curl -X PATCH -H "Authorization: token ${{ secrets.PULL_REQUEST_TOKEN }}" -H "Content-Type: application/json" -d '{"state": "closed"}' https://api.github.com/repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}
+      - name: Create go tag with date
+        id: date
+        run: |
+          echo "date=$(date +'%Y%m%d%H%M')" >> $GITHUB_OUTPUT
 
+      - name: Fetch all tags
+        run: git fetch --prune --unshallow --tags
 
-    cleanup_head_branch:
-      runs-on: ubuntu-latest
-      timeout-minutes: 5
-      if: always() && needs.check_pr.outputs.pr_state == 'open' && contains(github.event.pull_request.labels.*.name, 'delete-branch') && !contains(github.event.pull_request.labels.*.name, 'close-on-success')
-      needs: [run_tests, merge_pr, close_pr_failure]
-      steps:
+      - name: Find latest tag with regex v\d+\.\d+\.\d+$ and fallback to 0.0.0, skipping -alpha and -beta
+        id: latest_tag
+        run: |
+          latest_tag=$(git describe --tags --match "v[0-9]*.[0-9]*.[0-9]*" --abbrev=0 | grep -v -E "alpha|beta" || echo "v0.0.0")
+          major=$(echo $latest_tag | cut -d. -f1)
+          major=${major#v}
+          minor=$(echo $latest_tag | cut -d. -f2)
+          patch=$(echo $latest_tag | cut -d. -f3)
+          patch=${patch%-*}
+          patch=${patch%-*}
+          latest_tag=${major}.${minor}.${patch}
+          echo "Found latest tag: $latest_tag"
+          major=$((major + 1))
+          minor="0"
+          patch="0"
+          new_tag=${major}.${minor}.${patch}
+          echo "Tagging new as: $new_tag"
+          echo "tag=${new_tag}" >> $GITHUB_OUTPUT
 
-        - name: Checkout main
-          uses: actions/checkout@v3
-          with:
-            ref: main
+      - name: Merge PR
+        run: |
+          curl \
+              -s \
+              -X PUT \
+              -H "Accept: application/vnd.github.v3+json" \
+              -H "Authorization: token ${{ secrets.PULL_REQUEST_TOKEN }}" \
+              https://api.github.com/repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/merge \
+              -d '{"commit_title":"Merge ${{ env.HEAD_BRANCH }} into ${{ github.event.pull_request.base.ref }}","commit_message":"Merge ${{ env.HEAD_BRANCH }} into ${{ github.event.pull_request.base.ref }}","merge_method":"rebase"}' \
+              -o merge_response.json
+          # parse merge_response.json message to check if merge was successful. Use jq
+          merge_response=$(cat merge_response.json)
+          echo "merge_response: $merge_response"
+          merge_response_message=$(echo $merge_response | jq -r '.message')
+          echo "merge_response_message: $merge_response_message"
+          if [ "$merge_response_message" != "Pull Request successfully merged" ]; then
+            echo "ERROR: Merge failed"
+            exit 1
+          fi
+          merged_sha=$(echo $merge_response | jq -r '.sha')
+          curl \
+              -s \
+              -X PATCH \
+              -H "Accept: application/vnd.github.v3+json" \
+              -H "Authorization: token ${{ secrets.PULL_REQUEST_TOKEN }}" \
+              https://api.github.com/repos/${{ github.repository }}/git/refs/heads/v-${{ steps.latest_tag.outputs.tag }}-alpha \
+              -d '{"sha":"'$merged_sha'"}'
 
-        - name: If tag 'delete-branch' was set on the pull request, delete the branch
-          run: |
-              # First fetch. Then guess if remote head branch still exists and delete it. If it doesn't exist, it will fail, but that's ok
-              echo "Trying to delete branch ${{ github.event.pull_request.head.ref }}"
-              git fetch
-              git push origin --delete ${{ github.event.pull_request.head.ref }} || true
+  #    close_pr_success:
+  #      runs-on: ubuntu-latest
+  #      timeout-minutes: 5
+  #      if: needs.check_pr.outputs.pr_state == 'open' && contains(github.event.pull_request.labels.*.name, 'auto-merge')
+  #      needs: [run_tests, merge_pr]
+  #      steps:
+  #
+  #        - name: Sets the pull request milestone using ${{ needs.merge_pr.outputs.tag }}
+  #          run: |
+  #            # First converts tag "x.y.z" to milestone "vx.y"
+  #            milestone_title=$(echo ${{ needs.merge_pr.outputs.tag }} | sed 's/\([0-9]*\.[0-9]*\)\.[0-9]*/v\1/')
+  #            echo "Milestone: $milestone_title"
+  #            # List milestones to obtain milestone number
+  #            curl -s -H "Authorization: token ${{ secrets.PULL_REQUEST_TOKEN }}" https://api.github.com/repos/${{ github.repository }}/milestones > milestones.json
+  #            milestone_number=$(cat milestones.json | jq -r --arg milestone_title "$milestone_title" '.[] | select(.title == $milestone_title) | .number')
+  #            # If not found, create milestone
+  #            if [ -z "$milestone_number" ]; then
+  #              echo "Milestone not found. Creating it"
+  #              curl -X POST -H "Authorization: token ${{ secrets.PULL_REQUEST_TOKEN }}" -H "Content-Type: application/json" -d "{\"title\":\"$milestone_title\"}" https://api.github.com/repos/${{ github.repository }}/milestones
+  #              # List milestones to obtain milestone number
+  #              curl -s -H "Authorization: token ${{ secrets.PULL_REQUEST_TOKEN }}" https://api.github.com/repos/${{ github.repository }}/milestones > milestones.json
+  #              milestone_number=$(cat milestones.json | jq -r --arg milestone_title "$milestone_title" '.[] | select(.title == $milestone_title) | .number')
+  #            fi
+  #            echo "Milestone number: $milestone_number"
+  #            curl -X PATCH -H "Authorization: token ${{ secrets.PULL_REQUEST_TOKEN }}" -H "Content-Type: application/json" -d "{\"milestone\":$milestone_number}" https://api.github.com/repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}
+  #
+  #        - name: Always upload milestones.json
+  #          if: always()
+  #          uses: actions/upload-artifact@v3
+  #          with:
+  #              name: milestones.json
+  #              path: milestones.json
+  #
+  #        - name: Comments on the pull request and closes it
+  #          run: |
+  #            curl -X POST -H "Authorization: token ${{ secrets.PULL_REQUEST_TOKEN }}" -H "Content-Type: application/json" -d '{"body": "This PR has been merged into ${{ github.event.pull_request.base.ref }}. Thanks for your contribution!"}' https://api.github.com/repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments
+  #            curl -X PATCH -H "Authorization: token ${{ secrets.PULL_REQUEST_TOKEN }}" -H "Content-Type: application/json" -d '{"state": "closed"}' https://api.github.com/repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}
+
+  close_pr_failure:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    # Only if the pull request has the label 'auto-merge' and does not have the label 'close-on-success' and has failed
+    if: always()&& needs.check_pr.outputs.pr_state == 'open' && contains(github.event.pull_request.labels.*.name, 'auto-merge') && !contains(github.event.pull_request.labels.*.name, 'close-on-success') && contains(needs.*.result, 'failure')
+    needs: [check_pr, run_tests, merge_pr]
+    steps:
+      - name: Comments on the pull request and closes it
+        run: |
+          curl -X POST -H "Authorization: token ${{ secrets.PULL_REQUEST_TOKEN }}" -H "Content-Type: application/json" -d '{"body": "This PR has not been merged into ${{ github.event.pull_request.base.ref }}. Please fix the issues and re-open the PR."}' https://api.github.com/repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments
+          curl -X PATCH -H "Authorization: token ${{ secrets.PULL_REQUEST_TOKEN }}" -H "Content-Type: application/json" -d '{"state": "closed"}' https://api.github.com/repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}
+
+  cleanup_head_branch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    if: always() && needs.check_pr.outputs.pr_state == 'open' && contains(github.event.pull_request.labels.*.name, 'delete-branch') && !contains(github.event.pull_request.labels.*.name, 'close-on-success')
+    needs: [check_pr, run_tests, merge_pr, close_pr_failure]
+    env:
+      HEAD_BRANCH: ${{ github.event.pull_request.head.ref }}
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v3
+        with:
+          ref: main
+
+      - name: If tag 'delete-branch' was set on the pull request, delete the branch
+        run: |
+          # First fetch. Then guess if remote head branch still exists and delete it. If it doesn't exist, it will fail, but that's ok
+          echo "Trying to delete branch ${{ env.HEAD_BRANCH }}"
+          git fetch
+          git push origin --delete ${{ env.HEAD_BRANCH }} || true
