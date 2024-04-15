@@ -2,7 +2,6 @@ package model
 
 import (
 	"fmt"
-	"log"
 	"strings"
 
 	fiber "github.com/gofiber/fiber/v2"
@@ -76,7 +75,9 @@ func (eventContext *EventContext) GetBearer(loadedModel *Model) (error, *BearerT
 			return loadedModel.App.JwtSecretKey, nil
 		})
 
-		if token != nil {
+		if err != nil {
+			fmt.Printf("[DEBUG] Invalid token: %s\n", err.Error())
+		} else if token != nil {
 			if claims, ok := token.Claims.(jwt.MapClaims); ok && token.Valid {
 				bearerClaims = claims
 				claimRoles := claims["roles"]
@@ -93,7 +94,7 @@ func (eventContext *EventContext) GetBearer(loadedModel *Model) (error, *BearerT
 					}
 				}
 			} else {
-				log.Println(err)
+				fmt.Printf("[DEBUG] Invalid token: %s\n", err.Error())
 			}
 		}
 
