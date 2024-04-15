@@ -56,7 +56,7 @@ jobs:
       timeout-minutes: 5
       strategy:
         matrix:
-          go: [ '1.19', '1.20', '1.21' ]
+          go: [ '1.20', '1.21', '1.22' ]
       env:
         WST_ADMIN_USERNAME: admin
         WST_ADMIN_PWD: testadmin
@@ -64,16 +64,6 @@ jobs:
         PPROF_AUTH_PASSWORD: abcd1234.
         GITHUB_TOKEN: ${{ secrets.PULL_REQUEST_TOKEN }}
         MIN_COVERAGE_THRESHOLD: 81.3
-        WST_DB0_USERNAME: ${{ secrets.MONGO_DEV_USERNAME }}
-        WST_DB0_PASSWORD: ${{ secrets.MONGO_DEV_PWD }}
-        WST_DB1_USERNAME: ${{ secrets.MONGO_DEV_USERNAME }}
-        WST_DB1_PASSWORD: ${{ secrets.MONGO_DEV_PWD }}
-        WST_DB2_USERNAME: ${{ secrets.MONGO_DEV_USERNAME }}
-        WST_DB2_PASSWORD: ${{ secrets.MONGO_DEV_PWD }}
-        WST_DB_EXPECTED_TO_FAIL_USERNAME: ${{ secrets.MONGO_DEV_USERNAME }}
-        WST_DB_EXPECTED_TO_FAIL_PASSWORD: ${{ secrets.MONGO_DEV_PWD }}
-        WST_DB_EXPECTED_TO_BE_CLOSED_USERNAME: ${{ secrets.MONGO_DEV_USERNAME }}
-        WST_DB_EXPECTED_TO_BE_CLOSED_PASSWORD: ${{ secrets.MONGO_DEV_PWD }}
         JWT_SECRET: abcd1234.
         GO_ENV: TESTING
         DEBUG: true
@@ -99,6 +89,22 @@ jobs:
             git config --global user.email "github-actions[bot]@users.noreply.github.com"
             git config --global user.name "github-actions[bot]"
             git merge --no-edit --allow-unrelated-histories ${{ github.event.pull_request.head.sha }}
+
+        - name: Install MongoDB
+          run: |
+            sudo apt-get install gnupg curl
+            curl -fsSL https://www.mongodb.org/static/pgp/server-7.0.asc | \
+             sudo gpg -o /usr/share/keyrings/mongodb-server-7.0.gpg \
+             --dearmor
+            echo "deb [ arch=amd64,arm64 signed-by=/usr/share/keyrings/mongodb-server-7.0.gpg ] https://repo.mongodb.org/apt/ubuntu jammy/mongodb-org/7.0 multiverse" | sudo tee /etc/apt/sources.list.d/mongodb-org-7.0.list
+            sudo apt-get update
+            sudo apt-get install -y mongodb-org
+
+        - name: Start MongoDB service
+          run: sudo systemctl start mongod
+    
+        - name: Verify MongoDB service status
+          run: sudo systemctl status mongod
 
         - name: Cache Go packages
           uses: actions/cache@v3
@@ -129,10 +135,11 @@ jobs:
             go mod download
             cd westack/tests
             # Create a random number of 9 bytes
-            random_sufix=$(openssl rand -hex 9)
+            # at the end, replace dots with _, only if exists. keep remaining string
+            random_sufix=$(echo "$(openssl rand -hex 9)_${{ matrix.go }}" | sed 's/\./_/g')
             echo "Random sufix: $random_sufix"
             sed -i "s/\"database\": \"\(.*\)\",/\"database\": \"\1_$random_sufix\",/g" server/datasources*.json
-            cat server/datasources.json
+            cat server/datasources.TESTING.json
             go test -timeout 5m -c -coverpkg=../../../westack-go/... -covermode=atomic github.com/fredyk/westack-go/westack/tests -o output.test
             go tool test2json -t ./output.test -test.v -test.paniconexit0 -test.coverprofile ../../coverage.txt | jq -r 'select(.Output != "" and .Output != null) | .Output' | sed '/^$/d' | tee ../../test_output.txt 
             cd ../..
