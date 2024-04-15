@@ -9,6 +9,72 @@ concurrency:
 
 jobs:
 
+    check_code_quality:
+      runs-on: ubuntu-latest
+      env:
+        GITHUB_TOKEN: ${{ secrets.PULL_REQUEST_TOKEN }}
+      steps:
+
+        - name: Checkout sha
+          uses: actions/checkout@v3
+          with:
+            ref: ${{ github.event.pull_request.head.sha }}
+
+        - name: Set up Go
+          uses: actions/setup-go@v4
+          with:
+            go-version: 1.22
+
+        - name: Install Nancy
+          run: |
+            go install github.com/sonatype-nexus-community/nancy@latest
+
+        - name: Match dependencies from go.mod with latest Go Vulnerabilities
+          run: |
+            go list -m -json all | nancy sleuth --exclude-vulnerability-file .nancy-ignore
+
+        - name: Setup Golangci-lint
+          run: |
+            go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+            go install github.com/securego/gosec/v2/cmd/gosec@latest
+
+        - name: Run Gosec Security Scanner
+          id: golangci_lint
+          run: |
+            golangci-lint run --timeout 10m --disable-all --enable=gosec --out-format=json ./... > results.json || true
+            result=0
+            detailed_issues=""
+            if [ -f results.json ]; then
+              result=$(cat results.json | jq '.Issues | length')
+              detailed_issues=$(cat results.json | jq '.Issues')
+            fi
+            if [ $result -ne 0 ]; then
+              echo "Gosec found issues"
+              echo "issues_found=true" >> $GITHUB_OUTPUT
+              detailed_issues=$(echo $detailed_issues | sed 's/{/\\{/g' | sed 's/}/\\}/g' | sed 's/(/\\(/g' | sed 's/)/\\)/g' | sed 's/"/\\"/g')
+              echo "detailed_issues=$detailed_issues" >> $GITHUB_OUTPUT
+            else
+              echo "Gosec found no issues"
+              echo "issues_found=false" >> $GITHUB_OUTPUT
+            fi
+            exit 0
+
+        - name: Upload results.json
+          uses: actions/upload-artifact@v3
+          with:
+            name: results.json
+            path: results.json
+
+        - name: Exit if Gosec found issues
+          run: |
+            issues_found="${{ steps.golangci_lint.outputs.issues_found }}"
+            if [ "$issues_found" = "true" ]; then
+              cat results.json | jq '.Issues' 1>&2
+              exit 1
+            else
+              echo "Gosec found no issues at '${{ steps.golangci_lint.outputs.issues_found }}'"
+            fi
+
     check_pr:
       runs-on: ubuntu-latest
       env:
@@ -208,7 +274,7 @@ jobs:
 #      if: needs.check_pr.outputs.pr_state == 'open' && contains(github.event.pull_request.labels.*.name, 'auto-merge')
       # in addition, only if it is not a draft
       if: needs.check_pr.outputs.pr_state == 'open' && contains(github.event.pull_request.labels.*.name, 'auto-merge') && needs.check_pr.outputs.pr_draft == 'false'
-      needs: [check_pr, run_tests]
+      needs: [check_pr, check_code_quality, run_tests]
       env:
         GITHUB_TOKEN: ${{ secrets.PULL_REQUEST_TOKEN }}
       outputs:
