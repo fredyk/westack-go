@@ -196,13 +196,12 @@ func (app *WeStack) loadDataSources() error {
 	if err != nil {               // Handle errors reading the config file
 		switch err.(type) {
 		case viper.ConfigFileNotFoundError:
-			log.Println(fmt.Sprintf("[WARNING] %v.json not found, fallback to datasources.json", fileToLoad))
+			fmt.Printf("[WARNING] %v.json not found, fallback to datasources.json\n", fileToLoad)
 			dsViper.SetConfigName("datasources") // name of config file (without extension)
 			err := dsViper.ReadInConfig()        // Find and read the config file
 			if err != nil {
 				return fmt.Errorf("fatal error config file: %w", err)
 			}
-			break
 		default:
 			return fmt.Errorf("fatal error config file: %w", err)
 		}
@@ -718,12 +717,10 @@ func fixModelRelations(loadedModel *model.Model) error {
 				foreignKey := strings.ToLower(relatedModelName[:1]) + relatedModelName[1:] + "Id"
 				relation.ForeignKey = &foreignKey
 				//(*loadedModel.Config.Relations)[relationName] = relation
-				break
 			case "hasOne", "hasMany":
 				foreignKey := strings.ToLower(loadedModel.Name[:1]) + loadedModel.Name[1:] + "Id"
 				relation.ForeignKey = &foreignKey
 				//(*loadedModel.Config.Relations)[relationName] = relation
-				break
 			}
 		}
 	}
