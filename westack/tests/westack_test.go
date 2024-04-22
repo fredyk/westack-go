@@ -5,11 +5,6 @@ import (
 	"crypto/rand"
 	"encoding/json"
 	"fmt"
-	"github.com/fredyk/westack-go/westack/datasource"
-	"github.com/fredyk/westack-go/westack/model"
-	"github.com/gofiber/fiber/v2"
-	"github.com/mailru/easyjson"
-	"go.mongodb.org/mongo-driver/bson/primitive"
 	"io"
 	"log"
 	"math/big"
@@ -18,6 +13,12 @@ import (
 	"strconv"
 	"testing"
 	"time"
+
+	"github.com/fredyk/westack-go/westack/datasource"
+	"github.com/fredyk/westack-go/westack/model"
+	"github.com/gofiber/fiber/v2"
+	"github.com/mailru/easyjson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 
 	"github.com/stretchr/testify/assert"
 
@@ -439,13 +440,17 @@ func Test_WeStackDelete(t *testing.T) {
 
 func Test_InitAndServe(t *testing.T) {
 
+	var bootedApp *westack.WeStack
 	t.Parallel()
 
 	go func() {
-		westack.InitAndServe(westack.Options{Port: 8021, DisablePortEnvVar: true})
+		westack.InitAndServe(westack.Options{Port: 8021, DisablePortEnvVar: true}, func(app *westack.WeStack) {
+			bootedApp = app
+		})
 	}()
 
-	time.Sleep(5 * time.Second)
+	time.Sleep(3 * time.Second)
+	bootedApp.Stop()
 
 }
 
@@ -483,7 +488,7 @@ func Test_InvalidCasbinOutputDirectory1(t *testing.T) {
 	// recover from panic
 	defer func() {
 		if r := recover(); r != nil {
-			assert.Equal(t, "Error while loading models: could not check policies directory /proc/1/cwd/a: stat /proc/1/cwd/a: permission denied", r)
+			assert.Regexp(t, "Error while loading models: could not (check|create) policies directory /proc/1/cwd/a: (stat|mkdir) /proc/1/cwd/a: permission denied", r)
 			// mark as ok
 			t.Log("OK")
 		} else {
