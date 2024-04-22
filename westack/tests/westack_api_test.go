@@ -701,3 +701,52 @@ func Test_NoteWith2Footers(t *testing.T) {
 	assert.Equal(t, footer1.GetString("text"), note2.GetString("footer1.text"))
 
 }
+
+func Test_ImageWithTwoThumbnails(t *testing.T) {
+
+	t.Parallel()
+
+	// Create a image
+	image, err := invokeApiAsRandomUser(t, "POST", "/images", wst.M{
+		"title":  "Image with 2 thuzmbnails",
+		"userId": randomUser.GetString("id"),
+	}, wst.M{
+		"Content-Type": "application/json",
+	})
+	assert.NoError(t, err)
+	assert.NotEmpty(t, image.GetString("id"))
+
+	// Create first Thumbnail
+	thumbnail1, err := invokeApiAsRandomUser(t, "POST", "/images", wst.M{
+		"text":            "Thumbnail 1",
+		"originalImageId": image.GetString("id"),
+		"userId":          randomUser.GetString("id"),
+	}, wst.M{
+		"Content-Type": "application/json",
+	})
+	assert.NoError(t, err)
+	assert.NotEmpty(t, thumbnail1.GetString("id"))
+
+	// Create second Thumbnail
+	thumbnail2, err := invokeApiAsRandomUser(t, "POST", "/images", wst.M{
+		"text":            "Thumbnail 2",
+		"originalImageId": image.GetString("id"),
+		"userId":          randomUser.GetString("id"),
+	}, wst.M{
+		"Content-Type": "application/json",
+	})
+	assert.NoError(t, err)
+	assert.Equal(t, fiber.StatusConflict, thumbnail2.GetInt("error.statusCode"))
+	assert.Equal(t, "UNIQUENESS", thumbnail2.GetString("error.code"))
+
+	// Find note with nested relations
+	image2, err := invokeApiAsRandomUser(t, "GET", fmt.Sprintf("/images/%s?filter={\"include\":[{\"relation\":\"thumbnail\"}]}", image.GetString("id")), nil, nil)
+	assert.NoError(t, err)
+	assert.Equal(t, image.GetString("id"), image2.GetString("id"))
+	assert.Equal(t, thumbnail1.GetString("id"), image2.GetString("thumbnail.id"))
+	assert.Equal(t, thumbnail1.GetString("text"), image2.GetString("thumbnail.text"))
+
+	invalidThumbnails, err := invokeApiJsonA(t, "GET", "/images?filter={\"where\":{\"text\":\"Thumbnail 2\"}}", nil, wst.M{"Authorization": fmt.Sprintf("Bearer %v", randomUserToken.GetString("id"))})
+	assert.NoError(t, err)
+	assert.Equal(t, 0, len(invalidThumbnails))
+}

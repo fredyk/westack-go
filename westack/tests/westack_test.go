@@ -486,14 +486,12 @@ func Test_InvalidCasbinOutputDirectory1(t *testing.T) {
 	app := westack.New(westack.Options{
 		Logger: createMockLogger(),
 	})
-	app.Viper.Set("casbin.policies.outputDirectory", "/proc/1/cwd/a")
+	app.Viper.Set("casbin.policies.outputDirectory", "/home/invalid")
 
 	// recover from panic
 	defer func() {
 		if r := recover(); r != nil {
-			assert.Regexp(t, "Error while loading models: could not (check|create) policies directory /proc/1/cwd/a: (stat|mkdir) /proc/1/cwd/a: permission denied", r)
-			// mark as ok
-			t.Log("OK")
+			assert.Regexp(t, "Error while loading models: could not (check|create) policies directory /home/invalid: (stat|mkdir) /home/invalid: permission denied", r)
 		} else {
 			t.Error("Should have panicked")
 		}

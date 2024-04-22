@@ -11,6 +11,9 @@
   "Footer": {
     "dataSource": "db1"
   },
+  "Image": {
+    "dataSource": "db1"
+  },
   "Note": {
     "dataSource": "db0"
   },
