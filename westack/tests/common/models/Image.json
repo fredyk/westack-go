@@ -1,0 +1,24 @@
+{
+    "name": "Image",
+    "base": "PersistedModel",
+    "public": true,
+    "relations": {
+        "thumbnail": {
+          "type": "hasOne",
+          "model": "Image",
+          "foreignKey": "originalImageId"
+        },
+        "user": {
+            "type": "belongsTo",
+            "model": "user"
+        }
+    },
+    "casbin": {
+        "policies": [
+            "$authenticated,*,create,allow",
+            "$authenticated,*,read,allow",
+            "$owner,*,write,allow",
+            "$owner,*,__get__thumbnail,allow"
+        ]
+    }
+}
