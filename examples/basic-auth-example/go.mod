@@ -3,13 +3,13 @@ module github.com/fredyk/westack-go/examples/basic-auth-example
 go 1.21
 
 require (
-	github.com/fredyk/westack-go v1.8.3
+	github.com/fredyk/westack-go v1.8.5
 	github.com/gofiber/fiber/v2 v2.52.4
 	go.mongodb.org/mongo-driver v1.15.0
 )
 
 require (
-	github.com/andybalholm/brotli v1.0.6 // indirect
+	github.com/andybalholm/brotli v1.1.0 // indirect
 	github.com/casbin/casbin/v2 v2.87.1 // indirect
 	github.com/casbin/govaluate v1.1.0 // indirect
 	github.com/fsnotify/fsnotify v1.7.0 // indirect

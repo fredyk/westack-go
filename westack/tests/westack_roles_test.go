@@ -12,6 +12,9 @@ import (
 )
 
 func Test_NewUserAndRole(t *testing.T) {
+
+	t.Parallel()
+
 	randN := createRandomInt()
 	user, err := westack.UpsertUserWithRoles(app, westack.UserWithRoles{
 		Username: fmt.Sprintf("user-%v", randN),
@@ -23,6 +26,9 @@ func Test_NewUserAndRole(t *testing.T) {
 }
 
 func Test_NewUserAndRoleWithExistingRole(t *testing.T) {
+
+	t.Parallel()
+
 	randN := createRandomInt()
 	roleModel := app.FindModelsWithClass("Role")[0]
 	role, err := roleModel.Create(wst.M{
@@ -41,6 +47,9 @@ func Test_NewUserAndRoleWithExistingRole(t *testing.T) {
 }
 
 func Test_NewUserAndRoleWithExistingUser(t *testing.T) {
+
+	t.Parallel()
+
 	randN := createRandomInt()
 	user, err := invokeApiJsonM(t, "POST", "/users", wst.M{
 		"username": fmt.Sprintf("user-%v", randN),
@@ -61,6 +70,9 @@ func Test_NewUserAndRoleWithExistingUser(t *testing.T) {
 }
 
 func Test_NewUserAndRoleWithExistingUserAndRole(t *testing.T) {
+
+	t.Parallel()
+
 	randN := createRandomInt()
 	roleModel := app.FindModelsWithClass("Role")[0]
 	role, err := roleModel.Create(wst.M{
@@ -88,6 +100,9 @@ func Test_NewUserAndRoleWithExistingUserAndRole(t *testing.T) {
 }
 
 func Test_NewUserAndRoleWithExistingUserAndRoleAndUserRolesAndRoleMapping(t *testing.T) {
+
+	t.Parallel()
+
 	randN := createRandomInt()
 	roleModel := app.FindModelsWithClass("Role")[0]
 	role, err := roleModel.Create(wst.M{
@@ -124,6 +139,9 @@ func Test_NewUserAndRoleWithExistingUserAndRoleAndUserRolesAndRoleMapping(t *tes
 }
 
 func Test_NewUserAndRoleEmptyUsername(t *testing.T) {
+
+	t.Parallel()
+
 	randN := createRandomInt()
 	user, err := westack.UpsertUserWithRoles(app, westack.UserWithRoles{
 		Username: "",
@@ -135,6 +153,9 @@ func Test_NewUserAndRoleEmptyUsername(t *testing.T) {
 }
 
 func Test_NewUserAndRoleEmptyPassword(t *testing.T) {
+
+	t.Parallel()
+
 	randN := createRandomInt()
 	user, err := westack.UpsertUserWithRoles(app, westack.UserWithRoles{
 		Username: fmt.Sprintf("user-%v", randN),
@@ -146,6 +167,9 @@ func Test_NewUserAndRoleEmptyPassword(t *testing.T) {
 }
 
 func Test_NewUserAndRoleEmptyRoles(t *testing.T) {
+
+	t.Parallel()
+	
 	randN := createRandomInt()
 	user, err := westack.UpsertUserWithRoles(app, westack.UserWithRoles{
 		Username: fmt.Sprintf("user-%v", randN),

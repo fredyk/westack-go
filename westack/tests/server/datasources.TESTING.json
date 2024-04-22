@@ -7,7 +7,9 @@
     "username": "",
     "connector": "mongodb",
     "useNewUrlParser": true,
-    "allowExtendedOperators": true
+    "allowExtendedOperators": true,
+    "minPoolSize": 0,
+    "maxPoolSize": 1
   },
   "db1": {
     "url": "mongodb://localhost:27017",
@@ -17,7 +19,9 @@
     "username": "",
     "connector": "mongodb",
     "useNewUrlParser": true,
-    "allowExtendedOperators": true
+    "allowExtendedOperators": true,
+    "minPoolSize": 0,
+    "maxPoolSize": 1
   },
   "db2": {
     "url": "mongodb://localhost:27017",
@@ -27,7 +31,9 @@
     "username": "",
     "connector": "mongodb",
     "useNewUrlParser": true,
-    "allowExtendedOperators": true
+    "allowExtendedOperators": true,
+    "minPoolSize": 0,
+    "maxPoolSize": 1
   },
   "db_expected_to_fail": {
     "url": "mongodb://localhost:27017",
@@ -38,6 +44,8 @@
     "connector": "mongodb",
     "useNewUrlParser": true,
     "allowExtendedOperators": true,
+    "minPoolSize": 0,
+    "maxPoolSize": 1,
     "retryOnError": true
   },
   "db_expected_to_be_closed": {
@@ -49,6 +57,8 @@
     "connector": "mongodb",
     "useNewUrlParser": true,
     "allowExtendedOperators": true,
+    "minPoolSize": 0,
+    "maxPoolSize": 1,
     "retryOnError": true
   },
   "memorykv": {
