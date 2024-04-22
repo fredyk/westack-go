@@ -79,7 +79,7 @@ func (app *WeStack) loadModels() error {
 		var config *model.Config
 		err := wst.LoadFile("./common/models/"+fileInfo.Name(), &config)
 		if err != nil {
-			return fmt.Errorf("error while loading model %v: %v\n", fileInfo.Name(), err)
+			return fmt.Errorf("error while loading model %v: %v", fileInfo.Name(), err)
 		}
 		if config.Relations == nil {
 			config.Relations = &map[string]*model.Relation{}
@@ -132,9 +132,6 @@ type UniqueNessRestriction struct {
 func buildRelationsGraph(app *WeStack) {
 	for _, thisModel := range *app.modelRegistry {
 		for _, otherModel := range *app.modelRegistry {
-			if thisModel.Name == otherModel.Name {
-				continue
-			}
 			for _, relation := range *otherModel.Config.Relations {
 				if relation.Model == thisModel.Name {
 					if relation.Type == "hasOne" {
