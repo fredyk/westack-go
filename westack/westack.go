@@ -258,10 +258,10 @@ func New(options ...Options) *WeStack {
 	return &app
 }
 
-func InitAndServe(options Options) {
+func InitAndServe(options Options, onBoot ...func(app *WeStack)) {
 	app := New(options)
 
-	app.Boot()
+	app.Boot(onBoot...)
 
 	// Catch SIGINT signal and Stop()
 	go func() {
