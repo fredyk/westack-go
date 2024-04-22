@@ -4,6 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
+	"strings"
+	"time"
+
 	wst "github.com/fredyk/westack-go/westack/common"
 	"github.com/spf13/viper"
 	"go.mongodb.org/mongo-driver/bson"
@@ -12,9 +16,6 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"go.mongodb.org/mongo-driver/mongo/readpref"
-	"log"
-	"strings"
-	"time"
 )
 
 type MongoDBDatasourceOptions struct {
@@ -43,6 +44,14 @@ func (connector *MongoDBConnector) SetConfig(dsViper *viper.Viper) {
 func (connector *MongoDBConnector) Connect(parentContext context.Context) error {
 	var mongoCtx context.Context
 	var cancelFn context.CancelFunc
+
+	minPoolSize := connector.dsViper.GetInt64("minPoolSize")
+	maxPoolSize := connector.dsViper.GetInt64("maxPoolSize")
+
+	if maxPoolSize == 0 {
+		maxPoolSize = 5
+	}
+
 	if connector.options != nil && connector.options.Timeout > 0 {
 		fmt.Printf("[DEBUG] Setting timeout to %v seconds\n", connector.options.Timeout)
 		mongoCtx, cancelFn = context.WithTimeout(parentContext, time.Duration(connector.options.Timeout)*time.Second)
@@ -69,7 +78,7 @@ func (connector *MongoDBConnector) Connect(parentContext context.Context) error 
 	if connector.options != nil && connector.options.Timeout > 0 {
 		timeoutForOptions = time.Duration(connector.options.Timeout) * time.Second
 	}
-	clientOpts = clientOpts.SetSocketTimeout(timeoutForOptions).SetConnectTimeout(timeoutForOptions).SetServerSelectionTimeout(timeoutForOptions).SetMinPoolSize(1).SetMaxPoolSize(5)
+	clientOpts = clientOpts.SetSocketTimeout(timeoutForOptions).SetConnectTimeout(timeoutForOptions).SetServerSelectionTimeout(timeoutForOptions).SetMinPoolSize(uint64(minPoolSize)).SetMaxPoolSize(uint64(maxPoolSize))
 
 	if connector.options != nil && connector.options.Registry != nil {
 		clientOpts = clientOpts.SetRegistry(connector.options.Registry)
@@ -135,7 +144,7 @@ func (connector *MongoDBConnector) findByObjectId(collectionName string, _id int
 	if err != nil {
 		return nil, err
 	}
-	if results != nil && len(results) > 0 {
+	if len(results) > 0 {
 		return &(results)[0], nil
 	} else {
 		return nil, errors.New("document not found")
