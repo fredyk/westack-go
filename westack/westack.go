@@ -194,13 +194,12 @@ func New(options ...Options) *WeStack {
 	if err != nil {                // Handle errors reading the config file
 		switch {
 		case errors.As(err, &viper.ConfigFileNotFoundError{}):
-			log.Println(fmt.Sprintf("[WARNING] %v.json not found, fallback to config.json", fileToLoad))
+			fmt.Printf("[WARNING] %v.json not found, fallback to config.json\n", fileToLoad)
 			appViper.SetConfigName("config") // name of config file (without extension)
 			err := appViper.ReadInConfig()   // Find and read the config file
 			if err != nil {
 				log.Fatalf("fatal error config file: %v", err)
 			}
-			break
 		default:
 			log.Fatalf("fatal error config file: %v", err)
 		}
@@ -258,10 +257,10 @@ func New(options ...Options) *WeStack {
 	return &app
 }
 
-func InitAndServe(options Options) {
+func InitAndServe(options Options, onBoot ...func(app *WeStack)) {
 	app := New(options)
 
-	app.Boot()
+	app.Boot(onBoot...)
 
 	// Catch SIGINT signal and Stop()
 	go func() {

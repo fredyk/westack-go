@@ -128,6 +128,9 @@ func Test_ExtractLookups(t *testing.T) {
 }
 
 func Test_CustomerOrderStore(t *testing.T) {
+
+	t.Parallel()
+
 	// Create a customer with a random name, using math
 	nameN := createRandomInt()
 	name := fmt.Sprintf("Customer %v", nameN)

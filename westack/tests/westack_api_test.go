@@ -30,7 +30,7 @@ func createNoteForUser(userId string, token string, footerId string, t *testing.
 
 func Test_FindMany(t *testing.T) {
 
-	//t.Parallel()
+	t.Parallel()
 
 	var err error
 

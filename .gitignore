@@ -18,3 +18,4 @@
 /westack/tests/data/coverage/
 /westack/tests/data/*.policies.csv
 /westack/tests/data/*.casbin.dump.conf
+westack/tests/server/datasources.TESTING_PUBLIC.json
