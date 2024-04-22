@@ -249,7 +249,6 @@ func init() {
 }
 
 type mockLogger struct {
-	output          io.Writer
 	flags           int
 	internalLogger  *log.Logger
 	prefix          string
@@ -336,6 +335,10 @@ func login(t *testing.T, body wst.M) (string, string) {
 	}
 
 	contentLength, err := strconv.Atoi(response.Header["Content-Length"][0])
+	if err != nil {
+		t.Error(err)
+		return "", ""
+	}
 	responseBytes := make([]byte, contentLength)
 	count, err := response.Body.Read(responseBytes)
 	if err != nil && err != io.EOF {
