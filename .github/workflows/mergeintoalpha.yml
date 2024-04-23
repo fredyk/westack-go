@@ -64,6 +64,8 @@ jobs:
       PPROF_AUTH_USERNAME: test
       PPROF_AUTH_PASSWORD: abcd1234.
       GITHUB_TOKEN: ${{ secrets.PULL_REQUEST_TOKEN }}
+      DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+      DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
       MIN_COVERAGE_THRESHOLD: 81.3
       JWT_SECRET: abcd1234.
       GO_ENV: TESTING
@@ -126,6 +128,39 @@ jobs:
           check-latest: true
           cache-dependency-path: ${{ github.workspace }}/go.sum
 
+      - name: Install Docker
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y apt-transport-https ca-certificates curl gnupg-agent software-properties-common
+
+          curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
+
+          sudo add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
+
+
+          sudo apt-get update
+          sudo apt-get install -y docker-ce docker-ce-cli containerd.io
+
+
+      - name: Build Docker image
+        run: |
+          # use matrix as tag
+          # enable buildkit
+          # cd westack-go
+          export DOCKER_BUILDKIT=1
+          docker buildx create --use
+          docker login -u ${{ env.DOCKER_USERNAME }} -p ${{ env.DOCKER_PASSWORD }}
+          tags=fredyk03/westack-go:alpha-go${{ matrix.go }}
+          if [ "${{ matrix.go }}" == "1.22" ]; then
+            tags="$tags,fredyk03/westack-go:v2.0.0-alpha"
+          fi
+          docker buildx build \
+            --build-arg GO_VERSION=${{ matrix.go }} \
+            --platform linux/amd64,linux/arm64 \
+            -t $tags \
+            --push .
+          docker logout
+
       - name: Test WeStack
         run: |
           if [ -d ${{ github.workspace }}/.cache/go-build ]; then
@@ -139,7 +174,7 @@ jobs:
           # at the end, replace dots with _, only if exists. keep remaining string
           random_sufix=$(echo "$(openssl rand -hex 9)_${{ matrix.go }}" | sed 's/\./_/g')
           echo "Random sufix: $random_sufix"
-          sed -i "s/\"database\": \"\(.*\)\",/\"database\": \"\1_$random_sufix\",/g" server/datasources*.json
+          sed -i "s/\"database\": \"\([^\"]*\)\",/\"database\": \"\1_$random_sufix\",/g" server/datasources*.json
           cat server/datasources.TESTING.json
           go test -timeout 5m -c -coverpkg=../../../westack-go/... -covermode=atomic github.com/fredyk/westack-go/westack/tests -o output.test
           go tool test2json -t ./output.test -test.v -test.paniconexit0 -test.coverprofile ../../coverage.txt | jq -r 'select(.Output != "" and .Output != null) | .Output' | sed '/^$/d' | tee ../../test_output.txt
