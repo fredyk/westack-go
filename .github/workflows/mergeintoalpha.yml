@@ -64,6 +64,8 @@ jobs:
       PPROF_AUTH_USERNAME: test
       PPROF_AUTH_PASSWORD: abcd1234.
       GITHUB_TOKEN: ${{ secrets.PULL_REQUEST_TOKEN }}
+      DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+      DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
       MIN_COVERAGE_THRESHOLD: 81.3
       JWT_SECRET: abcd1234.
       GO_ENV: TESTING
@@ -139,7 +141,7 @@ jobs:
           # at the end, replace dots with _, only if exists. keep remaining string
           random_sufix=$(echo "$(openssl rand -hex 9)_${{ matrix.go }}" | sed 's/\./_/g')
           echo "Random sufix: $random_sufix"
-          sed -i "s/\"database\": \"\(.*\)\",/\"database\": \"\1_$random_sufix\",/g" server/datasources*.json
+          sed -i "s/\"database\": \"\([^\"]*\)\",/\"database\": \"\1_$random_sufix\",/g" server/datasources*.json
           cat server/datasources.TESTING.json
           go test -timeout 5m -c -coverpkg=../../../westack-go/... -covermode=atomic github.com/fredyk/westack-go/westack/tests -o output.test
           go tool test2json -t ./output.test -test.v -test.paniconexit0 -test.coverprofile ../../coverage.txt | jq -r 'select(.Output != "" and .Output != null) | .Output' | sed '/^$/d' | tee ../../test_output.txt

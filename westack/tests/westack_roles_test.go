@@ -121,6 +121,7 @@ func Test_NewUserAndRoleWithExistingUserAndRoleAndUserRolesAndRoleMapping(t *tes
 	assert.Contains(t, user, "id")
 
 	roleMappingModel, err := app.FindModel("RoleMapping")
+	assert.NoError(t, err)
 	userRole, err := roleMappingModel.Create(wst.M{
 		"type":        "USER",
 		"roleId":      role.Id,

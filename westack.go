@@ -1,6 +1,5 @@
 package main
 
-import "C"
 import (
 	cliutils "github.com/fredyk/westack-go/cli-utils"
 )

@@ -5,9 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/gofiber/fiber/v2"
-	"github.com/mailru/easyjson"
-	"go.mongodb.org/mongo-driver/mongo"
 	"io"
 	"log"
 	"net"
@@ -18,6 +15,10 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/gofiber/fiber/v2"
+	"github.com/mailru/easyjson"
+	"go.mongodb.org/mongo-driver/mongo"
 
 	"github.com/stretchr/testify/assert"
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -41,6 +42,7 @@ var customerModel *model.Model
 var orderModel *model.Model
 var storeModel *model.Model
 var footerModel *model.Model
+var imageModel *model.Model
 var appModel *model.Model
 var systemContext *model.EventContext
 
@@ -684,9 +686,7 @@ func testSpecialDatePlaceholder(t *testing.T, specialDateKey string, specialDate
 }
 
 func encodeUriComponent(st string) string {
-	var encodedKey string
-	encodedKey = url.QueryEscape(st)
-	return encodedKey
+	return url.QueryEscape(st)
 }
 
 // before all tests
@@ -858,6 +858,7 @@ func revertAllTests() error {
 		storeModel,
 		footerModel,
 		appModel,
+		imageModel,
 	} {
 		deleteManyResult, err := modelToPurge.DeleteMany(sharedDeleteManyWhere, systemContext)
 		if err != nil {

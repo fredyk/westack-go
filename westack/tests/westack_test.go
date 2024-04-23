@@ -143,6 +143,10 @@ func init() {
 		if err != nil {
 			log.Fatalf("failed to find model: %v", err)
 		}
+		imageModel, err = app.FindModel("Image")
+		if err != nil {
+			log.Fatalf("failed to find model: %v", err)
+		}
 		appModel, err = app.FindModel("App")
 		if err != nil {
 			log.Fatalf("failed to find model: %v", err)
