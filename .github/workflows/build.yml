@@ -1,0 +1,51 @@
+name: Build Docker Image
+
+on:
+  push:
+    branches:
+        - alpha
+
+jobs:
+
+    build:
+        runs-on: ubuntu-latest
+        env:
+            GITHUB_TOKEN: ${{ secrets.PULL_REQUEST_TOKEN }}
+            DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+            DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+      
+        steps:
+
+            - name: Checkout code
+              uses: actions/checkout@v2
+              with:
+                ref: alpha
+
+            - name: Install Docker
+              run: |
+                sudo apt-get update
+                sudo apt-get install -y apt-transport-https ca-certificates curl gnupg-agent software-properties-common
+
+                curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
+
+                sudo add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
+
+
+                sudo apt-get update
+                sudo apt-get install -y docker-ce docker-ce-cli containerd.io
+    
+    
+            - name: Build Docker image
+              run: |
+                # use matrix as tag
+                # enable buildkit
+                # cd westack-go
+                export DOCKER_BUILDKIT=1
+                docker buildx create --use
+                docker login -u ${{ env.DOCKER_USERNAME }} -p ${{ env.DOCKER_PASSWORD }}
+                tags="--tag fredyk03/westack-go:alpha --tag fredyk03/westack-go:v2.0.0-alpha"
+                docker buildx build \
+                    --platform linux/amd64,linux/arm64 \
+                    $tags \
+                    --push .
+                docker logout
