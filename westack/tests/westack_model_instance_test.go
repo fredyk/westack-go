@@ -15,7 +15,7 @@ func Test_ToJSON_Nil(t *testing.T) {
 
 	t.Parallel()
 
-	var instance *model.Instance
+	var instance *model.StatefulInstance
 	json := instance.ToJSON()
 	assert.Nil(t, json)
 }
@@ -24,7 +24,7 @@ func Test_ToJSON_NilInstance(t *testing.T) {
 
 	t.Parallel()
 
-	m := model.New(&model.Config{}, &map[string]*model.Model{})
+	m := model.New(&model.Config{}, &map[string]*model.StatefulModel{}).(*model.StatefulModel)
 	instance := m.NilInstance
 	json := instance.ToJSON()
 	assert.Equal(t, wst.NilMap, json)
@@ -114,7 +114,7 @@ func Test_Instance_Transform(t *testing.T) {
 		User    User               `bson:"user"`
 		Entries []Entry            `bson:"entries"`
 	}
-	err = instance.Transform(&out)
+	err = instance.(*model.StatefulInstance).Transform(&out)
 	assert.NoError(t, err)
 	assert.Equal(t, noteId.Hex(), out.Id.Hex())
 	assert.Equal(t, userId.Hex(), out.UserId.Hex())
@@ -140,7 +140,7 @@ func Test_Instance_Transform_Error(t *testing.T) {
 		}
 	}
 	noteModel.App.Debug = false
-	err = instance.Transform(&out)
+	err = instance.(*model.StatefulInstance).Transform(&out)
 	noteModel.App.Debug = true
 	assert.Error(t, err)
 }
@@ -168,7 +168,7 @@ func Test_Instance_UncheckedTransform(t *testing.T) {
 			Date string `bson:"date"`
 		}
 	}
-	out := instance.UncheckedTransform(new(SafeType))
+	out := instance.(*model.StatefulInstance).UncheckedTransform(new(SafeType))
 	assert.NotNil(t, out)
 }
 
@@ -194,9 +194,9 @@ func Test_Instance_UncheckedTransform_Panic(t *testing.T) {
 			Date chan string `bson:"date"`
 		}
 	}
-	instance.Model.App.Debug = false
-	instance.UncheckedTransform(new(UnsafeType))
-	instance.Model.App.Debug = true
+	instance.(*model.StatefulInstance).Model.App.Debug = false
+	instance.(*model.StatefulInstance).UncheckedTransform(new(UnsafeType))
+	instance.(*model.StatefulInstance).Model.App.Debug = true
 }
 
 func Test_UpdateAttributes(t *testing.T) {
@@ -238,18 +238,18 @@ func Test_UpdateAttributes(t *testing.T) {
 	}, systemContext)
 	assert.NoError(t, err)
 
-	updated, err = createdNote.UpdateAttributes(*secondNote, systemContext)
+	updated, err = createdNote.UpdateAttributes(secondNote, systemContext)
 	assert.NoError(t, err)
 	assert.Equal(t, "Second note", updated.GetString("title"))
 
 	_, err = secondNote.UpdateAttributes(wst.M{
-		"title": "Second note updated for *Instance",
+		"title": "Second note updated for Instance",
 	}, systemContext)
 	assert.NoError(t, err)
 
 	updated, err = createdNote.UpdateAttributes(secondNote, systemContext)
 	assert.NoError(t, err)
-	assert.Equal(t, "Second note updated for *Instance", updated.GetString("title"))
+	assert.Equal(t, "Second note updated for Instance", updated.GetString("title"))
 
 	updated, err = createdNote.UpdateAttributes(struct {
 		Title string `bson:"title"`
@@ -265,9 +265,11 @@ func Test_UpdateAttributes(t *testing.T) {
 		Title: make(chan string),
 	}, systemContext)
 	assert.Error(t, err)
+	assert.Nil(t, updated)
 
 	updated, err = createdNote.UpdateAttributes("invalid type", systemContext)
 	assert.Error(t, err)
+	assert.Nil(t, updated)
 
 	updated, err = createdNote.UpdateAttributes(wst.M{
 		"title": "Title from wst.M",
@@ -285,6 +287,7 @@ func Test_UpdateAttributes(t *testing.T) {
 		"__forceError": true,
 	}, systemContext)
 	assert.Error(t, err)
+	assert.Nil(t, updated)
 
 	updated, err = createdNote.UpdateAttributes(wst.M{
 		"__overwriteWith": wst.M{
@@ -300,13 +303,13 @@ func Test_UpdateAttributes(t *testing.T) {
 	assert.NoError(t, err)
 
 	updated, err = createdNote.UpdateAttributes(wst.M{
-		"__overwriteWith": *secondNote,
+		"__overwriteWith": secondNote,
 	}, systemContext)
 	assert.NoError(t, err)
 	assert.Equal(t, "Second note updated for overwrite with Instance", updated.GetString("title"))
 
 	_, err = secondNote.UpdateAttributes(wst.M{
-		"title": "Second note updated for overwrite with *Instance",
+		"title": "Second note updated for overwrite with Instance",
 	}, systemContext)
 	assert.NoError(t, err)
 
@@ -314,12 +317,13 @@ func Test_UpdateAttributes(t *testing.T) {
 		"__overwriteWith": secondNote,
 	}, systemContext)
 	assert.NoError(t, err)
-	assert.Equal(t, "Second note updated for overwrite with *Instance", updated.GetString("title"))
+	assert.Equal(t, "Second note updated for overwrite with Instance", updated.GetString("title"))
 
 	updated, err = createdNote.UpdateAttributes(wst.M{
 		"__overwriteWith": "invalid type",
 	}, systemContext)
 	assert.Error(t, err)
+	assert.Nil(t, updated)
 
 }
 
