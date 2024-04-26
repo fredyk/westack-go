@@ -13,8 +13,8 @@ RUN apk add --no-cache --update \
 
 WORKDIR /app
 
-COPY go.mod ./
-COPY go.sum ./
+COPY v2/go.mod ./
+COPY v2/go.sum ./
 RUN go mod download
 
 COPY cli ./cli

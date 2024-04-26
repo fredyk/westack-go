@@ -7,7 +7,7 @@ import (
 	"os"
 	"regexp"
 
-	"github.com/fredyk/westack-go/westack/model"
+	"github.com/fredyk/westack-go/v2/model"
 )
 
 var DefaultUser = model.Config{
