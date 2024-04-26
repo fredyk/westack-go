@@ -22,7 +22,7 @@ func Test_NewUserAndRole(t *testing.T) {
 		Roles:    []string{fmt.Sprintf("role-%v", randN)},
 	}, systemContext)
 	assert.NoError(t, err)
-	assert.NotNil(t, user.Id)
+	assert.NotNil(t, user.GetID())
 }
 
 func Test_NewUserAndRoleWithExistingRole(t *testing.T) {
@@ -35,7 +35,7 @@ func Test_NewUserAndRoleWithExistingRole(t *testing.T) {
 		"name": fmt.Sprintf("role-%v", randN),
 	}, systemContext)
 	assert.NoError(t, err)
-	assert.NotNil(t, role.Id)
+	assert.NotNil(t, role.GetID())
 
 	user, err := westack.UpsertUserWithRoles(app, westack.UserWithRoles{
 		Username: fmt.Sprintf("user-%v", randN),
@@ -43,7 +43,7 @@ func Test_NewUserAndRoleWithExistingRole(t *testing.T) {
 		Roles:    []string{fmt.Sprintf("role-%v", randN)},
 	}, systemContext)
 	assert.NoError(t, err)
-	assert.NotNil(t, user.Id)
+	assert.NotNil(t, user.GetID())
 }
 
 func Test_NewUserAndRoleWithExistingUser(t *testing.T) {
@@ -66,7 +66,7 @@ func Test_NewUserAndRoleWithExistingUser(t *testing.T) {
 		Roles:    []string{fmt.Sprintf("role-%v", randN)},
 	}, systemContext)
 	assert.NoError(t, err)
-	assert.NotNil(t, userFromUpsert.Id)
+	assert.NotNil(t, userFromUpsert.GetID())
 }
 
 func Test_NewUserAndRoleWithExistingUserAndRole(t *testing.T) {
@@ -79,7 +79,7 @@ func Test_NewUserAndRoleWithExistingUserAndRole(t *testing.T) {
 		"name": fmt.Sprintf("role-%v", randN),
 	}, systemContext)
 	assert.NoError(t, err)
-	assert.NotNil(t, role.Id)
+	assert.NotNil(t, role.GetID())
 
 	user, err := invokeApiJsonM(t, "POST", "/users", wst.M{
 		"username": fmt.Sprintf("user-%v", randN),
@@ -96,7 +96,7 @@ func Test_NewUserAndRoleWithExistingUserAndRole(t *testing.T) {
 		Roles:    []string{fmt.Sprintf("role-%v", randN)},
 	}, systemContext)
 	assert.NoError(t, err)
-	assert.NotNil(t, userFromUpsert.Id)
+	assert.NotNil(t, userFromUpsert.GetID())
 }
 
 func Test_NewUserAndRoleWithExistingUserAndRoleAndUserRolesAndRoleMapping(t *testing.T) {
@@ -109,7 +109,7 @@ func Test_NewUserAndRoleWithExistingUserAndRoleAndUserRolesAndRoleMapping(t *tes
 		"name": fmt.Sprintf("role-%v", randN),
 	}, systemContext)
 	assert.NoError(t, err)
-	assert.NotNil(t, role.Id)
+	assert.NotNil(t, role.GetID())
 
 	user, err := invokeApiJsonM(t, "POST", "/users", wst.M{
 		"username": fmt.Sprintf("user-%v", randN),
@@ -124,11 +124,11 @@ func Test_NewUserAndRoleWithExistingUserAndRoleAndUserRolesAndRoleMapping(t *tes
 	assert.NoError(t, err)
 	userRole, err := roleMappingModel.Create(wst.M{
 		"type":        "USER",
-		"roleId":      role.Id,
+		"roleId":      role.GetID(),
 		"principalId": user.GetString("id"),
 	}, systemContext)
 	assert.NoError(t, err)
-	assert.NotNil(t, userRole.Id)
+	assert.NotNil(t, userRole.GetID())
 
 	userFromUpsert, err := westack.UpsertUserWithRoles(app, westack.UserWithRoles{
 		Username: fmt.Sprintf("user-%v", randN),
@@ -136,7 +136,7 @@ func Test_NewUserAndRoleWithExistingUserAndRoleAndUserRolesAndRoleMapping(t *tes
 		Roles:    []string{fmt.Sprintf("role-%v", randN)},
 	}, systemContext)
 	assert.NoError(t, err)
-	assert.NotNil(t, userFromUpsert.Id)
+	assert.NotNil(t, userFromUpsert.GetID())
 }
 
 func Test_NewUserAndRoleEmptyUsername(t *testing.T) {
