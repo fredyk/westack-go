@@ -17,12 +17,12 @@ type EventContext struct {
 	Filter                 *wst.Filter
 	Data                   *wst.M
 	Query                  *wst.M
-	Instance               *Instance
+	Instance               *StatefulInstance
 	Ctx                    *fiber.Ctx
 	Ephemeral              *EphemeralData
 	IsNewInstance          bool
 	Result                 interface{}
-	Model                  *Model
+	Model                  *StatefulModel
 	ModelID                interface{}
 	StatusCode             int
 	DisableTypeConversions bool
@@ -42,10 +42,10 @@ func (eventContext *EventContext) UpdateEphemeral(newData *wst.M) {
 	}
 }
 
-func (eventContext *EventContext) GetBearer(loadedModel *Model) (error, *BearerToken) {
+func (eventContext *EventContext) GetBearer(loadedModel *StatefulModel) (*BearerToken, error) {
 
 	if eventContext.Bearer != nil {
-		return nil, eventContext.Bearer
+		return eventContext.Bearer, nil
 	}
 	c := eventContext.Ctx
 	authBytes := c.Request().Header.Peek("Authorization")
@@ -94,16 +94,16 @@ func (eventContext *EventContext) GetBearer(loadedModel *Model) (error, *BearerT
 					}
 				}
 			} else {
-				fmt.Printf("[DEBUG] Invalid token: %s\n", err.Error())
+				fmt.Printf("[DEBUG] Invalid token: %s\n", err)
 			}
 		}
 
 	}
-	return nil, &BearerToken{
+	return &BearerToken{
 		User:   user,
 		Roles:  roles,
 		Claims: bearerClaims,
 		Raw:    rawToken,
-	}
+	}, nil
 
 }
