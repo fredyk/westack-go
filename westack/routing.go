@@ -91,12 +91,14 @@ func (app *WeStack) loadModelsFixedRoutes() error {
 
 			mountUserModelFixedRoutes(loadedModel, app)
 
+		} else if loadedModel.Config.Base == "App" {
+			mountAppModelFixedRoutes(loadedModel, app)
 		}
 	}
 	return nil
 }
 
-func mountUserModelFixedRoutes(loadedModel *model.Model, app *WeStack) {
+func mountUserModelFixedRoutes(loadedModel *model.StatefulModel, app *WeStack) {
 	loadedModel.RemoteMethod(func(eventContext *model.EventContext) error {
 		return handleEvent(eventContext, loadedModel, "login")
 	}, model.RemoteMethodOptions{
@@ -120,7 +122,7 @@ func mountUserModelFixedRoutes(loadedModel *model.Model, app *WeStack) {
 
 	loadedModel.RemoteMethod(func(eventContext *model.EventContext) error {
 
-		err, token := eventContext.GetBearer(loadedModel)
+		token, err := eventContext.GetBearer(loadedModel)
 		if err != nil {
 			return err
 		}
@@ -308,7 +310,7 @@ func mountUserModelFixedRoutes(loadedModel *model.Model, app *WeStack) {
 
 }
 
-func mountBaseModelFixedRoutes(app *WeStack, loadedModel *model.Model) {
+func mountBaseModelFixedRoutes(app *WeStack, loadedModel *model.StatefulModel) {
 	if app.debug {
 		log.Println("Mount GET " + loadedModel.BaseUrl)
 	}
@@ -382,6 +384,60 @@ func mountBaseModelFixedRoutes(app *WeStack, loadedModel *model.Model) {
 		Http: model.RemoteMethodOptionsHttp{
 			Path: "/",
 			Verb: "post",
+		},
+	})
+}
+
+func mountAppModelFixedRoutes(loadedModel *model.StatefulModel, app *WeStack) {
+	if app.debug {
+		log.Println("Mount POST " + loadedModel.BaseUrl + "/:id/token")
+	}
+	loadedModel.RemoteMethod(func(eventContext *model.EventContext) error {
+		id := eventContext.Ctx.Params("id")
+		ttl := eventContext.Query.GetFloat64("ttl")
+		if ttl <= 0.0 {
+			ttl = 30 * 24 * 60 * 60
+		}
+		var asSt string
+		var asStOk bool
+		if eventContext.ModelID != nil {
+			asSt, asStOk = eventContext.ModelID.(string)
+		}
+		if eventContext.ModelID == nil || asStOk && len(strings.TrimSpace(asSt)) == 0 {
+			eventContext.ModelID = id
+		}
+		bearer := model.CreateBearer(asSt, float64(time.Now().Unix()), ttl, []string{"APP"})
+		// sign the bearer
+		token := jwt.NewWithClaims(jwt.SigningMethodHS256, bearer.Claims)
+		tokenString, err := token.SignedString(loadedModel.App.JwtSecretKey)
+		if err != nil {
+			return err
+		}
+		bearer.Raw = tokenString
+		eventContext.Result = wst.M{
+			"id":    bearer.Raw,
+			"appId": eventContext.ModelID,
+		}
+		return nil
+	}, model.RemoteMethodOptions{
+		Name: "createToken",
+		Accepts: model.RemoteMethodOptionsHttpArgs{
+			{
+				Arg:         "data",
+				Type:        "object",
+				Description: "",
+				Http:        model.ArgHttp{Source: "body"},
+				Required:    true,
+			},
+			{
+				Arg:  "ttl",
+				Type: "number",
+				Http: model.ArgHttp{Source: "query"},
+			},
+		},
+		Http: model.RemoteMethodOptionsHttp{
+			Path: "/:id/token",
+			Verb: "POST",
 		},
 	})
 }
@@ -530,7 +586,7 @@ func (app *WeStack) loadModelsDynamicRoutes() {
 	}
 }
 
-func handleEvent(eventContext *model.EventContext, loadedModel *model.Model, event string) (err error) {
+func handleEvent(eventContext *model.EventContext, loadedModel *model.StatefulModel, event string) (err error) {
 	if loadedModel.DisabledHandlers[event] != true {
 		err = loadedModel.GetHandler(event)(eventContext)
 		if err != nil {
@@ -546,7 +602,7 @@ func handleEvent(eventContext *model.EventContext, loadedModel *model.Model, eve
 	return
 }
 
-func casbinOwnerFn(loadedModel *model.Model) func(arguments ...interface{}) (interface{}, error) {
+func casbinOwnerFn(loadedModel *model.StatefulModel) func(arguments ...interface{}) (interface{}, error) {
 	modelConfigsByName := make(map[string]*model.Config)
 	return func(arguments ...interface{}) (interface{}, error) {
 
@@ -650,14 +706,14 @@ func casbinOwnerFn(loadedModel *model.Model) func(arguments ...interface{}) (int
 
 }
 
-func obtainSortedRelationKeys(loadedModel *model.Model, modelConfigsByName map[string]*model.Config) []string {
+func obtainSortedRelationKeys(loadedModel *model.StatefulModel, modelConfigsByName map[string]*model.Config) []string {
 	allRelatedKeys := make([]string, 0)
 	for key, r := range *loadedModel.Config.Relations {
 		relatedModelConfig := modelConfigsByName[r.Model]
 		if relatedModelConfig == nil {
 			// Ignore error because we already checked for it at boot time
 			relatedModelI, _ := loadedModel.App.FindModel(r.Model)
-			relatedModel := relatedModelI.(*model.Model)
+			relatedModel := relatedModelI.(*model.StatefulModel)
 			relatedModelConfig = relatedModel.Config
 			modelConfigsByName[r.Model] = relatedModelConfig
 		}
@@ -671,7 +727,7 @@ func obtainSortedRelationKeys(loadedModel *model.Model, modelConfigsByName map[s
 	return allRelatedKeys
 }
 
-func findUserRecursiveInRelation(loadedModel *model.Model, modelConfigsByName map[string]*model.Config, relationKey string, objId interface{}, roleKey string, usersForRole *[]string) error {
+func findUserRecursiveInRelation(loadedModel *model.StatefulModel, modelConfigsByName map[string]*model.Config, relationKey string, objId interface{}, roleKey string, usersForRole *[]string) error {
 	r := (*loadedModel.Config.Relations)[relationKey]
 
 	if r.Type == "belongsTo" {
@@ -700,13 +756,13 @@ func findUserRecursiveInRelation(loadedModel *model.Model, modelConfigsByName ma
 			}
 			return nil
 		}
-		relatedModel := relatedInstance.Model
+		relatedModel := relatedInstance.GetModel()
 
-		if relatedModel.Config.Base == "User" && *r.ForeignKey == "userId" || relatedModel.Config.Base == "App" && *r.ForeignKey == "appId" {
+		if relatedModel.GetConfig().Base == "User" && *r.ForeignKey == "userId" || relatedModel.GetConfig().Base == "App" && *r.ForeignKey == "appId" {
 			user := relatedInstance
 
 			if user != nil {
-				objUserId := model.GetIDAsString(user.Id)
+				objUserId := model.GetIDAsString(user.GetID())
 
 				_, err := loadedModel.Enforcer.AddRoleForUser(objUserId, roleKey)
 				if err != nil {
@@ -721,16 +777,16 @@ func findUserRecursiveInRelation(loadedModel *model.Model, modelConfigsByName ma
 
 			}
 
-		} else if relatedModel.Config.Base != "User" && relatedModel.Config.Base != "App" {
+		} else if relatedModel.GetConfig().Base != "User" && relatedModel.GetConfig().Base != "App" {
 			if loadedModel.App.Debug {
-				loadedModel.App.Logger().Printf("[DEBUG] Recursive owner check for %v\n", relatedModel.Name)
+				loadedModel.App.Logger().Printf("[DEBUG] Recursive owner check for %v\n", relatedModel.GetName())
 			}
-			sortedRelationKeys := obtainSortedRelationKeys(relatedModel, modelConfigsByName)
+			sortedRelationKeys := obtainSortedRelationKeys(relatedModel.(*model.StatefulModel), modelConfigsByName)
 			for _, key := range sortedRelationKeys {
 				if loadedModel.App.Debug {
-					loadedModel.App.Logger().Printf("[DEBUG] Recursive owner check for %v[%v]-->%v[%v]\n", loadedModel.Name, objId, relatedModel.Name, relatedInstance.Id)
+					loadedModel.App.Logger().Printf("[DEBUG] Recursive owner check for %v[%v]-->%v[%v]\n", loadedModel.Name, objId, relatedModel.GetName(), relatedInstance.GetID())
 				}
-				err = findUserRecursiveInRelation(relatedModel, modelConfigsByName, key, relatedInstance.Id, roleKey, usersForRole)
+				err = findUserRecursiveInRelation(relatedModel.(*model.StatefulModel), modelConfigsByName, key, relatedInstance.GetID(), roleKey, usersForRole)
 				if err != nil {
 					return err
 				}
