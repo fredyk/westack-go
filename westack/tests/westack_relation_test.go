@@ -165,8 +165,8 @@ func Test_CustomerOrderStore(t *testing.T) {
 	// Create 2 orders with amount
 	order := wst.M{
 		"amount":     131.43,
-		"customerId": createdCustomer.Id,
-		"storeId":    createdStore.Id,
+		"customerId": createdCustomer.GetID(),
+		"storeId":    createdStore.GetID(),
 	}
 	createdOrder, err := orderModel.Create(order, systemContext)
 	assert.NoError(t, err)
@@ -300,7 +300,7 @@ func Test_Aggregations(t *testing.T) {
 
 	// Get the note including the user
 	filter := &wst.Filter{
-		Where: &wst.Where{"userUsername": wst.M{"$gt": ""}, "_id": note.Id},
+		Where: &wst.Where{"userUsername": wst.M{"$gt": ""}, "_id": note.GetID()},
 		Aggregation: []wst.AggregationStage{
 			{
 				"$addFields": map[string]interface{}{

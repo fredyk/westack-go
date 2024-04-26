@@ -2,6 +2,10 @@ package westack
 
 import (
 	"fmt"
+	"os"
+	"strings"
+	"time"
+
 	casbinmodel "github.com/casbin/casbin/v2/model"
 	fileadapter "github.com/casbin/casbin/v2/persist/file-adapter"
 	wst "github.com/fredyk/westack-go/westack/common"
@@ -11,12 +15,9 @@ import (
 	"github.com/golang-jwt/jwt"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"golang.org/x/crypto/bcrypt"
-	"os"
-	"strings"
-	"time"
 )
 
-func createCasbinModel(loadedModel *model.Model, app *WeStack, config *model.Config) error {
+func createCasbinModel(loadedModel *model.StatefulModel, app *WeStack, config *model.Config) error {
 	casbModel := casbinmodel.NewModel()
 
 	basePoliciesDirectory := app.Viper.GetString("casbin.policies.outputDirectory")
@@ -101,7 +102,7 @@ func createCasbinModel(loadedModel *model.Model, app *WeStack, config *model.Con
 	return adapter.SavePolicy(casbModel)
 }
 
-func setupUserModel(loadedModel *model.Model, app *WeStack) {
+func setupUserModel(loadedModel *model.StatefulModel, app *WeStack) {
 	loadedModel.On("login", func(ctx *model.EventContext) error {
 		data := ctx.Data
 		email := data.GetString("email")
@@ -112,7 +113,7 @@ func setupUserModel(loadedModel *model.Model, app *WeStack) {
 		}
 
 		if (*data)["password"] == nil || strings.TrimSpace((*data)["password"].(string)) == "" {
-			return wst.CreateError(fiber.ErrUnauthorized, "LOGIN_FAILED", fiber.Map{"message": "login failed"}, "Error")
+			return wst.CreateError(fiber.ErrUnauthorized, "PASSWORD_REQUIRED", fiber.Map{"message": "password is required"}, "ValidationError")
 		}
 
 		var where wst.Where
@@ -121,14 +122,24 @@ func setupUserModel(loadedModel *model.Model, app *WeStack) {
 		} else {
 			where = wst.Where{"username": username}
 		}
-		users, err := loadedModel.FindMany(&wst.Filter{
+		usersCursor := loadedModel.FindMany(&wst.Filter{
 			Where: &where,
-		}, ctx).All()
+		}, ctx)
+		users, err := usersCursor.All()
+		if err != nil {
+			return err
+		}
 		if len(users) == 0 {
+			if usersCursor.(*model.ChannelCursor).Err != nil {
+				return usersCursor.(*model.ChannelCursor).Err
+			}
+			if loadedModel.App.Debug {
+				app.Logger().Printf("no user found with email or username %v\n", email)
+			}
 			return wst.CreateError(fiber.ErrUnauthorized, "LOGIN_FAILED", fiber.Map{"message": "login failed"}, "Error")
 		}
-		firstUser := users[0]
-		ctx.Instance = &firstUser
+		firstUser := users[0].(*model.StatefulInstance)
+		ctx.Instance = firstUser
 
 		firstUserData := firstUser.ToJSON()
 		savedPassword := firstUserData["password"]
@@ -145,6 +156,9 @@ func setupUserModel(loadedModel *model.Model, app *WeStack) {
 			}
 		}
 		if err != nil {
+			if loadedModel.App.Debug {
+				loadedModel.App.Logger().Printf("bcrypt.CompareHashAndPassword error: %v\n", err)
+			}
 			return wst.CreateError(fiber.ErrUnauthorized, "LOGIN_FAILED", fiber.Map{"message": "login failed"}, "Error")
 		}
 
@@ -229,13 +243,13 @@ func setupRoleModel(config *model.Config, app *WeStack, dataSource *datasource.D
 			},
 		},
 	}, app.modelRegistry)
-	roleMappingModel.App = app.asInterface()
-	roleMappingModel.Datasource = dataSource
+	roleMappingModel.(*model.StatefulModel).App = app.asInterface()
+	roleMappingModel.(*model.StatefulModel).Datasource = dataSource
 
-	app.roleMappingModel = roleMappingModel
+	app.roleMappingModel = roleMappingModel.(*model.StatefulModel)
 }
 
-func GetRoleNames(RoleMappingModel *model.Model, userIdHex string, userId primitive.ObjectID) ([]string, error) {
+func GetRoleNames(RoleMappingModel *model.StatefulModel, userIdHex string, userId primitive.ObjectID) ([]string, error) {
 	roleNames := []string{"USER"}
 
 	if RoleMappingModel != nil {
@@ -271,7 +285,7 @@ func GetRoleNames(RoleMappingModel *model.Model, userIdHex string, userId primit
 	return roleNames, nil
 }
 
-func CreateNewToken(userIdHex string, UserModel *model.Model, roles []string) (string, error) {
+func CreateNewToken(userIdHex string, UserModel *model.StatefulModel, roles []string) (string, error) {
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 		"userId":  userIdHex,
 		"created": time.Now().UnixMilli(),

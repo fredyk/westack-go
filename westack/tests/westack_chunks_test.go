@@ -3,10 +3,11 @@ package tests
 import (
 	"errors"
 	"fmt"
-	"github.com/mailru/easyjson"
 	"io"
 	"net/http"
 	"testing"
+
+	"github.com/mailru/easyjson"
 
 	"github.com/stretchr/testify/assert"
 
@@ -51,9 +52,9 @@ func Test_ChannelChunkGeneratorError(t *testing.T) {
 		"invalid": make(chan int),
 	}, systemContext)
 	assert.NoError(t, err)
-	var input chan *model.Instance = make(chan *model.Instance)
+	var input chan model.Instance = make(chan model.Instance)
 	go func() {
-		input <- &build
+		input <- build
 		close(input)
 	}()
 	cursor := model.NewChannelCursor(input)
@@ -80,7 +81,7 @@ func Test_ChannelChunkGeneratorClosedError(t *testing.T) {
 	//	"invalid": make(chan int),
 	//}, model.NewBuildCache(), systemContext)
 	//assert.NoError(t, err)
-	var input chan *model.Instance = make(chan *model.Instance)
+	var input chan model.Instance = make(chan model.Instance)
 	go func() {
 		//input <- &build
 		close(input)

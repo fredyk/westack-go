@@ -256,7 +256,7 @@ func Test_LoginUserWithoutPassword(t *testing.T) {
 	})
 	assert.NoError(t, err)
 	assert.EqualValues(t, fiber.StatusUnauthorized, user.GetInt("error.statusCode"))
-	assert.Equal(t, "LOGIN_FAILED", user.GetString("error.code"))
+	assert.Equal(t, "PASSWORD_REQUIRED", user.GetString("error.code"))
 
 }
 

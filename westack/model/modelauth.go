@@ -2,18 +2,19 @@ package model
 
 import (
 	"fmt"
-	"go.mongodb.org/mongo-driver/bson/primitive"
 	"log"
 	"strings"
 	"sync"
 	"time"
+
+	"go.mongodb.org/mongo-driver/bson/primitive"
 
 	"github.com/gofiber/fiber/v2"
 )
 
 var AuthMutex = sync.RWMutex{}
 
-func (loadedModel *Model) EnforceEx(token *BearerToken, objId string, action string, eventContext *EventContext) (error, bool) {
+func (loadedModel *StatefulModel) EnforceEx(token *BearerToken, objId string, action string, eventContext *EventContext) (error, bool) {
 
 	if token != nil && token.User != nil && token.User.System == true {
 		return nil, true
@@ -134,7 +135,7 @@ func (loadedModel *Model) EnforceEx(token *BearerToken, objId string, action str
 	return fiber.ErrUnauthorized, false
 }
 
-func updateAuthCache(loadedModel *Model, bearerUserIdSt string, targetObjId string, action string, allow bool) {
+func updateAuthCache(loadedModel *StatefulModel, bearerUserIdSt string, targetObjId string, action string, allow bool) {
 	cacheLock.Lock()
 	defer cacheLock.Unlock()
 	if loadedModel.authCache[bearerUserIdSt] == nil {
@@ -148,7 +149,7 @@ func updateAuthCache(loadedModel *Model, bearerUserIdSt string, targetObjId stri
 
 var cacheLock = sync.Mutex{}
 
-func addSubjectAuthCacheEntry(loadedModel *Model, bearerUserIdSt string) {
+func addSubjectAuthCacheEntry(loadedModel *StatefulModel, bearerUserIdSt string) {
 
 	// Delete after 5 minutes
 	go func() {
@@ -161,10 +162,10 @@ func addSubjectAuthCacheEntry(loadedModel *Model, bearerUserIdSt string) {
 	loadedModel.authCache[bearerUserIdSt] = make(map[string]map[string]bool)
 }
 
-func addObjectAuthCacheEntry(loadedModel *Model, bearerUserIdSt string, targetObjId string) {
+func addObjectAuthCacheEntry(loadedModel *StatefulModel, bearerUserIdSt string, targetObjId string) {
 	loadedModel.authCache[bearerUserIdSt][targetObjId] = make(map[string]bool)
 }
 
-func addActionAuthCacheEntry(loadedModel *Model, bearerUserIdSt string, targetObjId string, action string, allow bool) {
+func addActionAuthCacheEntry(loadedModel *StatefulModel, bearerUserIdSt string, targetObjId string, action string, allow bool) {
 	loadedModel.authCache[bearerUserIdSt][targetObjId][action] = allow
 }
