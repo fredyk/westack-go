@@ -3,12 +3,12 @@ package model
 import wst "github.com/fredyk/westack-go/westack/common"
 
 type ChannelCursor struct {
-	channel      chan *Instance
+	channel      chan Instance
 	Err          error
 	UsedPipeline *wst.A
 }
 
-func (cursor *ChannelCursor) Next() (result *Instance, err error) {
+func (cursor *ChannelCursor) Next() (result Instance, err error) {
 	err = cursor.Err
 	if err != nil {
 		return
@@ -27,7 +27,7 @@ func (cursor *ChannelCursor) All() (result InstanceA, err error) {
 		if instance == nil {
 			break
 		}
-		result = append(result, *instance)
+		result = append(result, instance)
 	}
 	err = cursor.Err
 	return
@@ -42,7 +42,7 @@ func (cursor *ChannelCursor) Error(err error) {
 	cursor.Err = err
 }
 
-func NewChannelCursor(channel chan *Instance) Cursor {
+func NewChannelCursor(channel chan Instance) Cursor {
 	return &ChannelCursor{
 		channel: channel,
 	}

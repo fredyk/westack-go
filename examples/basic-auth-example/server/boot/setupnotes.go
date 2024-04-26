@@ -2,11 +2,12 @@ package boot
 
 import (
 	"fmt"
+	"log"
+	"time"
+
 	"github.com/fredyk/westack-go/examples/basic-auth-example/common/models"
 	"github.com/fredyk/westack-go/westack"
 	wst "github.com/fredyk/westack-go/westack/common"
-	"log"
-	"time"
 )
 
 func SetupNotes(app *westack.WeStack) {
@@ -31,7 +32,7 @@ func SetupNotes(app *westack.WeStack) {
 		}
 	}
 	var typedUser models.User
-	err = user.Transform(&typedUser)
+	err = user.(*model.StatefulInstance).Transform(&typedUser)
 	if err != nil {
 		panic(err)
 	}
@@ -41,7 +42,7 @@ func SetupNotes(app *westack.WeStack) {
 		panic(fmt.Sprintf("Could not create note %v", err))
 	} else {
 		var typedNote models.Note
-		err := note.Transform(&typedNote)
+		err := note.(*model.StatefulInstance).Transform(&typedNote)
 		if err != nil {
 			panic(err)
 		}

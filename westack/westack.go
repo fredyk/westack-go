@@ -39,11 +39,11 @@ type WeStack struct {
 
 	port                           int
 	datasources                    *map[string]*datasource.Datasource
-	modelRegistry                  *map[string]*model.Model
+	modelRegistry                  *map[string]*model.StatefulModel
 	restrictModelUniquenessByField map[string]map[string]UniqueNessRestriction
 	debug                          bool
 	restApiRoot                    string
-	roleMappingModel               *model.Model
+	roleMappingModel               *model.StatefulModel
 	dataSourceOptions              *map[string]*datasource.Options
 	init                           time.Time
 	jwtSecretKey                   []byte
@@ -51,7 +51,7 @@ type WeStack struct {
 	logger                         wst.ILogger
 }
 
-func (app *WeStack) FindModel(modelName string) (*model.Model, error) {
+func (app *WeStack) FindModel(modelName string) (*model.StatefulModel, error) {
 	result := (*app.modelRegistry)[modelName]
 	if result == nil {
 		return nil, fmt.Errorf("model %v not found", modelName)
@@ -69,7 +69,7 @@ func (app *WeStack) FindDatasource(dsName string) (*datasource.Datasource, error
 	return result, nil
 }
 
-func (app *WeStack) FindModelsWithClass(modelClass string) (foundModels []*model.Model) {
+func (app *WeStack) FindModelsWithClass(modelClass string) (foundModels []*model.StatefulModel) {
 	for _, foundModel := range *app.modelRegistry {
 		if foundModel.Config.Base == modelClass {
 			foundModels = append(foundModels, foundModel)
@@ -140,7 +140,7 @@ func New(options ...Options) *WeStack {
 		JSONDecoder: json.Unmarshal,
 	})
 
-	modelRegistry := make(map[string]*model.Model)
+	modelRegistry := make(map[string]*model.StatefulModel)
 	datasources := make(map[string]*datasource.Datasource)
 
 	var finalOptions Options

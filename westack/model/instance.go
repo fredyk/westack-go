@@ -1,20 +1,37 @@
 package model
 
 import (
-	"errors"
 	"fmt"
+	"log"
+	"reflect"
+
 	"github.com/oliveagle/jsonpath"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
-	"log"
-	"reflect"
 
 	wst "github.com/fredyk/westack-go/westack/common"
 	"github.com/fredyk/westack-go/westack/datasource"
 )
 
-type Instance struct {
-	Model *Model
+type Instance interface {
+	GetID() interface{}
+	UpdateAttributes(data interface{}, baseContext *EventContext) (Instance, error)
+	ToJSON() wst.M
+	Get(relationName string) interface{}
+	GetA(path string) *wst.A
+	GetM(path string) *wst.M
+	GetString(path string) string
+	GetInt(path string) int64
+	GetFloat64(path string) float64
+	GetBoolean(path string, defaultValue bool) bool
+	GetObjectId(path string) primitive.ObjectID
+	GetOne(relation string) Instance
+	GetMany(relation string) InstanceA
+	GetModel() Model
+}
+
+type StatefulInstance struct {
+	Model *StatefulModel
 	Id    interface{}
 
 	data  wst.M
@@ -23,7 +40,21 @@ type Instance struct {
 
 type InstanceA []Instance
 
-func (modelInstance *Instance) ToJSON() wst.M {
+func (modelInstance *StatefulInstance) GetID() interface{} {
+	if modelInstance == nil {
+		return nil
+	}
+	return modelInstance.Id
+}
+
+func (modelInstance *StatefulInstance) GetModel() Model {
+	if modelInstance == nil {
+		return nil
+	}
+	return modelInstance.Model
+}
+
+func (modelInstance *StatefulInstance) ToJSON() wst.M {
 
 	if modelInstance == nil {
 		return nil
@@ -33,8 +64,7 @@ func (modelInstance *Instance) ToJSON() wst.M {
 		return wst.NilMap
 	}
 
-	var result wst.M
-	result = wst.CopyMap(modelInstance.data)
+	result := wst.CopyMap(modelInstance.data)
 	for relationName, relationConfig := range *modelInstance.Model.Config.Relations {
 		if modelInstance.data[relationName] != nil {
 			rawRelatedData := modelInstance.data[relationName]
@@ -42,16 +72,14 @@ func (modelInstance *Instance) ToJSON() wst.M {
 			if relatedModel != nil {
 				switch {
 				case isSingleRelation(relationConfig.Type):
-					relatedInstance := rawRelatedData.(*Instance).ToJSON()
+					relatedInstance := rawRelatedData.(*StatefulInstance).ToJSON()
 					result[relationName] = relatedInstance
-					break
 				case isManyRelation(relationConfig.Type):
 					aux := make(wst.A, len(rawRelatedData.(InstanceA)))
 					for idx, v := range rawRelatedData.(InstanceA) {
 						aux[idx] = v.ToJSON()
 					}
 					result[relationName] = aux
-					break
 				}
 			}
 		}
@@ -60,31 +88,30 @@ func (modelInstance *Instance) ToJSON() wst.M {
 	return result
 }
 
-func (modelInstance *Instance) Get(relationName string) interface{} {
+func (modelInstance *StatefulInstance) Get(relationName string) interface{} {
 	result := modelInstance.data[relationName]
 	switch (*modelInstance.Model.Config.Relations)[relationName].Type {
 	case "hasMany", "hasAndBelongsToMany":
 		if result == nil {
 			result = make(InstanceA, 0)
 		}
-		break
 	}
 	return result
 }
 
-func (modelInstance *Instance) GetOne(relationName string) *Instance {
+func (modelInstance *StatefulInstance) GetOne(relationName string) Instance {
 	result := modelInstance.Get(relationName)
 	if result == nil {
 		return nil
 	}
-	return result.(*Instance)
+	return result.(*StatefulInstance)
 }
 
-func (modelInstance *Instance) GetMany(relationName string) InstanceA {
+func (modelInstance *StatefulInstance) GetMany(relationName string) InstanceA {
 	return modelInstance.Get(relationName).(InstanceA)
 }
 
-func (modelInstance *Instance) HideProperties() {
+func (modelInstance *StatefulInstance) HideProperties() {
 	for _, propertyName := range modelInstance.Model.Config.Hidden {
 		delete(modelInstance.data, propertyName)
 	}
@@ -92,17 +119,17 @@ func (modelInstance *Instance) HideProperties() {
 	for relationKey, relationConfig := range *modelInstance.Model.Config.Relations {
 		if relationConfig.Type == "hasMany" || relationConfig.Type == "hasAndBelongsToMany" {
 			for _, instance := range modelInstance.GetMany(relationKey) {
-				instance.HideProperties()
+				instance.(*StatefulInstance).HideProperties()
 			}
 		} else if relationConfig.Type == "hasOne" || relationConfig.Type == "belongsTo" {
 			if instance := modelInstance.GetOne(relationKey); instance != nil {
-				instance.HideProperties()
+				instance.(*StatefulInstance).HideProperties()
 			}
 		}
 	}
 }
 
-func (modelInstance *Instance) Transform(out interface{}) (err error) {
+func (modelInstance *StatefulInstance) Transform(out interface{}) (err error) {
 	err = modelInstance.requireBytes()
 	if err == nil {
 		err = bson.UnmarshalWithRegistry(modelInstance.Model.App.Bson.Registry, modelInstance.bytes, out)
@@ -113,7 +140,7 @@ func (modelInstance *Instance) Transform(out interface{}) (err error) {
 	return
 }
 
-func (modelInstance *Instance) UncheckedTransform(out interface{}) interface{} {
+func (modelInstance *StatefulInstance) UncheckedTransform(out interface{}) interface{} {
 	err := modelInstance.Transform(out)
 	if err != nil {
 		panic(err)
@@ -121,7 +148,7 @@ func (modelInstance *Instance) UncheckedTransform(out interface{}) interface{} {
 	return out
 }
 
-func (modelInstance *Instance) UpdateAttributes(data interface{}, baseContext *EventContext) (*Instance, error) {
+func (modelInstance *StatefulInstance) UpdateAttributes(data interface{}, baseContext *EventContext) (Instance, error) {
 
 	var finalData wst.M
 	switch data.(type) {
@@ -130,26 +157,20 @@ func (modelInstance *Instance) UpdateAttributes(data interface{}, baseContext *E
 		for key, value := range data.(map[string]interface{}) {
 			finalData[key] = value
 		}
-		break
 	case *map[string]interface{}:
 		finalData = wst.M{}
 		for key, value := range *data.(*map[string]interface{}) {
 			finalData[key] = value
 		}
-		break
 	case wst.M:
 		finalData = data.(wst.M)
-		break
 	case *wst.M:
 		finalData = *data.(*wst.M)
-		break
-	case Instance:
-		value := data.(Instance)
+	case StatefulInstance:
+		value := data.(StatefulInstance)
 		finalData = (&value).ToJSON()
-		break
-	case *Instance:
-		finalData = data.(*Instance).ToJSON()
-		break
+	case *StatefulInstance:
+		finalData = data.(*StatefulInstance).ToJSON()
 	default:
 		// check if data is a struct
 		if reflect.TypeOf(data).Kind() == reflect.Struct {
@@ -162,7 +183,7 @@ func (modelInstance *Instance) UpdateAttributes(data interface{}, baseContext *E
 				return nil, err
 			}
 		} else {
-			return nil, errors.New(fmt.Sprintf("Invalid input for Model.UpdateAttributes() <- %s", data))
+			return nil, fmt.Errorf("invalid input for Model.UpdateAttributes() <- %s", data)
 		}
 	}
 
@@ -202,19 +223,21 @@ func (modelInstance *Instance) UpdateAttributes(data interface{}, baseContext *E
 		}
 		if eventContext.Result != nil {
 			switch eventContext.Result.(type) {
+			case *StatefulInstance, Instance:
+				return eventContext.Result.(*StatefulInstance), nil
 			case *Instance:
-				return eventContext.Result.(*Instance), nil
-			case Instance:
-				v := eventContext.Result.(Instance)
+				return (*eventContext.Result.(*Instance)).(*StatefulInstance), nil
+			case StatefulInstance:
+				v := eventContext.Result.(StatefulInstance)
 				return &v, nil
 			case wst.M:
 				v, err := modelInstance.Model.Build(eventContext.Result.(wst.M), targetBaseContext)
 				if err != nil {
 					return nil, err
 				}
-				return &v, nil
+				return v, nil
 			default:
-				return nil, fmt.Errorf("invalid eventContext.Result type, expected *Instance, Instance or wst.M; found %T", eventContext.Result)
+				return nil, fmt.Errorf("invalid eventContext.Result type, expected Instance, Instance or wst.M; found %T", eventContext.Result)
 			}
 		}
 	}
@@ -245,7 +268,7 @@ func (modelInstance *Instance) UpdateAttributes(data interface{}, baseContext *E
 	}
 }
 
-func (modelInstance *Instance) Reload(eventContext *EventContext) error {
+func (modelInstance *StatefulInstance) Reload(eventContext *EventContext) error {
 	newInstance, err := modelInstance.Model.FindById(modelInstance.Id, nil, eventContext)
 	if err != nil {
 		return err
@@ -255,17 +278,17 @@ func (modelInstance *Instance) Reload(eventContext *EventContext) error {
 			delete(modelInstance.data, k)
 		}
 	}
-	for k, v := range newInstance.data {
+	for k, v := range newInstance.(*StatefulInstance).data {
 		if (*modelInstance.Model.Config.Relations)[k] == nil {
 			modelInstance.data[k] = v
 		}
 	}
-	modelInstance.data = newInstance.data
+	modelInstance.data = newInstance.(*StatefulInstance).data
 	modelInstance.bytes = nil
 	return nil
 }
 
-func (modelInstance *Instance) GetString(path string) string {
+func (modelInstance *StatefulInstance) GetString(path string) string {
 	if res, err := jsonpath.JsonPathLookup(modelInstance.data, fmt.Sprintf("$.%v", path)); err == nil {
 		switch res.(type) {
 		case string:
@@ -277,7 +300,7 @@ func (modelInstance *Instance) GetString(path string) string {
 	return ""
 }
 
-func (modelInstance *Instance) GetFloat64(path string) float64 {
+func (modelInstance *StatefulInstance) GetFloat64(path string) float64 {
 	if res, err := jsonpath.JsonPathLookup(modelInstance.data, fmt.Sprintf("$.%v", path)); err == nil {
 		if v, ok := res.(float64); ok {
 			return v
@@ -294,7 +317,7 @@ func (modelInstance *Instance) GetFloat64(path string) float64 {
 	return 0
 }
 
-func (modelInstance *Instance) GetInt(path string) int64 {
+func (modelInstance *StatefulInstance) GetInt(path string) int64 {
 	if res, err := jsonpath.JsonPathLookup(modelInstance.data, fmt.Sprintf("$.%v", path)); err == nil {
 		if v, ok := res.(int64); ok {
 			return v
@@ -311,7 +334,7 @@ func (modelInstance *Instance) GetInt(path string) int64 {
 	return 0
 }
 
-func (modelInstance *Instance) GetBoolean(path string, defaultValue bool) bool {
+func (modelInstance *StatefulInstance) GetBoolean(path string, defaultValue bool) bool {
 	if res, err := jsonpath.JsonPathLookup(modelInstance.data, fmt.Sprintf("$.%v", path)); err == nil {
 		switch res.(type) {
 		case bool:
@@ -321,7 +344,7 @@ func (modelInstance *Instance) GetBoolean(path string, defaultValue bool) bool {
 	return defaultValue
 }
 
-func (modelInstance *Instance) GetObjectId(path string) (result primitive.ObjectID) {
+func (modelInstance *StatefulInstance) GetObjectId(path string) (result primitive.ObjectID) {
 	result = primitive.NilObjectID
 	if res, err := jsonpath.JsonPathLookup(modelInstance.data, fmt.Sprintf("$.%v", path)); err == nil {
 		switch res.(type) {
@@ -337,7 +360,7 @@ func (modelInstance *Instance) GetObjectId(path string) (result primitive.Object
 	return result
 }
 
-func (modelInstance *Instance) GetM(path string) *wst.M {
+func (modelInstance *StatefulInstance) GetM(path string) *wst.M {
 	res, err := jsonpath.JsonPathLookup(modelInstance.data, fmt.Sprintf("$.%v", path))
 	if err != nil {
 		return nil
@@ -363,7 +386,7 @@ func (modelInstance *Instance) GetM(path string) *wst.M {
 	}
 }
 
-func (modelInstance *Instance) GetA(path string) *wst.A {
+func (modelInstance *StatefulInstance) GetA(path string) *wst.A {
 	res, err := jsonpath.JsonPathLookup(modelInstance.data, fmt.Sprintf("$.%v", path))
 	if err != nil {
 		return nil
@@ -412,7 +435,7 @@ func (modelInstance *Instance) GetA(path string) *wst.A {
 	}
 }
 
-func (modelInstance *Instance) requireBytes() (err error) {
+func (modelInstance *StatefulInstance) requireBytes() (err error) {
 	if modelInstance.bytes == nil {
 		//if len(modelInstance.bytes) == 0 {
 		//// register encoder for primitive.ObjectID
@@ -437,7 +460,7 @@ func (modelInstance *Instance) requireBytes() (err error) {
 
 // Inherit easyjson
 
-func (modelInstance *Instance) MarshalBSON() (out []byte, err error) {
+func (modelInstance *StatefulInstance) MarshalBSON() (out []byte, err error) {
 	// marshal modelInstance.data
 	toMarshal := modelInstance.data
 	if modelInstance.Model.App.Debug {

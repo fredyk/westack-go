@@ -2,10 +2,11 @@ package tests
 
 import (
 	"fmt"
-	"github.com/goccy/go-json"
 	"os"
 	"testing"
 	"time"
+
+	"github.com/goccy/go-json"
 
 	"github.com/fredyk/westack-go/westack"
 	"github.com/fredyk/westack-go/westack/model"
@@ -225,7 +226,7 @@ func Test_BearerTokenWithObjectId(t *testing.T) {
 	subjId, err := primitive.ObjectIDFromHex(randomUserToken.GetString("userId"))
 	assert.NoError(t, err)
 	userBearer := model.CreateBearer(subjId, float64(time.Now().Unix()), float64(60), []string{"USER"})
-	refreshedByUser, err := noteModel.FindById(createdNote.Id, &wst.Filter{
+	refreshedByUser, err := noteModel.FindById(createdNote.GetID(), &wst.Filter{
 		Include: &wst.Include{
 			{Relation: "user"},
 			{Relation: "footer1"},
@@ -246,7 +247,7 @@ func Test_BearerTokenWithObjectId(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, "Test2", updatedByUser.GetString("title"))
 
-	refreshedByApp, err := noteModel.FindById(createdNote.Id, &wst.Filter{
+	refreshedByApp, err := noteModel.FindById(createdNote.GetID(), &wst.Filter{
 		Include: &wst.Include{
 			{Relation: "user"},
 			{Relation: "footer1"},
@@ -428,7 +429,7 @@ func Test_ProtectedFields(t *testing.T) {
 	}
 	userWithPrivileges, err := westack.UpsertUserWithRoles(app, plainUserWithPrivileges, systemContext)
 	assert.NoError(t, err)
-	assert.NotNil(t, userWithPrivileges.Id)
+	assert.NotNil(t, userWithPrivileges.GetID())
 	assert.NotEmptyf(t, userWithPrivileges.GetString("id"), "User should have an id")
 
 	// Login the user1

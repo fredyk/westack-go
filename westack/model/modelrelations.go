@@ -33,7 +33,7 @@ func isSingleRelation(relationType string) bool {
 	return relationType == "hasOne" || relationType == "belongsTo"
 }
 
-func (loadedModel *Model) ExtractLookupsFromFilter(filterMap *wst.Filter, disableTypeConversions bool) (*wst.A, error) {
+func (loadedModel *StatefulModel) ExtractLookupsFromFilter(filterMap *wst.Filter, disableTypeConversions bool) (*wst.A, error) {
 
 	if filterMap == nil {
 		return nil, nil
@@ -98,10 +98,10 @@ func (loadedModel *Model) ExtractLookupsFromFilter(filterMap *wst.Filter, disabl
 
 									relatedModel, _ := loadedModel.App.FindModel(relation.Model)
 
-									if relatedModel.(*Model).Datasource.Name != loadedModel.Datasource.Name {
+									if relatedModel.(*StatefulModel).Datasource.Name != loadedModel.Datasource.Name {
 										return nil, wst.CreateError(fiber.ErrBadRequest,
 											"BAD_RELATION",
-											fiber.Map{"message": fmt.Sprintf("related model %v at relation %v belongs to another datasource", relatedModel.(*Model).Name, relationName)},
+											fiber.Map{"message": fmt.Sprintf("related model %v at relation %v belongs to another datasource", relatedModel.(*StatefulModel).Name, relationName)},
 											"ValidationError",
 										)
 									}
@@ -282,7 +282,7 @@ func (loadedModel *Model) ExtractLookupsFromFilter(filterMap *wst.Filter, disabl
 	return lookups, nil
 }
 
-func (loadedModel *Model) appendIncludeToLookups(includeItem wst.IncludeItem, disableTypeConversions bool, lookups *wst.A) (*wst.A, error) {
+func (loadedModel *StatefulModel) appendIncludeToLookups(includeItem wst.IncludeItem, disableTypeConversions bool, lookups *wst.A) (*wst.A, error) {
 	var targetScope *wst.Filter
 	if includeItem.Scope != nil {
 		scopeValue := *includeItem.Scope
@@ -481,7 +481,7 @@ func recursiveExtractExpression(key string, value interface{}, specialFields map
 params:
   - relationDeepLevel: Starts at 1 (Root is 0)
 */
-func (loadedModel *Model) mergeRelated(relationDeepLevel byte, documents *wst.A, includeItem wst.IncludeItem, currentContext *EventContext) error {
+func (loadedModel *StatefulModel) mergeRelated(relationDeepLevel byte, documents *wst.A, includeItem wst.IncludeItem, currentContext *EventContext) error {
 
 	if documents == nil {
 		return nil
@@ -679,7 +679,7 @@ func (loadedModel *Model) mergeRelated(relationDeepLevel byte, documents *wst.A,
 	return nil
 }
 
-func (loadedModel *Model) findCachedRelatedDocuments(relatedLoadedModel *Model, keyFrom string, document wst.M, keyTo string, targetScope *wst.Filter, localCache map[string]InstanceA, cachedRelatedDocs []InstanceA, documentIdx int, baseContext *EventContext) error {
+func (loadedModel *StatefulModel) findCachedRelatedDocuments(relatedLoadedModel *StatefulModel, keyFrom string, document wst.M, keyTo string, targetScope *wst.Filter, localCache map[string]InstanceA, cachedRelatedDocs []InstanceA, documentIdx int, baseContext *EventContext) error {
 	cacheDs, err := loadedModel.App.FindDatasource(relatedLoadedModel.Config.Cache.Datasource)
 	if err != nil {
 		return err

@@ -155,7 +155,7 @@ func init() {
 		noteModel.Observe("before load", func(ctx *model.EventContext) error {
 			if ctx.BaseContext.Remote != nil {
 				if ctx.BaseContext.Query.GetString("mockResultTest124401") == "true" {
-					// set the result as *model.InstanceA
+					// set the result as model.InstanceA
 					inst, err := noteModel.Build(wst.M{
 						"title": "mocked124401",
 					}, ctx)
@@ -177,15 +177,15 @@ func init() {
 						inst,
 					}
 				} else if ctx.BaseContext.Query.GetString("mockResultTest124403") == "true" {
-					// set the result as []*model.InstanceA
+					// set the result as []model.InstanceA
 					inst, err := noteModel.Build(wst.M{
 						"title": "mocked124403",
 					}, ctx)
 					if err != nil {
 						return err
 					}
-					ctx.Result = []*model.Instance{
-						&inst,
+					ctx.Result = []*model.StatefulInstance{
+						inst.(*model.StatefulInstance),
 					}
 				} else if ctx.BaseContext.Query.GetString("mockResultTest124404") == "true" {
 					// set the result as wst.A
@@ -234,7 +234,7 @@ func init() {
 				return err
 			}
 			var resultNote localNote
-			err = note.Transform(&resultNote)
+			err = note.(*model.StatefulInstance).Transform(&resultNote)
 			if err != nil {
 				return err
 			}

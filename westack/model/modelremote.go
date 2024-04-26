@@ -17,7 +17,7 @@ import (
 	"github.com/fredyk/westack-go/westack/datasource"
 )
 
-func (loadedModel *Model) RemoteMethod(handler func(context *EventContext) error, options RemoteMethodOptions) fiber.Router {
+func (loadedModel *StatefulModel) RemoteMethod(handler func(context *EventContext) error, options RemoteMethodOptions) fiber.Router {
 	if !loadedModel.Config.Public {
 		loadedModel.App.Logger().Fatalf("Trying to register a remote method in the private model: %v, you may set \"public\": true in the %v.json file", loadedModel.Name, loadedModel.Name)
 	}
@@ -111,7 +111,7 @@ func (loadedModel *Model) RemoteMethod(handler func(context *EventContext) error
 var activeRequestsPerModel = make(map[string]int)
 var activeRequestsMutex sync.RWMutex
 
-func createFiberHandler(options RemoteMethodOptions, loadedModel *Model, verb string, path string) func(ctx *fiber.Ctx) error {
+func createFiberHandler(options RemoteMethodOptions, loadedModel *StatefulModel, verb string, path string) func(ctx *fiber.Ctx) error {
 	return func(ctx *fiber.Ctx) error {
 		// Limit to 2 concurrent requests per model, new requests will be queued
 		activeRequestsMutex.Lock()
@@ -152,7 +152,7 @@ func createRemoteMethodOperationItem(handler func(context *EventContext) error, 
 	}
 }
 
-func createOpenAPIAdditionalParams(loadedModel *Model, options RemoteMethodOptions) []wst.M {
+func createOpenAPIAdditionalParams(loadedModel *StatefulModel, options RemoteMethodOptions) []wst.M {
 	var params []wst.M
 	for _, param := range options.Accepts {
 		paramType := param.Type
@@ -191,7 +191,7 @@ func assignOpenAPIRequestBody(pathDef wst.M) {
 	}
 }
 
-func createOpenAPIPathDef(loadedModel *Model, description string, rawPathParams []string) wst.M {
+func createOpenAPIPathDef(loadedModel *StatefulModel, description string, rawPathParams []string) wst.M {
 	pathDef := wst.M{
 		"modelName": loadedModel.Name,
 		"summary":   description,
@@ -202,7 +202,7 @@ func createOpenAPIPathDef(loadedModel *Model, description string, rawPathParams 
 	return pathDef
 }
 
-func (loadedModel *Model) HandleRemoteMethod(name string, eventContext *EventContext) error {
+func (loadedModel *StatefulModel) HandleRemoteMethod(name string, eventContext *EventContext) error {
 
 	operationItem := loadedModel.remoteMethodsMap[name]
 
@@ -214,7 +214,7 @@ func (loadedModel *Model) HandleRemoteMethod(name string, eventContext *EventCon
 	options := operationItem.Options
 	handler := operationItem.Handler
 
-	err, token := eventContext.GetBearer(loadedModel)
+	token, err := eventContext.GetBearer(loadedModel)
 	if err != nil {
 		return err
 	}
@@ -281,7 +281,11 @@ func (loadedModel *Model) HandleRemoteMethod(name string, eventContext *EventCon
 				(*eventContext.Data)[k] = v
 			}
 		} else {
-			return wst.CreateError(fiber.ErrUnsupportedMediaType, "UNSUPPORTED_MEDIA_TYPE", fiber.Map{"message": "Unsupported media type"}, "ValidationError")
+			if c.Get("Content-Length", "0") == "0" || (c.Get("Content-Length") == "" && c.Get("Transfer-Encoding") == "") {
+				// no content
+			} else {
+				return wst.CreateError(fiber.ErrUnsupportedMediaType, "UNSUPPORTED_MEDIA_TYPE", fiber.Map{"message": "Unsupported media type"}, "ValidationError")
+			}
 		}
 	}
 
@@ -307,7 +311,10 @@ func (loadedModel *Model) HandleRemoteMethod(name string, eventContext *EventCon
 				}
 				break
 			case "number":
-				param, err = strconv.ParseFloat(paramSt, 64)
+				param = 0.0
+				if regexp.MustCompile(`^-\d+(\.\d+)?$`).MatchString(paramSt) {
+					param, err = strconv.ParseFloat(paramSt, 64)
+				}
 				if err != nil {
 					return wst.CreateError(fiber.ErrBadRequest, "INVALID_NUMBER", fiber.Map{"message": err.Error()}, "ValidationError")
 				}

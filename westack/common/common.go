@@ -2,7 +2,6 @@ package wst
 
 import (
 	"fmt"
-	"go.mongodb.org/mongo-driver/bson/bsonrw"
 	"log"
 	"os"
 	"reflect"
@@ -10,6 +9,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"go.mongodb.org/mongo-driver/bson/bsonrw"
 
 	"github.com/mailru/easyjson/jlexer"
 
@@ -85,6 +86,37 @@ func (m *M) GetInt(path string) int {
 			return v.GetInt(segments[len(segments)-1])
 		} else if v, ok := source.(map[string]interface{}); ok {
 			return asInt(v[segments[len(segments)-1]])
+		}
+	}
+	return 0
+}
+
+func (m *M) GetFloat64(path string) float64 {
+	if m == nil {
+		return 0
+	}
+	segments := strings.Split(path, ".")
+	if len(segments) == 1 {
+		return asFloat64((*m)[segments[0]])
+	} else {
+		source := obtainSourceFromM(m, segments[:len(segments)-1])
+		if v, ok := source.(M); ok {
+			return v.GetFloat64(segments[len(segments)-1])
+		} else if v, ok := source.(map[string]interface{}); ok {
+			return asFloat64(v[segments[len(segments)-1]])
+		}
+	}
+	return 0
+}
+
+func asFloat64(v interface{}) float64 {
+	if v1, ok := v.(float64); ok {
+		return v1
+	} else if v1, ok := v.(int64); ok {
+		return float64(v1)
+	} else if v1, ok := v.(string); ok && regexp.MustCompile(`^-?\d+(\.\d+)?$`).MatchString(v1) {
+		if f, err := strconv.ParseFloat(v1, 64); err == nil {
+			return f
 		}
 	}
 	return 0
@@ -207,7 +239,11 @@ func (m *M) GetBoolean(path string) bool {
 	segments := strings.Split(path, ".")
 	if len(segments) == 1 {
 		if v, ok := (*m)[segments[0]]; ok {
-			return v.(bool)
+			if v1, ok1 := v.(bool); ok1 {
+				return v1
+			} else if v1, ok1 := v.(string); ok1 {
+				return v1 == "true" || v1 == "1" || v1 == "yes" || v1 == "on"
+			}
 		}
 	} else {
 		source := obtainSourceFromM(m, segments[:len(segments)-1])
@@ -221,11 +257,14 @@ func (m *M) GetBoolean(path string) bool {
 }
 
 func asInt(v interface{}) int {
-	switch v := v.(type) {
-	case int64:
-		return int(v)
-	case float64:
-		return int(v)
+	if v1, ok := v.(int64); ok {
+		return int(v1)
+	} else if v1, ok := v.(float64); ok {
+		return int(v1)
+	} else if v1, ok := v.(string); ok {
+		if i, err := strconv.Atoi(v1); err == nil {
+			return i
+		}
 	}
 	return 0
 }
