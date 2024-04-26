@@ -2,8 +2,9 @@ package model
 
 import (
 	"fmt"
-	"github.com/mailru/easyjson"
 	"io"
+
+	"github.com/mailru/easyjson"
 )
 
 type Chunk struct {
@@ -71,15 +72,12 @@ func (chunkGenerator *cursorChunkGenerator) ContentType() string {
 	return "application/json"
 }
 
-func (chunkGenerator *cursorChunkGenerator) obtainNextChunk(err error, chunk Chunk) (error, Chunk) {
-	err = chunkGenerator.GenerateNextChunk()
-	chunk = chunkGenerator.currentChunk
-	return err, chunk
+func (chunkGenerator *cursorChunkGenerator) obtainNextChunk() (Chunk, error, ) {
+	return chunkGenerator.currentChunk, chunkGenerator.GenerateNextChunk()
 }
 
 func (chunkGenerator *cursorChunkGenerator) NextChunk() (chunk Chunk, err error) {
-	err, chunk = chunkGenerator.obtainNextChunk(err, chunk)
-	return
+	return chunkGenerator.obtainNextChunk()
 }
 
 func (chunkGenerator *cursorChunkGenerator) GenerateNextChunk() (err error) {
@@ -88,7 +86,7 @@ func (chunkGenerator *cursorChunkGenerator) GenerateNextChunk() (err error) {
 	if chunkGenerator.eof {
 		return io.EOF
 	} else {
-		var nextInstance *Instance
+		var nextInstance Instance
 		nextInstance, err = chunkGenerator.cursor.Next()
 		if err != nil {
 			if chunkGenerator.Debug {
@@ -102,7 +100,7 @@ func (chunkGenerator *cursorChunkGenerator) GenerateNextChunk() (err error) {
 			chunkGenerator.currentChunk.length += 1
 			chunkGenerator.eof = true
 		} else {
-			nextInstance.HideProperties()
+			nextInstance.(*StatefulInstance).HideProperties()
 			asM := nextInstance.ToJSON()
 			var asBytes []byte
 			asBytes, err = easyjson.Marshal(&asM)
@@ -149,7 +147,7 @@ func (chunkGenerator *cursorChunkGenerator) SetDebug(debug bool) {
 	chunkGenerator.Debug = debug
 }
 
-func NewCursorChunkGenerator(loadedModel *Model, cursor Cursor) ChunkGenerator {
+func NewCursorChunkGenerator(loadedModel *StatefulModel, cursor Cursor) ChunkGenerator {
 	result := cursorChunkGenerator{
 		cursor:  cursor,
 		Debug:   loadedModel.App.Debug,

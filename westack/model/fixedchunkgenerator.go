@@ -2,8 +2,9 @@ package model
 
 import (
 	"fmt"
-	"github.com/mailru/easyjson"
 	"io"
+
+	"github.com/mailru/easyjson"
 )
 
 type InstanceAChunkGenerator struct {
@@ -57,7 +58,7 @@ func (chunkGenerator *InstanceAChunkGenerator) GenerateNextChunk() (err error) {
 		}
 
 		nextInstance := chunkGenerator.input[chunkGenerator.currentChunkIndex-1]
-		nextInstance.HideProperties()
+		nextInstance.(*StatefulInstance).HideProperties()
 		asM := nextInstance.ToJSON()
 		var asBytes []byte
 		asBytes, err = easyjson.Marshal(&asM)
@@ -89,7 +90,7 @@ func (chunkGenerator *InstanceAChunkGenerator) SetDebug(debug bool) {
 	chunkGenerator.Debug = debug
 }
 
-func NewInstanceAChunkGenerator(loadedModel *Model, input InstanceA, contentType string) ChunkGenerator {
+func NewInstanceAChunkGenerator(loadedModel *StatefulModel, input InstanceA, contentType string) ChunkGenerator {
 	result := InstanceAChunkGenerator{
 		contentType:       contentType,
 		currentChunkIndex: 0,
