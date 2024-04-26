@@ -36,14 +36,14 @@ import (
 var server *westack.WeStack
 var userId primitive.ObjectID
 var noteId primitive.ObjectID
-var noteModel *model.Model
-var userModel *model.Model
-var customerModel *model.Model
-var orderModel *model.Model
-var storeModel *model.Model
-var footerModel *model.Model
-var imageModel *model.Model
-var appModel *model.Model
+var noteModel *model.StatefulModel
+var userModel *model.StatefulModel
+var customerModel *model.StatefulModel
+var orderModel *model.StatefulModel
+var storeModel *model.StatefulModel
+var footerModel *model.StatefulModel
+var imageModel *model.StatefulModel
+var appModel *model.StatefulModel
 var systemContext *model.EventContext
 
 func Test_GRPCCalls(t *testing.T) {
@@ -826,11 +826,12 @@ func TestMain(m *testing.M) {
 
 }
 
-func createAppInstance() (*model.Instance, error) {
+func createAppInstance() (*model.StatefulInstance, error) {
 	// Create an app instance
-	return appModel.Create(wst.M{
+	inst, err := appModel.Create(wst.M{
 		"name": "westack-tests",
 	}, systemContext)
+	return inst.(*model.StatefulInstance), err
 }
 
 func FakeMongoDbMonitor() *event.CommandMonitor {
@@ -850,7 +851,7 @@ func revertAllTests() error {
 			"$ne": nil,
 		},
 	}
-	for _, modelToPurge := range []*model.Model{
+	for _, modelToPurge := range []*model.StatefulModel{
 		noteModel,
 		userModel,
 		customerModel,

@@ -66,7 +66,7 @@ func (app *WeStack) loadModels() error {
 	if err != nil {
 		return err
 	}
-	var someUserModel *model.Model
+	var someUserModel *model.StatefulModel
 	for _, fileInfo := range fileInfos {
 
 		if fileInfo.IsDir() {
@@ -98,12 +98,12 @@ func (app *WeStack) loadModels() error {
 		}
 
 		loadedModel := model.New(config, app.modelRegistry)
-		err = app.setupModel(loadedModel, dataSource)
+		err = app.setupModel(loadedModel.(*model.StatefulModel), dataSource)
 		if err != nil {
 			return err
 		}
-		if loadedModel.Config.Base == "User" {
-			someUserModel = loadedModel
+		if loadedModel.(*model.StatefulModel).Config.Base == "User" {
+			someUserModel = loadedModel.(*model.StatefulModel)
 		}
 	}
 
@@ -254,7 +254,7 @@ func (app *WeStack) loadDataSources() error {
 	return nil
 }
 
-func (app *WeStack) setupModel(loadedModel *model.Model, dataSource *datasource.Datasource) error {
+func (app *WeStack) setupModel(loadedModel *model.StatefulModel, dataSource *datasource.Datasource) error {
 
 	loadedModel.App = app.asInterface()
 	loadedModel.Datasource = dataSource
@@ -310,7 +310,7 @@ func (app *WeStack) setupModel(loadedModel *model.Model, dataSource *datasource.
 		loadedModel.On("findById", func(ctx *model.EventContext) error {
 			result, err := loadedModel.FindById(ctx.ModelID, ctx.Filter, ctx)
 			if result != nil {
-				result.HideProperties()
+				result.(*model.StatefulInstance).HideProperties()
 			}
 			if err != nil {
 				return err
@@ -529,7 +529,7 @@ func (app *WeStack) setupModel(loadedModel *model.Model, dataSource *datasource.
 	return nil
 }
 
-func handleFindMany(app *WeStack, loadedModel *model.Model, ctx *model.EventContext) error {
+func handleFindMany(app *WeStack, loadedModel *model.StatefulModel, ctx *model.EventContext) error {
 	if loadedModel.App.Debug {
 		fmt.Println("[DEBUG] handleFindMany")
 	}
@@ -580,7 +580,7 @@ func handleFindMany(app *WeStack, loadedModel *model.Model, ctx *model.EventCont
 //
 //		 return createCursorChunkGenerator(cursor)
 //	}
-func traceChunkGenerator(app *WeStack, loadedModel *model.Model, ctx *model.EventContext, cursor model.Cursor) (model.ChunkGenerator, error) {
+func traceChunkGenerator(app *WeStack, loadedModel *model.StatefulModel, ctx *model.EventContext, cursor model.Cursor) (model.ChunkGenerator, error) {
 	internalDs, err := app.FindDatasource("<internal>")
 	if err != nil {
 		return nil, err
@@ -635,7 +635,7 @@ func traceChunkGenerator(app *WeStack, loadedModel *model.Model, ctx *model.Even
 			if doc == nil {
 				break
 			}
-			docs = append(docs, *doc)
+			docs = append(docs, doc)
 		}
 		if err != nil {
 			_, err2 := internalDs.Create("chunkGeneratorTraceErrors", &wst.M{
@@ -689,7 +689,7 @@ func (app *WeStack) asInterface() *wst.IApp {
 	}
 }
 
-func fixModelRelations(loadedModel *model.Model) error {
+func fixModelRelations(loadedModel *model.StatefulModel) error {
 	for relationName, relation := range *loadedModel.Config.Relations {
 
 		if relation.Type == "" {

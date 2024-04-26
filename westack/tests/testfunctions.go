@@ -4,25 +4,26 @@ import (
 	"bytes"
 	"crypto/rand"
 	"fmt"
-	"github.com/fredyk/westack-go/westack"
-	wst "github.com/fredyk/westack-go/westack/common"
-	"github.com/fredyk/westack-go/westack/model"
-	"github.com/goccy/go-json"
-	"github.com/golang-jwt/jwt"
-	"github.com/stretchr/testify/assert"
 	"io"
 	"math/big"
 	"net/http"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/fredyk/westack-go/westack"
+	wst "github.com/fredyk/westack-go/westack/common"
+	"github.com/fredyk/westack-go/westack/model"
+	"github.com/goccy/go-json"
+	"github.com/golang-jwt/jwt"
+	"github.com/stretchr/testify/assert"
 )
 
 var app *westack.WeStack
 var randomUser wst.M
 var randomUserToken wst.M
 var adminUserToken wst.M
-var appInstance *model.Instance
+var appInstance *model.StatefulInstance
 var appBearer *model.BearerToken
 
 // Decode the jwtInfo as JSON

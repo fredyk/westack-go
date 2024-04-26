@@ -1,7 +1,7 @@
 package model
 
 type Cursor interface {
-	Next() (result *Instance, err error)
+	Next() (result Instance, err error)
 	All() (result InstanceA, err error)
 	Close() error
 }
@@ -10,7 +10,7 @@ type ErrorCursor struct {
 	err error
 }
 
-func (cursor *ErrorCursor) Next() (result *Instance, err error) {
+func (cursor *ErrorCursor) Next() (result Instance, err error) {
 	return result, cursor.Error()
 }
 
@@ -26,7 +26,7 @@ func (cursor *ErrorCursor) Error() error {
 	return cursor.err
 }
 
-func newErrorCursor(err error) Cursor {
+func NewErrorCursor(err error) Cursor {
 	return &ErrorCursor{
 		err: err,
 	}
@@ -37,11 +37,11 @@ type FixedLengthCursor struct {
 	index     int
 }
 
-func (cursor *FixedLengthCursor) Next() (result *Instance, err error) {
+func (cursor *FixedLengthCursor) Next() (result Instance, err error) {
 	if cursor.index >= len(cursor.instances) {
 		return result, nil
 	}
-	result = &cursor.instances[cursor.index]
+	result = cursor.instances[cursor.index]
 	cursor.index++
 	return
 }

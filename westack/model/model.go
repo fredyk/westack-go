@@ -18,12 +18,24 @@ import (
 	"github.com/fredyk/westack-go/westack/memorykv"
 	"github.com/gofiber/fiber/v2"
 	"github.com/golang-jwt/jwt"
+	"github.com/spf13/cast"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 
 	wst "github.com/fredyk/westack-go/westack/common"
 	"github.com/fredyk/westack-go/westack/datasource"
 )
+
+type Model interface {
+	FindMany(filterMap *wst.Filter, currentContext *EventContext) Cursor
+	FindById(id interface{}, filterMap *wst.Filter, baseContext *EventContext) (Instance, error)
+	Create(data interface{}, currentContext *EventContext) (Instance, error)
+	Count(filterMap *wst.Filter, currentContext *EventContext) (int64, error)
+	DeleteById(id interface{}, currentContext *EventContext) (datasource.DeleteResult, error)
+	UpdateById(id interface{}, data interface{}, currentContext *EventContext) (Instance, error)
+	GetConfig() *Config
+	GetName() string
+}
 
 type Property struct {
 	Type     interface{} `json:"type"`
@@ -99,7 +111,7 @@ type DataSourceConfig struct {
 	Password  string `json:"password"`
 }
 
-type Model struct {
+type StatefulModel struct {
 	Name             string                 `json:"name"`
 	CollectionName   string                 `json:"-"`
 	Config           *Config                `json:"-"`
@@ -111,27 +123,35 @@ type Model struct {
 	CasbinAdapter    **fileadapter.Adapter
 	Enforcer         *casbin.Enforcer
 	DisabledHandlers map[string]bool
-	NilInstance      *Instance
+	NilInstance      *StatefulInstance
 
 	eventHandlers    map[string]func(eventContext *EventContext) error
-	modelRegistry    *map[string]*Model
+	modelRegistry    *map[string]*StatefulModel
 	remoteMethodsMap map[string]*OperationItem
 
 	authCache           map[string]map[string]map[string]bool
 	hasHiddenProperties bool
 }
 
-func (loadedModel *Model) GetModelRegistry() *map[string]*Model {
+func (loadedModel *StatefulModel) GetConfig() *Config {
+	return loadedModel.Config
+}
+
+func (loadedModel *StatefulModel) GetName() string {
+	return loadedModel.Name
+}
+
+func (loadedModel *StatefulModel) GetModelRegistry() *map[string]*StatefulModel {
 	return loadedModel.modelRegistry
 }
 
-func New(config *Config, modelRegistry *map[string]*Model) *Model {
+func New(config *Config, modelRegistry *map[string]*StatefulModel) Model {
 	name := config.Name
 	collectionName := config.Mongo.Collection
 	if collectionName == "" {
 		collectionName = name
 	}
-	loadedModel := &Model{
+	loadedModel := &StatefulModel{
 		Name:             name,
 		CollectionName:   collectionName,
 		Config:           config,
@@ -142,7 +162,7 @@ func New(config *Config, modelRegistry *map[string]*Model) *Model {
 		remoteMethodsMap: map[string]*OperationItem{},
 		authCache:        map[string]map[string]map[string]bool{},
 	}
-	loadedModel.NilInstance = &Instance{
+	loadedModel.NilInstance = &StatefulInstance{
 		Model: loadedModel,
 		Id:    primitive.NilObjectID,
 		data:  wst.NilMap,
@@ -156,10 +176,10 @@ func New(config *Config, modelRegistry *map[string]*Model) *Model {
 
 type RegistryEntry struct {
 	Name  string
-	Model *Model
+	Model *StatefulModel
 }
 
-func (loadedModel *Model) Build(data wst.M, currentContext *EventContext) (Instance, error) {
+func (loadedModel *StatefulModel) Build(data wst.M, currentContext *EventContext) (Instance, error) {
 
 	//if loadedModel.App.Stats.BuildsByModel[loadedModel.Name] == nil {
 	//	loadedModel.App.Stats.BuildsByModel[loadedModel.Name] = map[string]float64{
@@ -178,7 +198,7 @@ func (loadedModel *Model) Build(data wst.M, currentContext *EventContext) (Insta
 
 	var targetBaseContext = FindBaseContext(currentContext)
 
-	modelInstance := Instance{
+	modelInstance := StatefulInstance{
 		Id:    data["id"],
 		bytes: nil,
 		data:  data,
@@ -196,7 +216,7 @@ func (loadedModel *Model) Build(data wst.M, currentContext *EventContext) (Insta
 	if !loadedModel.DisabledHandlers["__operation__before_build"] {
 		err := loadedModel.GetHandler("__operation__before_build")(beforeBuildEventContext)
 		if err != nil {
-			return Instance{}, fmt.Errorf("error in __operation__before_build: %v", err)
+			return &StatefulInstance{}, fmt.Errorf("error in __operation__before_build: %v", err)
 		}
 	}
 
@@ -209,16 +229,16 @@ func (loadedModel *Model) Build(data wst.M, currentContext *EventContext) (Insta
 				switch relationConfig.Type {
 				case "belongsTo", "hasOne":
 					var relatedInstance Instance
-					if asInstance, asInstanceOk := rawRelatedData.(Instance); asInstanceOk {
+					if asInstance, asInstanceOk := rawRelatedData.(*StatefulInstance); asInstanceOk {
 						relatedInstance = asInstance
 					} else {
-						relatedInstance, err = relatedModel.(*Model).Build(rawRelatedData.(wst.M), targetBaseContext)
+						relatedInstance, err = relatedModel.(*StatefulModel).Build(rawRelatedData.(wst.M), targetBaseContext)
 						if err != nil {
 							fmt.Printf("[ERROR] Model.Build() --> %v\n", err)
-							return Instance{}, err
+							return &StatefulInstance{}, err
 						}
 					}
-					data[relationName] = &relatedInstance
+					data[relationName] = relatedInstance
 				case "hasMany", "hasAndBelongsToMany":
 
 					var result InstanceA
@@ -227,10 +247,10 @@ func (loadedModel *Model) Build(data wst.M, currentContext *EventContext) (Insta
 					} else {
 						result = make(InstanceA, len(rawRelatedData.(primitive.A)))
 						for idx, v := range rawRelatedData.(primitive.A) {
-							result[idx], err = relatedModel.(*Model).Build(v.(wst.M), targetBaseContext)
+							result[idx], err = relatedModel.(*StatefulModel).Build(v.(wst.M), targetBaseContext)
 							if err != nil {
 								fmt.Printf("[ERROR] Model.Build() --> %v\n", err)
-								return Instance{}, err
+								return &StatefulInstance{}, err
 							}
 						}
 					}
@@ -247,17 +267,18 @@ func (loadedModel *Model) Build(data wst.M, currentContext *EventContext) (Insta
 	eventContext.Data = &data
 	eventContext.Instance = &modelInstance
 
+	/* trunk-ignore(golangci-lint/gosimple) */
 	if loadedModel.DisabledHandlers["__operation__after_load"] != true {
 		err := loadedModel.GetHandler("__operation__after_load")(eventContext)
 		if err != nil {
-			return Instance{}, err
+			return &StatefulInstance{}, err
 		}
 	}
 
 	//loadedModel.App.Stats.BuildsByModel[loadedModel.Name]["count"]++
 	//loadedModel.App.Stats.BuildsByModel[loadedModel.Name]["time"] += float64(time.Now().UnixMilli() - init)
 
-	return modelInstance, nil
+	return &modelInstance, nil
 }
 
 func ParseFilter(filter string) *wst.Filter {
@@ -268,14 +289,14 @@ func ParseFilter(filter string) *wst.Filter {
 	return filterMap
 }
 
-func (loadedModel *Model) FindMany(filterMap *wst.Filter, currentContext *EventContext) Cursor {
+func (loadedModel *StatefulModel) FindMany(filterMap *wst.Filter, currentContext *EventContext) Cursor {
 
 	currentContext = existingOrEmpty(currentContext)
 	targetBaseContext := FindBaseContext(currentContext)
 
 	lookups, err := loadedModel.ExtractLookupsFromFilter(filterMap, currentContext.DisableTypeConversions)
 	if err != nil {
-		return newErrorCursor(err)
+		return NewErrorCursor(err)
 	}
 
 	currentOperationContext := &EventContext{
@@ -290,7 +311,7 @@ func (loadedModel *Model) FindMany(filterMap *wst.Filter, currentContext *EventC
 	if loadedModel.DisabledHandlers["__operation__before_load"] != true {
 		err := loadedModel.GetHandler("__operation__before_load")(currentOperationContext)
 		if err != nil {
-			return newErrorCursor(err)
+			return NewErrorCursor(err)
 		}
 		if currentOperationContext.Result != nil {
 			switch currentOperationContext.Result.(type) {
@@ -298,17 +319,17 @@ func (loadedModel *Model) FindMany(filterMap *wst.Filter, currentContext *EventC
 				return newFixedLengthCursor(*currentOperationContext.Result.(*InstanceA))
 			case InstanceA:
 				return newFixedLengthCursor(currentOperationContext.Result.(InstanceA))
-			case []*Instance:
-				return newFixedLengthCursor(copyInstanceSlice(currentOperationContext.Result.([]*Instance)))
+			case []*StatefulInstance:
+				return newFixedLengthCursor(copyInstanceSlice(currentOperationContext.Result.([]*StatefulInstance)))
 			case wst.A:
 				var result InstanceA
 				result, err = loadedModel.buildInstanceAFromA(currentOperationContext.Result.(wst.A), currentOperationContext)
 				if err != nil {
-					return newErrorCursor(err)
+					return NewErrorCursor(err)
 				}
 				return newFixedLengthCursor(result)
 			default:
-				return newErrorCursor(fmt.Errorf("invalid eventContext.Result type, expected InstanceA or []wst.M; found %T", currentOperationContext.Result))
+				return NewErrorCursor(fmt.Errorf("invalid eventContext.Result type, expected InstanceA or []wst.M; found %T", currentOperationContext.Result))
 			}
 		}
 	}
@@ -318,10 +339,10 @@ func (loadedModel *Model) FindMany(filterMap *wst.Filter, currentContext *EventC
 
 	dsCursor, err := loadedModel.Datasource.FindMany(loadedModel.CollectionName, lookups)
 	if err != nil {
-		return newErrorCursor(err)
+		return NewErrorCursor(err)
 	}
 	if dsCursor == nil {
-		return newErrorCursor(fmt.Errorf("invalid query result"))
+		return NewErrorCursor(fmt.Errorf("invalid query result"))
 	}
 
 	var targetInclude *wst.Include
@@ -332,7 +353,7 @@ func (loadedModel *Model) FindMany(filterMap *wst.Filter, currentContext *EventC
 		targetInclude = nil
 	}
 
-	var results = make(chan *Instance)
+	var results = make(chan Instance)
 	var cursor = NewChannelCursor(results).(*ChannelCursor)
 	cursor.UsedPipeline = lookups
 	//var cursor = newMongoCursor(context.Background(), dsCursor).(*MongoCursor)
@@ -354,7 +375,7 @@ func FindBaseContext(currentContext *EventContext) *EventContext {
 	return targetBaseContext
 }
 
-func (loadedModel *Model) buildInstanceAFromA(v wst.A, targetBaseContext *EventContext) (result InstanceA, err error) {
+func (loadedModel *StatefulModel) buildInstanceAFromA(v wst.A, targetBaseContext *EventContext) (result InstanceA, err error) {
 	result = make(InstanceA, len(v))
 	for idx, v := range v {
 		result[idx], err = loadedModel.Build(v, targetBaseContext)
@@ -365,15 +386,15 @@ func (loadedModel *Model) buildInstanceAFromA(v wst.A, targetBaseContext *EventC
 	return result, nil
 }
 
-func copyInstanceSlice(src []*Instance) InstanceA {
+func copyInstanceSlice(src []*StatefulInstance) InstanceA {
 	var result = make(InstanceA, len(src))
 	for idx, v := range src {
-		result[idx] = *v
+		result[idx] = v
 	}
 	return result
 }
 
-func insertCacheEntries(safeCacheDs *datasource.Datasource, loadedModel *Model, toCache wst.M) error {
+func insertCacheEntries(safeCacheDs *datasource.Datasource, loadedModel *StatefulModel, toCache wst.M) error {
 	cached, err := safeCacheDs.Create(loadedModel.CollectionName, &toCache)
 	if err != nil {
 		return err
@@ -385,7 +406,7 @@ func insertCacheEntries(safeCacheDs *datasource.Datasource, loadedModel *Model, 
 	return nil
 }
 
-func doExpireCacheKey(safeCacheDs *datasource.Datasource, loadedModel *Model, canonicalId string) (err error) {
+func doExpireCacheKey(safeCacheDs *datasource.Datasource, loadedModel *StatefulModel, canonicalId string) (err error) {
 	connectorName := safeCacheDs.SubViper.GetString("connector")
 	switch connectorName {
 	case "memorykv":
@@ -418,7 +439,7 @@ func existingOrEmpty[T any](existing *T) *T {
 	return new(T)
 }
 
-func (loadedModel *Model) Count(filterMap *wst.Filter, currentContext *EventContext) (int64, error) {
+func (loadedModel *StatefulModel) Count(filterMap *wst.Filter, currentContext *EventContext) (int64, error) {
 	currentContext = existingOrEmpty(currentContext)
 	var targetBaseContext = FindBaseContext(currentContext)
 
@@ -450,7 +471,7 @@ func (loadedModel *Model) Count(filterMap *wst.Filter, currentContext *EventCont
 
 }
 
-func (loadedModel *Model) FindOne(filterMap *wst.Filter, baseContext *EventContext) (*Instance, error) {
+func (loadedModel *StatefulModel) FindOne(filterMap *wst.Filter, baseContext *EventContext) (Instance, error) {
 
 	if filterMap == nil {
 		filterMap = &wst.Filter{}
@@ -460,7 +481,7 @@ func (loadedModel *Model) FindOne(filterMap *wst.Filter, baseContext *EventConte
 	return loadedModel.FindMany(filterMap, baseContext).Next()
 }
 
-func (loadedModel *Model) FindById(id interface{}, filterMap *wst.Filter, baseContext *EventContext) (*Instance, error) {
+func (loadedModel *StatefulModel) FindById(id interface{}, filterMap *wst.Filter, baseContext *EventContext) (Instance, error) {
 	var _id interface{}
 	switch id.(type) {
 	case string:
@@ -490,42 +511,37 @@ func (loadedModel *Model) FindById(id interface{}, filterMap *wst.Filter, baseCo
 	}
 
 	if len(instances) > 0 {
-		return &instances[0], nil
+		return instances[0], nil
 	}
 
 	return nil, nil
 }
 
-func (loadedModel *Model) Create(data interface{}, currentContext *EventContext) (*Instance, error) {
+func (loadedModel *StatefulModel) Create(data interface{}, currentContext *EventContext) (Instance, error) {
 
 	var finalData wst.M
-	switch data.(type) {
-	case map[string]interface{}:
+
+	if m, ok := data.(map[string]interface{}); ok {
 		finalData = wst.M{}
-		for key, value := range data.(map[string]interface{}) {
+		for key, value := range m {
 			finalData[key] = value
 		}
-		break
-	case *map[string]interface{}:
+	} else if m, ok := data.(*map[string]interface{}); ok {
 		finalData = wst.M{}
-		for key, value := range *data.(*map[string]interface{}) {
+		for key, value := range *m {
 			finalData[key] = value
 		}
-		break
-	case wst.M:
-		finalData = data.(wst.M)
-		break
-	case *wst.M:
-		finalData = *data.(*wst.M)
-		break
-	case Instance:
-		value := data.(Instance)
+	} else if m, ok := data.(wst.M); ok {
+		finalData = m
+	} else if m, ok := data.(*wst.M); ok {
+		finalData = *m
+	} else if value, ok := data.(StatefulInstance); ok {
 		finalData = (&value).ToJSON()
-		break
-	case *Instance:
-		finalData = data.(*Instance).ToJSON()
-		break
-	default:
+	} else if value, ok := data.(*StatefulInstance); ok {
+		finalData = value.ToJSON()
+	} else if value, ok := data.(*Instance); ok {
+		finalData = (*value).ToJSON()
+	} else {
 		// check if data is a struct
 		if reflect.TypeOf(data).Kind() == reflect.Struct {
 			bytes, err := bson.MarshalWithRegistry(loadedModel.App.Bson.Registry, data)
@@ -538,7 +554,7 @@ func (loadedModel *Model) Create(data interface{}, currentContext *EventContext)
 				return nil, err
 			}
 		} else {
-			return nil, errors.New(fmt.Sprintf("Invalid input for Model.Create() <- %s", data))
+			return nil, fmt.Errorf("invalid input for Model.Create() <- %s", cast.ToString(data))
 		}
 	}
 
@@ -565,19 +581,21 @@ func (loadedModel *Model) Create(data interface{}, currentContext *EventContext)
 		}
 		if eventContext.Result != nil {
 			switch eventContext.Result.(type) {
+			case *StatefulInstance, Instance:
+				return eventContext.Result.(*StatefulInstance), nil
 			case *Instance:
-				return eventContext.Result.(*Instance), nil
-			case Instance:
-				v := eventContext.Result.(Instance)
+				return (*eventContext.Result.(*Instance)).(*StatefulInstance), nil
+			case StatefulInstance:
+				v := eventContext.Result.(StatefulInstance)
 				return &v, nil
 			case wst.M:
 				v, err := loadedModel.Build(eventContext.Result.(wst.M), targetBaseContext)
 				if err != nil {
 					return nil, err
 				}
-				return &v, nil
+				return v, nil
 			default:
-				return nil, fmt.Errorf("invalid eventContext.Result type, expected *Instance, Instance or wst.M; found %T", eventContext.Result)
+				return nil, fmt.Errorf("invalid eventContext.Result type, expected Instance, Instance or wst.M; found %T", eventContext.Result)
 			}
 		}
 	}
@@ -593,20 +611,20 @@ func (loadedModel *Model) Create(data interface{}, currentContext *EventContext)
 		if err != nil {
 			return nil, err
 		}
-		result.HideProperties()
-		eventContext.Instance = &result
+		result.(*StatefulInstance).HideProperties()
+		eventContext.Instance = result.(*StatefulInstance)
 		if loadedModel.DisabledHandlers["__operation__after_save"] != true {
 			err := loadedModel.GetHandler("__operation__after_save")(eventContext)
 			if err != nil {
 				return nil, err
 			}
 		}
-		return &result, nil
+		return result, nil
 	}
 
 }
 
-func (loadedModel *Model) DeleteById(id interface{}, currentContext *EventContext) (datasource.DeleteResult, error) {
+func (loadedModel *StatefulModel) DeleteById(id interface{}, currentContext *EventContext) (datasource.DeleteResult, error) {
 
 	var finalId interface{}
 	switch id.(type) {
@@ -653,7 +671,7 @@ func (loadedModel *Model) DeleteById(id interface{}, currentContext *EventContex
 	return deleteResult, err
 }
 
-func (loadedModel *Model) DeleteMany(where *wst.Where, currentContext *EventContext) (result datasource.DeleteResult, err error) {
+func (loadedModel *StatefulModel) DeleteMany(where *wst.Where, currentContext *EventContext) (result datasource.DeleteResult, err error) {
 	if where == nil {
 		return result, errors.New("where cannot be nil")
 	}
@@ -683,6 +701,138 @@ func (loadedModel *Model) DeleteMany(where *wst.Where, currentContext *EventCont
 	eventContext.OperationName = wst.OperationNameDeleteMany
 
 	return loadedModel.Datasource.DeleteMany(loadedModel.CollectionName, whereLookups)
+}
+
+func (loadedModel *StatefulModel) UpdateById(id interface{}, data interface{}, currentContext *EventContext) (Instance, error) {
+
+	var finalId interface{}
+	/* trunk-ignore(golangci-lint/gosimple) */
+	switch id.(type) {
+	case string:
+		if aux, err := primitive.ObjectIDFromHex(id.(string)); err != nil {
+			finalId = aux
+		} else {
+			finalId = aux
+		}
+		break
+	case primitive.ObjectID:
+		finalId = id.(primitive.ObjectID)
+		break
+	case *primitive.ObjectID:
+		finalId = *id.(*primitive.ObjectID)
+		break
+	default:
+		if loadedModel.App.Debug {
+			fmt.Println(fmt.Sprintf("[WARNING] Invalid input for Model.UpdateById() <- %s", id))
+		}
+	}
+
+	var finalData wst.M
+	switch data.(type) {
+	case map[string]interface{}:
+		finalData = wst.M{}
+		for key, value := range data.(map[string]interface{}) {
+			finalData[key] = value
+		}
+		break
+	case *map[string]interface{}:
+		finalData = wst.M{}
+		for key, value := range *data.(*map[string]interface{}) {
+			finalData[key] = value
+		}
+		break
+	case wst.M:
+		finalData = data.(wst.M)
+		break
+	case *wst.M:
+		finalData = *data.(*wst.M)
+		break
+	case StatefulInstance:
+		value := data.(StatefulInstance)
+		finalData = (&value).ToJSON()
+		break
+	case *StatefulInstance:
+		finalData = data.(*StatefulInstance).ToJSON()
+		break
+	default:
+		// check if data is a struct
+		if reflect.TypeOf(data).Kind() == reflect.Struct {
+			bytes, err := bson.MarshalWithRegistry(loadedModel.App.Bson.Registry, data)
+			if err != nil {
+				return nil, err
+			}
+			err = bson.UnmarshalWithRegistry(loadedModel.App.Bson.Registry, bytes, &finalData)
+			if err != nil {
+				// how to test this???
+				return nil, err
+			}
+		} else {
+			return nil, errors.New(fmt.Sprintf("Invalid input for Model.UpdateById() <- %s", data))
+		}
+	}
+
+	currentContext = existingOrEmpty(currentContext)
+	var targetBaseContext = FindBaseContext(currentContext)
+	if !currentContext.DisableTypeConversions {
+		_, err := datasource.ReplaceObjectIds(finalData)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	eventContext := &EventContext{
+		BaseContext: targetBaseContext,
+	}
+	eventContext.Data = &finalData
+	eventContext.Model = loadedModel
+	eventContext.IsNewInstance = false
+	eventContext.OperationName = wst.OperationNameUpdateById
+
+	if loadedModel.DisabledHandlers["__operation__before_save"] != true {
+		err := loadedModel.GetHandler("__operation__before_save")(eventContext)
+		if err != nil {
+			return nil, err
+		}
+		if eventContext.Result != nil {
+			switch eventContext.Result.(type) {
+			case *StatefulInstance, Instance:
+				return eventContext.Result.(*StatefulInstance), nil
+			case *Instance:
+				return (*eventContext.Result.(*Instance)).(*StatefulInstance), nil
+			case StatefulInstance:
+				v := eventContext.Result.(StatefulInstance)
+				return &v, nil
+			case wst.M:
+				v, err := loadedModel.Build(eventContext.Result.(wst.M), targetBaseContext)
+				if err != nil {
+					return nil, err
+				}
+				return v, nil
+			default:
+				return nil, fmt.Errorf("invalid eventContext.Result type, expected Instance, Instance or wst.M; found %T", eventContext.Result)
+			}
+		}
+	}
+
+	document, err := loadedModel.Datasource.UpdateById(loadedModel.CollectionName, finalId, &finalData)
+	if err != nil {
+		return nil, err
+	} else {
+		result, err := loadedModel.Build(*document, eventContext)
+		if err != nil {
+			return nil, err
+		}
+		result.(*StatefulInstance).HideProperties()
+		eventContext.Instance = result.(*StatefulInstance)
+		if !loadedModel.DisabledHandlers["__operation__after_save"] {
+			err := loadedModel.GetHandler("__operation__after_save")(eventContext)
+			if err != nil {
+				return nil, err
+			}
+		}
+		return result, nil
+	}
+
 }
 
 type RemoteMethodOptionsHttp struct {
@@ -735,7 +885,7 @@ type BearerToken struct {
 
 type EphemeralData wst.M
 
-func wrapEventHandler(model *Model, eventKey string, handler func(eventContext *EventContext) error) func(eventContext *EventContext) error {
+func wrapEventHandler(model *StatefulModel, eventKey string, handler func(eventContext *EventContext) error) func(eventContext *EventContext) error {
 	currentHandler := model.eventHandlers[eventKey]
 	if currentHandler != nil {
 		newHandler := handler
@@ -755,18 +905,18 @@ func wrapEventHandler(model *Model, eventKey string, handler func(eventContext *
 	return handler
 }
 
-func (loadedModel *Model) On(event string, handler func(eventContext *EventContext) error) {
+func (loadedModel *StatefulModel) On(event string, handler func(eventContext *EventContext) error) {
 	loadedModel.eventHandlers[event] = wrapEventHandler(loadedModel, event, handler)
 }
 
-func (loadedModel *Model) Observe(operation string, handler func(eventContext *EventContext) error) {
+func (loadedModel *StatefulModel) Observe(operation string, handler func(eventContext *EventContext) error) {
 	eventKey := "__operation__" + strings.ReplaceAll(strings.TrimSpace(operation), " ", "_")
 	loadedModel.On(eventKey, handler)
 }
 
 var handlerMutex = sync.Mutex{}
 
-func (loadedModel *Model) GetHandler(event string) func(eventContext *EventContext) error {
+func (loadedModel *StatefulModel) GetHandler(event string) func(eventContext *EventContext) error {
 	res := loadedModel.eventHandlers[event]
 	if res == nil {
 		handlerMutex.Lock()
@@ -782,13 +932,13 @@ func (loadedModel *Model) GetHandler(event string) func(eventContext *EventConte
 	return res
 }
 
-func (loadedModel *Model) Initialize() {
+func (loadedModel *StatefulModel) Initialize() {
 	if len(loadedModel.Config.Hidden) > 0 {
 		loadedModel.hasHiddenProperties = true
 	}
 }
 
-func (loadedModel *Model) dispatchFindManyResults(cursor *ChannelCursor, dsCursor datasource.MongoCursorI, targetInclude *wst.Include, currentContext *EventContext, results chan *Instance, filterMap *wst.Filter) {
+func (loadedModel *StatefulModel) dispatchFindManyResults(cursor *ChannelCursor, dsCursor datasource.MongoCursorI, targetInclude *wst.Include, currentContext *EventContext, results chan Instance, filterMap *wst.Filter) {
 	err := func() error {
 		defer func(cursor Cursor) {
 			//// wait 16ms for error
@@ -849,7 +999,7 @@ func (loadedModel *Model) dispatchFindManyResults(cursor *ChannelCursor, dsCurso
 	}
 }
 
-func (loadedModel *Model) dispatchFindManySingleDocument(dsCursor datasource.MongoCursorI, targetInclude *wst.Include, currentContext *EventContext, filterMap *wst.Filter, disabledCache bool, safeCacheDs *datasource.Datasource, documentsToCacheByKey map[string]wst.A) (*Instance, error) {
+func (loadedModel *StatefulModel) dispatchFindManySingleDocument(dsCursor datasource.MongoCursorI, targetInclude *wst.Include, currentContext *EventContext, filterMap *wst.Filter, disabledCache bool, safeCacheDs *datasource.Datasource, documentsToCacheByKey map[string]wst.A) (*StatefulInstance, error) {
 	var document wst.M
 	err := dsCursor.Decode(&document)
 	if err != nil {
@@ -948,7 +1098,7 @@ func (loadedModel *Model) dispatchFindManySingleDocument(dsCursor datasource.Mon
 		}
 
 	}
-	return &inst, err
+	return inst.(*StatefulInstance), err
 }
 
 func GetIDAsString(idToConvert interface{}) string {
