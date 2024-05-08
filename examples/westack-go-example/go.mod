@@ -1,6 +1,6 @@
 module westack-go-example
 
-go 1.21
+go 1.21.10
 
 require (
 	github.com/fredyk/westack-go v1.8.5
