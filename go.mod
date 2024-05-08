@@ -1,6 +1,6 @@
 module github.com/fredyk/westack-go
 
-go 1.21
+go 1.21.6
 
 require (
 	github.com/andybalholm/brotli v1.1.0
