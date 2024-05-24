@@ -42,7 +42,7 @@ jobs:
             #   || (git merge --abort || true) && git merge --allow-unrelated-histories --no-edit -X theirs ${{ github.event.pull_request.head.sha }} \
             #   || git merge --abort
             git checkout ${{ github.event.pull_request.head.sha }}
-            git rebase -X theirs alpha
+            git rebase -X theirs --reapply-cherry-picks alpha
             # git checkout alpha
             # git merge --ff -X theirs ${{ github.event.pull_request.head.sha }}
           elif [ -n "$GITHUB_REF" ]; then # else if it is a push
@@ -52,7 +52,7 @@ jobs:
             #     || (git merge --abort || true) && git merge --allow-unrelated-histories --no-edit -X theirs ${{ github.sha }} \
             #    || git merge --abort
             git checkout ${{ github.sha }}
-            git rebase -X theirs alpha
+            git rebase -X theirs --reapply-cherry-picks alpha
             # git checkout alpha
             # git merge --ff -X theirs ${{ github.sha }}
           fi
