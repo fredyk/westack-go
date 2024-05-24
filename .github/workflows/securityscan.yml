@@ -43,8 +43,8 @@ jobs:
             #   || git merge --abort
             git checkout ${{ github.event.pull_request.head.sha }}
             git rebase -X theirs alpha
-            git checkout alpha
-            git merge --ff ${{ github.event.pull_request.head.sha }}
+            # git checkout alpha
+            # git merge --ff -X theirs ${{ github.event.pull_request.head.sha }}
           elif [ -n "$GITHUB_REF" ]; then # else if it is a push
             echo "Merging push $GITHUB_REF: ${{ github.sha }}"
             # git merge --allow-unrelated-histories --no-edit -X theirs ${{ github.sha }}
@@ -53,8 +53,8 @@ jobs:
             #    || git merge --abort
             git checkout ${{ github.sha }}
             git rebase -X theirs alpha
-            git checkout alpha
-            git merge --ff ${{ github.sha }}
+            # git checkout alpha
+            # git merge --ff -X theirs ${{ github.sha }}
           fi
 
       - name: Set up Go
