@@ -38,15 +38,23 @@ jobs:
           if [ -n "$GITHUB_HEAD_REF" ]; then
             echo "Merging pull request $GITHUB_HEAD_REF: ${{ github.event.pull_request.head.sha }}"
             # git merge --allow-unrelated-histories --no-edit -X theirs ${{ github.event.pull_request.head.sha }}
-            git merge --allow-unrelated-histories --no-edit ${{ github.event.pull_request.head.sha }} \
-              || (git merge --abort || true) && git merge --allow-unrelated-histories --no-edit -X theirs ${{ github.event.pull_request.head.sha }} \
-              || git merge --abort
+            # git merge --allow-unrelated-histories --no-edit ${{ github.event.pull_request.head.sha }} \
+            #   || (git merge --abort || true) && git merge --allow-unrelated-histories --no-edit -X theirs ${{ github.event.pull_request.head.sha }} \
+            #   || git merge --abort
+            git checkout ${{ github.event.pull_request.head.sha }}
+            git rebase -X theirs alpha
+            git checkout alpha
+            git merge --ff ${{ github.event.pull_request.head.sha }}
           elif [ -n "$GITHUB_REF" ]; then # else if it is a push
             echo "Merging push $GITHUB_REF: ${{ github.sha }}"
             # git merge --allow-unrelated-histories --no-edit -X theirs ${{ github.sha }}
-            git merge --allow-unrelated-histories --no-edit ${{ github.sha }} \
-                || (git merge --abort || true) && git merge --allow-unrelated-histories --no-edit -X theirs ${{ github.sha }} \
-                || git merge --abort
+            # git merge --allow-unrelated-histories --no-edit ${{ github.sha }} \
+            #     || (git merge --abort || true) && git merge --allow-unrelated-histories --no-edit -X theirs ${{ github.sha }} \
+            #    || git merge --abort
+            git checkout ${{ github.sha }}
+            git rebase -X theirs alpha
+            git checkout alpha
+            git merge --ff ${{ github.sha }}
           fi
 
       - name: Set up Go
