@@ -72,7 +72,7 @@ func (app *WeStack) loadModelsFixedRoutes() error {
 			if v := app.Viper.GetString("casbin.models.dumpDirectory"); v != "" {
 				modelsDumpDir = v
 			}
-			err = os.WriteFile(fmt.Sprintf("%v/%v.casbin.dump.conf", modelsDumpDir, loadedModel.Name), []byte(text), os.ModePerm)
+			err = os.WriteFile(fmt.Sprintf("%v/%v.casbin.dump.conf", modelsDumpDir, loadedModel.Name), []byte(text), 0600)
 			if err != nil {
 				return fmt.Errorf("could not write casbin dump: %v", err)
 			}
