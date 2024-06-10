@@ -416,7 +416,9 @@ func recursiveExtractFields(targetWhere wst.M, specialFields map[string]bool, mo
 			var newOr []interface{}
 			outSpecialFields, newOr = recursiveExtractExpression(key, value, outSpecialFields, mode)
 			if len(newOr) > 0 {
-				result["$or"] = newOr
+				if mode == "INCLUDE" {
+					result["$or"] = value
+				}
 			}
 		default:
 			// check if key is a nested field
