@@ -168,11 +168,11 @@ func (loadedModel *Model) ExtractLookupsFromFilter(filterMap *wst.Filter, disabl
 			}
 		}
 		var extractedMatch wst.M
-		newFoundFields, extractedMatch = recursiveExtractFields(targetWhereAsM, newFoundFields, "EXCLUDE")
+		newFoundFields, extractedMatch, _ = recursiveExtractFields(targetWhereAsM, newFoundFields, "EXCLUDE")
 		if len(extractedMatch) > 0 {
 			*lookups = append(*lookups, wst.M{"$match": extractedMatch})
 		}
-		newFoundFields, extractedMatch = recursiveExtractFields(targetWhereAsM, newFoundFields, "INCLUDE")
+		newFoundFields, extractedMatch, _ = recursiveExtractFields(targetWhereAsM, newFoundFields, "INCLUDE")
 		if len(extractedMatch) > 0 {
 			targetMatchAfterLookups = wst.M{"$match": extractedMatch}
 		}
@@ -391,7 +391,7 @@ func (loadedModel *Model) appendIncludeToLookups(includeItem wst.IncludeItem, di
 	return lookups, nil
 }
 
-func recursiveExtractFields(targetWhere wst.M, specialFields map[string]bool, mode string) (outSpecialFields map[string]bool, result wst.M) {
+func recursiveExtractFields(targetWhere wst.M, specialFields map[string]bool, mode string) (outSpecialFields map[string]bool, result wst.M, foundSpecialFields bool) {
 	outSpecialFields = make(map[string]bool)
 	result = wst.M{}
 	// Some posible wheres:
@@ -408,19 +408,24 @@ func recursiveExtractFields(targetWhere wst.M, specialFields map[string]bool, mo
 		switch key {
 		case "$and":
 			var newAnd []interface{}
-			outSpecialFields, newAnd = recursiveExtractExpression(key, value, outSpecialFields, mode)
+			outSpecialFields, newAnd, foundSpecialFields = recursiveExtractExpression(key, value, outSpecialFields, mode)
 			if len(newAnd) > 0 {
 				result["$and"] = newAnd
 			}
 		case "$or":
-			var newOr []interface{}
-			outSpecialFields, newOr = recursiveExtractExpression(key, value, outSpecialFields, mode)
-			if len(newOr) > 0 {
-				result["$or"] = newOr
+			//var newOr []interface{}
+			outSpecialFields, _, foundSpecialFields = recursiveExtractExpression(key, value, outSpecialFields, mode)
+			if len(outSpecialFields) > 0 {
+				if mode == "INCLUDE" {
+					result["$or"] = value
+				}
+			} else if !foundSpecialFields && mode == "EXCLUDE" {
+				result["$or"] = value
 			}
 		default:
 			// check if key is a nested field
 			if strings.Contains(key, ".") {
+				foundSpecialFields = true
 				outSpecialFields[key] = true
 			}
 			switch mode {
@@ -438,7 +443,7 @@ func recursiveExtractFields(targetWhere wst.M, specialFields map[string]bool, mo
 	return
 }
 
-func recursiveExtractExpression(key string, value interface{}, specialFields map[string]bool, mode string) (outSpecialFields map[string]bool, newList []interface{}) {
+func recursiveExtractExpression(key string, value interface{}, specialFields map[string]bool, mode string) (outSpecialFields map[string]bool, newList []interface{}, foundSpecialFields bool) {
 	newList = make([]interface{}, 0)
 	var asInterfaceList []interface{}
 	switch value.(type) {
@@ -464,7 +469,7 @@ func recursiveExtractExpression(key string, value interface{}, specialFields map
 			}
 		}
 		var newVal wst.M
-		outSpecialFields, newVal = recursiveExtractFields(asM, specialFields, mode)
+		outSpecialFields, newVal, foundSpecialFields = recursiveExtractFields(asM, specialFields, mode)
 		if len(newVal) > 0 {
 			newList = append(newList, newVal)
 		}
