@@ -4,7 +4,7 @@ go 1.21.10
 
 require (
 	github.com/fredyk/westack-go v1.8.6
-	github.com/gofiber/fiber/v2 v2.52.4
+	github.com/gofiber/fiber/v2 v2.52.5
 	go.mongodb.org/mongo-driver v1.15.1
 )
 
