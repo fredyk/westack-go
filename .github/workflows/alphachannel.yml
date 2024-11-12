@@ -82,14 +82,14 @@ jobs:
 
         - name: Always upload pull_request.json
           if: always()
-          uses: actions/upload-artifact@v2
+          uses: actions/upload-artifact@v3
           with:
             name: pull_request.json
             path: pull_request.json
 
         - name: Always upload pull_request_headers.txt
           if: always()
-          uses: actions/upload-artifact@v2
+          uses: actions/upload-artifact@v3
           with:
               name: pull_request_headers.txt
               path: pull_request_headers.txt
