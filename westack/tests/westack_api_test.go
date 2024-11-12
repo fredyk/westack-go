@@ -619,7 +619,7 @@ func Test_DeleteNoteTwice(t *testing.T) {
 
 func Test_FindWithNestedRelations(t *testing.T) {
 
-	t.Parallel()
+	//t.Parallel()
 
 	// Create a note
 	note, err := invokeApiAsRandomUser(t, "POST", "/notes", wst.M{
