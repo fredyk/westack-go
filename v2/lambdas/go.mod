@@ -1,11 +1,11 @@
-module github.com/fredyk/westack-go/westack/v2/lambdas
+module github.com/fredyk/westack-go/v2/lambdas
 
 go 1.22.2
 
-replace github.com/fredyk/westack-go => ../../../../westack-go
+replace github.com/fredyk/westack-go/v2 => ../../../westack-go/v2
 
 require (
-	github.com/fredyk/westack-go v1.8.5
+	github.com/fredyk/westack-go/v2 v2.0.0-alpha-rc2
 	github.com/gofiber/fiber/v2 v2.52.4
 	github.com/mailru/easyjson v0.7.7
 	go.mongodb.org/mongo-driver v1.15.0
