@@ -201,7 +201,7 @@ func Test_DatasourceDeleteManyOK(t *testing.T) {
 	t.Parallel()
 
 	note1, err := invokeApiAsRandomUser(t, "POST", "/notes", wst.M{
-		"title": fmt.Sprintf("Note %v", createRandomInt()),
+		"title": fmt.Sprintf("Note 1 %v", createRandomInt()),
 	}, wst.M{
 		"Content-Type": "application/json",
 	})
@@ -209,12 +209,21 @@ func Test_DatasourceDeleteManyOK(t *testing.T) {
 	assert.Contains(t, note1, "id")
 
 	note2, err := invokeApiAsRandomUser(t, "POST", "/notes", wst.M{
-		"title": fmt.Sprintf("Note %v", createRandomInt()),
+		"title": fmt.Sprintf("Note 2 %v", createRandomInt()),
 	}, wst.M{
 		"Content-Type": "application/json",
 	})
 	assert.NoError(t, err)
 	assert.Contains(t, note2, "id")
+
+	// This will not be deleted
+	noteToKeep, err := invokeApiAsRandomUser(t, "POST", "/notes", wst.M{
+		"title": fmt.Sprintf("Note 3 %v", createRandomInt()),
+	}, wst.M{
+		"Content-Type": "application/json",
+	})
+	assert.NoError(t, err)
+	assert.Contains(t, noteToKeep, "id")
 
 	result, err := noteModel.DeleteMany(&wst.Where{
 		"_id": wst.M{
