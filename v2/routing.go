@@ -394,7 +394,15 @@ func mountAppDynamicRoutes(loadedModel *model.StatefulModel, app *WeStack) {
 	}
 	loadedModel.RemoteMethod(func(eventContext *model.EventContext) error {
 		id := eventContext.Ctx.Params("id")
-		ttl := eventContext.Query.GetFloat64("ttl")
+		ttl := eventContext.Data.GetFloat64("ttl")
+		additionalRolesSt := eventContext.Data.GetString("roles")
+		additionalRoles := make([]string, 0)
+		if len(strings.TrimSpace(additionalRolesSt)) > 0 {
+			additionalRoles = strings.Split(additionalRolesSt, ",")
+			for i, role := range additionalRoles {
+				additionalRoles[i] = strings.TrimSpace(role)
+			}
+		}
 		if ttl <= 0.0 {
 			ttl = 30 * 24 * 60 * 60
 		}
@@ -406,7 +414,9 @@ func mountAppDynamicRoutes(loadedModel *model.StatefulModel, app *WeStack) {
 		if eventContext.ModelID == nil || asStOk && len(strings.TrimSpace(asSt)) == 0 {
 			eventContext.ModelID = id
 		}
-		bearer := model.CreateBearer(eventContext.ModelID, float64(time.Now().Unix()), ttl, []string{"APP"})
+		roles := []string{"APP"}
+		roles = append(roles, additionalRoles...)
+		bearer := model.CreateBearer(eventContext.ModelID, float64(time.Now().Unix()), ttl, roles)
 		// sign the bearer
 		token := jwt.NewWithClaims(jwt.SigningMethodHS256, bearer.Claims)
 		tokenString, err := token.SignedString(loadedModel.App.JwtSecretKey)
@@ -428,11 +438,6 @@ func mountAppDynamicRoutes(loadedModel *model.StatefulModel, app *WeStack) {
 				Description: "",
 				Http:        model.ArgHttp{Source: "body"},
 				Required:    true,
-			},
-			{
-				Arg:  "ttl",
-				Type: "number",
-				Http: model.ArgHttp{Source: "query"},
 			},
 		},
 		Http: model.RemoteMethodOptionsHttp{
