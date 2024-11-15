@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -155,8 +156,14 @@ func New(options ...Options) *WeStack {
 	}
 
 	if finalOptions.JwtSecretKey == "" {
-		if s, present := os.LookupEnv("JWT_SECRET"); present {
-			finalOptions.JwtSecretKey = s
+		if s, present := os.LookupEnv("JWT_SECRET"); present && strings.TrimSpace(s) != "" {
+			if len(strings.TrimSpace(s)) >= 13 {
+				finalOptions.JwtSecretKey = s
+			} else {
+				logger.Fatalf("Invalid JWT secret. It must be at least 13 characters long")
+			}
+		} else {
+			logger.Fatalf("Missing JWT secret. Either set JWT_SECRET environment variable or provide it in the options as JwtSecretKey")
 		}
 	}
 	if envDebug, _ := os.LookupEnv("DEBUG"); envDebug == "true" {
