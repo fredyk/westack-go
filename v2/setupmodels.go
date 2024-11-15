@@ -11,7 +11,6 @@ import (
 	wst "github.com/fredyk/westack-go/v2/common"
 	"github.com/fredyk/westack-go/v2/datasource"
 	"github.com/fredyk/westack-go/v2/model"
-	"github.com/gofiber/fiber/v2"
 	"github.com/golang-jwt/jwt"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"golang.org/x/crypto/bcrypt"
@@ -78,7 +77,6 @@ func createCasbinModel(loadedModel *model.StatefulModel, app *WeStack, config *m
 			casbModel.AddPolicy("p", "p", []string{replaceVarNames(p)})
 		}
 	} else if config.Base != "User" && config.Base != "App" {
-		casbModel.AddPolicy("p", "p", []string{replaceVarNames("$authenticated,*,read,allow")})
 		casbModel.AddPolicy("p", "p", []string{replaceVarNames("$owner,*,*,allow")})
 	}
 
