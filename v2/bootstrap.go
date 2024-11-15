@@ -309,14 +309,14 @@ func (app *WeStack) setupModel(loadedModel *model.StatefulModel, dataSource *dat
 		})
 		loadedModel.On("findById", func(ctx *model.EventContext) error {
 			result, err := loadedModel.FindById(ctx.ModelID, ctx.Filter, ctx)
-			if result != nil {
-				result.(*model.StatefulInstance).HideProperties()
-			}
 			if err != nil {
 				return err
 			}
 			ctx.StatusCode = fiber.StatusOK
-			ctx.Result = result.ToJSON()
+			if result != nil {
+				result.(*model.StatefulInstance).HideProperties()
+				ctx.Result = result.ToJSON()
+			}
 			return nil
 		})
 
