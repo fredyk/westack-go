@@ -6,8 +6,8 @@ import (
 	"time"
 
 	"github.com/fredyk/westack-go/examples/basic-auth-example/common/models"
-	"github.com/fredyk/westack-go/westack"
-	wst "github.com/fredyk/westack-go/westack/common"
+	"github.com/fredyk/westack-go/v2"
+	wst "github.com/fredyk/westack-go/v2/common"
 )
 
 func SetupNotes(app *westack.WeStack) {

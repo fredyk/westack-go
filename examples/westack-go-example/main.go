@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/fredyk/westack-go/westack"
+	"github.com/fredyk/westack-go/v2"
 	"github.com/gofiber/fiber/v2"
 	"log"
 )

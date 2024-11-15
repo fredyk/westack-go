@@ -1,8 +1,8 @@
 package cliutils
 
 import (
-	"github.com/fredyk/westack-go/westack"
-	"github.com/fredyk/westack-go/westack/model"
+	"github.com/fredyk/westack-go/v2"
+	"github.com/fredyk/westack-go/v2/model"
 	"log"
 	"os"
 )
