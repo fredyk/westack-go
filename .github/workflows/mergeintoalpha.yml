@@ -143,7 +143,7 @@ jobs:
           echo "Random sufix: $random_sufix"
           sed -i "s/\"database\": \"\([^\"]*\)\",/\"database\": \"\1_$random_sufix\",/g" server/datasources*.json
           cat server/datasources.TESTING.json
-          go test -timeout 5m -c -coverpkg=../../../westack-go/... -covermode=atomic github.com/fredyk/westack-go/westack/tests -o output.test
+          go test -timeout 5m -c -coverpkg=../../../westack-go/... -covermode=atomic github.com/fredyk/westack-go/v2/tests -o output.test
           go tool test2json -t ./output.test -test.v -test.paniconexit0 -test.coverprofile ../../coverage.txt | jq -r 'select(.Output != "" and .Output != null) | .Output' | sed '/^$/d' | tee ../../test_output.txt
           cd ../..
           sed -i 's/[\x00-\x09\x0b-\x1f\x7f-\xff]/\\&/g' test_output.txt
@@ -189,8 +189,8 @@ jobs:
         if: matrix.go != '1.18'
         run: |
           # Parse coverage_lines to get coverage percentage. If any percentage is below $MIN_COVERAGE_THRESHOLD, exit with error
-          # Also skip github.com/fredyk/westack-go/westack/tests
-          coverage_lines=$(cat coverage.summary.txt | grep -v "coverage: \[no statements\]" | grep -v "coverage: \[no tests to run\]" | grep -v "github.com/fredyk/westack-go/westack/tests")
+          # Also skip github.com/fredyk/westack-go/v2/tests
+          coverage_lines=$(cat coverage.summary.txt | grep -v "coverage: \[no statements\]" | grep -v "coverage: \[no tests to run\]" | grep -v "github.com/fredyk/westack-go/v2/tests")
           echo "Target min coverage: $MIN_COVERAGE_THRESHOLD"
           echo "Saved coverage:"
           cat coverage.summary.txt
