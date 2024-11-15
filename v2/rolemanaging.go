@@ -7,13 +7,13 @@ import (
 	"github.com/fredyk/westack-go/v2/model"
 )
 
-type UserWithRoles struct {
+type AccountWithRoles struct {
 	Username string   `json:"username"`
 	Password string   `json:"password"`
 	Roles    []string `json:"roles"`
 }
 
-func UpsertUserWithRoles(app *WeStack, userToUpsert UserWithRoles, eventContext *model.EventContext) (user model.Instance, err error) {
+func UpsertAccountWithRoles(app *WeStack, userToUpsert AccountWithRoles, eventContext *model.EventContext) (user model.Instance, err error) {
 
 	var userModel *model.StatefulModel
 
@@ -31,9 +31,9 @@ func UpsertUserWithRoles(app *WeStack, userToUpsert UserWithRoles, eventContext 
 		return
 	}
 
-	foundModels := app.FindModelsWithClass("User")
+	foundModels := app.FindModelsWithClass("Account")
 	if len(foundModels) == 0 {
-		err = fmt.Errorf("user model not found")
+		err = fmt.Errorf("account model not found")
 		return
 	}
 	userModel = foundModels[0]
@@ -56,12 +56,12 @@ func UpsertUserWithRoles(app *WeStack, userToUpsert UserWithRoles, eventContext 
 		if err != nil {
 			return
 		}
-		fmt.Printf("User %v created with id %v\n", userToUpsert.Username, user.GetID())
+		fmt.Printf("Account %v created with id %v\n", userToUpsert.Username, user.GetID())
 	} else {
-		fmt.Printf("User %v already exists\n", userToUpsert.Username)
+		fmt.Printf("Account %v already exists\n", userToUpsert.Username)
 	}
 
-	err = UpsertUserRoles(app, user.GetID(), userToUpsert.Roles, eventContext)
+	err = UpsertAccountRoles(app, user.GetID(), userToUpsert.Roles, eventContext)
 	if err != nil {
 		return
 	}
@@ -69,7 +69,7 @@ func UpsertUserWithRoles(app *WeStack, userToUpsert UserWithRoles, eventContext 
 	return
 }
 
-func UpsertUserRoles(app *WeStack, userId interface{}, roles []string, eventContext *model.EventContext) error {
+func UpsertAccountRoles(app *WeStack, userId interface{}, roles []string, eventContext *model.EventContext) error {
 	var roleModel *model.StatefulModel
 	foundModels := app.FindModelsWithClass("Role")
 	if len(foundModels) == 0 {

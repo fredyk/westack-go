@@ -12,12 +12,12 @@ import (
 	wst "github.com/fredyk/westack-go/v2/common"
 )
 
-func createNoteForUser(userId string, token string, footerId string, t *testing.T) (note wst.M, err error) {
+func createNoteForAccount(userId string, token string, footerId string, t *testing.T) (note wst.M, err error) {
 	parsed, err := invokeApiJsonM(t, "POST", "/notes", wst.M{
-		"title":    "Test Note",
-		"content":  "This is a test note",
-		"userId":   userId,
-		"footerId": footerId,
+		"title":     "Test Note",
+		"content":   "This is a test note",
+		"accountId": userId,
+		"footerId":  footerId,
 	}, wst.M{
 		"Content-Type":  "application/json",
 		"Authorization": fmt.Sprintf("Bearer %v", token),
@@ -34,26 +34,26 @@ func Test_FindMany(t *testing.T) {
 
 	var err error
 
-	user := createUser(t, wst.M{
+	user := createAccount(t, wst.M{
 		"username": fmt.Sprintf("user-%d", createRandomInt()),
 		"password": "abcd1234.",
 	})
-	token, err := loginUser(user.GetString("username"), "abcd1234.", t)
+	token, err := loginAccount(user.GetString("username"), "abcd1234.", t)
 	assert.Nilf(t, err, "Error while logging in: %v", err)
 	assert.NotNilf(t, token, "Token is nil: %v", token)
 	assert.Contains(t, token, "id")
 
-	footer, err := createFooter2ForUser(token["id"].(string), user["id"].(string), t)
+	footer, err := createFooter2ForAccount(token["id"].(string), user["id"].(string), t)
 	assert.Nilf(t, err, "Error while creating footer: %v", err)
 	assert.NotNilf(t, footer, "Footer is nil: %v", footer)
 	assert.NotEmpty(t, footer["id"].(string))
 
-	note, err := createNoteForUser(user["id"].(string), token["id"].(string), footer["id"].(string), t)
+	note, err := createNoteForAccount(user["id"].(string), token["id"].(string), footer["id"].(string), t)
 	assert.Nilf(t, err, "Error while creating note: %v", err)
 	assert.NotNilf(t, note, "Note is nil: %v", note)
 	assert.NotEmpty(t, note["id"].(string))
 
-	parsed, err := invokeApiJsonA(t, "GET", `/notes?filter={"include":[{"relation":"user"},{"relation":"footer1"},{"relation":"footer2"}]}`, nil, wst.M{
+	parsed, err := invokeApiJsonA(t, "GET", `/notes?filter={"include":[{"relation":"account"},{"relation":"footer1"},{"relation":"footer2"}]}`, nil, wst.M{
 		"Authorization": fmt.Sprintf("Bearer %v", token["id"].(string)),
 	})
 	assert.NoError(t, err)
@@ -69,17 +69,17 @@ func Test_Count(t *testing.T) {
 	// If this test is run in parallel, the count will be increased by more than one and the test will fail.
 	t.Parallel()
 
-	// deleteResult, err := noteModel.DeleteMany(&wst.Where{"_id": wst.M{"$ne": nil}}, &model.EventContext{Bearer: &model.BearerToken{User: &model.BearerUser{System: true}}})
+	// deleteResult, err := noteModel.DeleteMany(&wst.Where{"_id": wst.M{"$ne": nil}}, &model.EventContext{Bearer: &model.BearerToken{Account: &model.BearerUser{System: true}}})
 	// assert.NoError(t, err)
 	// assert.NotNil(t, deleteResult)
 
 	// Count notes
-	countResponse, err := invokeApiAsRandomUser(t, "GET", "/notes/count?filter={\"where\":{\"title\":\"Note+for+count\"}}", nil, nil)
+	countResponse, err := invokeApiAsRandomAccount(t, "GET", "/notes/count?filter={\"where\":{\"title\":\"Note+for+count\"}}", nil, nil)
 	assert.NoError(t, err)
 	assert.EqualValues(t, 0, countResponse["count"])
 
 	// Create a note
-	note, err := invokeApiAsRandomUser(t, "POST", "/notes", wst.M{
+	note, err := invokeApiAsRandomAccount(t, "POST", "/notes", wst.M{
 		"title": "Note for count",
 	}, wst.M{
 		"Content-Type": "application/json",
@@ -90,7 +90,7 @@ func Test_Count(t *testing.T) {
 	assert.Equal(t, "Note for count", note.GetString("title"))
 
 	// Count notes again
-	newCount, err := invokeApiAsRandomUser(t, "GET", "/notes/count?filter={\"where\":{\"title\":\"Note+for+count\"}}", nil, nil)
+	newCount, err := invokeApiAsRandomAccount(t, "GET", "/notes/count?filter={\"where\":{\"title\":\"Note+for+count\"}}", nil, nil)
 	assert.NoError(t, err)
 	assert.EqualValuesf(t, countResponse["count"].(float64)+1, newCount["count"], "Count is not increased: %v", newCount)
 
@@ -100,25 +100,25 @@ func Test_FindById(t *testing.T) {
 
 	t.Parallel()
 
-	foundUser, err := invokeApiAsRandomUser(t, "GET", fmt.Sprintf("/users/%v", randomUser.GetString("id")), nil, nil)
+	foundAccount, err := invokeApiAsRandomAccount(t, "GET", fmt.Sprintf("/accounts/%v", randomAccount.GetString("id")), nil, nil)
 	assert.NoError(t, err)
-	assert.Contains(t, foundUser, "id")
-	assert.Equal(t, randomUser.GetString("id"), foundUser.GetString("id"))
+	assert.Contains(t, foundAccount, "id")
+	assert.Equal(t, randomAccount.GetString("id"), foundAccount.GetString("id"))
 
 }
 
-func Test_UserFindSelf(t *testing.T) {
+func Test_AccountFindSelf(t *testing.T) {
 
 	t.Parallel()
 
-	foundUser, err := invokeApiAsRandomUser(t, "GET", "/users/me", nil, nil)
+	foundAccount, err := invokeApiAsRandomAccount(t, "GET", "/accounts/me", nil, nil)
 	assert.NoError(t, err)
-	assert.Contains(t, foundUser, "id")
-	assert.Equal(t, randomUser.GetString("id"), foundUser.GetString("id"))
-	assert.Equal(t, "", foundUser.GetString("password"))
-	assert.Nil(t, foundUser.GetM("error"))
-	assert.Nil(t, foundUser.GetM("error").GetM("details"))
-	assert.Equal(t, "", foundUser.GetM("error").GetString("code"))
+	assert.Contains(t, foundAccount, "id")
+	assert.Equal(t, randomAccount.GetString("id"), foundAccount.GetString("id"))
+	assert.Equal(t, "", foundAccount.GetString("password"))
+	assert.Nil(t, foundAccount.GetM("error"))
+	assert.Nil(t, foundAccount.GetM("error").GetM("details"))
+	assert.Equal(t, "", foundAccount.GetM("error").GetString("code"))
 
 }
 
@@ -127,7 +127,7 @@ func Test_PostResetPassword(t *testing.T) {
 	t.Parallel()
 
 	// Request password reset
-	resetPasswordResponse, err := invokeApiJsonM(t, "POST", "/users/reset-password", wst.M{}, wst.M{
+	resetPasswordResponse, err := invokeApiJsonM(t, "POST", "/accounts/reset-password", wst.M{}, wst.M{
 		"Content-Type": "application/json",
 	})
 	assert.NoError(t, err)
@@ -141,7 +141,7 @@ func Test_VerifyEmail(t *testing.T) {
 	t.Parallel()
 
 	// Request email verification
-	verifyEmailResponse, err := invokeApiAsRandomUser(t, "POST", "/users/verify-mail", wst.M{}, wst.M{
+	verifyEmailResponse, err := invokeApiAsRandomAccount(t, "POST", "/accounts/verify-mail", wst.M{}, wst.M{
 		"Content-Type": "application/json",
 	})
 	assert.NoError(t, err)
@@ -149,14 +149,14 @@ func Test_VerifyEmail(t *testing.T) {
 	assert.Equal(t, "Verification email sent", verifyEmailResponse.GetString("message"))
 
 	// Request email verification
-	performVerificationResponse := invokeApiFullResponse(t, "GET", fmt.Sprintf("/users/verify-mail?user_id=%s&access_token=%s&redirect_uri=%s",
-		randomUser.GetString("id"),
+	performVerificationResponse := invokeApiFullResponse(t, "GET", fmt.Sprintf("/accounts/verify-mail?user_id=%s&access_token=%s&redirect_uri=%s",
+		randomAccount.GetString("id"),
 		verifyEmailResponse.GetString("bearer"),
-		encodeUriComponent("/api/v1/users/me"),
+		encodeUriComponent("/api/v1/accounts/me"),
 	), nil, nil)
 	assert.NotEmpty(t, performVerificationResponse)
 	assert.Equal(t, fiber.StatusFound, performVerificationResponse.StatusCode)
-	assert.Equal(t, "/api/v1/users/me", performVerificationResponse.Header.Get("Location"))
+	assert.Equal(t, "/api/v1/accounts/me", performVerificationResponse.Header.Get("Location"))
 	//assert.Equal(t, "OK", performVerificationResponse.GetString("result"))
 	//assert.Equal(t, "Email verified", performVerificationResponse.GetString("message"))
 
@@ -168,9 +168,9 @@ func Test_GetPerformEmailVerification(t *testing.T) {
 
 }
 
-func createFooter2ForUser(token string, userId string, t *testing.T) (wst.M, error) {
+func createFooter2ForAccount(token string, userId string, t *testing.T) (wst.M, error) {
 	parsed, err := invokeApiJsonM(t, "POST", "/footers", wst.M{
-		"userId": userId,
+		"accountId": userId,
 	}, wst.M{
 		"Content-Type":  "application/json",
 		"Authorization": fmt.Sprintf("Bearer %v", token),
@@ -185,7 +185,7 @@ func Test_EmptyArray(t *testing.T) {
 	t.Parallel()
 
 	parsed, err := invokeApiJsonA(t, "GET", "/empties", nil, wst.M{
-		"Authorization": fmt.Sprintf("Bearer %v", randomUserToken.GetString("id")),
+		"Authorization": fmt.Sprintf("Bearer %v", randomAccountToken.GetString("id")),
 	})
 	assert.NoError(t, err)
 
@@ -193,7 +193,7 @@ func Test_EmptyArray(t *testing.T) {
 
 }
 
-func loginUser(email string, password string, t *testing.T) (wst.M, error) {
+func loginAccount(email string, password string, t *testing.T) (wst.M, error) {
 	res, err := loginAsExplicitMode(email, password, "email", t)
 	if err != nil {
 		return res, err
@@ -207,7 +207,7 @@ func loginUser(email string, password string, t *testing.T) (wst.M, error) {
 }
 
 func loginAsExplicitMode(email string, password string, mode string, t *testing.T) (wst.M, error) {
-	return invokeApiJsonM(t, "POST", "/users/login", wst.M{
+	return invokeApiJsonM(t, "POST", "/accounts/login", wst.M{
 		mode:       email,
 		"password": password,
 	}, wst.M{
@@ -215,11 +215,11 @@ func loginAsExplicitMode(email string, password string, mode string, t *testing.
 	})
 }
 
-func Test_CreateUserWithoutUsername(t *testing.T) {
+func Test_CreateAccountWithoutUsername(t *testing.T) {
 
 	t.Parallel()
 
-	user, err := invokeApiJsonM(t, "POST", "/users", wst.M{
+	user, err := invokeApiJsonM(t, "POST", "/accounts", wst.M{
 		"password": "abcd1234.",
 	}, wst.M{
 		"Content-Type": "application/json",
@@ -230,11 +230,11 @@ func Test_CreateUserWithoutUsername(t *testing.T) {
 
 }
 
-func Test_LoginUserWithoutUserOrEmail(t *testing.T) {
+func Test_LoginAccountWithoutUserOrEmail(t *testing.T) {
 
 	t.Parallel()
 
-	user, err := invokeApiJsonM(t, "POST", "/users/login", wst.M{
+	user, err := invokeApiJsonM(t, "POST", "/accounts/login", wst.M{
 		"password": "abcd1234.",
 	}, wst.M{
 		"Content-Type": "application/json",
@@ -245,11 +245,11 @@ func Test_LoginUserWithoutUserOrEmail(t *testing.T) {
 
 }
 
-func Test_LoginUserWithoutPassword(t *testing.T) {
+func Test_LoginAccountWithoutPassword(t *testing.T) {
 
 	t.Parallel()
 
-	user, err := invokeApiJsonM(t, "POST", "/users/login", wst.M{
+	user, err := invokeApiJsonM(t, "POST", "/accounts/login", wst.M{
 		"username": fmt.Sprintf("user-%d-doesnotexist", createRandomInt()),
 	}, wst.M{
 		"Content-Type": "application/json",
@@ -260,12 +260,12 @@ func Test_LoginUserWithoutPassword(t *testing.T) {
 
 }
 
-func Test_LoginUserWithWrongPassword(t *testing.T) {
+func Test_LoginAccountWithWrongPassword(t *testing.T) {
 
 	t.Parallel()
 
-	user, err := invokeApiJsonM(t, "POST", "/users/login", wst.M{
-		"username": randomUser.GetString("username"),
+	user, err := invokeApiJsonM(t, "POST", "/accounts/login", wst.M{
+		"username": randomAccount.GetString("username"),
 		"password": "wrongpassword",
 	}, wst.M{
 		"Content-Type": "application/json",
@@ -281,7 +281,7 @@ func Test_RequestCache(t *testing.T) {
 	t.Parallel()
 
 	// Create a request cache entry
-	requestCacheEntry, err := invokeApiAsRandomUser(t, "POST", "/request-cache-entries", wst.M{
+	requestCacheEntry, err := invokeApiAsRandomAccount(t, "POST", "/request-cache-entries", wst.M{
 		"_entries": wst.A{
 			{
 				"key":   "test-key",
@@ -300,7 +300,7 @@ func Test_RequestCache(t *testing.T) {
 	endpoint := fmt.Sprintf("/request-cache-entries?filter={\"where\":{\"_redId\":\"%s\"}}", requestCacheEntry.GetString("_redId"))
 	requestCacheEntries, err := invokeApiJsonA(t, "GET", endpoint, nil, wst.M{
 		"Content-Type":  "application/json",
-		"Authorization": fmt.Sprintf("Bearer %v", randomUserToken.GetString("id")),
+		"Authorization": fmt.Sprintf("Bearer %v", randomAccountToken.GetString("id")),
 	})
 	assert.NoError(t, err)
 	assert.Greater(t, len(requestCacheEntries), 0)
@@ -321,7 +321,7 @@ func Test_ForceError1719(t *testing.T) {
 	t.Parallel()
 
 	result, err := invokeApiJsonM(t, "GET", "/notes?forceError1719=true", nil, wst.M{
-		"Authorization": fmt.Sprintf("Bearer %v", randomUserToken.GetString("id")),
+		"Authorization": fmt.Sprintf("Bearer %v", randomAccountToken.GetString("id")),
 	})
 	assert.NoError(t, err)
 	assert.Equal(t, "ERR_1719", result.GetString("error.code"))
@@ -330,16 +330,16 @@ func Test_ForceError1719(t *testing.T) {
 func Test_FindMe(t *testing.T) {
 	t.Parallel()
 
-	result, err := invokeApiAsRandomUser(t, "GET", "/users/me", nil, nil)
+	result, err := invokeApiAsRandomAccount(t, "GET", "/accounts/me", nil, nil)
 	assert.NoError(t, err)
-	assert.Equal(t, result.GetString("id"), randomUser.GetString("id"))
+	assert.Equal(t, result.GetString("id"), randomAccount.GetString("id"))
 
 }
 
 func Test_Patch(t *testing.T) {
 	t.Parallel()
 
-	result, err := invokeApiAsRandomUser(t, "PATCH", "/users/"+randomUser.GetString("id"), wst.M{
+	result, err := invokeApiAsRandomAccount(t, "PATCH", "/accounts/"+randomAccount.GetString("id"), wst.M{
 		"attribute1452": "value1452",
 	}, wst.M{
 		"Content-Type": "application/json",
@@ -352,7 +352,7 @@ func Test_Patch(t *testing.T) {
 func Test_PatchWithEphemeral(t *testing.T) {
 	t.Parallel()
 
-	result, err := invokeApiAsRandomUser(t, "PATCH", "/users/"+randomUser.GetString("id"), wst.M{
+	result, err := invokeApiAsRandomAccount(t, "PATCH", "/accounts/"+randomAccount.GetString("id"), wst.M{
 		"testEphemeral": "ephemeralAttribute1503",
 	}, wst.M{
 		"Content-Type": "application/json",
@@ -361,7 +361,7 @@ func Test_PatchWithEphemeral(t *testing.T) {
 	assert.Equal(t, "ephemeralValue1503", result.GetString("ephemeralAttribute1503"))
 
 	// Find user again and check that the ephemeral attribute is not there
-	result, err = invokeApiAsRandomUser(t, "GET", "/users/me", nil, nil)
+	result, err = invokeApiAsRandomAccount(t, "GET", "/accounts/me", nil, nil)
 	assert.NoError(t, err)
 	assert.Equal(t, "", result.GetString("ephemeralAttribute1503"))
 
@@ -369,14 +369,14 @@ func Test_PatchWithEphemeral(t *testing.T) {
 
 // First random user creates a note
 // Then the same user updates the note
-func Test_UserUpdatesNote(t *testing.T) {
+func Test_AccountUpdatesNote(t *testing.T) {
 
 	t.Parallel()
 
 	// Create a note
-	note, err := invokeApiAsRandomUser(t, "POST", "/notes", wst.M{
-		"title":  "Test Note",
-		"userId": randomUser.GetString("id"),
+	note, err := invokeApiAsRandomAccount(t, "POST", "/notes", wst.M{
+		"title":     "Test Note",
+		"accountId": randomAccount.GetString("id"),
 	}, wst.M{
 		"Content-Type": "application/json",
 	})
@@ -386,7 +386,7 @@ func Test_UserUpdatesNote(t *testing.T) {
 	assert.Equal(t, "Test Note", note.GetString("title"))
 
 	// Update the note
-	updatedNote, err := invokeApiAsRandomUser(t, "PATCH", "/notes/"+note.GetString("id"), wst.M{
+	updatedNote, err := invokeApiAsRandomAccount(t, "PATCH", "/notes/"+note.GetString("id"), wst.M{
 		"title": "Test Note Updated",
 	}, wst.M{
 		"Content-Type": "application/json",
@@ -396,7 +396,7 @@ func Test_UserUpdatesNote(t *testing.T) {
 	assert.Equal(t, "Test Note Updated", updatedNote.GetString("title"))
 
 	// Now recursive permissions. Create a footer associated to the note, and then update the footer
-	footer, err := invokeApiAsRandomUser(t, "POST", "/footers", wst.M{
+	footer, err := invokeApiAsRandomAccount(t, "POST", "/footers", wst.M{
 		"noteId": note.GetString("id"),
 		"text":   "Test Footer",
 	}, wst.M{
@@ -408,7 +408,7 @@ func Test_UserUpdatesNote(t *testing.T) {
 	assert.Equal(t, note.GetString("id"), footer.GetString("noteId"))
 
 	// Update the footer
-	updatedFooter, err := invokeApiAsRandomUser(t, "PATCH", "/footers/"+footer.GetString("id"), wst.M{
+	updatedFooter, err := invokeApiAsRandomAccount(t, "PATCH", "/footers/"+footer.GetString("id"), wst.M{
 		"text": "Test Footer Updated",
 	}, wst.M{
 		"Content-Type": "application/json",
@@ -419,12 +419,12 @@ func Test_UserUpdatesNote(t *testing.T) {
 
 	// Now another user tries to update the same footer
 	user2Username := fmt.Sprintf("user-%d", createRandomInt())
-	createUser(t, wst.M{
+	createAccount(t, wst.M{
 		"username": user2Username,
 		"password": "abcd1234.",
 	})
 
-	user2Token, err := loginUser(user2Username, "abcd1234.", t)
+	user2Token, err := loginAccount(user2Username, "abcd1234.", t)
 	assert.NoError(t, err)
 	assert.NotEmpty(t, user2Token.GetString("id"))
 
@@ -450,18 +450,18 @@ func Test_UserUpdatesNote(t *testing.T) {
 
 }
 
-func Test_CreateUserTwiceByUsername(t *testing.T) {
+func Test_CreateAccountTwiceByUsername(t *testing.T) {
 
 	t.Parallel()
 
-	user := createUser(t, wst.M{
+	user := createAccount(t, wst.M{
 		"username": fmt.Sprintf("user-%d", createRandomInt()),
 		"password": "abcd1234.",
 	})
 	assert.NotNil(t, user)
 	assert.NotEmpty(t, user.GetString("id"))
 
-	user2, err := invokeApiJsonM(t, "POST", "/users", wst.M{
+	user2, err := invokeApiJsonM(t, "POST", "/accounts", wst.M{
 		"username": user.GetString("username"),
 		"password": "abcd1234.",
 	}, wst.M{
@@ -473,18 +473,18 @@ func Test_CreateUserTwiceByUsername(t *testing.T) {
 
 }
 
-func Test_CreateUserTwiceByEmail(t *testing.T) {
+func Test_CreateAccountTwiceByEmail(t *testing.T) {
 
 	t.Parallel()
 
-	user := createUser(t, wst.M{
+	user := createAccount(t, wst.M{
 		"email":    fmt.Sprintf("user-%d@example.com", createRandomInt()),
 		"password": "abcd1234.",
 	})
 	assert.NotNil(t, user)
 	assert.NotEmpty(t, user.GetString("id"))
 
-	user2, err := invokeApiJsonM(t, "POST", "/users", wst.M{
+	user2, err := invokeApiJsonM(t, "POST", "/accounts", wst.M{
 		"email":    user.GetString("email"),
 		"password": "abcd1234.",
 	}, wst.M{
@@ -496,11 +496,11 @@ func Test_CreateUserTwiceByEmail(t *testing.T) {
 
 }
 
-func Test_CreateUserInvalidEmail(t *testing.T) {
+func Test_CreateAccountInvalidEmail(t *testing.T) {
 
 	t.Parallel()
 
-	user, err := invokeApiJsonM(t, "POST", "/users", wst.M{
+	user, err := invokeApiJsonM(t, "POST", "/accounts", wst.M{
 		"email":    "invalidEmail",
 		"password": "abcd1234.",
 	}, wst.M{
@@ -512,11 +512,11 @@ func Test_CreateUserInvalidEmail(t *testing.T) {
 
 }
 
-func Test_CreateUserPasswordBlank(t *testing.T) {
+func Test_CreateAccountPasswordBlank(t *testing.T) {
 
 	t.Parallel()
 
-	user, err := invokeApiJsonM(t, "POST", "/users", wst.M{
+	user, err := invokeApiJsonM(t, "POST", "/accounts", wst.M{
 		"username": fmt.Sprintf("user-%d", createRandomInt()),
 		"password": "",
 	}, wst.M{
@@ -530,22 +530,22 @@ func Test_CreateUserPasswordBlank(t *testing.T) {
 
 // First creates a user
 // Then the user changes the password
-func Test_UpdateUserPassword(t *testing.T) {
+func Test_UpdateAccountPassword(t *testing.T) {
 
 	t.Parallel()
 
-	user := createUser(t, wst.M{
+	user := createAccount(t, wst.M{
 		"username": fmt.Sprintf("user-%d", createRandomInt()),
 		"password": "abcd1234.",
 	})
 	assert.NotNil(t, user)
 	assert.NotEmpty(t, user.GetString("id"))
 
-	token, err := loginUser(user.GetString("username"), "abcd1234.", t)
+	token, err := loginAccount(user.GetString("username"), "abcd1234.", t)
 	assert.NoError(t, err)
 	assert.Contains(t, token, "id")
 
-	user2, err := invokeApiJsonM(t, "PATCH", "/users/"+user.GetString("id"), wst.M{
+	user2, err := invokeApiJsonM(t, "PATCH", "/accounts/"+user.GetString("id"), wst.M{
 		"password": "efgh5678,",
 	}, wst.M{
 		"Content-Type":  "application/json",
@@ -555,12 +555,12 @@ func Test_UpdateUserPassword(t *testing.T) {
 	assert.NotNil(t, user2)
 	assert.Equal(t, user.GetString("id"), user2.GetString("id"))
 
-	token2, err := loginUser(user.GetString("username"), "efgh5678,", t)
+	token2, err := loginAccount(user.GetString("username"), "efgh5678,", t)
 	assert.NoError(t, err)
 	assert.Contains(t, token2, "id")
 
 	// Find self
-	user3, err := invokeApiJsonM(t, "GET", "/users/me", nil, wst.M{
+	user3, err := invokeApiJsonM(t, "GET", "/accounts/me", nil, wst.M{
 		"Authorization": fmt.Sprintf("Bearer %v", token2.GetString("id")),
 	})
 	assert.NoError(t, err)
@@ -575,7 +575,7 @@ func Test_DeleteNonExistentNote(t *testing.T) {
 
 	// Delete note
 	result, err := invokeApiJsonM(t, "DELETE", "/notes/000000000000000000000000", nil, wst.M{
-		"Authorization": fmt.Sprintf("Bearer %s", adminUserToken.GetString("id")),
+		"Authorization": fmt.Sprintf("Bearer %s", adminAccountToken.GetString("id")),
 	})
 	assert.NoError(t, err)
 	assert.Equal(t, fiber.StatusNotFound, result.GetInt("error.statusCode"))
@@ -590,9 +590,9 @@ func Test_DeleteNoteTwice(t *testing.T) {
 	t.Parallel()
 
 	// Create a note
-	note, err := invokeApiAsRandomUser(t, "POST", "/notes", wst.M{
-		"title":  "Test Note",
-		"userId": randomUser.GetString("id"),
+	note, err := invokeApiAsRandomAccount(t, "POST", "/notes", wst.M{
+		"title":     "Test Note",
+		"accountId": randomAccount.GetString("id"),
 	}, wst.M{
 		"Content-Type": "application/json",
 	})
@@ -603,13 +603,13 @@ func Test_DeleteNoteTwice(t *testing.T) {
 
 	// Delete note
 	result := invokeApiFullResponse(t, "DELETE", "/notes/"+note.GetString("id"), nil, wst.M{
-		"Authorization": fmt.Sprintf("Bearer %s", randomUserToken.GetString("id")),
+		"Authorization": fmt.Sprintf("Bearer %s", randomAccountToken.GetString("id")),
 	})
 	assert.Equal(t, fiber.StatusNoContent, result.StatusCode)
 
 	// Delete note again
 	result2, err := invokeApiJsonM(t, "DELETE", "/notes/"+note.GetString("id"), nil, wst.M{
-		"Authorization": fmt.Sprintf("Bearer %s", randomUserToken.GetString("id")),
+		"Authorization": fmt.Sprintf("Bearer %s", randomAccountToken.GetString("id")),
 	})
 	assert.NoError(t, err)
 	assert.Equal(t, fiber.StatusBadRequest, result2.GetInt("error.statusCode"))
@@ -622,9 +622,9 @@ func Test_FindWithNestedRelations(t *testing.T) {
 	//t.Parallel()
 
 	// Create a note
-	note, err := invokeApiAsRandomUser(t, "POST", "/notes", wst.M{
-		"title":  "Test Note",
-		"userId": randomUser.GetString("id"),
+	note, err := invokeApiAsRandomAccount(t, "POST", "/notes", wst.M{
+		"title":     "Test Note",
+		"accountId": randomAccount.GetString("id"),
 	}, wst.M{
 		"Content-Type": "application/json",
 	})
@@ -634,7 +634,7 @@ func Test_FindWithNestedRelations(t *testing.T) {
 	assert.Equal(t, "Test Note", note.GetString("title"))
 
 	// Create a footer
-	footer, err := invokeApiAsRandomUser(t, "POST", "/footers", wst.M{
+	footer, err := invokeApiAsRandomAccount(t, "POST", "/footers", wst.M{
 		"noteId": note.GetString("id"),
 		"text":   "Test Footer",
 	}, wst.M{
@@ -647,7 +647,7 @@ func Test_FindWithNestedRelations(t *testing.T) {
 
 	// Find note with nested relations
 	note2, err := invokeApiJsonM(t, "GET", "/notes/"+note.GetString("id")+`?filter={"include":[{"relation":"footer1","scope":{"include":[{"relation":"note"}]}}]}`, nil, wst.M{
-		"Authorization": fmt.Sprintf("Bearer %s", randomUserToken.GetString("id")),
+		"Authorization": fmt.Sprintf("Bearer %s", randomAccountToken.GetString("id")),
 	})
 	assert.NoError(t, err)
 	assert.Equal(t, note.GetString("id"), note2.GetString("id"))
@@ -661,9 +661,9 @@ func Test_NoteWith2Footers(t *testing.T) {
 	// t.Parallel()
 
 	// Create a note
-	note, err := invokeApiAsRandomUser(t, "POST", "/notes", wst.M{
-		"title":  "Note with 2 footers",
-		"userId": randomUser.GetString("id"),
+	note, err := invokeApiAsRandomAccount(t, "POST", "/notes", wst.M{
+		"title":     "Note with 2 footers",
+		"accountId": randomAccount.GetString("id"),
 	}, wst.M{
 		"Content-Type": "application/json",
 	})
@@ -671,10 +671,10 @@ func Test_NoteWith2Footers(t *testing.T) {
 	assert.NotEmpty(t, note.GetString("id"))
 
 	// Create first footer
-	footer1, err := invokeApiAsRandomUser(t, "POST", "/footers", wst.M{
-		"text":   "Footer 1",
-		"noteId": note.GetString("id"),
-		"userId": randomUser.GetString("id"),
+	footer1, err := invokeApiAsRandomAccount(t, "POST", "/footers", wst.M{
+		"text":      "Footer 1",
+		"noteId":    note.GetString("id"),
+		"accountId": randomAccount.GetString("id"),
 	}, wst.M{
 		"Content-Type": "application/json",
 	})
@@ -682,10 +682,10 @@ func Test_NoteWith2Footers(t *testing.T) {
 	assert.NotEmpty(t, footer1.GetString("id"))
 
 	// Create second footer
-	footer2, err := invokeApiAsRandomUser(t, "POST", "/footers", wst.M{
-		"text":   "Footer 2",
-		"noteId": note.GetString("id"),
-		"userId": randomUser.GetString("id"),
+	footer2, err := invokeApiAsRandomAccount(t, "POST", "/footers", wst.M{
+		"text":      "Footer 2",
+		"noteId":    note.GetString("id"),
+		"accountId": randomAccount.GetString("id"),
 	}, wst.M{
 		"Content-Type": "application/json",
 	})
@@ -694,7 +694,7 @@ func Test_NoteWith2Footers(t *testing.T) {
 	assert.Equal(t, "UNIQUENESS", footer2.GetString("error.code"))
 
 	// Find note with nested relations
-	note2, err := invokeApiAsRandomUser(t, "GET", fmt.Sprintf("/notes/%s?filter={\"include\":[{\"relation\":\"footer1\"}]}", note.GetString("id")), nil, nil)
+	note2, err := invokeApiAsRandomAccount(t, "GET", fmt.Sprintf("/notes/%s?filter={\"include\":[{\"relation\":\"footer1\"}]}", note.GetString("id")), nil, nil)
 	assert.NoError(t, err)
 	assert.Equal(t, note.GetString("id"), note2.GetString("id"))
 	assert.Equal(t, footer1.GetString("id"), note2.GetString("footer1.id"))
@@ -707,9 +707,9 @@ func Test_ImageWithTwoThumbnails(t *testing.T) {
 	t.Parallel()
 
 	// Create a image
-	image, err := invokeApiAsRandomUser(t, "POST", "/images", wst.M{
-		"title":  "Image with 2 thuzmbnails",
-		"userId": randomUser.GetString("id"),
+	image, err := invokeApiAsRandomAccount(t, "POST", "/images", wst.M{
+		"title":     "Image with 2 thuzmbnails",
+		"accountId": randomAccount.GetString("id"),
 	}, wst.M{
 		"Content-Type": "application/json",
 	})
@@ -717,10 +717,10 @@ func Test_ImageWithTwoThumbnails(t *testing.T) {
 	assert.NotEmpty(t, image.GetString("id"))
 
 	// Create first Thumbnail
-	thumbnail1, err := invokeApiAsRandomUser(t, "POST", "/images", wst.M{
+	thumbnail1, err := invokeApiAsRandomAccount(t, "POST", "/images", wst.M{
 		"text":            "Thumbnail 1",
 		"originalImageId": image.GetString("id"),
-		"userId":          randomUser.GetString("id"),
+		"accountId":       randomAccount.GetString("id"),
 	}, wst.M{
 		"Content-Type": "application/json",
 	})
@@ -728,10 +728,10 @@ func Test_ImageWithTwoThumbnails(t *testing.T) {
 	assert.NotEmpty(t, thumbnail1.GetString("id"))
 
 	// Create second Thumbnail
-	thumbnail2, err := invokeApiAsRandomUser(t, "POST", "/images", wst.M{
+	thumbnail2, err := invokeApiAsRandomAccount(t, "POST", "/images", wst.M{
 		"text":            "Thumbnail 2",
 		"originalImageId": image.GetString("id"),
-		"userId":          randomUser.GetString("id"),
+		"accountId":       randomAccount.GetString("id"),
 	}, wst.M{
 		"Content-Type": "application/json",
 	})
@@ -740,13 +740,13 @@ func Test_ImageWithTwoThumbnails(t *testing.T) {
 	assert.Equal(t, "UNIQUENESS", thumbnail2.GetString("error.code"))
 
 	// Find note with nested relations
-	image2, err := invokeApiAsRandomUser(t, "GET", fmt.Sprintf("/images/%s?filter={\"include\":[{\"relation\":\"thumbnail\"}]}", image.GetString("id")), nil, nil)
+	image2, err := invokeApiAsRandomAccount(t, "GET", fmt.Sprintf("/images/%s?filter={\"include\":[{\"relation\":\"thumbnail\"}]}", image.GetString("id")), nil, nil)
 	assert.NoError(t, err)
 	assert.Equal(t, image.GetString("id"), image2.GetString("id"))
 	assert.Equal(t, thumbnail1.GetString("id"), image2.GetString("thumbnail.id"))
 	assert.Equal(t, thumbnail1.GetString("text"), image2.GetString("thumbnail.text"))
 
-	invalidThumbnails, err := invokeApiJsonA(t, "GET", "/images?filter={\"where\":{\"text\":\"Thumbnail 2\"}}", nil, wst.M{"Authorization": fmt.Sprintf("Bearer %v", randomUserToken.GetString("id"))})
+	invalidThumbnails, err := invokeApiJsonA(t, "GET", "/images?filter={\"where\":{\"text\":\"Thumbnail 2\"}}", nil, wst.M{"Authorization": fmt.Sprintf("Bearer %v", randomAccountToken.GetString("id"))})
 	assert.NoError(t, err)
 	assert.Equal(t, 0, len(invalidThumbnails))
 }

@@ -166,7 +166,7 @@ func Test_CreateWithOverrideResultError(t *testing.T) {
 
 	t.Parallel()
 
-	result, err := invokeApiAsRandomUser(t, "POST", "/notes", wst.M{
+	result, err := invokeApiAsRandomAccount(t, "POST", "/notes", wst.M{
 		"__forceError": true,
 	}, wst.M{"Content-Type": "application/json"})
 	assert.NoError(t, err)
@@ -177,7 +177,7 @@ func Test_CreateWithOverrideInvalid(t *testing.T) {
 
 	t.Parallel()
 
-	result, err := invokeApiAsRandomUser(t, "POST", "/notes", wst.M{
+	result, err := invokeApiAsRandomAccount(t, "POST", "/notes", wst.M{
 		"__overwriteWith": 1,
 	}, wst.M{"Content-Type": "application/json"})
 	assert.NoError(t, err)
@@ -198,7 +198,7 @@ func Test_CreateWithForcingError(t *testing.T) {
 
 	t.Parallel()
 
-	result, err := invokeApiAsRandomUser(t, "POST", "/notes", wst.M{
+	result, err := invokeApiAsRandomAccount(t, "POST", "/notes", wst.M{
 		"__forceAfterError": true,
 	}, wst.M{"Content-Type": "application/json"})
 	assert.NoError(t, err)
@@ -218,17 +218,17 @@ func Test_BearerTokenWithObjectId(t *testing.T) {
 	t.Parallel()
 
 	createdNote, err := noteModel.Create(wst.M{
-		"title":  "Test",
-		"userId": randomUserToken.GetString("userId"),
-		"appId":  appInstance.Id,
+		"title":     "Test",
+		"accountId": randomAccountToken.GetString("accountId"),
+		"appId":     appInstance.Id,
 	}, systemContext)
 	assert.NoError(t, err)
-	subjId, err := primitive.ObjectIDFromHex(randomUserToken.GetString("userId"))
+	subjId, err := primitive.ObjectIDFromHex(randomAccountToken.GetString("accountId"))
 	assert.NoError(t, err)
 	userBearer := model.CreateBearer(subjId, float64(time.Now().Unix()), float64(60), []string{"USER"})
-	refreshedByUser, err := noteModel.FindById(createdNote.GetID(), &wst.Filter{
+	refreshedByAccount, err := noteModel.FindById(createdNote.GetID(), &wst.Filter{
 		Include: &wst.Include{
-			{Relation: "user"},
+			{Relation: "account"},
 			{Relation: "footer1"},
 			{Relation: "footer2"},
 			{Relation: "publicFooter"},
@@ -238,18 +238,18 @@ func Test_BearerTokenWithObjectId(t *testing.T) {
 		Bearer: userBearer,
 	})
 	assert.NoError(t, err)
-	assert.Equal(t, "Test", refreshedByUser.GetString("title"))
-	updatedByUser, err := refreshedByUser.UpdateAttributes(wst.M{
+	assert.Equal(t, "Test", refreshedByAccount.GetString("title"))
+	updatedByAccount, err := refreshedByAccount.UpdateAttributes(wst.M{
 		"title": "Test2",
 	}, &model.EventContext{
 		Bearer: userBearer,
 	})
 	assert.NoError(t, err)
-	assert.Equal(t, "Test2", updatedByUser.GetString("title"))
+	assert.Equal(t, "Test2", updatedByAccount.GetString("title"))
 
 	refreshedByApp, err := noteModel.FindById(createdNote.GetID(), &wst.Filter{
 		Include: &wst.Include{
-			{Relation: "user"},
+			{Relation: "account"},
 			{Relation: "footer1"},
 			{Relation: "footer2"},
 			{Relation: "publicFooter"},
@@ -273,7 +273,7 @@ func Test_CreateWithDefaultStringValue(t *testing.T) {
 
 	t.Parallel()
 
-	created, err := invokeApiAsRandomUser(t, "POST", "/notes", wst.M{}, wst.M{"Content-Type": "application/json"})
+	created, err := invokeApiAsRandomAccount(t, "POST", "/notes", wst.M{}, wst.M{"Content-Type": "application/json"})
 	assert.Nil(t, err)
 	assert.Equal(t, "default", created.GetString("defaultString"))
 }
@@ -282,7 +282,7 @@ func Test_CreateWithDefaultIntValue(t *testing.T) {
 
 	t.Parallel()
 
-	created, err := invokeApiAsRandomUser(t, "POST", "/notes", wst.M{}, wst.M{"Content-Type": "application/json"})
+	created, err := invokeApiAsRandomAccount(t, "POST", "/notes", wst.M{}, wst.M{"Content-Type": "application/json"})
 	assert.Nil(t, err)
 	assert.EqualValues(t, 1, created["defaultInt"])
 }
@@ -291,7 +291,7 @@ func Test_CreateWithDefaultFloatValue(t *testing.T) {
 
 	t.Parallel()
 
-	created, err := invokeApiAsRandomUser(t, "POST", "/notes", wst.M{}, wst.M{"Content-Type": "application/json"})
+	created, err := invokeApiAsRandomAccount(t, "POST", "/notes", wst.M{}, wst.M{"Content-Type": "application/json"})
 	assert.Nil(t, err)
 	assert.EqualValues(t, 87436874647.8761781676, created["defaultFloat"])
 }
@@ -300,7 +300,7 @@ func Test_CreateWithDefaultBooleanValue(t *testing.T) {
 
 	t.Parallel()
 
-	created, err := invokeApiAsRandomUser(t, "POST", "/notes", wst.M{}, wst.M{"Content-Type": "application/json"})
+	created, err := invokeApiAsRandomAccount(t, "POST", "/notes", wst.M{}, wst.M{"Content-Type": "application/json"})
 	assert.Nil(t, err)
 	assert.EqualValues(t, true, created["defaultBoolean"])
 }
@@ -309,7 +309,7 @@ func Test_CreateWithDefaultListValue(t *testing.T) {
 
 	t.Parallel()
 
-	created, err := invokeApiAsRandomUser(t, "POST", "/notes", wst.M{}, wst.M{"Content-Type": "application/json"})
+	created, err := invokeApiAsRandomAccount(t, "POST", "/notes", wst.M{}, wst.M{"Content-Type": "application/json"})
 	assert.Nil(t, err)
 	assert.Contains(t, created, "defaultList")
 	assert.IsType(t, []interface{}{}, created["defaultList"])
@@ -320,7 +320,7 @@ func Test_CreateWithDefaultMapValue(t *testing.T) {
 
 	t.Parallel()
 
-	created, err := invokeApiAsRandomUser(t, "POST", "/notes", wst.M{}, wst.M{"Content-Type": "application/json"})
+	created, err := invokeApiAsRandomAccount(t, "POST", "/notes", wst.M{}, wst.M{"Content-Type": "application/json"})
 	assert.Nil(t, err)
 	assert.Contains(t, created, "defaultMap")
 	assert.IsType(t, map[string]interface{}{}, created["defaultMap"])
@@ -332,7 +332,7 @@ func Test_CreateWithDefaultNilValue(t *testing.T) {
 
 	t.Parallel()
 
-	created, err := invokeApiAsRandomUser(t, "POST", "/notes", wst.M{}, wst.M{"Content-Type": "application/json"})
+	created, err := invokeApiAsRandomAccount(t, "POST", "/notes", wst.M{}, wst.M{"Content-Type": "application/json"})
 	assert.Nil(t, err)
 	assert.Contains(t, created, "defaultNull")
 	assert.Nil(t, created["defaultNull"])
@@ -346,7 +346,7 @@ func Test_CreateWithDefaultTimeValue(t *testing.T) {
 	lowerSeconds := probablyTime.Unix()
 	// Should be 16 seconds after at most
 	upperSeconds := probablyTime.Unix() + 16
-	created, err := invokeApiAsRandomUser(t, "POST", "/notes", wst.M{}, wst.M{"Content-Type": "application/json"})
+	created, err := invokeApiAsRandomAccount(t, "POST", "/notes", wst.M{}, wst.M{"Content-Type": "application/json"})
 	assert.Nil(t, err)
 	assert.Contains(t, created, "defaultTimeNow")
 	var parsedTime time.Time
@@ -364,7 +364,7 @@ func Test_CreateWithDefaultTimeHourAgo(t *testing.T) {
 	lowerSeconds := probablyTime.Unix() - 3600
 	// Should be 15 milliseconds after at most
 	upperSeconds := probablyTime.Unix() - 3597
-	created, err := invokeApiAsRandomUser(t, "POST", "/notes", wst.M{}, wst.M{"Content-Type": "application/json"})
+	created, err := invokeApiAsRandomAccount(t, "POST", "/notes", wst.M{}, wst.M{"Content-Type": "application/json"})
 	assert.Nil(t, err)
 	assert.Contains(t, created, "defaultTimeHourAgo")
 	var parsedTime time.Time
@@ -383,7 +383,7 @@ func Test_CreateWithDefaultTimeHourFromNow(t *testing.T) {
 	lowerSeconds := probablyTime.Unix() + 3600
 	// Should be 15 seconds after at most
 	upperSeconds := probablyTime.Unix() + 3615
-	created, err := invokeApiAsRandomUser(t, "POST", "/notes", wst.M{}, wst.M{"Content-Type": "application/json"})
+	created, err := invokeApiAsRandomAccount(t, "POST", "/notes", wst.M{}, wst.M{"Content-Type": "application/json"})
 	assert.Nil(t, err)
 	assert.Contains(t, created, "defaultTimeHourFromNow")
 	var parsedTime time.Time
@@ -405,7 +405,7 @@ func Test_ProtectedFields(t *testing.T) {
 		"password": "abcd1234.",
 		"phone":    "1234567890",
 	}
-	user1 := createUser(t, plainUser1)
+	user1 := createAccount(t, plainUser1)
 
 	// Another random user
 	plainUser2 := wst.M{
@@ -413,39 +413,39 @@ func Test_ProtectedFields(t *testing.T) {
 		"password": "abcd1234.",
 		"phone":    "9876543210",
 	}
-	createUser(t, plainUser2)
+	createAccount(t, plainUser2)
 
-	// User with special privilege "__protectedFieldsPrivileged"
+	// Account with special privilege "__protectedFieldsPrivileged"
 	plainUser3 := wst.M{
 		"username": fmt.Sprintf("__protectedFieldsPrivileged_user%v", createRandomInt()),
 		"password": "abcd1234.",
 	}
 
 	// Add the privilege "__protectedFieldsPrivileged" to the user3
-	plainUserWithPrivileges := westack.UserWithRoles{
+	plainUserWithPrivileges := westack.AccountWithRoles{
 		Username: plainUser3.GetString("username"),
 		Password: plainUser3.GetString("password"),
 		Roles:    []string{"__protectedFieldsPrivileged"},
 	}
-	userWithPrivileges, err := westack.UpsertUserWithRoles(app, plainUserWithPrivileges, systemContext)
+	userWithPrivileges, err := westack.UpsertAccountWithRoles(app, plainUserWithPrivileges, systemContext)
 	assert.NoError(t, err)
 	assert.NotNil(t, userWithPrivileges.GetID())
-	assert.NotEmptyf(t, userWithPrivileges.GetString("id"), "User should have an id")
+	assert.NotEmptyf(t, userWithPrivileges.GetString("id"), "Account should have an id")
 
 	// Login the user1
 	username1 := plainUser1.GetString("username")
 	password1 := plainUser1.GetString("password")
-	user1Token, err := loginUser(username1, password1, t)
+	user1Token, err := loginAccount(username1, password1, t)
 	assert.NoError(t, err)
 
 	// Login the user2
-	user2Token, err := loginUser(plainUser2.GetString("username"), plainUser2.GetString("password"), t)
+	user2Token, err := loginAccount(plainUser2.GetString("username"), plainUser2.GetString("password"), t)
 	assert.NoError(t, err)
 
 	// Login with admin
 	adminUsername := os.Getenv("WST_ADMIN_USERNAME")
 	adminPwd := os.Getenv("WST_ADMIN_PWD")
-	adminToken, err := loginUser(
+	adminToken, err := loginAccount(
 		adminUsername,
 		adminPwd,
 		t,
@@ -453,7 +453,7 @@ func Test_ProtectedFields(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Login with userWithPrivileges
-	userWithPrivilegesToken, err := loginUser(
+	userWithPrivilegesToken, err := loginAccount(
 		plainUserWithPrivileges.Username,
 		plainUserWithPrivileges.Password,
 		t,
@@ -469,7 +469,7 @@ func Test_ProtectedFields(t *testing.T) {
 	user1RetrievedWithUser2, err := invokeApiJsonM(
 		t,
 		"GET",
-		fmt.Sprintf("/public-users/%v", user1.GetString("id")),
+		fmt.Sprintf("/public-accounts/%v", user1.GetString("id")),
 		nil,
 		wst.M{
 			"Authorization": fmt.Sprintf("Bearer %v", user2Token["id"]),
@@ -491,7 +491,7 @@ func Test_ProtectedFields(t *testing.T) {
 	users1RetrievedWithUser2, err := invokeApiJsonA(
 		t,
 		"GET",
-		fmt.Sprintf("/public-users?filter=%v", string(encodedFilter)),
+		fmt.Sprintf("/public-accounts?filter=%v", string(encodedFilter)),
 		nil,
 		wst.M{
 			"Authorization": fmt.Sprintf("Bearer %v", user2Token["id"]),
@@ -511,7 +511,7 @@ func Test_ProtectedFields(t *testing.T) {
 	user1RetrievedWithAdmin, err := invokeApiJsonM(
 		t,
 		"GET",
-		fmt.Sprintf("/public-users/%v", user1.GetString("id")),
+		fmt.Sprintf("/public-accounts/%v", user1.GetString("id")),
 		nil,
 		wst.M{
 			"Authorization": fmt.Sprintf("Bearer %v", adminToken["id"]),
@@ -527,7 +527,7 @@ func Test_ProtectedFields(t *testing.T) {
 	user1RetrievedWithUser1, err := invokeApiJsonM(
 		t,
 		"GET",
-		fmt.Sprintf("/public-users/%v", user1.GetString("id")),
+		fmt.Sprintf("/public-accounts/%v", user1.GetString("id")),
 		nil,
 		wst.M{
 			"Authorization": fmt.Sprintf("Bearer %v", user1Token["id"]),
@@ -544,7 +544,7 @@ func Test_ProtectedFields(t *testing.T) {
 	user1RetrievedWithUserWithPrivileges, err := invokeApiJsonM(
 		t,
 		"GET",
-		fmt.Sprintf("/public-users/%v", user1.GetString("id")),
+		fmt.Sprintf("/public-accounts/%v", user1.GetString("id")),
 		nil,
 		wst.M{
 			"Authorization": fmt.Sprintf("Bearer %v", userWithPrivilegesToken["id"]),

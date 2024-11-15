@@ -1,7 +1,7 @@
 {
-  "name": "user",
-  "base": "User",
-  "plural": "users",
+  "name": "account",
+  "base": "Account",
+  "plural": "accounts",
   "public": true,
   "properties": {
     "email": {
@@ -18,7 +18,7 @@
       "type": "hasAndBelongsToMany",
       "model": "role",
       "modelThrough": "RoleMapping",
-      "foreignKey": "userId",
+      "foreignKey": "accountId",
       "keyThrough": "roleId"
     }
   },
