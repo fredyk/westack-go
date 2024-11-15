@@ -8,9 +8,9 @@
           "model": "Image",
           "foreignKey": "originalImageId"
         },
-        "user": {
+        "account": {
             "type": "belongsTo",
-            "model": "user"
+            "model": "Account"
         }
     },
     "casbin": {

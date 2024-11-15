@@ -50,93 +50,29 @@ Follow these steps to quickly set up and run a simple API:
    westack-go init .
    ```
 
-   This creates the basic structure, including configuration files and directories for models and controllers.
+### Create a new model
+```shell
+# Usage: westack-go model add <model_name> <datasource_name>
+#   <datasource_name> defaults to "db" when you run `westack-go init .`
+ 
+westack-go model add Note db
+```
 
-4. **Define a model**:
+### Getting started
 
-   Create a `models/note.json` file:
+#### (Optional) Customize your models and datasources
 
-   ```json
-   {
-     "name": "Note",
-     "base": "PersistedModel",
-     "properties": {
-       "title": {
-         "type": "string",
-         "required": true
-       },
-       "content": {
-         "type": "string"
-       }
-     },
-     "casbin": {
-       "policies": [
-         "$authenticated,*,*,allow",
-         "$everyone,*,read,allow",
-         "$owner,*,__get__footer,allow"
-       ]
-     }
-   }
-   ```
-
-5. **Create the main application file**:
-
-   Create a `main.go` file with the following content:
-
-   ```go
-   package main
-
-   import (
-       "log"
-
-       "github.com/fredyk/westack-go/westack"
-   )
-
-   func main() {
-       app := westack.New()
-
-       app.Boot()
-
-       log.Fatal(app.Start())
-   }
-   ```
-
-6. **Run the server**:
-
-   ```bash
-   go run main.go
-   ```
-
-7. **Test the API**:
-
-   Access the Swagger UI at `http://localhost:3000/swagger` to test your endpoints.
-
----
-
-## Core Concepts
-
-### Architecture Overview
-
-westack-go is built around the following core components:
-
-- **Models**: Define the structure of your data and generate APIs automatically.
-- **Datasources**: Abstract the details of data storage, supporting MongoDB and in-memory stores.
-- **Routing**: Manage API endpoints and middleware.
-- **Controllers**: Centralize business logic.
-- **CLI Utilities**: Simplify repetitive tasks like generating models and controllers.
-
-### Key Components
-
-#### Models
-
-Models are the backbone of westack-go, defined in JSON files under the `models/` directory. These JSON files specify attributes, relationships, and access policies using Casbin.
-
-Example of a JSON Model:
+<details>
+  <summary>Account.json</summary>
 
 ```json
 {
-  "name": "Note",
-  "base": "PersistedModel",
+  "name": "Account",
+  "base": "Account",
+  "public": true,
+  "hidden": [
+    "password"
+  ],
   "properties": {
     "title": {
       "type": "string",
@@ -213,10 +149,9 @@ Create or update `models/note.json`:
     }
   },
   "relations": {
-    "footer": {
-      "type": "hasOne",
-      "model": "Footer",
-      "foreignKey": "noteId"
+    "account": {
+      "type": "belongsTo",
+      "model": "Account"
     }
   },
   "casbin": {
@@ -229,200 +164,96 @@ Create or update `models/note.json`:
 }
 ```
 
-This will establish the relationship where `Footer` belongs to `Note` and `Note` has one `Footer`, allowing CRUD operations to respect the relationship automatically.
+</details>
 
----
+<details>
+  <summary>datasources.json</summary>
 
-## Advanced Features
-
-### Swagger Integration
-
-westack-go automatically generates Swagger documentation for your APIs. The Swagger UI is available at:
-
-- `/swagger`: Interactive API documentation.
-- `/swagger/doc.json`: The OpenAPI specification in JSON format.
-
----
-# Filters in westack-go
-
-## Overview
-
-Filters in westack-go allow developers to:
-
-- Query, sort, paginate, and limit data retrieved from models.
-- Build flexible APIs that support custom data slices without hardcoding query logic.
-
-### Automatic Fields
-
-westack-go automatically manages the following fields:
-
-- **`created`**: Added when a record is created.
-- **`modified`**: Updated whenever a record is modified.
-
-### Use Cases
-
-Filters can be applied to standard CRUD endpoints, such as `GET /notes`, to refine the data returned.
-
-## Syntax and Structure
-
-Filters are specified as JSON objects within the `filter` query parameter. Spaces within filter values should be replaced with the `+` character to ensure proper parsing by the API.
-
-### 1. Filtering by Fields
-
-You can filter records based on specific field values using the following format:
-
-```http
-GET /notes?filter={"where":{"field":"value"}}
+```json
+{
+  "db": {
+    "name": "db",
+    "host": "localhost",
+    "port": 27017,
+    "database": "example_db",
+    "password": "",
+    "username": "",
+    "connector": "mongodb"
+  }
+}
 ```
 
-Example:
+</details>
 
-```http
-GET /notes?filter={"where":{"title":"Meeting"}}
+<details>
+  <summary>model-config.json</summary>
+
+```json
+{
+  "Account": {
+    "dataSource": "db"
+  },
+  "Note": {
+    "dataSource": "db"
+  }
+}
 ```
 
-This retrieves all `Note` records where the `title` field equals `Meeting`.
+</details>
 
-### 2. Advanced Conditions
 
-For more complex filtering, you can use comparison operators:
+### Run
 
-- `$gt` (greater than)
-- `$gte` (greater than or equal to)
-- `$lt` (less than)
-- `$lte` (less than or equal to)
-- `$ne` (not equal to)
-- `$in` (in array)
-- `$regex` (regular expression)
-
-Example:
-
-```http
-GET /notes?filter={"where":{"content":{"$regex":".*important.*"}}}
+```shell
+westack-go server start
 ```
 
-This retrieves all `Note` records where the `content` field contains the substring "important".
+### Test it:
 
-### 3. Sorting
-
-You can sort records by one or more fields using the `order` parameter:
-
-```http
-GET /notes?filter={"order":["field+ASC"]}
+1. Create an account
+```shell
+$ curl -X POST http://localhost:8023/api/v1/accounts -H 'Content-Type: application/json' -d '{"email":"exampleuser@example.com","password":"1234"}'
 ```
 
-Example:
+2. Login
+```shell
+$ curl -X POST http://localhost:8023/api/v1/accounts/login -H 'Content-Type: application/json' -d '{"email":"exampleuser@example.com","password":"1234"}'
 
-```http
-GET /notes?filter={"order":["title+ASC"]}
+Response body: {"id":"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJjcmVhdGVkIjoxNjQ3MjUzMDczMTQ0LCJyb2xlcyI6WyJVU0VSIl0sInR0bCI6MTIwOTYwMDAwMCwidXNlcklkIjoiNjIyZjE2NDMzNzdjYTNmMWEzOTI0MWY0In0.sbl7QA2--X7MiPZ4DLRL2f5_z08VD5quItBDl2ybmGk","accountId":"622f1643377ca3f1a39241f4"}
 ```
 
-This retrieves all `Note` records sorted by the `title` field in ascending order.
-
-### 4. Pagination
-
-To limit the number of results returned and implement pagination, use the `limit` and `skip` parameters:
-
-- `limit`: Specifies the maximum number of records to return.
-- `skip`: Skips the specified number of records before returning results.
-
-Example:
-
-```http
-GET /notes?filter={"limit":10,"skip":20}
+3. Find account data
+```shell
+$ curl http://localhost:8023/api/v1/accounts/me -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJjcmVhdGVkIjoxNjQ3MjUzMDczMTQ0LCJyb2xlcyI6WyJVU0VSIl0sInR0bCI6MTIwOTYwMDAwMCwidXNlcklkIjoiNjIyZjE2NDMzNzdjYTNmMWEzOTI0MWY0In0.sbl7QA2--X7MiPZ4DLRL2f5_z08VD5quItBDl2ybmGk'
+ 
+Response body: {"email":"exampleuser@example.com","id":"622f1643377ca3f1a39241f4"}
 ```
 
-This retrieves 10 `Note` records starting from the 21st record.
-
-### 5. Field Selection
-
-To retrieve only specific fields from a record, use the `fields` parameter:
-
-```http
-GET /notes?filter={"fields":{"field1":true,"field2":false}}
+4. Create a note for the account
+```shell
+$ curl -X POST http://localhost:8023/api/v1/notes -H 'Content-Type: application/json' -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJjcmVhdGVkIjoxNjQ3MjUzMDczMTQ0LCJyb2xlcyI6WyJVU0VSIl0sInR0bCI6MTIwOTYwMDAwMCwidXNlcklkIjoiNjIyZjE2NDMzNzdjYTNmMWEzOTI0MWY0In0.sbl7QA2--X7MiPZ4DLRL2f5_z08VD5quItBDl2ybmGk' -d '{"title":"Note 1","body":"This is my first note","accountId":"622f1643377ca3f1a39241f4"}'
 ```
 
-Example:
+5. Find again the account, now with their notes
+```shell
+$ curl 'http://localhost:8023/api/v1/accounts/me?filter=%7B"include":%5B%7B"relation":"notes"%7D%5D%7D' -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJjcmVhdGVkIjoxNjQ3MjUzMDczMTQ0LCJyb2xlcyI6WyJVU0VSIl0sInR0bCI6MTIwOTYwMDAwMCwidXNlcklkIjoiNjIyZjE2NDMzNzdjYTNmMWEzOTI0MWY0In0.sbl7QA2--X7MiPZ4DLRL2f5_z08VD5quItBDl2ybmGk'
 
-```http
-GET /notes?filter={"fields":{"title":true,"content":false}}
+Response body: {"email":"exampleuser@example.com","id":"622f1643377ca3f1a39241f4","notes":[{"title":"Note 1","body":"This is my first note","accountId":"622f1643377ca3f1a39241f4","id":"622f1643377ca3f1a39241f5"}]}
 ```
 
-This retrieves only the `title` field and excludes the `content` field for all `Note` records.
+6. Find the single note
+```shell
+$ curl http://localhost:8023/api/v1/notes/622f1643377ca3f1a39241f5 -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJjcmVhdGVkIjoxNjUwNDA2ODEzNDY3LCJyb2xlcyI6WyJVU0VSIl0sInR0bCI6MTIwOTYwMDAwMCwidXNlcklkIjoiNjI1ZjM1OTE0NzU5YWJiOGZhMmE1YzljIn0.hWeMlZrhTFAac4LXTSiSIQ7uy7VhAlg1L9DKG3QPTpg'
 
-## Combining Filters
-
-Filters can be combined to build complex queries:
-
-```http
-GET /notes?filter={"where":{"title":"Meeting"},"order":["title+DESC"],"limit":5}
+Response body: {"title":"Note 1","body":"This is my first note","accountId":"622f1643377ca3f1a39241f4","id":"622f1643377ca3f1a39241f5"}
 ```
 
-This retrieves up to 5 `Note` records where the `title` is "Meeting", sorted in descending order by `title`.
+7. Update the note
+```shell
+$ curl -X PATCH http://localhost:8023/api/v1/notes/622f1643377ca3f1a39241f5 -H 'Content-Type: application/json' -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJjcmVhdGVkIjoxNjUwNDA2ODEzNDY3LCJyb2xlcyI6WyJVU0VSIl0sInR0bCI6MTIwOTYwMDAwMCwidXNlcklkIjoiNjI1ZjM1OTE0NzU5YWJiOGZhMmE1YzljIn0.hWeMlZrhTFAac4LXTSiSIQ7uy7VhAlg1L9DKG3QPTpg' -d '{"body":"I modified the note body"}'
 
-## Examples in Practice
-
-### Example 1: Basic Filtering
-
-Retrieve all notes where `content` contains "urgent":
-
-```http
-GET /notes?filter={"where":{"content":{"$regex":".*urgent.*"}}}
+Response body: {"title":"Note 1","body":"I modified the note body","accountId":"622f1643377ca3f1a39241f4","id":"622f1643377ca3f1a39241f5"}
 ```
-
-### Example 2: Pagination and Sorting
-
-Retrieve the first 10 notes sorted by `created` in descending order:
-
-```http
-GET /notes?filter={"order":["created+DESC"],"limit":10}
-```
-
-### Example 3: Advanced Pagination
-
-Skip the first 5 notes and retrieve the next 15 notes:
-
-```http
-GET /notes?filter={"limit":15,"skip":5}
-```
-
-### Example 4: Complex Filtering
-
-Retrieve all notes where `title` is "Meeting" and `content` does not contain "canceled":
-
-```http
-GET /notes?filter={"where":{"title":"Meeting","content":{"$not":{"$regex":".*canceled.*"}}}}
-```
-
-## Including Relations
-
-To include related models, use the `include` parameter:
-
-```http
-GET /notes?filter={"include":[{"relation":"footer"}]}
-```
-
-This retrieves `Note` records along with their related `Footer` records.
-
-### Including Relations with Filtering
-
-You can include related models and apply additional filters simultaneously. For example:
-
-```http
-GET /notes?filter={"where":{"title":"Meeting"},"include":[{"relation":"footer"}]}
-```
-
-This retrieves `Note` records where the `title` is "Meeting" and includes the related `Footer` records.
-
-## Limitations and Considerations
-
-**Performance**: Complex filters might impact query performance, especially with large datasets.
-
-Filters are a powerful feature of westack-go, making it easy to build flexible, queryable APIs. For further customization or troubleshooting, consult the source code or westack-go examples.
-
-
----
-
 ### Change Log
 
 - **v1.6.14**
