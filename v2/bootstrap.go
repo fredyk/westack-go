@@ -478,16 +478,16 @@ func (app *WeStack) setupModel(loadedModel *model.StatefulModel, dataSource *dat
 			if protectedFieldsCount <= 0 || eventContext.BaseContext.Bearer.Account.System || skipOperationForBeforeBuild(eventContext.OperationName) {
 				return nil
 			}
-			isDifferentUser := true
+			isDifferentAccount := true
 			if eventContext.BaseContext.Bearer != nil && eventContext.BaseContext.Bearer.Account != nil {
-				foundUserId := eventContext.ModelID.(primitive.ObjectID).Hex()
-				requesterUserId := eventContext.BaseContext.Bearer.Account.Id
-				if v, ok := requesterUserId.(primitive.ObjectID); ok {
-					requesterUserId = v.Hex()
+				foundAccountId := eventContext.ModelID.(primitive.ObjectID).Hex()
+				requesterAccountId := eventContext.BaseContext.Bearer.Account.Id
+				if v, ok := requesterAccountId.(primitive.ObjectID); ok {
+					requesterAccountId = v.Hex()
 				}
-				isDifferentUser = foundUserId != requesterUserId.(string)
+				isDifferentAccount = foundAccountId != requesterAccountId.(string)
 			}
-			if isDifferentUser && !isAllowedForProtectedFields(eventContext.BaseContext.Bearer) {
+			if isDifferentAccount && !isAllowedForProtectedFields(eventContext.BaseContext.Bearer) {
 				for _, hiddenProperty := range loadedModel.Config.Protected {
 					delete(*eventContext.Data, hiddenProperty)
 				}
@@ -510,11 +510,11 @@ func (app *WeStack) setupModel(loadedModel *model.StatefulModel, dataSource *dat
 		loadedModel.On("instance_delete", deleteByIdHandler)
 
 		if config.Base == "Account" {
-			upsertUserRolesHandler := func(ctx *model.EventContext) error {
+			upsertAccountRolesHandler := func(ctx *model.EventContext) error {
 				var body UpserRequestBody
 				err := ctx.Ctx.BodyParser(&body)
 				if err == nil {
-					err = UpsertUserRoles(app, ctx.ModelID, body.Roles, ctx)
+					err = UpsertAccountRoles(app, ctx.ModelID, body.Roles, ctx)
 					if err == nil {
 						ctx.StatusCode = fiber.StatusOK
 						ctx.Result = wst.M{"result": "OK"}
@@ -522,7 +522,7 @@ func (app *WeStack) setupModel(loadedModel *model.StatefulModel, dataSource *dat
 				}
 				return err
 			}
-			loadedModel.On("user_upsertRoles", upsertUserRolesHandler)
+			loadedModel.On("user_upsertRoles", upsertAccountRolesHandler)
 		}
 
 	}

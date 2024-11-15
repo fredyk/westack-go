@@ -317,7 +317,7 @@ func createMockLogger() wst.ILogger {
 	}
 }
 
-func createUser(t *testing.T, userData wst.M) wst.M {
+func createAccount(t *testing.T, userData wst.M) wst.M {
 	var user wst.M
 	var err error
 	user, err = invokeApiJsonM(t, "POST", "/accounts", userData, wst.M{
@@ -380,7 +380,7 @@ func Test_WeStackCreateUser(t *testing.T) {
 	email := fmt.Sprintf("email%v@example.com", randomUserSuffix)
 	password := "test"
 	plainUser := wst.M{"email": email, "password": password, "username": fmt.Sprintf("user%v", randomUserSuffix)}
-	createUser(t, plainUser)
+	createAccount(t, plainUser)
 
 }
 
@@ -403,7 +403,7 @@ func Test_WeStackLogin(t *testing.T) {
 
 	log.Println("Email", email)
 	plainUser := wst.M{"email": email, "password": password, "username": fmt.Sprintf("user%v", n)}
-	createUser(t, plainUser)
+	createAccount(t, plainUser)
 
 	login(t, plainUser)
 
@@ -417,7 +417,7 @@ func Test_WeStackDelete(t *testing.T) {
 	email := fmt.Sprintf("email%v@example.com", 100000000+n.Int64())
 	password := "test"
 	plainUser := wst.M{"email": email, "password": password, "username": fmt.Sprintf("user%v", n)}
-	createUser(t, plainUser)
+	createAccount(t, plainUser)
 
 	bearer, userId := login(t, plainUser)
 

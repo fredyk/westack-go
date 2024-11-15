@@ -303,7 +303,7 @@ func Test_SpecialFilterNow(t *testing.T) {
 
 	// Create a note for checking the filter
 	randomTitle := fmt.Sprintf("Test_SpecialFilterNow_%d", createRandomInt())
-	note, err := invokeApiAsRandomUser(t, "POST", "/notes", wst.M{
+	note, err := invokeApiAsRandomAccount(t, "POST", "/notes", wst.M{
 		"title": randomTitle,
 	}, wst.M{"Content-Type": "application/json"})
 	assert.NoError(t, err)
@@ -322,7 +322,7 @@ func Test_SpecialFilterToday(t *testing.T) {
 
 	// Create a note for checking the filter
 	randomTitle := fmt.Sprintf("Test_SpecialFilterToday_%d", createRandomInt())
-	note, err := invokeApiAsRandomUser(t, "POST", "/notes", wst.M{
+	note, err := invokeApiAsRandomAccount(t, "POST", "/notes", wst.M{
 		// Created 24 hours ago
 		"created": time.Now().Add(-24 * time.Hour),
 		"title":   randomTitle,
@@ -344,7 +344,7 @@ func Test_SpecialFilterYesterday(t *testing.T) {
 
 	// Create a note for checking the filter
 	randomTitle := fmt.Sprintf("Test_SpecialFilterYesterday_%d", createRandomInt())
-	note, err := invokeApiAsRandomUser(t, "POST", "/notes", wst.M{
+	note, err := invokeApiAsRandomAccount(t, "POST", "/notes", wst.M{
 		// Created 48 hours ago
 		"created": time.Now().Add(-48 * time.Hour),
 		"title":   randomTitle,
@@ -365,7 +365,7 @@ func Test_SpecialFilterTomorrow(t *testing.T) {
 
 	// Create a note for checking the filter
 	randomTitle := fmt.Sprintf("Test_SpecialFilterTomorrow_%d", createRandomInt())
-	note, err := invokeApiAsRandomUser(t, "POST", "/notes", wst.M{
+	note, err := invokeApiAsRandomAccount(t, "POST", "/notes", wst.M{
 		"title": randomTitle,
 	}, wst.M{"Content-Type": "application/json"})
 	assert.NoError(t, err)
@@ -384,7 +384,7 @@ func Test_SpecialFilter7DaysAgo(t *testing.T) {
 
 	// Create a note for checking the filter
 	randomTitle := fmt.Sprintf("Test_SpecialFilter7DaysAgo_%d", createRandomInt())
-	note, err := invokeApiAsRandomUser(t, "POST", "/notes", wst.M{
+	note, err := invokeApiAsRandomAccount(t, "POST", "/notes", wst.M{
 		// Created 8 days ago
 		"created": time.Now().Add(-8 * 24 * time.Hour),
 		"title":   randomTitle,
@@ -405,7 +405,7 @@ func Test_SpecialFilter4WeeksAgo(t *testing.T) {
 
 	// Create a note for checking the filter
 	randomTitle := fmt.Sprintf("Test_SpecialFilter4WeeksAgo_%d", createRandomInt())
-	note, err := invokeApiAsRandomUser(t, "POST", "/notes", wst.M{
+	note, err := invokeApiAsRandomAccount(t, "POST", "/notes", wst.M{
 		// Created 5 weeks ago
 		"created": time.Now().Add(-5 * 7 * 24 * time.Hour),
 		"title":   randomTitle,
@@ -426,7 +426,7 @@ func Test_SpecialFilter3MonthsAgo(t *testing.T) {
 
 	// Create a note for checking the filter
 	randomTitle := fmt.Sprintf("Test_SpecialFilter3MonthsAgo_%d", createRandomInt())
-	note, err := invokeApiAsRandomUser(t, "POST", "/notes", wst.M{
+	note, err := invokeApiAsRandomAccount(t, "POST", "/notes", wst.M{
 		// Created 4 months ago
 		"created": time.Now().Add(-4 * 30 * 24 * time.Hour),
 		"title":   randomTitle,
@@ -447,7 +447,7 @@ func Test_SpecialFilter2YearsAgo(t *testing.T) {
 
 	// Create a note for checking the filter
 	randomTitle := fmt.Sprintf("Test_SpecialFilter2YearsAgo_%d", createRandomInt())
-	note, err := invokeApiAsRandomUser(t, "POST", "/notes", wst.M{
+	note, err := invokeApiAsRandomAccount(t, "POST", "/notes", wst.M{
 		// Created 3 years ago
 		"created": time.Now().Add(-3 * 365 * 24 * time.Hour),
 		"title":   randomTitle,
@@ -468,7 +468,7 @@ func Test_SpecialFilter15SecondsAgo(t *testing.T) {
 
 	// Create a note for checking the filter
 	randomTitle := fmt.Sprintf("Test_SpecialFilter15SecondsAgo_%d", createRandomInt())
-	note, err := invokeApiAsRandomUser(t, "POST", "/notes", wst.M{
+	note, err := invokeApiAsRandomAccount(t, "POST", "/notes", wst.M{
 		// Created 16 seconds ago
 		"created": time.Now().Add(-16 * time.Second),
 		"title":   randomTitle,
@@ -489,7 +489,7 @@ func Test_SpecialFilter10MinutesAgo(t *testing.T) {
 
 	// Create a note for checking the filter
 	randomTitle := fmt.Sprintf("Test_SpecialFilter10MinutesAgo_%d", createRandomInt())
-	note, err := invokeApiAsRandomUser(t, "POST", "/notes", wst.M{
+	note, err := invokeApiAsRandomAccount(t, "POST", "/notes", wst.M{
 		// Created 11 minutes ago
 		"created": time.Now().Add(-11 * time.Minute),
 		"title":   randomTitle,
@@ -510,7 +510,7 @@ func Test_SpecialFilter5HoursAgo(t *testing.T) {
 
 	// Create a note for checking the filter
 	randomTitle := fmt.Sprintf("Test_SpecialFilter5HoursAgo_%d", createRandomInt())
-	note, err := invokeApiAsRandomUser(t, "POST", "/notes", wst.M{
+	note, err := invokeApiAsRandomAccount(t, "POST", "/notes", wst.M{
 		// Created 6 hours ago
 		"created": time.Now().Add(-6 * time.Hour),
 		"title":   randomTitle,
@@ -679,7 +679,7 @@ func testSpecialDatePlaceholder(t *testing.T, specialDateKey string, specialDate
 	fmt.Printf("Original filter: %s\n", filter)
 	fmt.Printf("Sending query: %s\n", endpointWithFilter)
 	out, err := invokeApiJsonA(t, "GET", endpointWithFilter, nil, wst.M{
-		"Authorization": "Bearer " + randomUserToken.GetString("id"),
+		"Authorization": "Bearer " + randomAccountToken.GetString("id"),
 	})
 	assert.NoError(t, err)
 	return out, err
@@ -760,27 +760,27 @@ func TestMain(m *testing.M) {
 	})
 
 	userN := createRandomInt()
-	plainUser := wst.M{
+	plainAccount := wst.M{
 		"email":    fmt.Sprintf("user-%d@example.com", userN),
 		"username": fmt.Sprintf("user_%d", userN),
 		"password": "abcd1234.",
 	}
 	var t *testing.T = new(testing.T)
 	// Instantiate a test here using m
-	randomUser = createUser(t, plainUser)
-	randomUserToken, err = loginUser(plainUser.GetString("username"), plainUser.GetString("password"), t)
+	randomAccount = createAccount(t, plainAccount)
+	randomAccountToken, err = loginAccount(plainAccount.GetString("username"), plainAccount.GetString("password"), t)
 	if err != nil {
 		log.Fatalf("failed to login user: %v", err)
 	}
-	if randomUserToken.GetString("id") == "" {
+	if randomAccountToken.GetString("id") == "" {
 		log.Fatalf("failed to login user: %v", err)
 	}
 
-	adminUserToken, err = loginUser(os.Getenv("WST_ADMIN_USERNAME"), os.Getenv("WST_ADMIN_PWD"), t)
+	adminAccountToken, err = loginAccount(os.Getenv("WST_ADMIN_USERNAME"), os.Getenv("WST_ADMIN_PWD"), t)
 	if err != nil {
 		log.Fatalf("failed to login admin user: %v", err)
 	}
-	if adminUserToken.GetString("id") == "" {
+	if adminAccountToken.GetString("id") == "" {
 		log.Fatalf("failed to login admin user: %v", err)
 	}
 	appInstance, err = createAppInstance()

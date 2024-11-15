@@ -22,9 +22,9 @@
   "db2": {
     "url": "mongodb://mongo-dev-1.fhcreations.com:27019,mongo-dev-2.fhcreations.com:27020,mongo-dev-3.fhcreations.com:27021/?readPreference=secondary&replicaSet=rs0",
     "database": "example_db_02",
-    "password": "<from_$WST_$ds.key_PASSWORD>",
+    "password": "",
     "name": "db2",
-    "username": "<from_$WST_$ds.key_USERNAME>",
+    "username": "",
     "connector": "mongodb",
     "useNewUrlParser": true,
     "allowExtendedOperators": true
@@ -32,9 +32,9 @@
   "db_expected_to_fail": {
     "url": "mongodb://mongo-dev-1.fhcreations.com:27019,mongo-dev-2.fhcreations.com:27020,mongo-dev-3.fhcreations.com:27021/?readPreference=secondary&replicaSet=rs0",
     "database": "example_db_expected_to_fail",
-    "password": "<from_$WST_$ds.key_PASSWORD>",
+    "password": "",
     "name": "db_expected_to_fail",
-    "username": "<from_$WST_$ds.key_USERNAME>",
+    "username": "",
     "connector": "mongodb",
     "useNewUrlParser": true,
     "allowExtendedOperators": true,
@@ -43,9 +43,9 @@
   "db_expected_to_be_closed": {
     "url": "mongodb://mongo-dev-1.fhcreations.com:27019,mongo-dev-2.fhcreations.com:27020,mongo-dev-3.fhcreations.com:27021/?readPreference=secondary&replicaSet=rs0",
     "database": "example_db_expected_to_be_closed",
-    "password": "<from_$WST_$ds.key_PASSWORD>",
+    "password": "",
     "name": "db_expected_to_be_closed",
-    "username": "<from_$WST_$ds.key_USERNAME>",
+    "username": "",
     "connector": "mongodb",
     "useNewUrlParser": true,
     "allowExtendedOperators": true,

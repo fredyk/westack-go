@@ -635,10 +635,10 @@ func casbinOwnerFn(loadedModel *model.StatefulModel) func(arguments ...interface
 			return false, nil
 		}
 
-		objUserId := ""
+		objOwnerId := ""
 		if loadedModel.Config.Base == "Account" || loadedModel.Config.Base == "App" {
-			objUserId = model.GetIDAsString(objId)
-			if subId == objUserId {
+			objOwnerId = model.GetIDAsString(objId)
+			if subId == objOwnerId {
 				return true, nil
 			}
 		}
@@ -742,9 +742,9 @@ func findOwnerRecursiveInRelation(loadedModel *model.StatefulModel, modelConfigs
 			user := relatedInstance
 
 			// if user != nil && user.GetID() != nil {
-			objUserId := model.GetIDAsString(user.GetID())
+			objOwnerId := model.GetIDAsString(user.GetID())
 
-			_, err := loadedModel.Enforcer.AddRoleForUser(objUserId, roleKey)
+			_, err := loadedModel.Enforcer.AddRoleForUser(objOwnerId, roleKey)
 			if err != nil {
 				return err
 			}
@@ -754,10 +754,10 @@ func findOwnerRecursiveInRelation(loadedModel *model.StatefulModel, modelConfigs
 			}
 
 			if loadedModel.App.Debug {
-				loadedModel.App.Logger().Printf("[DEBUG] Added role %v for user %v\n", roleKey, objUserId)
+				loadedModel.App.Logger().Printf("[DEBUG] Added role %v for user %v\n", roleKey, objOwnerId)
 			}
 
-			*ownersForRole = append(*ownersForRole, objUserId)
+			*ownersForRole = append(*ownersForRole, objOwnerId)
 
 			// }
 
