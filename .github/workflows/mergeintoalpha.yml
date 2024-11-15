@@ -67,7 +67,7 @@ jobs:
       DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
       DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
       MIN_COVERAGE_THRESHOLD: 81.3
-      JWT_SECRET: abcd1234.
+      JWT_SECRET: abcd12345678.
       GO_ENV: TESTING
       DEBUG: true
       PORT: 8019
