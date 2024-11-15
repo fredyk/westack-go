@@ -77,11 +77,11 @@ func createCasbinModel(loadedModel *model.StatefulModel, app *WeStack, config *m
 		for _, p := range loadedModel.Config.Casbin.Policies {
 			casbModel.AddPolicy("p", "p", []string{replaceVarNames(p)})
 		}
-	} else if config.Base != "User" && config.Base != "App" {
+	} else if config.Base != "Account" && config.Base != "App" {
 		casbModel.AddPolicy("p", "p", []string{replaceVarNames("$owner,*,read_write,allow")})
 	}
 
-	if config.Base == "User" {
+	if config.Base == "Account" {
 		casbModel.AddPolicy("p", "p", []string{replaceVarNames("$everyone,*,create,allow")})
 		casbModel.AddPolicy("p", "p", []string{replaceVarNames("$everyone,*,login,allow")})
 		casbModel.AddPolicy("p", "p", []string{replaceVarNames("$everyone,*,resetPassword,allow")})
@@ -96,12 +96,8 @@ func createCasbinModel(loadedModel *model.StatefulModel, app *WeStack, config *m
 		casbModel.AddPolicy("p", "p", []string{replaceVarNames("admin,*,user_upsertRoles,allow")})
 	}
 	if config.Base == "App" {
-		casbModel.AddPolicy("p", "p", []string{replaceVarNames("$authenticated,*,create,allow")})
-		casbModel.AddPolicy("p", "p", []string{replaceVarNames("$owner,*,findById,allow")})
-		casbModel.AddPolicy("p", "p", []string{replaceVarNames("$owner,*,instance_updateAttributes,allow")})
-		// TODO: check https://github.com/fredyk/westack-go/issues/447
-		casbModel.AddPolicy("p", "p", []string{replaceVarNames("$owner,*,instance_delete,allow")})
-		casbModel.AddPolicy("p", "p", []string{replaceVarNames("$owner,*,createToken,allow")})
+		casbModel.AddPolicy("p", "p", []string{replaceVarNames("admin,*,create,allow")})
+		casbModel.AddPolicy("p", "p", []string{replaceVarNames("$owner,*,read_write,allow")})
 	}
 	loadedModel.CasbinModel = &casbModel
 	loadedModel.CasbinAdapter = &adapter
@@ -109,7 +105,7 @@ func createCasbinModel(loadedModel *model.StatefulModel, app *WeStack, config *m
 	return adapter.SavePolicy(casbModel)
 }
 
-func setupUserModel(loadedModel *model.StatefulModel, app *WeStack) {
+func setupAccountModel(loadedModel *model.StatefulModel, app *WeStack) {
 	loadedModel.On("login", func(ctx *model.EventContext) error {
 		data := ctx.Data
 		email := data.GetString("email")
@@ -129,27 +125,27 @@ func setupUserModel(loadedModel *model.StatefulModel, app *WeStack) {
 		} else {
 			where = wst.Where{"username": username}
 		}
-		usersCursor := loadedModel.FindMany(&wst.Filter{
+		accountsCursor := loadedModel.FindMany(&wst.Filter{
 			Where: &where,
 		}, ctx)
-		users, err := usersCursor.All()
+		accounts, err := accountsCursor.All()
 		if err != nil {
 			return err
 		}
-		if len(users) == 0 {
-			if usersCursor.(*model.ChannelCursor).Err != nil {
-				return usersCursor.(*model.ChannelCursor).Err
+		if len(accounts) == 0 {
+			if accountsCursor.(*model.ChannelCursor).Err != nil {
+				return accountsCursor.(*model.ChannelCursor).Err
 			}
 			if loadedModel.App.Debug {
 				app.Logger().Printf("no user found with email or username %v\n", email)
 			}
 			return wst.CreateError(fiber.ErrUnauthorized, "LOGIN_FAILED", fiber.Map{"message": "login failed"}, "Error")
 		}
-		firstUser := users[0].(*model.StatefulInstance)
-		ctx.Instance = firstUser
+		firstAccount := accounts[0].(*model.StatefulInstance)
+		ctx.Instance = firstAccount
 
-		firstUserData := firstUser.ToJSON()
-		savedPassword := firstUserData["password"]
+		firstAccountData := firstAccount.ToJSON()
+		savedPassword := firstAccountData["password"]
 		saltedPassword := fmt.Sprintf("%s%s", string(loadedModel.App.JwtSecretKey), (*data)["password"].(string))
 		err = bcrypt.CompareHashAndPassword([]byte(savedPassword.(string)), []byte(saltedPassword))
 		if err != nil {
@@ -169,12 +165,12 @@ func setupUserModel(loadedModel *model.StatefulModel, app *WeStack) {
 			return wst.CreateError(fiber.ErrUnauthorized, "LOGIN_FAILED", fiber.Map{"message": "login failed"}, "Error")
 		}
 
-		userIdHex := firstUser.Id.(primitive.ObjectID).Hex()
+		userIdHex := firstAccount.Id.(primitive.ObjectID).Hex()
 
 		roleNames := []string{"USER"}
 		if app.roleMappingModel != nil {
 			ctx.Bearer = &model.BearerToken{
-				User: &model.BearerUser{
+				Account: &model.BearerAccount{
 					System: true,
 				},
 				Roles: []model.BearerRole{},
@@ -192,7 +188,7 @@ func setupUserModel(loadedModel *model.StatefulModel, app *WeStack) {
 						"principalId": userIdHex,
 					},
 					{
-						"principalId": firstUser.Id,
+						"principalId": firstAccount.Id,
 					},
 				},
 			}, Include: &wst.Include{{Relation: "role"}}}, roleContext).All()
@@ -206,16 +202,16 @@ func setupUserModel(loadedModel *model.StatefulModel, app *WeStack) {
 		}
 
 		token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-			"userId":  userIdHex,
-			"created": time.Now().UnixMilli(),
-			"ttl":     604800 * 2 * 1000,
-			"roles":   roleNames,
+			"accountId": userIdHex,
+			"created":   time.Now().UnixMilli(),
+			"ttl":       604800 * 2 * 1000,
+			"roles":     roleNames,
 		})
 
 		tokenString, err := token.SignedString(loadedModel.App.JwtSecretKey)
 
 		ctx.StatusCode = fiber.StatusOK
-		ctx.Result = fiber.Map{"id": tokenString, "userId": userIdHex}
+		ctx.Result = fiber.Map{"id": tokenString, "accountId": userIdHex}
 		return nil
 	})
 }
@@ -235,9 +231,9 @@ func setupRoleModel(config *model.Config, app *WeStack, dataSource *datasource.D
 				//PrimaryKey: "",
 				//ForeignKey: "",
 			},
-			"user": {
+			"account": {
 				Type:  "belongsTo",
-				Model: "user",
+				Model: "Account",
 				//PrimaryKey: "",
 				//ForeignKey: "",
 			},
@@ -261,7 +257,7 @@ func GetRoleNames(RoleMappingModel *model.StatefulModel, userIdHex string, userI
 
 	if RoleMappingModel != nil {
 		ctx := &model.EventContext{Bearer: &model.BearerToken{
-			User: &model.BearerUser{
+			Account: &model.BearerAccount{
 				System: true,
 			},
 			Roles: []model.BearerRole{},
@@ -292,14 +288,14 @@ func GetRoleNames(RoleMappingModel *model.StatefulModel, userIdHex string, userI
 	return roleNames, nil
 }
 
-func CreateNewToken(userIdHex string, UserModel *model.StatefulModel, roles []string) (string, error) {
+func CreateNewToken(userIdHex string, AccountModel *model.StatefulModel, roles []string) (string, error) {
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-		"userId":  userIdHex,
-		"created": time.Now().UnixMilli(),
-		"ttl":     604800 * 2 * 1000,
-		"roles":   roles,
+		"accountId": userIdHex,
+		"created":   time.Now().UnixMilli(),
+		"ttl":       604800 * 2 * 1000,
+		"roles":     roles,
 	})
-	tokenString, err := token.SignedString(UserModel.App.JwtSecretKey)
+	tokenString, err := token.SignedString(AccountModel.App.JwtSecretKey)
 	if err != nil {
 		return "", err
 	}

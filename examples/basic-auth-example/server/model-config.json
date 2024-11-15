@@ -1,5 +1,5 @@
 {
-  "user": {
+  "account": {
     "dataSource": "db",
     "public": true
   },

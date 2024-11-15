@@ -29,13 +29,13 @@
   "Store": {
     "dataSource": "db2"
   },
-  "publicUser": {
+  "PublicAccount": {
     "dataSource": "db0"
   },
   "role": {
     "dataSource": "db0"
   },
-  "user": {
+  "Account": {
     "dataSource": "db0"
   }
 }
