@@ -472,13 +472,17 @@ func addDefaultCasbinRoles(app *WeStack, err error, e *casbin.Enforcer) error {
 	if app.debug {
 		app.logger.Printf("[DEBUG] Added role instance_delete for user %v, err: %v\n", replaceVarNames("write"), err)
 	}
-	_, err = e.AddRoleForUser("read", replaceVarNames("*"))
+	_, err = e.AddRoleForUser("read", replaceVarNames("read_write"))
 	if app.debug {
-		app.logger.Printf("[DEBUG] Added role read for user %v, err: %v\n", replaceVarNames("*"), err)
+		app.logger.Printf("[DEBUG] Added role read for user %v, err: %v\n", replaceVarNames("read_write"), err)
 	}
-	_, err = e.AddRoleForUser("write", replaceVarNames("*"))
+	_, err = e.AddRoleForUser("write", replaceVarNames("read_write"))
 	if app.debug {
-		app.logger.Printf("[DEBUG] Added role write for user %v, err: %v\n", replaceVarNames("*"), err)
+		app.logger.Printf("[DEBUG] Added role write for user %v, err: %v\n", replaceVarNames("read_write"), err)
+	}
+	_, err = e.AddRoleForUser("read_write", replaceVarNames("*"))
+	if app.debug {
+		app.logger.Printf("[DEBUG] Added role read_write for user %v, err: %v\n", replaceVarNames("*"), err)
 	}
 	return nil
 }
