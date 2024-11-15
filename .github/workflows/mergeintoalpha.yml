@@ -135,8 +135,9 @@ jobs:
             cp -r ${{ github.workspace }}/.cache/go-build ${{ github.workspace }}/go/pkg
             cp -r ${{ github.workspace }}/.cache/mod ${{ github.workspace }}/go/pkg
           fi
+          cd v2
           go mod download
-          cd v2/tests
+          cd tests
           # Create a random number of 9 bytes
           # at the end, replace dots with _, only if exists. keep remaining string
           random_sufix=$(echo "$(openssl rand -hex 9)_${{ matrix.go }}" | sed 's/\./_/g')
