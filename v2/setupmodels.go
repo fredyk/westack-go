@@ -144,8 +144,8 @@ func setupAccountModel(loadedModel *model.StatefulModel, app *WeStack) {
 		firstAccount := accounts[0].(*model.StatefulInstance)
 		ctx.Instance = firstAccount
 
-		firstUserData := firstAccount.ToJSON()
-		savedPassword := firstUserData["password"]
+		firstAccountData := firstAccount.ToJSON()
+		savedPassword := firstAccountData["password"]
 		saltedPassword := fmt.Sprintf("%s%s", string(loadedModel.App.JwtSecretKey), (*data)["password"].(string))
 		err = bcrypt.CompareHashAndPassword([]byte(savedPassword.(string)), []byte(saltedPassword))
 		if err != nil {
@@ -288,14 +288,14 @@ func GetRoleNames(RoleMappingModel *model.StatefulModel, userIdHex string, userI
 	return roleNames, nil
 }
 
-func CreateNewToken(userIdHex string, UserModel *model.StatefulModel, roles []string) (string, error) {
+func CreateNewToken(userIdHex string, AccountModel *model.StatefulModel, roles []string) (string, error) {
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 		"accountId": userIdHex,
 		"created":   time.Now().UnixMilli(),
 		"ttl":       604800 * 2 * 1000,
 		"roles":     roles,
 	})
-	tokenString, err := token.SignedString(UserModel.App.JwtSecretKey)
+	tokenString, err := token.SignedString(AccountModel.App.JwtSecretKey)
 	if err != nil {
 		return "", err
 	}

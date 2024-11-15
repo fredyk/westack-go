@@ -283,7 +283,7 @@ func Test_Aggregations(t *testing.T) {
 	*/
 
 	randomUserName := fmt.Sprintf("testuser%d", createRandomInt())
-	randomUser := createUser(t, wst.M{
+	randomUser := createAccount(t, wst.M{
 		"username":  randomUserName,
 		"password":  "abcd1234.",
 		"firstName": "John",
@@ -343,7 +343,7 @@ func Test_AggregationsWithDirectNestedQuery(t *testing.T) {
 
 	note, err := noteModel.Create(wst.M{
 		"title":     randomNoteTitle,
-		"accountId": randomUser.GetString("id"),
+		"accountId": randomAccount.GetString("id"),
 	}, systemContext)
 	assert.NoError(t, err)
 	assert.NotNil(t, note)
@@ -351,7 +351,7 @@ func Test_AggregationsWithDirectNestedQuery(t *testing.T) {
 	filter := &wst.Filter{
 		Where: &wst.Where{
 			"title":            note.GetString("title"),
-			"account.username": randomUser.GetString("username"),
+			"account.username": randomAccount.GetString("username"),
 		},
 		Include: &wst.Include{
 			{
@@ -367,7 +367,7 @@ func Test_AggregationsWithDirectNestedQuery(t *testing.T) {
 	assert.NotNil(t, notes)
 	assert.Equal(t, 1, len(notes))
 	assert.Equal(t, note.GetString("title"), notes[0].GetString("title"))
-	assert.Equal(t, randomUser.GetString("username"), notes[0].GetOne("account").ToJSON()["username"])
+	assert.Equal(t, randomAccount.GetString("username"), notes[0].GetOne("account").ToJSON()["username"])
 
 }
 
@@ -597,7 +597,7 @@ func Test_RelationWithoutAuth(t *testing.T) {
 	t.Parallel()
 
 	// Create a note
-	note, err := invokeApiAsRandomUser(t, "POST", "/notes", wst.M{
+	note, err := invokeApiAsRandomAccount(t, "POST", "/notes", wst.M{
 		"title": "Note 1",
 	}, wst.M{
 		"Content-Type": "application/json",
@@ -606,7 +606,7 @@ func Test_RelationWithoutAuth(t *testing.T) {
 	assert.Contains(t, note, "id")
 
 	// Create a footer
-	footer, err := invokeApiAsRandomUser(t, "POST", "/footers", wst.M{
+	footer, err := invokeApiAsRandomAccount(t, "POST", "/footers", wst.M{
 		"title":        "Public Footer 1",
 		"publicNoteId": note.GetString("id"),
 	}, wst.M{
@@ -616,7 +616,7 @@ func Test_RelationWithoutAuth(t *testing.T) {
 	assert.Contains(t, footer, "id")
 
 	// Get the note including the footer
-	noteWithFooter, err := invokeApiAsRandomUser(t, "GET", "/notes/"+note.GetString("id")+"?filter=%7B%22include%22%3A%5B%7B%22relation%22%3A%22publicFooter%22%7D%5D%7D", nil, nil)
+	noteWithFooter, err := invokeApiAsRandomAccount(t, "GET", "/notes/"+note.GetString("id")+"?filter=%7B%22include%22%3A%5B%7B%22relation%22%3A%22publicFooter%22%7D%5D%7D", nil, nil)
 	assert.NoError(t, err)
 	assert.Contains(t, noteWithFooter, "id")
 	assert.Contains(t, noteWithFooter, "publicFooter")

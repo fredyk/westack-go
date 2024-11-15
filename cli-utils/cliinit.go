@@ -10,7 +10,7 @@ import (
 	"github.com/fredyk/westack-go/v2/model"
 )
 
-var DefaultUser = model.Config{
+var DefaultAccount = model.Config{
 	Name:   "Account",
 	Plural: "accounts",
 	Base:   "Account",
@@ -178,7 +178,7 @@ func initProject(cwd string) error {
 		return err
 	}
 
-	foundUserModel := false
+	foundAccountModel := false
 	foundRoleModel := false
 	foundAppModel := false
 	for _, entry := range entries {
@@ -194,7 +194,7 @@ func initProject(cwd string) error {
 			}
 
 			if config.Base == "Account" {
-				foundUserModel = true
+				foundAccountModel = true
 			} else if config.Base == "Role" {
 				foundRoleModel = true
 			} else if config.Base == "App" {
@@ -203,8 +203,8 @@ func initProject(cwd string) error {
 		}
 	}
 
-	if !foundUserModel {
-		err2 := addModel(DefaultUser, "db")
+	if !foundAccountModel {
+		err2 := addModel(DefaultAccount, "db")
 		if err2 != nil {
 			return err2
 		}

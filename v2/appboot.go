@@ -2,6 +2,12 @@ package westack
 
 import (
 	"fmt"
+	"io"
+	"log"
+	"net/http"
+	"os"
+	"runtime/debug"
+
 	wst "github.com/fredyk/westack-go/v2/common"
 	"github.com/fredyk/westack-go/v2/memorykv"
 	"github.com/fredyk/westack-go/v2/model"
@@ -9,11 +15,6 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/compress"
 	"github.com/gofiber/fiber/v2/middleware/recover"
-	"io"
-	"log"
-	"net/http"
-	"os"
-	"runtime/debug"
 )
 
 func appBoot(customRoutesCallbacks []func(app *WeStack), app *WeStack) {
@@ -71,7 +72,7 @@ func appBoot(customRoutesCallbacks []func(app *WeStack), app *WeStack) {
 	}
 
 	// Upsert the admin user
-	_, err = UpsertUserWithRoles(app, UserWithRoles{
+	_, err = UpsertAccountWithRoles(app, AccountWithRoles{
 		Username: app.Options.adminUsername,
 		Password: app.Options.adminPwd,
 		Roles:    []string{"admin"},
