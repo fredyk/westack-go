@@ -51,9 +51,9 @@
     }
   },
   "relations": {
-    "user": {
+    "account": {
       "type": "belongsTo",
-      "model": "user"
+      "model": "Account"
     },
     "app": {
       "type": "belongsTo",

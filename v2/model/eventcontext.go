@@ -58,7 +58,7 @@ func (eventContext *EventContext) GetBearer(loadedModel *StatefulModel) (*Bearer
 	}
 	authBearerPair := strings.Split(strings.TrimSpace(authSt), "Bearer ")
 
-	var user *BearerUser
+	var user *BearerAccount
 	roles := make([]BearerRole, 0)
 	bearerClaims := jwt.MapClaims{}
 	rawToken := ""
@@ -81,8 +81,8 @@ func (eventContext *EventContext) GetBearer(loadedModel *StatefulModel) (*Bearer
 			if claims, ok := token.Claims.(jwt.MapClaims); ok && token.Valid {
 				bearerClaims = claims
 				claimRoles := claims["roles"]
-				userId := claims["userId"]
-				user = &BearerUser{
+				userId := claims["accountId"]
+				user = &BearerAccount{
 					Id:   userId,
 					Data: claims,
 				}
@@ -100,10 +100,10 @@ func (eventContext *EventContext) GetBearer(loadedModel *StatefulModel) (*Bearer
 
 	}
 	return &BearerToken{
-		User:   user,
-		Roles:  roles,
-		Claims: bearerClaims,
-		Raw:    rawToken,
+		Account: user,
+		Roles:   roles,
+		Claims:  bearerClaims,
+		Raw:     rawToken,
 	}, nil
 
 }

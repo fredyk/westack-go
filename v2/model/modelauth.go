@@ -16,7 +16,7 @@ var AuthMutex = sync.RWMutex{}
 
 func (loadedModel *StatefulModel) EnforceEx(token *BearerToken, objId string, action string, eventContext *EventContext) (error, bool) {
 
-	if token != nil && token.User != nil && token.User.System == true {
+	if token != nil && token.Account != nil && token.Account.System == true {
 		return nil, true
 	}
 
@@ -24,16 +24,16 @@ func (loadedModel *StatefulModel) EnforceEx(token *BearerToken, objId string, ac
 		log.Printf("[WARNING] Trying to enforce without token at %v.%v\n", loadedModel.Name, action)
 	}
 
-	var bearerUserIdSt string
+	var bearerAccountIdSt string
 	var targetObjId string
 
 	var locked bool
 
-	if token == nil || token.User == nil {
-		bearerUserIdSt = "_EVERYONE_"
+	if token == nil || token.Account == nil {
+		bearerAccountIdSt = "_EVERYONE_"
 		targetObjId = "*"
 		AuthMutex.RLock()
-		if result, isPresent := loadedModel.authCache[bearerUserIdSt][targetObjId][action]; isPresent {
+		if result, isPresent := loadedModel.authCache[bearerAccountIdSt][targetObjId][action]; isPresent {
 			if loadedModel.App.Debug || !result {
 				log.Printf("[DEBUG] Cache hit for %v.%v ---> %v\n", loadedModel.Name, action, result)
 			}
@@ -45,13 +45,13 @@ func (loadedModel *StatefulModel) EnforceEx(token *BearerToken, objId string, ac
 
 	} else {
 
-		bearerUserIdSt = ""
-		if v, ok := token.User.Id.(string); ok {
-			bearerUserIdSt = v
-		} else if vv, ok := token.User.Id.(primitive.ObjectID); ok {
-			bearerUserIdSt = vv.Hex()
+		bearerAccountIdSt = ""
+		if v, ok := token.Account.Id.(string); ok {
+			bearerAccountIdSt = v
+		} else if vv, ok := token.Account.Id.(primitive.ObjectID); ok {
+			bearerAccountIdSt = vv.Hex()
 		} else {
-			bearerUserIdSt = fmt.Sprintf("%v", token.User.Id)
+			bearerAccountIdSt = fmt.Sprintf("%v", token.Account.Id)
 		}
 		targetObjId = objId
 
@@ -71,7 +71,7 @@ func (loadedModel *StatefulModel) EnforceEx(token *BearerToken, objId string, ac
 		expiresAtTimestamp := created + ttl
 		if time.Now().Unix() > expiresAtTimestamp {
 			if loadedModel.App.Debug {
-				fmt.Println("Token expired for user", bearerUserIdSt)
+				fmt.Println("Token expired for user", bearerAccountIdSt)
 			}
 			return fiber.ErrUnauthorized, false
 		}
@@ -87,16 +87,16 @@ func (loadedModel *StatefulModel) EnforceEx(token *BearerToken, objId string, ac
 		defer AuthMutex.Unlock()
 		locked = true
 
-		_, err := loadedModel.Enforcer.AddRoleForUser(bearerUserIdSt, "_EVERYONE_")
+		_, err := loadedModel.Enforcer.AddRoleForUser(bearerAccountIdSt, "_EVERYONE_")
 		if err != nil {
 			return err, false
 		}
-		_, err = loadedModel.Enforcer.AddRoleForUser(bearerUserIdSt, "_AUTHENTICATED_")
+		_, err = loadedModel.Enforcer.AddRoleForUser(bearerAccountIdSt, "_AUTHENTICATED_")
 		if err != nil {
 			return err, false
 		}
 		for _, r := range token.Roles {
-			_, err := loadedModel.Enforcer.AddRoleForUser(bearerUserIdSt, r.Name)
+			_, err := loadedModel.Enforcer.AddRoleForUser(bearerAccountIdSt, r.Name)
 			if err != nil {
 				return err, false
 			}
@@ -113,13 +113,13 @@ func (loadedModel *StatefulModel) EnforceEx(token *BearerToken, objId string, ac
 		defer AuthMutex.Unlock()
 	}
 
-	allow, exp, err := loadedModel.Enforcer.EnforceEx(bearerUserIdSt, targetObjId, action)
+	allow, exp, err := loadedModel.Enforcer.EnforceEx(bearerAccountIdSt, targetObjId, action)
 
 	if loadedModel.App.Debug || !allow {
 		if len(exp) > 0 {
 			log.Println("Explain", exp)
 		}
-		fmt.Printf("[DEBUG] EnforceEx for %v.%v (subj=%v,obj=%v) ---> %v\n", loadedModel.Name, action, bearerUserIdSt, targetObjId, allow)
+		fmt.Printf("[DEBUG] EnforceEx for %v.%v (subj=%v,obj=%v) ---> %v\n", loadedModel.Name, action, bearerAccountIdSt, targetObjId, allow)
 		if eventContext.Remote != nil && eventContext.Remote.Name != "" {
 			fmt.Printf("[DEBUG] ... at remote method %v %v%v\n", strings.ToUpper(eventContext.Remote.Http.Verb), loadedModel.BaseUrl, eventContext.Remote.Http.Path)
 		}
@@ -149,17 +149,17 @@ func updateAuthCache(loadedModel *StatefulModel, subKey string, targetObjId stri
 
 var cacheLock = sync.Mutex{}
 
-func addSubjectAuthCacheEntry(loadedModel *StatefulModel, bearerUserIdSt string) {
+func addSubjectAuthCacheEntry(loadedModel *StatefulModel, bearerAccountIdSt string) {
 
 	// Delete after 5 minutes
 	go func() {
 		time.Sleep(5 * time.Minute)
 		cacheLock.Lock()
 		defer cacheLock.Unlock()
-		delete(loadedModel.authCache, bearerUserIdSt)
+		delete(loadedModel.authCache, bearerAccountIdSt)
 	}()
 
-	loadedModel.authCache[bearerUserIdSt] = make(map[string]map[string]bool)
+	loadedModel.authCache[bearerAccountIdSt] = make(map[string]map[string]bool)
 }
 
 func addObjectAuthCacheEntry(loadedModel *StatefulModel, subKey string, targetObjId string) {

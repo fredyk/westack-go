@@ -66,17 +66,17 @@ func Test_ExtractLookups(t *testing.T) {
 
 	// test include
 	lookups, err = noteModel.ExtractLookupsFromFilter(&wst.Filter{
-		Include: &wst.Include{{Relation: "user"}},
+		Include: &wst.Include{{Relation: "account"}},
 	}, false)
 	assert.NoError(t, err)
 	assert.Equal(t, 2, len(*lookups))
-	assert.Equal(t, "user", lookups.GetM("[0].$lookup").GetString("from"))
-	assert.Equal(t, "user", lookups.GetM("[0].$lookup").GetString("as"))
-	assert.Equal(t, "$userId", lookups.GetM("[0].$lookup.let").GetString("userId"))
+	assert.Equal(t, "Account", lookups.GetM("[0].$lookup").GetString("from"))
+	assert.Equal(t, "account", lookups.GetM("[0].$lookup").GetString("as"))
+	assert.Equal(t, "$accountId", lookups.GetM("[0].$lookup.let").GetString("accountId"))
 	assert.Equal(t, "$_id", wst.GetTypedList[string](lookups.GetM("[0].$lookup.pipeline.[0].$match.$expr.$and.[0]"), "$eq")[0])
-	assert.Equal(t, "$$userId", wst.GetTypedList[string](lookups.GetM("[0].$lookup.pipeline.[0].$match.$expr.$and.[0]"), "$eq")[1])
+	assert.Equal(t, "$$accountId", wst.GetTypedList[string](lookups.GetM("[0].$lookup.pipeline.[0].$match.$expr.$and.[0]"), "$eq")[1])
 
-	assert.Equal(t, "$user", lookups.GetM("[1].$unwind").GetString("path"))
+	assert.Equal(t, "$account", lookups.GetM("[1].$unwind").GetString("path"))
 	assert.Equal(t, true, lookups.GetM("[1]").GetBoolean("$unwind.preserveNullAndEmptyArrays"))
 
 	// test include with invalid relation 1
@@ -88,21 +88,21 @@ func Test_ExtractLookups(t *testing.T) {
 
 	// test include with scope
 	lookups, err = noteModel.ExtractLookupsFromFilter(&wst.Filter{
-		Include: &wst.Include{{Relation: "user", Scope: &wst.Filter{Where: &wst.Where{"name": "John"}}}},
+		Include: &wst.Include{{Relation: "account", Scope: &wst.Filter{Where: &wst.Where{"name": "John"}}}},
 	}, false)
 	assert.NoError(t, err)
 	assert.Equal(t, 2, len(*lookups))
 	assert.Contains(t, *lookups.GetAt(0), "$lookup")
-	assert.Equal(t, "user", lookups.GetM("[0].$lookup").GetString("from"))
-	assert.Equal(t, "user", lookups.GetM("[0].$lookup").GetString("as"))
-	assert.Equal(t, "$userId", lookups.GetM("[0].$lookup.let").GetString("userId"))
+	assert.Equal(t, "Account", lookups.GetM("[0].$lookup").GetString("from"))
+	assert.Equal(t, "account", lookups.GetM("[0].$lookup").GetString("as"))
+	assert.Equal(t, "$accountId", lookups.GetM("[0].$lookup.let").GetString("accountId"))
 	assert.Equal(t, "$_id", wst.GetTypedList[string](lookups.GetM("[0].$lookup.pipeline.[0].$match.$expr.$and.[0]"), "$eq")[0])
-	assert.Equal(t, "$$userId", wst.GetTypedList[string](lookups.GetM("[0].$lookup.pipeline.[0].$match.$expr.$and.[0]"), "$eq")[1])
+	assert.Equal(t, "$$accountId", wst.GetTypedList[string](lookups.GetM("[0].$lookup.pipeline.[0].$match.$expr.$and.[0]"), "$eq")[1])
 	assert.Equal(t, false, lookups.GetM("[0].$lookup.pipeline.[1].$project").GetBoolean("password"))
 	assert.Equal(t, "John", lookups.GetString("[0].$lookup.pipeline.[2].$match.name"))
 
 	assert.Contains(t, *lookups.GetAt(1), "$unwind")
-	assert.Equal(t, "$user", lookups.GetM("[1].$unwind").GetString("path"))
+	assert.Equal(t, "$account", lookups.GetM("[1].$unwind").GetString("path"))
 	assert.Equal(t, true, lookups.GetM("[1].$unwind").GetBoolean("preserveNullAndEmptyArrays"))
 
 	// test include hasMany
@@ -114,13 +114,13 @@ func Test_ExtractLookups(t *testing.T) {
 	assert.Contains(t, *lookups.GetAt(0), "$lookup")
 	assert.Equal(t, "Note", lookups.GetM("[0].$lookup").GetString("from"))
 	assert.Equal(t, "notes", lookups.GetM("[0].$lookup").GetString("as"))
-	assert.Equal(t, "$_id", lookups.GetM("[0].$lookup.let").GetString("userId"))
-	assert.Equal(t, "$userId", wst.GetTypedList[string](lookups.GetM("[0].$lookup.pipeline.[0].$match.$expr.$and.[0]"), "$eq")[0])
-	assert.Equal(t, "$$userId", wst.GetTypedList[string](lookups.GetAt(0), "$lookup.pipeline.[0].$match.$expr.$and.[0].$eq")[1])
+	assert.Equal(t, "$_id", lookups.GetM("[0].$lookup.let").GetString("accountId"))
+	assert.Equal(t, "$accountId", wst.GetTypedList[string](lookups.GetM("[0].$lookup.pipeline.[0].$match.$expr.$and.[0]"), "$eq")[0])
+	assert.Equal(t, "$$accountId", wst.GetTypedList[string](lookups.GetAt(0), "$lookup.pipeline.[0].$match.$expr.$and.[0].$eq")[1])
 
 	// test invalid scope
 	lookups, err = noteModel.ExtractLookupsFromFilter(&wst.Filter{
-		Include: &wst.Include{{Relation: "user", Scope: &wst.Filter{Include: &wst.Include{{Relation: "invalid"}}}}},
+		Include: &wst.Include{{Relation: "account", Scope: &wst.Filter{Include: &wst.Include{{Relation: "invalid"}}}}},
 	}, false)
 	assert.Error(t, err)
 	assert.Nil(t, lookups)
@@ -273,7 +273,7 @@ func Test_Aggregations(t *testing.T) {
 		Aggregation: [
 			{
 				$addFields: {
-					"userUsername": "$user.username"
+					"userUsername": "$account.username"
 				}
 			}
 		],
@@ -283,7 +283,7 @@ func Test_Aggregations(t *testing.T) {
 	*/
 
 	randomUserName := fmt.Sprintf("testuser%d", createRandomInt())
-	randomUser := createUser(t, wst.M{
+	randomUser := createAccount(t, wst.M{
 		"username":  randomUserName,
 		"password":  "abcd1234.",
 		"firstName": "John",
@@ -292,8 +292,8 @@ func Test_Aggregations(t *testing.T) {
 
 	noteTitle := "Note 1"
 	note, err := noteModel.Create(wst.M{
-		"title":  noteTitle,
-		"userId": randomUser.GetString("id"),
+		"title":     noteTitle,
+		"accountId": randomUser.GetString("id"),
 	}, systemContext)
 	assert.NoError(t, err)
 	assert.NotNil(t, note)
@@ -304,16 +304,16 @@ func Test_Aggregations(t *testing.T) {
 		Aggregation: []wst.AggregationStage{
 			{
 				"$addFields": map[string]interface{}{
-					"userUsername": "$user.username",
+					"userUsername": "$account.username",
 					"fullUserName": map[string]interface{}{
-						"$concat": []string{"$user.firstName", " ", "$user.lastName"},
+						"$concat": []string{"$account.firstName", " ", "$account.lastName"},
 					},
 				},
 			},
 		},
 		Include: &wst.Include{
 			{
-				Relation: "user",
+				Relation: "account",
 				Scope: &wst.Filter{
 					Where: &wst.Where{"username": randomUserName},
 				},
@@ -342,20 +342,20 @@ func Test_AggregationsWithDirectNestedQuery(t *testing.T) {
 	randomNoteTitle := fmt.Sprintf("testnote%d", createRandomInt())
 
 	note, err := noteModel.Create(wst.M{
-		"title":  randomNoteTitle,
-		"userId": randomUser.GetString("id"),
+		"title":     randomNoteTitle,
+		"accountId": randomAccount.GetString("id"),
 	}, systemContext)
 	assert.NoError(t, err)
 	assert.NotNil(t, note)
 
 	filter := &wst.Filter{
 		Where: &wst.Where{
-			"title":         note.GetString("title"),
-			"user.username": randomUser.GetString("username"),
+			"title":            note.GetString("title"),
+			"account.username": randomAccount.GetString("username"),
 		},
 		Include: &wst.Include{
 			{
-				Relation: "user",
+				Relation: "account",
 			},
 		},
 	}
@@ -367,7 +367,7 @@ func Test_AggregationsWithDirectNestedQuery(t *testing.T) {
 	assert.NotNil(t, notes)
 	assert.Equal(t, 1, len(notes))
 	assert.Equal(t, note.GetString("title"), notes[0].GetString("title"))
-	assert.Equal(t, randomUser.GetString("username"), notes[0].GetOne("user").ToJSON()["username"])
+	assert.Equal(t, randomAccount.GetString("username"), notes[0].GetOne("account").ToJSON()["username"])
 
 }
 
@@ -385,13 +385,13 @@ func Test_AggregationsLimitAfterLookups(t *testing.T) {
 		Aggregation: []wst.AggregationStage{
 			{
 				"$addFields": map[string]interface{}{
-					"userUsername": "$user.username",
+					"userUsername": "$account.username",
 				},
 			},
 		},
 		Include: &wst.Include{
 			{
-				Relation: "user",
+				Relation: "account",
 				Scope: &wst.Filter{
 					Where: &wst.Where{"username": firstUser.ToJSON()["username"]},
 				},
@@ -440,7 +440,7 @@ func Test_AggregationsLimitBeforeLookups(t *testing.T) {
 		},
 		Include: &wst.Include{
 			{
-				Relation: "user",
+				Relation: "account",
 				Scope: &wst.Filter{
 					Where: &wst.Where{"username": firstUser.ToJSON()["username"]},
 				},
@@ -597,7 +597,7 @@ func Test_RelationWithoutAuth(t *testing.T) {
 	t.Parallel()
 
 	// Create a note
-	note, err := invokeApiAsRandomUser(t, "POST", "/notes", wst.M{
+	note, err := invokeApiAsRandomAccount(t, "POST", "/notes", wst.M{
 		"title": "Note 1",
 	}, wst.M{
 		"Content-Type": "application/json",
@@ -606,7 +606,7 @@ func Test_RelationWithoutAuth(t *testing.T) {
 	assert.Contains(t, note, "id")
 
 	// Create a footer
-	footer, err := invokeApiAsRandomUser(t, "POST", "/footers", wst.M{
+	footer, err := invokeApiAsRandomAccount(t, "POST", "/footers", wst.M{
 		"title":        "Public Footer 1",
 		"publicNoteId": note.GetString("id"),
 	}, wst.M{
@@ -616,7 +616,7 @@ func Test_RelationWithoutAuth(t *testing.T) {
 	assert.Contains(t, footer, "id")
 
 	// Get the note including the footer
-	noteWithFooter, err := invokeApiAsRandomUser(t, "GET", "/notes/"+note.GetString("id")+"?filter=%7B%22include%22%3A%5B%7B%22relation%22%3A%22publicFooter%22%7D%5D%7D", nil, nil)
+	noteWithFooter, err := invokeApiAsRandomAccount(t, "GET", "/notes/"+note.GetString("id")+"?filter=%7B%22include%22%3A%5B%7B%22relation%22%3A%22publicFooter%22%7D%5D%7D", nil, nil)
 	assert.NoError(t, err)
 	assert.Contains(t, noteWithFooter, "id")
 	assert.Contains(t, noteWithFooter, "publicFooter")

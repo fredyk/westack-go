@@ -1,6 +1,6 @@
 {
-  "name": "publicUser",
-  "base": "User",
+  "name": "PublicAccount",
+  "base": "Account",
   "public": true,
   "properties": {
     "email": {
@@ -23,6 +23,6 @@
     ]
   },
   "mongo": {
-    "collection": "user"
+    "collection": "Account"
   }
 }

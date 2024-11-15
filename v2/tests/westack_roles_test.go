@@ -16,7 +16,7 @@ func Test_NewUserAndRole(t *testing.T) {
 	t.Parallel()
 
 	randN := createRandomInt()
-	user, err := westack.UpsertUserWithRoles(app, westack.UserWithRoles{
+	user, err := westack.UpsertAccountWithRoles(app, westack.AccountWithRoles{
 		Username: fmt.Sprintf("user-%v", randN),
 		Password: fmt.Sprintf("pwd-%v", randN),
 		Roles:    []string{fmt.Sprintf("role-%v", randN)},
@@ -37,7 +37,7 @@ func Test_NewUserAndRoleWithExistingRole(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NotNil(t, role.GetID())
 
-	user, err := westack.UpsertUserWithRoles(app, westack.UserWithRoles{
+	user, err := westack.UpsertAccountWithRoles(app, westack.AccountWithRoles{
 		Username: fmt.Sprintf("user-%v", randN),
 		Password: fmt.Sprintf("pwd-%v", randN),
 		Roles:    []string{fmt.Sprintf("role-%v", randN)},
@@ -51,7 +51,7 @@ func Test_NewUserAndRoleWithExistingUser(t *testing.T) {
 	t.Parallel()
 
 	randN := createRandomInt()
-	user, err := invokeApiJsonM(t, "POST", "/users", wst.M{
+	user, err := invokeApiJsonM(t, "POST", "/accounts", wst.M{
 		"username": fmt.Sprintf("user-%v", randN),
 		"password": fmt.Sprintf("pwd-%v", randN),
 	}, wst.M{
@@ -60,7 +60,7 @@ func Test_NewUserAndRoleWithExistingUser(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Contains(t, user, "id")
 
-	userFromUpsert, err := westack.UpsertUserWithRoles(app, westack.UserWithRoles{
+	userFromUpsert, err := westack.UpsertAccountWithRoles(app, westack.AccountWithRoles{
 		Username: fmt.Sprintf("user-%v", randN),
 		Password: fmt.Sprintf("pwd-%v", randN),
 		Roles:    []string{fmt.Sprintf("role-%v", randN)},
@@ -81,7 +81,7 @@ func Test_NewUserAndRoleWithExistingUserAndRole(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NotNil(t, role.GetID())
 
-	user, err := invokeApiJsonM(t, "POST", "/users", wst.M{
+	user, err := invokeApiJsonM(t, "POST", "/accounts", wst.M{
 		"username": fmt.Sprintf("user-%v", randN),
 		"password": fmt.Sprintf("pwd-%v", randN),
 	}, wst.M{
@@ -90,7 +90,7 @@ func Test_NewUserAndRoleWithExistingUserAndRole(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Contains(t, user, "id")
 
-	userFromUpsert, err := westack.UpsertUserWithRoles(app, westack.UserWithRoles{
+	userFromUpsert, err := westack.UpsertAccountWithRoles(app, westack.AccountWithRoles{
 		Username: fmt.Sprintf("user-%v", randN),
 		Password: fmt.Sprintf("pwd-%v", randN),
 		Roles:    []string{fmt.Sprintf("role-%v", randN)},
@@ -111,7 +111,7 @@ func Test_NewUserAndRoleWithExistingUserAndRoleAndUserRolesAndRoleMapping(t *tes
 	assert.NoError(t, err)
 	assert.NotNil(t, role.GetID())
 
-	user, err := invokeApiJsonM(t, "POST", "/users", wst.M{
+	user, err := invokeApiJsonM(t, "POST", "/accounts", wst.M{
 		"username": fmt.Sprintf("user-%v", randN),
 		"password": fmt.Sprintf("pwd-%v", randN),
 	}, wst.M{
@@ -130,7 +130,7 @@ func Test_NewUserAndRoleWithExistingUserAndRoleAndUserRolesAndRoleMapping(t *tes
 	assert.NoError(t, err)
 	assert.NotNil(t, userRole.GetID())
 
-	userFromUpsert, err := westack.UpsertUserWithRoles(app, westack.UserWithRoles{
+	userFromUpsert, err := westack.UpsertAccountWithRoles(app, westack.AccountWithRoles{
 		Username: fmt.Sprintf("user-%v", randN),
 		Password: fmt.Sprintf("pwd-%v", randN),
 		Roles:    []string{fmt.Sprintf("role-%v", randN)},
@@ -144,7 +144,7 @@ func Test_NewUserAndRoleEmptyUsername(t *testing.T) {
 	t.Parallel()
 
 	randN := createRandomInt()
-	user, err := westack.UpsertUserWithRoles(app, westack.UserWithRoles{
+	user, err := westack.UpsertAccountWithRoles(app, westack.AccountWithRoles{
 		Username: "",
 		Password: fmt.Sprintf("pwd-%v", randN),
 		Roles:    []string{fmt.Sprintf("role-%v", randN)},
@@ -158,7 +158,7 @@ func Test_NewUserAndRoleEmptyPassword(t *testing.T) {
 	t.Parallel()
 
 	randN := createRandomInt()
-	user, err := westack.UpsertUserWithRoles(app, westack.UserWithRoles{
+	user, err := westack.UpsertAccountWithRoles(app, westack.AccountWithRoles{
 		Username: fmt.Sprintf("user-%v", randN),
 		Password: "",
 		Roles:    []string{fmt.Sprintf("role-%v", randN)},
@@ -172,7 +172,7 @@ func Test_NewUserAndRoleEmptyRoles(t *testing.T) {
 	t.Parallel()
 
 	randN := createRandomInt()
-	user, err := westack.UpsertUserWithRoles(app, westack.UserWithRoles{
+	user, err := westack.UpsertAccountWithRoles(app, westack.AccountWithRoles{
 		Username: fmt.Sprintf("user-%v", randN),
 		Password: fmt.Sprintf("pwd-%v", randN),
 		Roles:    []string{},
@@ -190,7 +190,7 @@ func Test_RemoteAssignRole(t *testing.T) {
 	adminPassword := os.Getenv("WST_ADMIN_PWD")
 
 	// Login as admin
-	adminToken, err := loginUser(adminUser, adminPassword, t)
+	adminToken, err := loginAccount(adminUser, adminPassword, t)
 	assert.Nil(t, err)
 	if !assert.Contains(t, adminToken, "id") {
 		t.Fatal("Missing id in result token")
@@ -199,25 +199,14 @@ func Test_RemoteAssignRole(t *testing.T) {
 
 	// Create a new user
 	password := fmt.Sprintf("pwd-%v", createRandomInt())
-	user := createUser(t, wst.M{
+	user := createAccount(t, wst.M{
 		"username": fmt.Sprintf("user-%v", createRandomInt()),
 		"password": password,
 	})
 
 	desiredRoles := []string{fmt.Sprintf("role-1-%v", createRandomInt()), fmt.Sprintf("role-2-%v", createRandomInt())}
 
-	// Invoke remote method to assign role
-	// Update Roles Definition:
-	// method: PUT
-	// endpoint: /users/{userId}/roles
-	// request body: { roles: [role1, role2, ..., roleN] }
-	// headers: { Authorization: Bearer {token}, Content-Type: application/json }
-	// response: 200 { result: "OK" }
-	// or 400 { error: { code: "ERROR_CODE", message: "Error message", details: { ... } } }
-	// or 401 { error: { code: "AUTHORIZATION_REQUIRED", message: "Authorization required" } }
-	// or 404 { error: { code: "USER_NOT_FOUND", message: "User not found" } }
-
-	url := fmt.Sprintf("/users/%v/roles", user["id"])
+	url := fmt.Sprintf("/accounts/%v/roles", user["id"])
 	updateRolesResponse, err := invokeApiJsonM(t, "PUT", url, wst.M{
 		"roles": desiredRoles,
 	}, wst.M{
@@ -229,7 +218,7 @@ func Test_RemoteAssignRole(t *testing.T) {
 	assert.Equal(t, "OK", updateRolesResponse["result"])
 
 	// Login as the user
-	userToken, err := loginUser(user.GetString("username"), password, t)
+	userToken, err := loginAccount(user.GetString("username"), password, t)
 	assert.Nil(t, err)
 	if !assert.Contains(t, userToken, "id") {
 		t.Fatal("Missing id in result token")
@@ -257,7 +246,7 @@ func Test_RemoteAssignRole(t *testing.T) {
 	assert.EqualValues(t, 401, resp["error"].(map[string]interface{})["statusCode"])
 
 	// Login again
-	userToken, err = loginUser(user.GetString("username"), password, t)
+	userToken, err = loginAccount(user.GetString("username"), password, t)
 	assert.Nil(t, err)
 	if !assert.Contains(t, userToken, "id") {
 		t.Fatal("Missing id in result token")

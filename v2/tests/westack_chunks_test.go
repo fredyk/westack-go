@@ -103,7 +103,7 @@ func Test_FixedBeforeLoadMock124401(t *testing.T) {
 	t.Parallel()
 
 	resp := invokeApiFullResponse(t, "GET", "/notes?mockResultTest124401=true", nil, wst.M{
-		"Authorization": fmt.Sprintf("Bearer %s", randomUserToken.GetString("id")),
+		"Authorization": fmt.Sprintf("Bearer %s", randomAccountToken.GetString("id")),
 	})
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 	responseBody, err := parseResultAsJsonArray(resp)
@@ -119,7 +119,7 @@ func Test_FixedBeforeLoadMock124402(t *testing.T) {
 	t.Parallel()
 
 	resp := invokeApiFullResponse(t, "GET", "/notes?mockResultTest124402=true", nil, wst.M{
-		"Authorization": fmt.Sprintf("Bearer %s", randomUserToken.GetString("id")),
+		"Authorization": fmt.Sprintf("Bearer %s", randomAccountToken.GetString("id")),
 	})
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 	responseBody, err := parseResultAsJsonArray(resp)
@@ -135,7 +135,7 @@ func Test_FixedBeforeLoadMock124403(t *testing.T) {
 	t.Parallel()
 
 	resp := invokeApiFullResponse(t, "GET", "/notes?mockResultTest124403=true", nil, wst.M{
-		"Authorization": fmt.Sprintf("Bearer %s", randomUserToken.GetString("id")),
+		"Authorization": fmt.Sprintf("Bearer %s", randomAccountToken.GetString("id")),
 	})
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 	responseBody, err := parseResultAsJsonArray(resp)
@@ -151,7 +151,7 @@ func Test_FixedBeforeLoadMock124404(t *testing.T) {
 	t.Parallel()
 
 	resp := invokeApiFullResponse(t, "GET", "/notes?mockResultTest124404=true", nil, wst.M{
-		"Authorization": fmt.Sprintf("Bearer %s", randomUserToken.GetString("id")),
+		"Authorization": fmt.Sprintf("Bearer %s", randomAccountToken.GetString("id")),
 	})
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 	responseBody, err := parseResultAsJsonArray(resp)
@@ -168,7 +168,7 @@ func Test_AfterLoadShouldReturnEmpty(t *testing.T) {
 
 	// create 5 notes
 	for i := 0; i < 5; i++ {
-		note, err := invokeApiAsRandomUser(t, "POST", "/notes", wst.M{
+		note, err := invokeApiAsRandomAccount(t, "POST", "/notes", wst.M{
 			"title": fmt.Sprintf("Note %d", i+1),
 			"body":  fmt.Sprintf("This is note %d", i+1),
 		}, wst.M{"Content-Type": "application/json"})
@@ -176,7 +176,7 @@ func Test_AfterLoadShouldReturnEmpty(t *testing.T) {
 		assert.NotEmpty(t, note.GetString("id"))
 	}
 
-	resp, err := invokeApiAsRandomUser(t, "GET", "/notes?forceError1753=true", nil, nil)
+	resp, err := invokeApiAsRandomAccount(t, "GET", "/notes?forceError1753=true", nil, nil)
 	assert.NoError(t, err)
 	assert.Equal(t, "forced error 1753", resp.GetString("error.message"))
 	// "after load" cannot handle errors. It skips failed instances.
@@ -188,7 +188,7 @@ func Test_BeforeBuildReturnsError(t *testing.T) {
 
 	t.Parallel()
 
-	resp, err := invokeApiAsRandomUser(t, "GET", "/notes?forceError1556=true", nil, nil)
+	resp, err := invokeApiAsRandomAccount(t, "GET", "/notes?forceError1556=true", nil, nil)
 	assert.NoError(t, err)
 	assert.Equal(t, "error in __operation__before_build: forced error 1556", resp.GetString("error.message"))
 }
