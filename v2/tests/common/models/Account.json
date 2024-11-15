@@ -1,7 +1,7 @@
 {
-  "name": "user",
-  "base": "User",
-  "plural": "users",
+  "name": "Account",
+  "base": "Account",
+  "plural": "accounts",
   "public": true,
   "properties": {
     "email": {

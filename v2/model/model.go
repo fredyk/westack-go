@@ -866,7 +866,7 @@ type OperationItem struct {
 	Options RemoteMethodOptions
 }
 
-type BearerUser struct {
+type BearerAccount struct {
 	Id     interface{}
 	Data   interface{}
 	System bool
@@ -877,10 +877,10 @@ type BearerRole struct {
 }
 
 type BearerToken struct {
-	User   *BearerUser
-	Roles  []BearerRole
-	Raw    string
-	Claims jwt.MapClaims
+	Account *BearerAccount
+	Roles   []BearerRole
+	Raw     string
+	Claims  jwt.MapClaims
 }
 
 type EphemeralData wst.M
@@ -1102,27 +1102,27 @@ func (loadedModel *StatefulModel) dispatchFindManySingleDocument(dsCursor dataso
 }
 
 func GetIDAsString(idToConvert interface{}) string {
-	var foundObjUserId string
+	var foundObjAccountId string
 	if v, ok := idToConvert.(primitive.ObjectID); ok {
-		foundObjUserId = v.Hex()
+		foundObjAccountId = v.Hex()
 	} else if v, ok := idToConvert.(*primitive.ObjectID); ok {
-		foundObjUserId = v.Hex()
+		foundObjAccountId = v.Hex()
 	} else if v, ok := idToConvert.(string); ok {
-		foundObjUserId = v
+		foundObjAccountId = v
 	} else {
-		foundObjUserId = fmt.Sprintf("%v", idToConvert)
+		foundObjAccountId = fmt.Sprintf("%v", idToConvert)
 	}
-	return foundObjUserId
+	return foundObjAccountId
 }
 
 func CreateBearer(subjectId interface{}, createdAtSeconds float64, ttlSeconds float64, roles []string) *BearerToken {
 	return &BearerToken{
-		User: &BearerUser{Id: subjectId},
+		Account: &BearerAccount{Id: subjectId},
 		Claims: jwt.MapClaims{
-			"created": createdAtSeconds,
-			"ttl":     ttlSeconds,
-			"roles":   roles,
-			"userId":  GetIDAsString(subjectId),
+			"created":   createdAtSeconds,
+			"ttl":       ttlSeconds,
+			"roles":     roles,
+			"accountId": GetIDAsString(subjectId),
 		},
 	}
 }

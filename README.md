@@ -40,12 +40,12 @@ westack-go model add Note db
 #### (Optional) Customize your models and datasources
 
 <details>
-  <summary>User.json</summary>
+  <summary>Account.json</summary>
 
 ```json
 {
-  "name": "User",
-  "base": "User",
+  "name": "Account",
+  "base": "Account",
   "public": true,
   "hidden": [
     "password"
@@ -90,9 +90,9 @@ westack-go model add Note db
     }
   },
   "relations": {
-    "user": {
+    "account": {
       "type": "belongsTo",
-      "model": "User"
+      "model": "Account"
     }
   },
   "casbin": {
@@ -131,7 +131,7 @@ westack-go model add Note db
 
 ```json
 {
-  "User": {
+  "Account": {
     "dataSource": "db"
   },
   "Note": {
@@ -151,49 +151,49 @@ westack-go server start
 
 ### Test it:
 
-1. Create a user
+1. Create an account
 ```shell
-$ curl -X POST http://localhost:8023/api/v1/users -H 'Content-Type: application/json' -d '{"email":"exampleuser@example.com","password":"1234"}'
+$ curl -X POST http://localhost:8023/api/v1/accounts -H 'Content-Type: application/json' -d '{"email":"exampleuser@example.com","password":"1234"}'
 ```
 
 2. Login
 ```shell
-$ curl -X POST http://localhost:8023/api/v1/users/login -H 'Content-Type: application/json' -d '{"email":"exampleuser@example.com","password":"1234"}'
+$ curl -X POST http://localhost:8023/api/v1/accounts/login -H 'Content-Type: application/json' -d '{"email":"exampleuser@example.com","password":"1234"}'
 
-Response body: {"id":"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJjcmVhdGVkIjoxNjQ3MjUzMDczMTQ0LCJyb2xlcyI6WyJVU0VSIl0sInR0bCI6MTIwOTYwMDAwMCwidXNlcklkIjoiNjIyZjE2NDMzNzdjYTNmMWEzOTI0MWY0In0.sbl7QA2--X7MiPZ4DLRL2f5_z08VD5quItBDl2ybmGk","userId":"622f1643377ca3f1a39241f4"}
+Response body: {"id":"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJjcmVhdGVkIjoxNjQ3MjUzMDczMTQ0LCJyb2xlcyI6WyJVU0VSIl0sInR0bCI6MTIwOTYwMDAwMCwidXNlcklkIjoiNjIyZjE2NDMzNzdjYTNmMWEzOTI0MWY0In0.sbl7QA2--X7MiPZ4DLRL2f5_z08VD5quItBDl2ybmGk","accountId":"622f1643377ca3f1a39241f4"}
 ```
 
-3. Find user data
+3. Find account data
 ```shell
-$ curl http://localhost:8023/api/v1/users/me -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJjcmVhdGVkIjoxNjQ3MjUzMDczMTQ0LCJyb2xlcyI6WyJVU0VSIl0sInR0bCI6MTIwOTYwMDAwMCwidXNlcklkIjoiNjIyZjE2NDMzNzdjYTNmMWEzOTI0MWY0In0.sbl7QA2--X7MiPZ4DLRL2f5_z08VD5quItBDl2ybmGk'
+$ curl http://localhost:8023/api/v1/accounts/me -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJjcmVhdGVkIjoxNjQ3MjUzMDczMTQ0LCJyb2xlcyI6WyJVU0VSIl0sInR0bCI6MTIwOTYwMDAwMCwidXNlcklkIjoiNjIyZjE2NDMzNzdjYTNmMWEzOTI0MWY0In0.sbl7QA2--X7MiPZ4DLRL2f5_z08VD5quItBDl2ybmGk'
  
 Response body: {"email":"exampleuser@example.com","id":"622f1643377ca3f1a39241f4"}
 ```
 
-4. Create a note for the user
+4. Create a note for the account
 ```shell
-$ curl -X POST http://localhost:8023/api/v1/notes -H 'Content-Type: application/json' -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJjcmVhdGVkIjoxNjQ3MjUzMDczMTQ0LCJyb2xlcyI6WyJVU0VSIl0sInR0bCI6MTIwOTYwMDAwMCwidXNlcklkIjoiNjIyZjE2NDMzNzdjYTNmMWEzOTI0MWY0In0.sbl7QA2--X7MiPZ4DLRL2f5_z08VD5quItBDl2ybmGk' -d '{"title":"Note 1","body":"This is my first note","userId":"622f1643377ca3f1a39241f4"}'
+$ curl -X POST http://localhost:8023/api/v1/notes -H 'Content-Type: application/json' -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJjcmVhdGVkIjoxNjQ3MjUzMDczMTQ0LCJyb2xlcyI6WyJVU0VSIl0sInR0bCI6MTIwOTYwMDAwMCwidXNlcklkIjoiNjIyZjE2NDMzNzdjYTNmMWEzOTI0MWY0In0.sbl7QA2--X7MiPZ4DLRL2f5_z08VD5quItBDl2ybmGk' -d '{"title":"Note 1","body":"This is my first note","accountId":"622f1643377ca3f1a39241f4"}'
 ```
 
-5. Find again the user, now with their notes
+5. Find again the account, now with their notes
 ```shell
-$ curl 'http://localhost:8023/api/v1/users/me?filter=%7B"include":%5B%7B"relation":"notes"%7D%5D%7D' -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJjcmVhdGVkIjoxNjQ3MjUzMDczMTQ0LCJyb2xlcyI6WyJVU0VSIl0sInR0bCI6MTIwOTYwMDAwMCwidXNlcklkIjoiNjIyZjE2NDMzNzdjYTNmMWEzOTI0MWY0In0.sbl7QA2--X7MiPZ4DLRL2f5_z08VD5quItBDl2ybmGk'
+$ curl 'http://localhost:8023/api/v1/accounts/me?filter=%7B"include":%5B%7B"relation":"notes"%7D%5D%7D' -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJjcmVhdGVkIjoxNjQ3MjUzMDczMTQ0LCJyb2xlcyI6WyJVU0VSIl0sInR0bCI6MTIwOTYwMDAwMCwidXNlcklkIjoiNjIyZjE2NDMzNzdjYTNmMWEzOTI0MWY0In0.sbl7QA2--X7MiPZ4DLRL2f5_z08VD5quItBDl2ybmGk'
 
-Response body: {"email":"exampleuser@example.com","id":"622f1643377ca3f1a39241f4","notes":[{"title":"Note 1","body":"This is my first note","userId":"622f1643377ca3f1a39241f4","id":"622f1643377ca3f1a39241f5"}]}
+Response body: {"email":"exampleuser@example.com","id":"622f1643377ca3f1a39241f4","notes":[{"title":"Note 1","body":"This is my first note","accountId":"622f1643377ca3f1a39241f4","id":"622f1643377ca3f1a39241f5"}]}
 ```
 
 6. Find the single note
 ```shell
 $ curl http://localhost:8023/api/v1/notes/622f1643377ca3f1a39241f5 -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJjcmVhdGVkIjoxNjUwNDA2ODEzNDY3LCJyb2xlcyI6WyJVU0VSIl0sInR0bCI6MTIwOTYwMDAwMCwidXNlcklkIjoiNjI1ZjM1OTE0NzU5YWJiOGZhMmE1YzljIn0.hWeMlZrhTFAac4LXTSiSIQ7uy7VhAlg1L9DKG3QPTpg'
 
-Response body: {"title":"Note 1","body":"This is my first note","userId":"622f1643377ca3f1a39241f4","id":"622f1643377ca3f1a39241f5"}
+Response body: {"title":"Note 1","body":"This is my first note","accountId":"622f1643377ca3f1a39241f4","id":"622f1643377ca3f1a39241f5"}
 ```
 
 7. Update the note
 ```shell
 $ curl -X PATCH http://localhost:8023/api/v1/notes/622f1643377ca3f1a39241f5 -H 'Content-Type: application/json' -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJjcmVhdGVkIjoxNjUwNDA2ODEzNDY3LCJyb2xlcyI6WyJVU0VSIl0sInR0bCI6MTIwOTYwMDAwMCwidXNlcklkIjoiNjI1ZjM1OTE0NzU5YWJiOGZhMmE1YzljIn0.hWeMlZrhTFAac4LXTSiSIQ7uy7VhAlg1L9DKG3QPTpg' -d '{"body":"I modified the note body"}'
 
-Response body: {"title":"Note 1","body":"I modified the note body","userId":"622f1643377ca3f1a39241f4","id":"622f1643377ca3f1a39241f5"}
+Response body: {"title":"Note 1","body":"I modified the note body","accountId":"622f1643377ca3f1a39241f4","id":"622f1643377ca3f1a39241f5"}
 ```
 ### Change Log
 

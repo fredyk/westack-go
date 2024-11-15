@@ -10,10 +10,10 @@ import (
 	"github.com/fredyk/westack-go/v2/model"
 )
 
-var DefaultUser = model.Config{
-	Name:   "User",
-	Plural: "users",
-	Base:   "User",
+var DefaultAccount = model.Config{
+	Name:   "Account",
+	Plural: "accounts",
+	Base:   "Account",
 	Public: true,
 	Properties: map[string]model.Property{
 		"email": {
@@ -33,6 +33,20 @@ var DefaulRole = model.Config{
 	Name:   "Role",
 	Plural: "roles",
 	Base:   "Role",
+	Public: false,
+	Properties: map[string]model.Property{
+		"name": {
+			Type:     "string",
+			Required: true,
+		},
+	},
+	Relations: &map[string]*model.Relation{},
+}
+
+var DefaultApp = model.Config{
+	Name:   "App",
+	Plural: "apps",
+	Base:   "App",
 	Public: false,
 	Properties: map[string]model.Property{
 		"name": {
@@ -164,8 +178,9 @@ func initProject(cwd string) error {
 		return err
 	}
 
-	foundUserModel := false
+	foundAccountModel := false
 	foundRoleModel := false
+	foundAppModel := false
 	for _, entry := range entries {
 		if regexp.MustCompile("\\.json$").MatchString(entry.Name()) {
 			bytes, err := os.ReadFile("common/models/" + entry.Name())
@@ -178,16 +193,18 @@ func initProject(cwd string) error {
 				return err
 			}
 
-			if config.Base == "User" {
-				foundUserModel = true
+			if config.Base == "Account" {
+				foundAccountModel = true
 			} else if config.Base == "Role" {
 				foundRoleModel = true
+			} else if config.Base == "App" {
+				foundAppModel = true
 			}
 		}
 	}
 
-	if !foundUserModel {
-		err2 := addModel(DefaultUser, "db")
+	if !foundAccountModel {
+		err2 := addModel(DefaultAccount, "db")
 		if err2 != nil {
 			return err2
 		}
@@ -195,6 +212,13 @@ func initProject(cwd string) error {
 
 	if !foundRoleModel {
 		err2 := addModel(DefaulRole, "db")
+		if err2 != nil {
+			return err2
+		}
+	}
+
+	if !foundAppModel {
+		err2 := addModel(DefaultApp, "db")
 		if err2 != nil {
 			return err2
 		}

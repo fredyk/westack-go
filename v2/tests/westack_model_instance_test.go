@@ -35,19 +35,19 @@ func Test_ToJSON_BelongsToRelation(t *testing.T) {
 	t.Parallel()
 
 	instance, err := noteModel.Build(wst.M{
-		"_id":    noteId,
-		"userId": userId,
-		"user": wst.M{
+		"_id":       noteId,
+		"accountId": userId,
+		"account": wst.M{
 			"id": userId,
 		},
 	}, systemContext)
 	assert.NoError(t, err)
-	originalUser := instance.GetOne("user")
+	originalAccount := instance.GetOne("account")
 	json := instance.ToJSON()
-	user := json.GetM("user")
+	user := json.GetM("account")
 	assert.NotNil(t, user)
 	assert.Equal(t, userId.Hex(), user.GetString("id"))
-	assert.Equal(t, originalUser.GetObjectId("id").Hex(), user.GetString("id"))
+	assert.Equal(t, originalAccount.GetObjectId("id").Hex(), user.GetString("id"))
 
 }
 
@@ -80,7 +80,7 @@ func Test_Access_Empty_Relation(t *testing.T) {
 	}, systemContext)
 	assert.NoError(t, err)
 	// assert user is nil
-	assert.Nil(t, instance.GetOne("user"))
+	assert.Nil(t, instance.GetOne("account"))
 	// assert entries is empty
 	assert.Equal(t, 0, len(instance.GetMany("entries")))
 }
@@ -89,7 +89,7 @@ type Entry struct {
 	Date string `bson:"date"`
 	Text string `bson:"text"`
 }
-type User struct {
+type Account struct {
 	Id primitive.ObjectID `bson:"id"`
 }
 
@@ -98,9 +98,9 @@ func Test_Instance_Transform(t *testing.T) {
 	t.Parallel()
 
 	instance, err := noteModel.Build(wst.M{
-		"_id":    noteId,
-		"userId": userId,
-		"user": wst.M{
+		"_id":       noteId,
+		"accountId": userId,
+		"account": wst.M{
 			"id": userId,
 		},
 		"entries": primitive.A{
@@ -109,16 +109,16 @@ func Test_Instance_Transform(t *testing.T) {
 	}, systemContext)
 	assert.NoError(t, err)
 	var out struct {
-		Id      primitive.ObjectID `bson:"id"`
-		UserId  primitive.ObjectID `bson:"userId"`
-		User    User               `bson:"user"`
-		Entries []Entry            `bson:"entries"`
+		Id        primitive.ObjectID `bson:"id"`
+		AccountId primitive.ObjectID `bson:"accountId"`
+		Account   Account            `bson:"account"`
+		Entries   []Entry            `bson:"entries"`
 	}
 	err = instance.(*model.StatefulInstance).Transform(&out)
 	assert.NoError(t, err)
 	assert.Equal(t, noteId.Hex(), out.Id.Hex())
-	assert.Equal(t, userId.Hex(), out.UserId.Hex())
-	assert.Equal(t, userId.Hex(), out.User.Id.Hex())
+	assert.Equal(t, userId.Hex(), out.AccountId.Hex())
+	assert.Equal(t, userId.Hex(), out.Account.Id.Hex())
 	assert.Equal(t, 1, len(out.Entries))
 	assert.Equal(t, "2021-01-01", out.Entries[0].Date)
 	assert.Equal(t, "Entry 1", out.Entries[0].Text)
