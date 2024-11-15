@@ -30,8 +30,10 @@ func (loadedModel *StatefulModel) EnforceEx(token *BearerToken, objId string, ac
 	var locked bool
 
 	if token == nil || token.User == nil {
+		bearerUserIdSt = "_EVERYONE_"
+		targetObjId = "*"
 		AuthMutex.RLock()
-		if result, isPresent := loadedModel.authCache["_EVERYONE_"]["*"][action]; isPresent {
+		if result, isPresent := loadedModel.authCache[bearerUserIdSt][targetObjId][action]; isPresent {
 			if loadedModel.App.Debug || !result {
 				log.Printf("[DEBUG] Cache hit for %v.%v ---> %v\n", loadedModel.Name, action, result)
 			}
