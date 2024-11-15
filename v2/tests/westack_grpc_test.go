@@ -702,7 +702,7 @@ func TestMain(m *testing.M) {
 		log.Fatal(err)
 	}
 	systemContext = &model.EventContext{
-		Bearer: &model.BearerToken{User: &model.BearerUser{System: true}},
+		Bearer: &model.BearerToken{Account: &model.BearerAccount{System: true}},
 	}
 
 	// start server

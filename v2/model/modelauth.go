@@ -16,7 +16,7 @@ var AuthMutex = sync.RWMutex{}
 
 func (loadedModel *StatefulModel) EnforceEx(token *BearerToken, objId string, action string, eventContext *EventContext) (error, bool) {
 
-	if token != nil && token.User != nil && token.User.System == true {
+	if token != nil && token.Account != nil && token.Account.System == true {
 		return nil, true
 	}
 
@@ -29,7 +29,7 @@ func (loadedModel *StatefulModel) EnforceEx(token *BearerToken, objId string, ac
 
 	var locked bool
 
-	if token == nil || token.User == nil {
+	if token == nil || token.Account == nil {
 		bearerUserIdSt = "_EVERYONE_"
 		targetObjId = "*"
 		AuthMutex.RLock()
@@ -46,12 +46,12 @@ func (loadedModel *StatefulModel) EnforceEx(token *BearerToken, objId string, ac
 	} else {
 
 		bearerUserIdSt = ""
-		if v, ok := token.User.Id.(string); ok {
+		if v, ok := token.Account.Id.(string); ok {
 			bearerUserIdSt = v
-		} else if vv, ok := token.User.Id.(primitive.ObjectID); ok {
+		} else if vv, ok := token.Account.Id.(primitive.ObjectID); ok {
 			bearerUserIdSt = vv.Hex()
 		} else {
-			bearerUserIdSt = fmt.Sprintf("%v", token.User.Id)
+			bearerUserIdSt = fmt.Sprintf("%v", token.Account.Id)
 		}
 		targetObjId = objId
 

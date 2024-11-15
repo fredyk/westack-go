@@ -66,7 +66,7 @@ func (app *WeStack) loadModels() error {
 	if err != nil {
 		return err
 	}
-	var someUserModel *model.StatefulModel
+	var someAccountModel *model.StatefulModel
 	for _, fileInfo := range fileInfos {
 
 		if fileInfo.IsDir() {
@@ -102,13 +102,13 @@ func (app *WeStack) loadModels() error {
 		if err != nil {
 			return err
 		}
-		if loadedModel.(*model.StatefulModel).Config.Base == "User" {
-			someUserModel = loadedModel.(*model.StatefulModel)
+		if loadedModel.(*model.StatefulModel).Config.Base == "Account" {
+			someAccountModel = loadedModel.(*model.StatefulModel)
 		}
 	}
 
 	if app.roleMappingModel != nil {
-		(*app.roleMappingModel.Config.Relations)["user"].Model = someUserModel.Name
+		(*app.roleMappingModel.Config.Relations)["account"].Model = someAccountModel.Name
 		err := app.setupModel(app.roleMappingModel, app.roleMappingModel.Datasource)
 		if err != nil {
 			return err
@@ -267,9 +267,9 @@ func (app *WeStack) setupModel(loadedModel *model.StatefulModel, dataSource *dat
 		setupRoleModel(config, app, dataSource)
 	}
 
-	if config.Base == "User" {
+	if config.Base == "Account" {
 
-		setupUserModel(loadedModel, app)
+		setupAccountModel(loadedModel, app)
 
 	}
 
@@ -367,7 +367,7 @@ func (app *WeStack) setupModel(loadedModel *model.StatefulModel, dataSource *dat
 					}
 				}
 
-				if config.Base == "User" {
+				if config.Base == "Account" {
 					username := (*data)["username"]
 					email := (*data)["email"]
 					if (username == nil || strings.TrimSpace(username.(string)) == "") && (email == nil || strings.TrimSpace(email.(string)) == "") {
@@ -385,7 +385,7 @@ func (app *WeStack) setupModel(loadedModel *model.StatefulModel, dataSource *dat
 							return err2
 						}
 						if existent != nil {
-							return wst.CreateError(fiber.ErrConflict, "USERNAME_UNIQUENESS", fiber.Map{"message": fmt.Sprintf("The `user` instance is not valid. Details: `username` User already exists (value: \"%v\").", username), "codes": wst.M{"username": []string{"uniqueness"}}}, "ValidationError")
+							return wst.CreateError(fiber.ErrConflict, "USERNAME_UNIQUENESS", fiber.Map{"message": fmt.Sprintf("The `user` instance is not valid. Details: `username` Account already exists (value: \"%v\").", username), "codes": wst.M{"username": []string{"uniqueness"}}}, "ValidationError")
 						}
 					}
 
@@ -410,7 +410,7 @@ func (app *WeStack) setupModel(loadedModel *model.StatefulModel, dataSource *dat
 					(*data)["password"] = string(hashed)
 
 					if app.debug {
-						fmt.Printf("Create User: ('%v', '%v')\n", (*data)["username"], (*data)["email"])
+						fmt.Printf("Create Account: ('%v', '%v')\n", (*data)["username"], (*data)["email"])
 					}
 				}
 
@@ -419,7 +419,7 @@ func (app *WeStack) setupModel(loadedModel *model.StatefulModel, dataSource *dat
 					for foreignKey, restriction := range app.restrictModelUniquenessByField[loadedModel.Name] {
 						if (*data)[foreignKey] != nil {
 							filter := wst.Filter{Where: &wst.Where{foreignKey: (*data)[foreignKey]}}
-							existent, err2 := loadedModel.FindOne(&filter, &model.EventContext{Bearer: &model.BearerToken{User: &model.BearerUser{System: true}}})
+							existent, err2 := loadedModel.FindOne(&filter, &model.EventContext{Bearer: &model.BearerToken{Account: &model.BearerAccount{System: true}}})
 							if err2 != nil {
 								return err2
 							}
@@ -434,9 +434,9 @@ func (app *WeStack) setupModel(loadedModel *model.StatefulModel, dataSource *dat
 				}
 
 			} else {
-				if config.Base == "User" {
+				if config.Base == "Account" {
 					if (*data)["password"] != nil && (*data)["password"] != "" {
-						log.Println("Update User password")
+						log.Println("Update Account password")
 						hashed, err := bcrypt.GenerateFromPassword([]byte(fmt.Sprintf("%s%s", string(loadedModel.App.JwtSecretKey), (*data)["password"].(string))), 10)
 						if err != nil {
 							return err
@@ -475,13 +475,13 @@ func (app *WeStack) setupModel(loadedModel *model.StatefulModel, dataSource *dat
 
 		protectedFieldsCount := len(loadedModel.Config.Protected)
 		loadedModel.Observe("before build", func(eventContext *model.EventContext) error {
-			if protectedFieldsCount <= 0 || eventContext.BaseContext.Bearer.User.System || skipOperationForBeforeBuild(eventContext.OperationName) {
+			if protectedFieldsCount <= 0 || eventContext.BaseContext.Bearer.Account.System || skipOperationForBeforeBuild(eventContext.OperationName) {
 				return nil
 			}
 			isDifferentUser := true
-			if eventContext.BaseContext.Bearer != nil && eventContext.BaseContext.Bearer.User != nil {
+			if eventContext.BaseContext.Bearer != nil && eventContext.BaseContext.Bearer.Account != nil {
 				foundUserId := eventContext.ModelID.(primitive.ObjectID).Hex()
-				requesterUserId := eventContext.BaseContext.Bearer.User.Id
+				requesterUserId := eventContext.BaseContext.Bearer.Account.Id
 				if v, ok := requesterUserId.(primitive.ObjectID); ok {
 					requesterUserId = v.Hex()
 				}
@@ -509,7 +509,7 @@ func (app *WeStack) setupModel(loadedModel *model.StatefulModel, dataSource *dat
 		}
 		loadedModel.On("instance_delete", deleteByIdHandler)
 
-		if config.Base == "User" {
+		if config.Base == "Account" {
 			upsertUserRolesHandler := func(ctx *model.EventContext) error {
 				var body UpserRequestBody
 				err := ctx.Ctx.BodyParser(&body)

@@ -30,8 +30,8 @@ var appBearer *model.BearerToken
 type jwtInfo struct {
 	Bearer string `json:"-"`
 	// roles is mandatory
-	Roles  []string `json:"roles"`
-	UserId string   `json:"userId"`
+	Roles     []string `json:"roles"`
+	AccountId string   `json:"accountId"`
 }
 
 func extractJWTPayload(t *testing.T, bearer string) jwtInfo {

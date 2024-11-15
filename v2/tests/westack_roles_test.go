@@ -51,7 +51,7 @@ func Test_NewUserAndRoleWithExistingUser(t *testing.T) {
 	t.Parallel()
 
 	randN := createRandomInt()
-	user, err := invokeApiJsonM(t, "POST", "/users", wst.M{
+	user, err := invokeApiJsonM(t, "POST", "/accounts", wst.M{
 		"username": fmt.Sprintf("user-%v", randN),
 		"password": fmt.Sprintf("pwd-%v", randN),
 	}, wst.M{
@@ -81,7 +81,7 @@ func Test_NewUserAndRoleWithExistingUserAndRole(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NotNil(t, role.GetID())
 
-	user, err := invokeApiJsonM(t, "POST", "/users", wst.M{
+	user, err := invokeApiJsonM(t, "POST", "/accounts", wst.M{
 		"username": fmt.Sprintf("user-%v", randN),
 		"password": fmt.Sprintf("pwd-%v", randN),
 	}, wst.M{
@@ -111,7 +111,7 @@ func Test_NewUserAndRoleWithExistingUserAndRoleAndUserRolesAndRoleMapping(t *tes
 	assert.NoError(t, err)
 	assert.NotNil(t, role.GetID())
 
-	user, err := invokeApiJsonM(t, "POST", "/users", wst.M{
+	user, err := invokeApiJsonM(t, "POST", "/accounts", wst.M{
 		"username": fmt.Sprintf("user-%v", randN),
 		"password": fmt.Sprintf("pwd-%v", randN),
 	}, wst.M{
@@ -206,18 +206,7 @@ func Test_RemoteAssignRole(t *testing.T) {
 
 	desiredRoles := []string{fmt.Sprintf("role-1-%v", createRandomInt()), fmt.Sprintf("role-2-%v", createRandomInt())}
 
-	// Invoke remote method to assign role
-	// Update Roles Definition:
-	// method: PUT
-	// endpoint: /users/{userId}/roles
-	// request body: { roles: [role1, role2, ..., roleN] }
-	// headers: { Authorization: Bearer {token}, Content-Type: application/json }
-	// response: 200 { result: "OK" }
-	// or 400 { error: { code: "ERROR_CODE", message: "Error message", details: { ... } } }
-	// or 401 { error: { code: "AUTHORIZATION_REQUIRED", message: "Authorization required" } }
-	// or 404 { error: { code: "USER_NOT_FOUND", message: "User not found" } }
-
-	url := fmt.Sprintf("/users/%v/roles", user["id"])
+	url := fmt.Sprintf("/accounts/%v/roles", user["id"])
 	updateRolesResponse, err := invokeApiJsonM(t, "PUT", url, wst.M{
 		"roles": desiredRoles,
 	}, wst.M{

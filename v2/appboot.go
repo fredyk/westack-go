@@ -67,7 +67,7 @@ func appBoot(customRoutesCallbacks []func(app *WeStack), app *WeStack) {
 	}
 
 	systemContext := &model.EventContext{
-		Bearer: &model.BearerToken{User: &model.BearerUser{System: true}},
+		Bearer: &model.BearerToken{Account: &model.BearerAccount{System: true}},
 	}
 
 	// Upsert the admin user

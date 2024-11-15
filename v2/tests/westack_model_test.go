@@ -218,17 +218,17 @@ func Test_BearerTokenWithObjectId(t *testing.T) {
 	t.Parallel()
 
 	createdNote, err := noteModel.Create(wst.M{
-		"title":  "Test",
-		"userId": randomUserToken.GetString("userId"),
-		"appId":  appInstance.Id,
+		"title":     "Test",
+		"accountId": randomUserToken.GetString("accountId"),
+		"appId":     appInstance.Id,
 	}, systemContext)
 	assert.NoError(t, err)
-	subjId, err := primitive.ObjectIDFromHex(randomUserToken.GetString("userId"))
+	subjId, err := primitive.ObjectIDFromHex(randomUserToken.GetString("accountId"))
 	assert.NoError(t, err)
 	userBearer := model.CreateBearer(subjId, float64(time.Now().Unix()), float64(60), []string{"USER"})
 	refreshedByUser, err := noteModel.FindById(createdNote.GetID(), &wst.Filter{
 		Include: &wst.Include{
-			{Relation: "user"},
+			{Relation: "account"},
 			{Relation: "footer1"},
 			{Relation: "footer2"},
 			{Relation: "publicFooter"},
@@ -249,7 +249,7 @@ func Test_BearerTokenWithObjectId(t *testing.T) {
 
 	refreshedByApp, err := noteModel.FindById(createdNote.GetID(), &wst.Filter{
 		Include: &wst.Include{
-			{Relation: "user"},
+			{Relation: "account"},
 			{Relation: "footer1"},
 			{Relation: "footer2"},
 			{Relation: "publicFooter"},
@@ -415,7 +415,7 @@ func Test_ProtectedFields(t *testing.T) {
 	}
 	createUser(t, plainUser2)
 
-	// User with special privilege "__protectedFieldsPrivileged"
+	// Account with special privilege "__protectedFieldsPrivileged"
 	plainUser3 := wst.M{
 		"username": fmt.Sprintf("__protectedFieldsPrivileged_user%v", createRandomInt()),
 		"password": "abcd1234.",
@@ -430,7 +430,7 @@ func Test_ProtectedFields(t *testing.T) {
 	userWithPrivileges, err := westack.UpsertUserWithRoles(app, plainUserWithPrivileges, systemContext)
 	assert.NoError(t, err)
 	assert.NotNil(t, userWithPrivileges.GetID())
-	assert.NotEmptyf(t, userWithPrivileges.GetString("id"), "User should have an id")
+	assert.NotEmptyf(t, userWithPrivileges.GetString("id"), "Account should have an id")
 
 	// Login the user1
 	username1 := plainUser1.GetString("username")
@@ -469,7 +469,7 @@ func Test_ProtectedFields(t *testing.T) {
 	user1RetrievedWithUser2, err := invokeApiJsonM(
 		t,
 		"GET",
-		fmt.Sprintf("/public-users/%v", user1.GetString("id")),
+		fmt.Sprintf("/public-accounts/%v", user1.GetString("id")),
 		nil,
 		wst.M{
 			"Authorization": fmt.Sprintf("Bearer %v", user2Token["id"]),
@@ -491,7 +491,7 @@ func Test_ProtectedFields(t *testing.T) {
 	users1RetrievedWithUser2, err := invokeApiJsonA(
 		t,
 		"GET",
-		fmt.Sprintf("/public-users?filter=%v", string(encodedFilter)),
+		fmt.Sprintf("/public-accounts?filter=%v", string(encodedFilter)),
 		nil,
 		wst.M{
 			"Authorization": fmt.Sprintf("Bearer %v", user2Token["id"]),
@@ -511,7 +511,7 @@ func Test_ProtectedFields(t *testing.T) {
 	user1RetrievedWithAdmin, err := invokeApiJsonM(
 		t,
 		"GET",
-		fmt.Sprintf("/public-users/%v", user1.GetString("id")),
+		fmt.Sprintf("/public-accounts/%v", user1.GetString("id")),
 		nil,
 		wst.M{
 			"Authorization": fmt.Sprintf("Bearer %v", adminToken["id"]),
@@ -527,7 +527,7 @@ func Test_ProtectedFields(t *testing.T) {
 	user1RetrievedWithUser1, err := invokeApiJsonM(
 		t,
 		"GET",
-		fmt.Sprintf("/public-users/%v", user1.GetString("id")),
+		fmt.Sprintf("/public-accounts/%v", user1.GetString("id")),
 		nil,
 		wst.M{
 			"Authorization": fmt.Sprintf("Bearer %v", user1Token["id"]),
@@ -544,7 +544,7 @@ func Test_ProtectedFields(t *testing.T) {
 	user1RetrievedWithUserWithPrivileges, err := invokeApiJsonM(
 		t,
 		"GET",
-		fmt.Sprintf("/public-users/%v", user1.GetString("id")),
+		fmt.Sprintf("/public-accounts/%v", user1.GetString("id")),
 		nil,
 		wst.M{
 			"Authorization": fmt.Sprintf("Bearer %v", userWithPrivilegesToken["id"]),

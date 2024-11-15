@@ -87,9 +87,9 @@ func (app *WeStack) loadModelsFixedRoutes() error {
 
 		mountBaseModelFixedRoutes(app, loadedModel)
 
-		if loadedModel.Config.Base == "User" {
+		if loadedModel.Config.Base == "Account" {
 
-			mountUserModelFixedRoutes(loadedModel, app)
+			mountAccountModelFixedRoutes(loadedModel, app)
 
 		} else if loadedModel.Config.Base == "App" {
 			mountAppDynamicRoutes(loadedModel, app)
@@ -98,12 +98,12 @@ func (app *WeStack) loadModelsFixedRoutes() error {
 	return nil
 }
 
-func mountUserModelFixedRoutes(loadedModel *model.StatefulModel, app *WeStack) {
+func mountAccountModelFixedRoutes(loadedModel *model.StatefulModel, app *WeStack) {
 	loadedModel.RemoteMethod(func(eventContext *model.EventContext) error {
 		return handleEvent(eventContext, loadedModel, "login")
 	}, model.RemoteMethodOptions{
 		Name:        "login",
-		Description: "Logins a user",
+		Description: "Logins an account",
 		Accepts: model.RemoteMethodOptionsHttpArgs{
 			{
 				Arg:         "data",
@@ -126,7 +126,7 @@ func mountUserModelFixedRoutes(loadedModel *model.StatefulModel, app *WeStack) {
 		if err != nil {
 			return err
 		}
-		eventContext.ModelID = token.User.Id
+		eventContext.ModelID = token.Account.Id
 		return loadedModel.HandleRemoteMethod("findById", eventContext)
 
 	}, model.RemoteMethodOptions{
@@ -174,7 +174,7 @@ func mountUserModelFixedRoutes(loadedModel *model.StatefulModel, app *WeStack) {
 	})
 
 	loadedModel.RemoteMethod(func(eventContext *model.EventContext) error {
-		fmt.Println("verify user ", eventContext.Bearer.User.Id)
+		fmt.Println("verify user ", eventContext.Bearer.Account.Id)
 		eventContext.Bearer.Claims["created"] = time.Now().Unix()
 		eventContext.Bearer.Claims["ttl"] = 86400 * 2 * 1000
 		eventContext.Bearer.Claims["allowsEmailVerification"] = true
@@ -207,7 +207,7 @@ func mountUserModelFixedRoutes(loadedModel *model.StatefulModel, app *WeStack) {
 
 	loadedModel.RemoteMethod(func(eventContext *model.EventContext) error {
 		// Developer must implement this event
-		userId := eventContext.Bearer.User.Id
+		userId := eventContext.Bearer.Account.Id
 		if userId == "" {
 			return errors.New("no user id found in bearer")
 		}
@@ -272,7 +272,7 @@ func mountUserModelFixedRoutes(loadedModel *model.StatefulModel, app *WeStack) {
 			} else if token != nil {
 
 				if claims, ok := token.Claims.(jwt.MapClaims); ok && token.Valid {
-					userIdHex = claims["userId"].(string)
+					userIdHex = claims["accountId"].(string)
 					userId, _ := primitive.ObjectIDFromHex(userIdHex)
 					roleNames, err := GetRoleNames(app.roleMappingModel, userIdHex, userId)
 					if err != nil {
@@ -298,7 +298,7 @@ func mountUserModelFixedRoutes(loadedModel *model.StatefulModel, app *WeStack) {
 			return errors.New("invalid Authorization header")
 		}
 
-		return eventContext.Ctx.JSON(fiber.Map{"id": tokenString, "userId": userIdHex})
+		return eventContext.Ctx.JSON(fiber.Map{"id": tokenString, "accountId": userIdHex})
 	}, model.RemoteMethodOptions{
 		Name:        "refreshToken",
 		Description: "Obtains current user",
@@ -576,7 +576,7 @@ func (app *WeStack) loadModelsDynamicRoutes() {
 			},
 		})
 
-		if loadedModel.Config.Base == "User" {
+		if loadedModel.Config.Base == "Account" {
 			loadedModel.RemoteMethod(func(eventContext *model.EventContext) error {
 				id, err := primitive.ObjectIDFromHex(eventContext.Ctx.Params("id"))
 				if err != nil {
@@ -636,7 +636,7 @@ func casbinOwnerFn(loadedModel *model.StatefulModel) func(arguments ...interface
 		}
 
 		objUserId := ""
-		if loadedModel.Config.Base == "User" || loadedModel.Config.Base == "App" {
+		if loadedModel.Config.Base == "Account" || loadedModel.Config.Base == "App" {
 			objUserId = model.GetIDAsString(objId)
 			if subId == objUserId {
 				return true, nil
@@ -644,10 +644,10 @@ func casbinOwnerFn(loadedModel *model.StatefulModel) func(arguments ...interface
 		}
 
 		roleKey := fmt.Sprintf("%v_OWNERS", objId)
-		var usersForRole []string
+		var accountsForRole []string
 		var err error
-		if usersForRole, err = loadedModel.Enforcer.GetUsersForRole(roleKey); err == nil {
-			for _, userInRole := range usersForRole {
+		if accountsForRole, err = loadedModel.Enforcer.GetUsersForRole(roleKey); err == nil {
+			for _, userInRole := range accountsForRole {
 				if subId == userInRole {
 					return true, nil
 				}
@@ -661,7 +661,7 @@ func casbinOwnerFn(loadedModel *model.StatefulModel) func(arguments ...interface
 		sortedRelationKeys := obtainSortedRelationKeys(loadedModel, modelConfigsByName)
 		for _, relationKey := range sortedRelationKeys {
 
-			err = findUserRecursiveInRelation(loadedModel, modelConfigsByName, relationKey, objId, roleKey, &usersForRole)
+			err = findOwnerRecursiveInRelation(loadedModel, modelConfigsByName, relationKey, objId, roleKey, &accountsForRole)
 			if err != nil {
 				if loadedModel.App.Debug {
 					loadedModel.App.Logger().Printf("[DEBUG] Recursive owner check for %v[%v]-->%v[%v] failed: %v\n", loadedModel.Name, objId, relationKey, objId, err)
@@ -674,7 +674,7 @@ func casbinOwnerFn(loadedModel *model.StatefulModel) func(arguments ...interface
 			loadedModel.App.Logger().Printf("[DEBUG] Recursive owner check for %v took %v ms\n", loadedModel.Name, time.Since(recursiveSearchStart).Milliseconds())
 		}
 
-		for _, userInRole := range usersForRole {
+		for _, userInRole := range accountsForRole {
 			if subId == userInRole {
 				return true, nil
 			}
@@ -698,7 +698,7 @@ func obtainSortedRelationKeys(loadedModel *model.StatefulModel, modelConfigsByNa
 			modelConfigsByName[r.Model] = relatedModelConfig
 		}
 		// userId goes first, others later
-		if r.Type == "belongsTo" && (relatedModelConfig.Base == "User" || relatedModelConfig.Base == "App") {
+		if r.Type == "belongsTo" && (relatedModelConfig.Base == "Account" || relatedModelConfig.Base == "App") {
 			allRelatedKeys = append([]string{key}, allRelatedKeys...)
 		} else {
 			allRelatedKeys = append(allRelatedKeys, key)
@@ -707,7 +707,7 @@ func obtainSortedRelationKeys(loadedModel *model.StatefulModel, modelConfigsByNa
 	return allRelatedKeys
 }
 
-func findUserRecursiveInRelation(loadedModel *model.StatefulModel, modelConfigsByName map[string]*model.Config, relationKey string, objId interface{}, roleKey string, usersForRole *[]string) error {
+func findOwnerRecursiveInRelation(loadedModel *model.StatefulModel, modelConfigsByName map[string]*model.Config, relationKey string, objId interface{}, roleKey string, ownersForRole *[]string) error {
 	r := (*loadedModel.Config.Relations)[relationKey]
 
 	if r.Type == "belongsTo" {
@@ -716,7 +716,7 @@ func findUserRecursiveInRelation(loadedModel *model.StatefulModel, modelConfigsB
 			Include: &wst.Include{{Relation: relationKey}},
 		}, &model.EventContext{
 			Bearer: &model.BearerToken{
-				User: &model.BearerUser{System: true},
+				Account: &model.BearerAccount{System: true},
 			},
 		})
 		if err != nil {
@@ -738,7 +738,7 @@ func findUserRecursiveInRelation(loadedModel *model.StatefulModel, modelConfigsB
 		}
 		relatedModel := relatedInstance.GetModel()
 
-		if relatedModel.GetConfig().Base == "User" && *r.ForeignKey == "userId" || relatedModel.GetConfig().Base == "App" && *r.ForeignKey == "appId" {
+		if relatedModel.GetConfig().Base == "Account" && *r.ForeignKey == "accountId" || relatedModel.GetConfig().Base == "App" && *r.ForeignKey == "appId" {
 			user := relatedInstance
 
 			// if user != nil && user.GetID() != nil {
@@ -757,11 +757,11 @@ func findUserRecursiveInRelation(loadedModel *model.StatefulModel, modelConfigsB
 				loadedModel.App.Logger().Printf("[DEBUG] Added role %v for user %v\n", roleKey, objUserId)
 			}
 
-			*usersForRole = append(*usersForRole, objUserId)
+			*ownersForRole = append(*ownersForRole, objUserId)
 
 			// }
 
-		} else if relatedModel.GetConfig().Base != "User" && relatedModel.GetConfig().Base != "App" {
+		} else if relatedModel.GetConfig().Base != "Account" && relatedModel.GetConfig().Base != "App" {
 			if loadedModel.App.Debug {
 				loadedModel.App.Logger().Printf("[DEBUG] Recursive owner check for %v\n", relatedModel.GetName())
 			}
@@ -770,7 +770,7 @@ func findUserRecursiveInRelation(loadedModel *model.StatefulModel, modelConfigsB
 				if loadedModel.App.Debug {
 					loadedModel.App.Logger().Printf("[DEBUG] Recursive owner check for %v[%v]-->%v[%v]\n", loadedModel.Name, objId, relatedModel.GetName(), relatedInstance.GetID())
 				}
-				err = findUserRecursiveInRelation(relatedModel.(*model.StatefulModel), modelConfigsByName, key, relatedInstance.GetID(), roleKey, usersForRole)
+				err = findOwnerRecursiveInRelation(relatedModel.(*model.StatefulModel), modelConfigsByName, key, relatedInstance.GetID(), roleKey, ownersForRole)
 				if err != nil {
 					return err
 				}

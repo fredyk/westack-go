@@ -82,7 +82,7 @@ func init() {
 			return nil
 		})
 
-		userModel, err = app.FindModel("user")
+		userModel, err = app.FindModel("Account")
 		if err != nil {
 			log.Fatalf("failed to find model: %v", err)
 		}
@@ -320,7 +320,7 @@ func createMockLogger() wst.ILogger {
 func createUser(t *testing.T, userData wst.M) wst.M {
 	var user wst.M
 	var err error
-	user, err = invokeApiJsonM(t, "POST", "/users", userData, wst.M{
+	user, err = invokeApiJsonM(t, "POST", "/accounts", userData, wst.M{
 		"Content-Type": "application/json",
 	})
 	assert.NoError(t, err)
@@ -330,7 +330,7 @@ func createUser(t *testing.T, userData wst.M) wst.M {
 
 func login(t *testing.T, body wst.M) (string, string) {
 	b := createBody(t, body)
-	request := httptest.NewRequest("POST", "/api/v1/users/login", b)
+	request := httptest.NewRequest("POST", "/api/v1/accounts/login", b)
 	request.Header.Set("Content-Type", "application/json")
 	response, err := app.Server.Test(request, 45000)
 	if err != nil {
@@ -364,8 +364,8 @@ func login(t *testing.T, body wst.M) (string, string) {
 		return "", ""
 	}
 
-	if assert.NotEmpty(t, loginResponse["id"]) && assert.NotEmpty(t, loginResponse["userId"]) {
-		return loginResponse["id"].(string), loginResponse["userId"].(string)
+	if assert.NotEmpty(t, loginResponse["id"]) && assert.NotEmpty(t, loginResponse["accountId"]) {
+		return loginResponse["id"].(string), loginResponse["accountId"].(string)
 	} else {
 		t.Error("Wrong response")
 		return "", ""
@@ -421,7 +421,7 @@ func Test_WeStackDelete(t *testing.T) {
 
 	bearer, userId := login(t, plainUser)
 
-	request := httptest.NewRequest("DELETE", fmt.Sprintf("/api/v1/users/%v", userId), nil)
+	request := httptest.NewRequest("DELETE", fmt.Sprintf("/api/v1/accounts/%v", userId), nil)
 	request.Header.Set("Authorization", fmt.Sprintf("Bearer %v", bearer))
 	response, err := app.Server.Test(request, 45000)
 	if err != nil {

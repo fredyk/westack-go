@@ -11,9 +11,9 @@ import (
 )
 
 var DefaultUser = model.Config{
-	Name:   "User",
-	Plural: "users",
-	Base:   "User",
+	Name:   "Account",
+	Plural: "accounts",
+	Base:   "Account",
 	Public: true,
 	Properties: map[string]model.Property{
 		"email": {
@@ -33,6 +33,20 @@ var DefaulRole = model.Config{
 	Name:   "Role",
 	Plural: "roles",
 	Base:   "Role",
+	Public: false,
+	Properties: map[string]model.Property{
+		"name": {
+			Type:     "string",
+			Required: true,
+		},
+	},
+	Relations: &map[string]*model.Relation{},
+}
+
+var DefaultApp = model.Config{
+	Name:   "App",
+	Plural: "apps",
+	Base:   "App",
 	Public: false,
 	Properties: map[string]model.Property{
 		"name": {
@@ -166,6 +180,7 @@ func initProject(cwd string) error {
 
 	foundUserModel := false
 	foundRoleModel := false
+	foundAppModel := false
 	for _, entry := range entries {
 		if regexp.MustCompile("\\.json$").MatchString(entry.Name()) {
 			bytes, err := os.ReadFile("common/models/" + entry.Name())
@@ -178,10 +193,12 @@ func initProject(cwd string) error {
 				return err
 			}
 
-			if config.Base == "User" {
+			if config.Base == "Account" {
 				foundUserModel = true
 			} else if config.Base == "Role" {
 				foundRoleModel = true
+			} else if config.Base == "App" {
+				foundAppModel = true
 			}
 		}
 	}
@@ -195,6 +212,13 @@ func initProject(cwd string) error {
 
 	if !foundRoleModel {
 		err2 := addModel(DefaulRole, "db")
+		if err2 != nil {
+			return err2
+		}
+	}
+
+	if !foundAppModel {
+		err2 := addModel(DefaultApp, "db")
 		if err2 != nil {
 			return err2
 		}

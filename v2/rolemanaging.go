@@ -31,9 +31,9 @@ func UpsertUserWithRoles(app *WeStack, userToUpsert UserWithRoles, eventContext 
 		return
 	}
 
-	foundModels := app.FindModelsWithClass("User")
+	foundModels := app.FindModelsWithClass("Account")
 	if len(foundModels) == 0 {
-		err = fmt.Errorf("user model not found")
+		err = fmt.Errorf("account model not found")
 		return
 	}
 	userModel = foundModels[0]
@@ -56,9 +56,9 @@ func UpsertUserWithRoles(app *WeStack, userToUpsert UserWithRoles, eventContext 
 		if err != nil {
 			return
 		}
-		fmt.Printf("User %v created with id %v\n", userToUpsert.Username, user.GetID())
+		fmt.Printf("Account %v created with id %v\n", userToUpsert.Username, user.GetID())
 	} else {
-		fmt.Printf("User %v already exists\n", userToUpsert.Username)
+		fmt.Printf("Account %v already exists\n", userToUpsert.Username)
 	}
 
 	err = UpsertUserRoles(app, user.GetID(), userToUpsert.Roles, eventContext)
