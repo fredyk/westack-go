@@ -20,9 +20,9 @@ import (
 )
 
 var app *westack.WeStack
-var randomUser wst.M
-var randomUserToken wst.M
-var adminUserToken wst.M
+var randomAccount wst.M
+var randomAccountToken wst.M
+var adminAccountToken wst.M
 var appInstance *model.StatefulInstance
 var appBearer *model.BearerToken
 
@@ -30,8 +30,8 @@ var appBearer *model.BearerToken
 type jwtInfo struct {
 	Bearer string `json:"-"`
 	// roles is mandatory
-	Roles  []string `json:"roles"`
-	UserId string   `json:"userId"`
+	Roles     []string `json:"roles"`
+	AccountId string   `json:"accountId"`
 }
 
 func extractJWTPayload(t *testing.T, bearer string) jwtInfo {
@@ -121,12 +121,12 @@ func invokeApiFullResponse(t *testing.T, method string, url string, body wst.M, 
 	return resp
 }
 
-func invokeApiAsRandomUser(t *testing.T, method string, url string, body wst.M, headers wst.M) (result wst.M, err error) {
+func invokeApiAsRandomAccount(t *testing.T, method string, url string, body wst.M, headers wst.M) (result wst.M, err error) {
 	if headers == nil {
 		headers = wst.M{}
 	}
 	if v, ok := headers["Authorization"]; !ok || v == "" {
-		headers["Authorization"] = fmt.Sprintf("Bearer %v", randomUserToken.GetString("id"))
+		headers["Authorization"] = fmt.Sprintf("Bearer %v", randomAccountToken.GetString("id"))
 	}
 	return invokeApiJsonM(t, method, url, body, headers)
 }
