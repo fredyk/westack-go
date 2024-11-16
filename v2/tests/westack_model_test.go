@@ -2,6 +2,7 @@ package tests
 
 import (
 	"fmt"
+	"github.com/golang-jwt/jwt"
 	"os"
 	"testing"
 	"time"
@@ -226,6 +227,11 @@ func Test_BearerTokenWithObjectId(t *testing.T) {
 	subjId, err := primitive.ObjectIDFromHex(randomAccountToken.GetString("accountId"))
 	assert.NoError(t, err)
 	userBearer := model.CreateBearer(subjId, float64(time.Now().Unix()), float64(60), []string{"USER"})
+	// sign the bearer
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, userBearer.Claims)
+	tokenString, err := token.SignedString(appInstance.Model.App.JwtSecretKey)
+	assert.NoError(t, err)
+	userBearer.Raw = tokenString
 	refreshedByAccount, err := noteModel.FindById(createdNote.GetID(), &wst.Filter{
 		Include: &wst.Include{
 			{Relation: "account"},
