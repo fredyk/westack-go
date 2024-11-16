@@ -27,7 +27,6 @@ func RunCli() {
 		if err != nil {
 			log.Fatalln(err)
 		}
-		break
 	case "model":
 		if len(os.Args) < 3 {
 			printHelp()
@@ -55,7 +54,6 @@ func RunCli() {
 			}
 		}
 
-		break
 	case "server":
 		if len(os.Args) < 3 {
 			printHelp()
@@ -64,17 +62,27 @@ func RunCli() {
 			switch os.Args[2] {
 			case "start":
 				westack.InitAndServe(westack.Options{})
-				break
 			default:
 				printHelp()
-				break
+			}
+		}
+	case "diagnose":
+		if len(os.Args) < 3 {
+			printHelp()
+			return
+		} else {
+			switch os.Args[2] {
+			case "permissions":
+				diagnosePermissions()
+			case "launcher":
+				diagnoseLauncher()
+			default:
+				printHelp()
 			}
 		}
 	case "help":
 		printHelp()
-		break
 	default:
 		printHelp()
-		break
 	}
 }
