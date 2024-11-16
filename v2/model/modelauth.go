@@ -2,12 +2,11 @@ package model
 
 import (
 	"fmt"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"log"
 	"strings"
 	"sync"
 	"time"
-
-	"go.mongodb.org/mongo-driver/bson/primitive"
 
 	"github.com/gofiber/fiber/v2"
 )
@@ -45,14 +44,7 @@ func (loadedModel *StatefulModel) EnforceEx(token *BearerToken, objId string, ac
 
 	} else {
 
-		bearerAccountIdSt = ""
-		if v, ok := token.Account.Id.(string); ok {
-			bearerAccountIdSt = v
-		} else if vv, ok := token.Account.Id.(primitive.ObjectID); ok {
-			bearerAccountIdSt = vv.Hex()
-		} else {
-			bearerAccountIdSt = fmt.Sprintf("%v", token.Account.Id)
-		}
+		bearerAccountIdSt = token.Raw
 		targetObjId = objId
 
 		var created int64
@@ -76,7 +68,7 @@ func (loadedModel *StatefulModel) EnforceEx(token *BearerToken, objId string, ac
 			return fiber.ErrUnauthorized, false
 		}
 
-		if result, isPresent := loadedModel.authCache[token.Raw][targetObjId][action]; isPresent {
+		if result, isPresent := loadedModel.authCache[bearerAccountIdSt][targetObjId][action]; isPresent {
 			if loadedModel.App.Debug || !result {
 				log.Printf("[DEBUG] Cache hit for %v.%v ---> %v\n", loadedModel.Name, action, result)
 			}
@@ -119,17 +111,27 @@ func (loadedModel *StatefulModel) EnforceEx(token *BearerToken, objId string, ac
 		if len(exp) > 0 {
 			log.Println("Explain", exp)
 		}
-		fmt.Printf("[DEBUG] EnforceEx for %v.%v (subj=%v,obj=%v) ---> %v\n", loadedModel.Name, action, bearerAccountIdSt, targetObjId, allow)
+		var subjId string
+		if token != nil && token.Account != nil {
+			if v, ok := token.Account.Id.(string); ok {
+				subjId = v
+			} else if vv, ok := token.Account.Id.(primitive.ObjectID); ok {
+				subjId = vv.Hex()
+			} else {
+				subjId = fmt.Sprintf("%v", token.Account.Id)
+			}
+		}
+		fmt.Printf("[DEBUG] EnforceEx for %v.%v (subj=%v,obj=%v) ---> %v\n", loadedModel.Name, action, subjId, targetObjId, allow)
 		if eventContext.Remote != nil && eventContext.Remote.Name != "" {
 			fmt.Printf("[DEBUG] ... at remote method %v %v%v\n", strings.ToUpper(eventContext.Remote.Http.Verb), loadedModel.BaseUrl, eventContext.Remote.Http.Path)
 		}
 	}
 	if err != nil {
-		updateAuthCache(loadedModel, token.Raw, targetObjId, action, false)
+		updateAuthCache(loadedModel, bearerAccountIdSt, targetObjId, action, false)
 		return err, false
 	}
 	if allow {
-		updateAuthCache(loadedModel, token.Raw, targetObjId, action, true)
+		updateAuthCache(loadedModel, bearerAccountIdSt, targetObjId, action, true)
 		return nil, true
 	}
 	return fiber.ErrUnauthorized, false

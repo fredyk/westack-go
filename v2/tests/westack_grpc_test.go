@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/golang-jwt/jwt"
 	"io"
 	"log"
 	"net"
@@ -788,6 +789,13 @@ func TestMain(m *testing.M) {
 		log.Fatalf("failed to create app instance: %v", err)
 	}
 	appBearer = model.CreateBearer(appInstance.Id, float64(time.Now().Unix()), float64(600), []string{"APP"})
+	// sign the bearer
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, appBearer.Claims)
+	tokenString, err := token.SignedString(appInstance.Model.App.JwtSecretKey)
+	if err != nil {
+		log.Fatalf("failed to sign token: %v", err)
+	}
+	appBearer.Raw = tokenString
 
 	go func() {
 		err := server.Start()
