@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/fredyk/westack-go/v2/westack"
 	"github.com/golang-jwt/jwt"
 	"io"
 	"log"
@@ -26,7 +27,6 @@ import (
 	"go.mongodb.org/mongo-driver/event"
 	"google.golang.org/grpc"
 
-	"github.com/fredyk/westack-go/v2"
 	wst "github.com/fredyk/westack-go/v2/common"
 	"github.com/fredyk/westack-go/v2/datasource"
 	"github.com/fredyk/westack-go/v2/model"
