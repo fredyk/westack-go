@@ -213,35 +213,14 @@ func initProject(cwd string) error {
 
 	}
 
-	entries, err := os.ReadDir("common/models")
-	if err != nil {
-		return err
+	allModels, err2 := loadAllModels()
+	if err2 != nil {
+		return err2
 	}
 
-	foundAccountModel := false
-	foundRoleModel := false
-	foundAppModel := false
-	for _, entry := range entries {
-		if regexp.MustCompile("\\.json$").MatchString(entry.Name()) {
-			bytes, err := os.ReadFile("common/models/" + entry.Name())
-			if err != nil {
-				return err
-			}
-			var config *model.Config
-			err = json.Unmarshal(bytes, &config)
-			if err != nil {
-				return err
-			}
-
-			if config.Base == "Account" {
-				foundAccountModel = true
-			} else if config.Base == "Role" {
-				foundRoleModel = true
-			} else if config.Base == "App" {
-				foundAppModel = true
-			}
-		}
-	}
+	_, foundAccountModel := allModels["Account"]
+	_, foundRoleModel := allModels["Role"]
+	_, foundAppModel := allModels["App"]
 
 	if !foundAccountModel {
 		err2 := addModel(DefaultAccount, "db")
@@ -274,6 +253,33 @@ func initProject(cwd string) error {
 	}
 
 	return nil
+}
+
+func loadAllModels() (map[string]model.Config, error) {
+
+	entries, err := os.ReadDir("common/models")
+	if err != nil {
+		return nil, err
+	}
+
+	allModels := make(map[string]model.Config)
+
+	for _, entry := range entries {
+		if regexp.MustCompile("\\.json$").MatchString(entry.Name()) {
+			bytes, err := os.ReadFile("common/models/" + entry.Name())
+			if err != nil {
+				return nil, err
+			}
+			var config *model.Config
+			err = json.Unmarshal(bytes, &config)
+			if err != nil {
+				return nil, err
+			}
+
+			allModels[config.Name] = *config
+		}
+	}
+	return allModels, nil
 }
 
 func addModel(config model.Config, datasource string) error {
