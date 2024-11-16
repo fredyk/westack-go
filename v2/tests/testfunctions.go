@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/rand"
 	"fmt"
+	"github.com/fredyk/westack-go/v2/westack"
 	"io"
 	"math/big"
 	"net/http"
@@ -11,7 +12,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/fredyk/westack-go/v2"
 	wst "github.com/fredyk/westack-go/v2/common"
 	"github.com/fredyk/westack-go/v2/model"
 	"github.com/goccy/go-json"

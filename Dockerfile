@@ -17,8 +17,8 @@ COPY v2/go.mod ./
 COPY v2/go.sum ./
 RUN go mod download
 
-COPY cli ./cli
-COPY cli-utils ./cli-utils
+COPY v2/cli ./cli
+COPY v2/cli-utils ./cli-utils
 COPY westack ./westack
 COPY *.go ./
 

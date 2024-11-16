@@ -2,6 +2,7 @@ package tests
 
 import (
 	"fmt"
+	"github.com/fredyk/westack-go/v2/westack"
 	"github.com/golang-jwt/jwt"
 	"os"
 	"testing"
@@ -9,7 +10,6 @@ import (
 
 	"github.com/goccy/go-json"
 
-	"github.com/fredyk/westack-go/v2"
 	"github.com/fredyk/westack-go/v2/model"
 
 	"github.com/stretchr/testify/assert"
