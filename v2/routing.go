@@ -615,8 +615,23 @@ func casbinOwnerFn(loadedModel *model.StatefulModel) func(arguments ...interface
 	modelConfigsByName := make(map[string]*model.Config)
 	return func(arguments ...interface{}) (interface{}, error) {
 
-		subId := arguments[0].(string)
+		var subId string
+		rawToken := arguments[0].(string)
 		objId := arguments[1].(string)
+
+		// Decode the token
+		token, err := jwt.Parse(rawToken, func(token *jwt.Token) (interface{}, error) {
+			return loadedModel.App.JwtSecretKey, nil
+		})
+		if err != nil {
+			return false, err
+		}
+		if claims, ok := token.Claims.(jwt.MapClaims); ok && token.Valid {
+			subId = claims["accountId"].(string)
+		} else {
+			return false, errors.New("invalid token")
+		}
+
 		policyObj := arguments[2]
 
 		if loadedModel.App.Debug {
@@ -645,7 +660,6 @@ func casbinOwnerFn(loadedModel *model.StatefulModel) func(arguments ...interface
 
 		roleKey := fmt.Sprintf("%v_OWNERS", objId)
 		var accountsForRole []string
-		var err error
 		if accountsForRole, err = loadedModel.Enforcer.GetUsersForRole(roleKey); err == nil {
 			for _, userInRole := range accountsForRole {
 				if subId == userInRole {
