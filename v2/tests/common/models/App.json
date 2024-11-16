@@ -4,7 +4,12 @@
   "base": "App",
   "public": true,
   "properties": {},
-  "relations": {},
+  "relations": {
+    "account": {
+      "type": "belongsTo",
+      "model": "Account"
+    }
+  },
   "hidden": [],
   "casbin": {
     "requestDefinition": "",
