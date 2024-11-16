@@ -2,7 +2,6 @@ package westack
 
 import (
 	"fmt"
-
 	wst "github.com/fredyk/westack-go/v2/common"
 	"github.com/fredyk/westack-go/v2/model"
 )
