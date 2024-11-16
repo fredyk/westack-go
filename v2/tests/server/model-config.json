@@ -29,7 +29,7 @@
   "Store": {
     "dataSource": "db2"
   },
-  "publicAccount": {
+  "PublicAccount": {
     "dataSource": "db0"
   },
   "role": {

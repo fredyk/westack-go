@@ -1,5 +1,5 @@
 {
-  "name": "publicAccount",
+  "name": "PublicAccount",
   "base": "Account",
   "public": true,
   "properties": {
