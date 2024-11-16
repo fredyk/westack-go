@@ -2,12 +2,12 @@ package tests
 
 import (
 	"fmt"
+	"github.com/fredyk/westack-go/v2/westack"
 	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/fredyk/westack-go/v2"
 	wst "github.com/fredyk/westack-go/v2/common"
 )
 

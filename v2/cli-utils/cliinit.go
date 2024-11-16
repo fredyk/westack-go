@@ -25,8 +25,43 @@ var DefaultAccount = model.Config{
 			Required: true,
 		},
 	},
-	Relations: &map[string]*model.Relation{},
-	Hidden:    []string{"password"},
+	Relations: &map[string]*model.Relation{
+		"parentAccount": {
+			Type:  "belongsTo",
+			Model: "Account",
+		},
+		"subAccounts": {
+			Type:  "hasMany",
+			Model: "Account",
+		},
+		"profile": {
+			Type:  "hasOne",
+			Model: "Profile",
+		},
+	},
+	Hidden: []string{"password"},
+}
+
+var DefaultProfile = model.Config{
+	Name:   "Profile",
+	Plural: "profiles",
+	Base:   "Profile",
+	Public: true,
+	Properties: map[string]model.Property{
+		"displayName": {
+			Type: "string",
+		},
+		"nickname": {
+			Type: "string",
+		},
+	},
+	Relations: &map[string]*model.Relation{
+		"account": {
+			Type:  "belongsTo",
+			Model: "Account",
+		},
+	},
+	Hidden: []string{},
 }
 
 var DefaulRole = model.Config{
@@ -54,7 +89,12 @@ var DefaultApp = model.Config{
 			Required: true,
 		},
 	},
-	Relations: &map[string]*model.Relation{},
+	Relations: &map[string]*model.Relation{
+		"account": {
+			Type:  "belongsTo",
+			Model: "Account",
+		},
+	},
 }
 
 var DefaultDatasources = map[string]model.DataSourceConfig{
