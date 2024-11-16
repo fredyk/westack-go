@@ -16,9 +16,11 @@ func diagnoseModelsWithoutEveryoneRead() {
 	if err != nil {
 		log.Fatalf("Error loading models: %v", err)
 	}
-	// Check if any model does not have "$everyone,*,read,allow" policy
+	fmt.Println()
 	fmt.Println("Checking for possible 401 reasons:")
+	fmt.Println()
 	issuesFound := false
+	// Check if some model does not have "$everyone,*,read,allow" policy
 	for _, model := range allModels {
 		if model.Base != "Account" && model.Base != "Role" && model.Base != "App" {
 			if model.Casbin.Policies == nil {
@@ -38,11 +40,41 @@ func diagnoseModelsWithoutEveryoneRead() {
 			}
 		}
 	}
+
+	fmt.Println()
+
+	// Check if some model does not have a relation to Account model
+	for _, model := range allModels {
+		if model.Base != "Account" && model.Base != "Role" {
+			if model.Relations == nil {
+				fmt.Printf("WARNING: Model %v does not have any relations\n", model.Name)
+			} else {
+				found := false
+				for _, relation := range *model.Relations {
+					if (relation.Model == "Account" || relation.Model == "App") && relation.Type == "belongsTo" {
+						found = true
+						break
+					}
+				}
+				if !found {
+					if model.Base == "App" {
+						fmt.Printf("ERROR: Model %v does not have a relation to Account or App model\n", model.Name)
+					} else {
+						fmt.Printf("INFO: Model %v does not have a relation to Account or App model\n", model.Name)
+					}
+					issuesFound = true
+				}
+			}
+		}
+	}
 	if !issuesFound {
 		fmt.Println("No issues found")
 	}
+	fmt.Println()
+	fmt.Println()
 
 	fmt.Println("Checking for possible excessive permissions:")
+	fmt.Println()
 	issuesFound = false
 	for _, model := range allModels {
 		if model.Base != "Account" && model.Base != "Role" && model.Base != "App" {
