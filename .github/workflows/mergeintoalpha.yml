@@ -60,14 +60,14 @@ jobs:
         go: ["1.21", "1.22"]
     env:
       WST_ADMIN_USERNAME: admin
-      WST_ADMIN_PWD: testadmin
+      WST_ADMIN_PWD: Abcd1234.
       PPROF_AUTH_USERNAME: test
       PPROF_AUTH_PASSWORD: abcd1234.
       GITHUB_TOKEN: ${{ secrets.PULL_REQUEST_TOKEN }}
       DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
       DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
       MIN_COVERAGE_THRESHOLD: 81.3
-      JWT_SECRET: abcd12345678.
+      JWT_SECRET: abcD12345678.
       GO_ENV: TESTING
       DEBUG: true
       PORT: 8019

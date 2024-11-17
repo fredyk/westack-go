@@ -45,6 +45,7 @@ type WeStack struct {
 	debug                          bool
 	restApiRoot                    string
 	roleMappingModel               *model.StatefulModel
+	accountCredentialsModel        *model.StatefulModel
 	dataSourceOptions              *map[string]*datasource.Options
 	init                           time.Time
 	jwtSecretKey                   []byte
@@ -156,14 +157,14 @@ func New(options ...Options) *WeStack {
 	}
 
 	if finalOptions.JwtSecretKey == "" {
-		if s, present := os.LookupEnv("JWT_SECRET"); present && strings.TrimSpace(s) != "" {
+		if s, present := os.LookupEnv("JWT_SECRET"); present && wst.IsSecurePassword(s) {
 			if len(strings.TrimSpace(s)) >= 13 {
 				finalOptions.JwtSecretKey = s
 			} else {
 				logger.Fatalf("Invalid JWT secret. It must be at least 13 characters long")
 			}
 		} else {
-			logger.Fatalf("Missing JWT secret. Either set JWT_SECRET environment variable or provide it in the options as JwtSecretKey")
+			logger.Fatalf("Missing JWT secret. Either set JWT_SECRET environment variable or provide it in the options as JwtSecretKey.\nPassword length must be at least 8 characters and contain at least one uppercase letter, one lowercase letter, one number and one special character")
 		}
 	}
 	if envDebug, _ := os.LookupEnv("DEBUG"); envDebug == "true" {
@@ -177,8 +178,8 @@ func New(options ...Options) *WeStack {
 	finalOptions.adminUsername = adminUsername
 
 	adminPassword, present := os.LookupEnv("WST_ADMIN_PWD")
-	if !present {
-		logger.Fatalf("WST_ADMIN_PWD environment variable is not set")
+	if !present || !wst.IsSecurePassword(adminPassword) {
+		logger.Fatalf("WST_ADMIN_PWD environment variable is not set. Password length must be at least 8 characters and contain at least one uppercase letter, one lowercase letter, one number and one special character")
 	}
 	finalOptions.adminPwd = adminPassword
 
