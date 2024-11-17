@@ -114,6 +114,11 @@ func (app *WeStack) loadModels() error {
 			return err
 		}
 	}
+	(*app.accountCredentialsModel.Config.Relations)["account"].Model = someAccountModel.Name
+	err = app.setupModel(app.accountCredentialsModel, app.accountCredentialsModel.Datasource)
+	if err != nil {
+		return err
+	}
 
 	err2 := fixRelations(app)
 	if err2 != nil {
@@ -264,7 +269,7 @@ func (app *WeStack) setupModel(loadedModel *model.StatefulModel, dataSource *dat
 	loadedModel.Initialize()
 
 	if config.Base == "Role" {
-		setupRoleModel(config, app, dataSource)
+		setupInternalModels(config, app, dataSource)
 	}
 
 	if config.Base == "Account" {
@@ -295,237 +300,280 @@ func (app *WeStack) setupModel(loadedModel *model.StatefulModel, dataSource *dat
 
 		loadedModel.BaseUrl = app.restApiRoot + "/" + plural
 
-		loadedModel.On("findMany", func(ctx *model.EventContext) error {
-			return handleFindMany(app, loadedModel, ctx)
-		})
-		loadedModel.On("count", func(ctx *model.EventContext) error {
-			result, err := loadedModel.Count(ctx.Filter, ctx)
-			if err != nil {
-				return err
-			}
-			ctx.StatusCode = fiber.StatusOK
-			ctx.Result = wst.M{"count": result}
-			return nil
-		})
-		loadedModel.On("findById", func(ctx *model.EventContext) error {
-			result, err := loadedModel.FindById(ctx.ModelID, ctx.Filter, ctx)
-			if err != nil {
-				return err
-			}
-			ctx.StatusCode = fiber.StatusOK
-			if result != nil {
-				result.(*model.StatefulInstance).HideProperties()
-				ctx.Result = result.ToJSON()
-			}
-			return nil
-		})
+	}
+	loadedModel.On("findMany", func(ctx *model.EventContext) error {
+		return handleFindMany(app, loadedModel, ctx)
+	})
+	loadedModel.On("count", func(ctx *model.EventContext) error {
+		result, err := loadedModel.Count(ctx.Filter, ctx)
+		if err != nil {
+			return err
+		}
+		ctx.StatusCode = fiber.StatusOK
+		ctx.Result = wst.M{"count": result}
+		return nil
+	})
+	loadedModel.On("findById", func(ctx *model.EventContext) error {
+		result, err := loadedModel.FindById(ctx.ModelID, ctx.Filter, ctx)
+		if err != nil {
+			return err
+		}
+		ctx.StatusCode = fiber.StatusOK
+		if result != nil {
+			result.(*model.StatefulInstance).HideProperties()
+			ctx.Result = result.ToJSON()
+		}
+		return nil
+	})
 
-		loadedModel.Observe("before save", func(ctx *model.EventContext) error {
-			data := ctx.Data
-			intervalPattern := regexp.MustCompile(`^[-+]\d+s$`)
+	loadedModel.Observe("before save", func(ctx *model.EventContext) error {
+		data := ctx.Data
+		intervalPattern := regexp.MustCompile(`^[-+]\d+s$`)
 
-			if _, ok := (*data)["modified"]; !ok {
+		if _, ok := (*data)["modified"]; !ok {
+			timeNow := time.Now()
+			(*data)["modified"] = timeNow
+		}
+
+		if ctx.IsNewInstance {
+			if _, ok := (*data)["created"]; !ok {
 				timeNow := time.Now()
-				(*data)["modified"] = timeNow
+				(*data)["created"] = timeNow
 			}
 
-			if ctx.IsNewInstance {
-				if _, ok := (*data)["created"]; !ok {
-					timeNow := time.Now()
-					(*data)["created"] = timeNow
-				}
-
-				for propertyName, propertyConfig := range config.Properties {
-					defaultValue := propertyConfig.Default
-					if defaultValue != nil {
-						if _, ok := (*data)[propertyName]; !ok {
-							if defaultValue == "null" {
-								defaultValue = nil
-							}
-							if propertyConfig.Type == "date" {
-								if defaultValue == "$now" {
-									(*data)[propertyName] = time.Now()
-									continue
-								}
-								if match := intervalPattern.MatchString(defaultValue.(string)); match {
-									secondsString := defaultValue.(string)[1 : len(defaultValue.(string))-1]
-									seconds, err := strconv.Atoi(secondsString)
-									if err != nil {
-										return err
-									}
-
-									adjustment := 1
-									if defaultValue.(string)[0] == '-' {
-										adjustment = -1
-									}
-
-									defaultValue = time.Now().Add(time.Duration(adjustment*seconds) * time.Second)
-								}
-							}
-							(*data)[propertyName] = defaultValue
+			for propertyName, propertyConfig := range config.Properties {
+				defaultValue := propertyConfig.Default
+				if defaultValue != nil {
+					if _, ok := (*data)[propertyName]; !ok {
+						if defaultValue == "null" {
+							defaultValue = nil
 						}
+						if propertyConfig.Type == "date" {
+							if defaultValue == "$now" {
+								(*data)[propertyName] = time.Now()
+								continue
+							}
+							if match := intervalPattern.MatchString(defaultValue.(string)); match {
+								secondsString := defaultValue.(string)[1 : len(defaultValue.(string))-1]
+								seconds, err := strconv.Atoi(secondsString)
+								if err != nil {
+									return err
+								}
+
+								adjustment := 1
+								if defaultValue.(string)[0] == '-' {
+									adjustment = -1
+								}
+
+								defaultValue = time.Now().Add(time.Duration(adjustment*seconds) * time.Second)
+							}
+						}
+						(*data)[propertyName] = defaultValue
+					}
+				}
+			}
+
+			if config.Base == "AccountCredentials" {
+
+				username := data.GetString("username")
+				email := data.GetString("email")
+				password := data.GetString("password")
+				if (strings.TrimSpace(username) == "") && (strings.TrimSpace(email) == "") {
+					return wst.CreateError(fiber.ErrBadRequest, "EMAIL_PRESENCE", fiber.Map{"message": "Either username or email is required", "codes": wst.M{"email": []string{"presence"}}}, "ValidationError")
+				}
+
+				if email != "" && !ValidEmailRegex.MatchString(email) {
+					return wst.CreateError(fiber.ErrBadRequest, "EMAIL_FORMAT", fiber.Map{"message": "Invalid email format", "codes": wst.M{"email": []string{"format"}}}, "ValidationError")
+				}
+
+				if strings.TrimSpace(username) != "" {
+					filter := wst.Filter{Where: &wst.Where{"username": username}}
+					existent, err2 := loadedModel.FindOne(&filter, ctx)
+					if err2 != nil {
+						return err2
+					}
+					if existent != nil {
+						return wst.CreateError(fiber.ErrConflict, "USERNAME_UNIQUENESS", fiber.Map{"message": fmt.Sprintf("The `user` instance is not valid. Details: `username` Account already exists (value: \"%v\").", username), "codes": wst.M{"username": []string{"uniqueness"}}}, "ValidationError")
 					}
 				}
 
-				if config.Base == "Account" {
-					username := (*data)["username"]
-					email := (*data)["email"]
-					if (username == nil || strings.TrimSpace(username.(string)) == "") && (email == nil || strings.TrimSpace(email.(string)) == "") {
-						return wst.CreateError(fiber.ErrBadRequest, "EMAIL_PRESENCE", fiber.Map{"message": "Either username or email is required", "codes": wst.M{"email": []string{"presence"}}}, "ValidationError")
+				if strings.TrimSpace(email) != "" {
+					filter := wst.Filter{Where: &wst.Where{"email": email}}
+					existent, err2 := loadedModel.FindOne(&filter, ctx)
+					if err2 != nil {
+						return err2
 					}
-
-					if email != nil && !ValidEmailRegex.MatchString(email.(string)) {
-						return wst.CreateError(fiber.ErrBadRequest, "EMAIL_FORMAT", fiber.Map{"message": "Invalid email format", "codes": wst.M{"email": []string{"format"}}}, "ValidationError")
+					if existent != nil {
+						return wst.CreateError(fiber.ErrConflict, "EMAIL_UNIQUENESS", fiber.Map{"message": fmt.Sprintf("The `user` instance is not valid. Details: `email` Email already exists (value: \"%v\").", email), "codes": wst.M{"email": []string{"uniqueness"}}}, "ValidationError")
 					}
+				}
 
-					if username != nil && strings.TrimSpace(username.(string)) != "" {
-						filter := wst.Filter{Where: &wst.Where{"username": username}}
-						existent, err2 := loadedModel.FindOne(&filter, ctx)
+				if strings.TrimSpace(password) == "" {
+					return wst.CreateError(fiber.ErrBadRequest, "PASSWORD_BLANK", fiber.Map{"message": "Invalid password"}, "ValidationError")
+				} else if !wst.IsSecurePassword(password) {
+					return wst.CreateError(fiber.ErrBadRequest, "PASSWORD_INSECURE", fiber.Map{"message": "Password length must be at least 8 characters and contain at least one uppercase letter, one lowercase letter, one number and one special character"}, "ValidationError")
+				}
+				hashed, err := bcrypt.GenerateFromPassword([]byte(fmt.Sprintf("%s%s", string(loadedModel.App.JwtSecretKey), password)), 11)
+				if err != nil {
+					return err
+				}
+				(*data)["password"] = string(hashed)
+
+			}
+
+			if config.Base == "Account" {
+
+				plainCredentials := data.Pick(accountCredentialsProperties)
+				data.ClearProperties([]string{"password"})
+
+				accountCredentials, err := app.accountCredentialsModel.Create(plainCredentials, &model.EventContext{
+					Bearer:      ctx.Bearer,
+					BaseContext: ctx,
+				})
+				if err != nil {
+					return err
+				}
+
+				ctx.QueueOperation("after save", func(nextCtx *model.EventContext) error {
+					updated, err := accountCredentials.UpdateAttributes(wst.M{"accountId": nextCtx.Instance.Id}, nextCtx)
+					if err != nil {
+						return err
+					}
+					if app.debug {
+						fmt.Printf("Update AccountCredentials: ('%v', '%v')\n", updated.GetString("username"), updated.GetString("email"))
+					}
+					return nil
+				})
+
+				if app.debug {
+					fmt.Printf("Create Account: ('%v', '%v')\n", (*data)["username"], (*data)["email"])
+				}
+			}
+
+			// Check inverse hasOne uniqueness
+			if _, ok := app.restrictModelUniquenessByField[loadedModel.Name]; ok {
+				for foreignKey, restriction := range app.restrictModelUniquenessByField[loadedModel.Name] {
+					if (*data)[foreignKey] != nil {
+						filter := wst.Filter{Where: &wst.Where{foreignKey: (*data)[foreignKey]}}
+						existent, err2 := loadedModel.FindOne(&filter, &model.EventContext{Bearer: &model.BearerToken{Account: &model.BearerAccount{System: true}}})
 						if err2 != nil {
 							return err2
 						}
-						if existent != nil {
-							return wst.CreateError(fiber.ErrConflict, "USERNAME_UNIQUENESS", fiber.Map{"message": fmt.Sprintf("The `user` instance is not valid. Details: `username` Account already exists (value: \"%v\").", username), "codes": wst.M{"username": []string{"uniqueness"}}}, "ValidationError")
+						if existent != nil && existent.GetID() != nil {
+							if app.debug {
+								fmt.Printf("[ERROR] inverse hasOne restriction triggered for [%v %v=%v]\n", loadedModel.Name, foreignKey, (*data)[foreignKey])
+							}
+							return wst.CreateError(fiber.ErrConflict, restriction.Code, fiber.Map{"message": restriction.Message, "codes": wst.M{foreignKey: []string{strings.ToLower(restriction.Code)}}}, restriction.ErrorName)
 						}
 					}
+				}
+			}
 
-					if email != nil && strings.TrimSpace(email.(string)) != "" {
-						filter := wst.Filter{Where: &wst.Where{"email": email}}
-						existent, err2 := loadedModel.FindOne(&filter, ctx)
-						if err2 != nil {
-							return err2
-						}
-						if existent != nil {
-							return wst.CreateError(fiber.ErrConflict, "EMAIL_UNIQUENESS", fiber.Map{"message": fmt.Sprintf("The `user` instance is not valid. Details: `email` Email already exists (value: \"%v\").", email), "codes": wst.M{"email": []string{"uniqueness"}}}, "ValidationError")
-						}
-					}
-
-					if (*data)["password"] == nil || strings.TrimSpace((*data)["password"].(string)) == "" {
-						return wst.CreateError(fiber.ErrBadRequest, "PASSWORD_BLANK", fiber.Map{"message": "Invalid password"}, "ValidationError")
-					}
-					hashed, err := bcrypt.GenerateFromPassword([]byte(fmt.Sprintf("%s%s", string(loadedModel.App.JwtSecretKey), (*data)["password"].(string))), 10)
+		} else {
+			if config.Base == "AccountCredentials" {
+				if (*data)["password"] != nil && (*data)["password"] != "" {
+					log.Println("Update Account password")
+					hashed, err := bcrypt.GenerateFromPassword([]byte(fmt.Sprintf("%s%s", string(loadedModel.App.JwtSecretKey), (*data)["password"].(string))), 11)
 					if err != nil {
 						return err
 					}
 					(*data)["password"] = string(hashed)
-
-					if app.debug {
-						fmt.Printf("Create Account: ('%v', '%v')\n", (*data)["username"], (*data)["email"])
-					}
 				}
-
-				// Check inverse hasOne uniqueness
-				if _, ok := app.restrictModelUniquenessByField[loadedModel.Name]; ok {
-					for foreignKey, restriction := range app.restrictModelUniquenessByField[loadedModel.Name] {
-						if (*data)[foreignKey] != nil {
-							filter := wst.Filter{Where: &wst.Where{foreignKey: (*data)[foreignKey]}}
-							existent, err2 := loadedModel.FindOne(&filter, &model.EventContext{Bearer: &model.BearerToken{Account: &model.BearerAccount{System: true}}})
-							if err2 != nil {
-								return err2
-							}
-							if existent != nil && existent.GetID() != nil {
-								if app.debug {
-									fmt.Printf("[ERROR] inverse hasOne restriction triggered for [%v %v=%v]\n", loadedModel.Name, foreignKey, (*data)[foreignKey])
-								}
-								return wst.CreateError(fiber.ErrConflict, restriction.Code, fiber.Map{"message": restriction.Message, "codes": wst.M{foreignKey: []string{strings.ToLower(restriction.Code)}}}, restriction.ErrorName)
-							}
-						}
-					}
+			} else if config.Base == "Account" {
+				credentials, err := app.accountCredentialsModel.FindOne(&wst.Filter{Where: &wst.Where{"accountId": ctx.ModelID}}, ctx)
+				if err != nil {
+					return err
 				}
-
-			} else {
-				if config.Base == "Account" {
-					if (*data)["password"] != nil && (*data)["password"] != "" {
-						log.Println("Update Account password")
-						hashed, err := bcrypt.GenerateFromPassword([]byte(fmt.Sprintf("%s%s", string(loadedModel.App.JwtSecretKey), (*data)["password"].(string))), 10)
-						if err != nil {
-							return err
-						}
-						(*data)["password"] = string(hashed)
+				if credentials != nil {
+					plainCredentials := data.Pick(accountCredentialsProperties)
+					data.ClearProperties([]string{"password"})
+					_, err = credentials.UpdateAttributes(plainCredentials, ctx)
+					if err != nil {
+						return err
 					}
 				}
 			}
+		}
+		return nil
+	})
+
+	loadedModel.On("create", func(ctx *model.EventContext) error {
+		created, err := loadedModel.Create(*ctx.Data, ctx)
+		if err != nil {
+			return err
+		}
+		ctx.StatusCode = fiber.StatusOK
+		ctx.Result = created.ToJSON()
+		return nil
+	})
+
+	loadedModel.On("instance_updateAttributes", func(ctx *model.EventContext) error {
+		inst, err := loadedModel.FindById(ctx.ModelID, nil, ctx)
+		if err != nil {
+			return err
+		}
+
+		updated, err := inst.UpdateAttributes(ctx.Data, ctx)
+		if err != nil {
+			return err
+		}
+		ctx.StatusCode = fiber.StatusOK
+		ctx.Result = updated.ToJSON()
+		return nil
+	})
+
+	protectedFieldsCount := len(loadedModel.Config.Protected)
+	loadedModel.Observe("before build", func(eventContext *model.EventContext) error {
+		if protectedFieldsCount <= 0 || eventContext.BaseContext.Bearer.Account.System || skipOperationForBeforeBuild(eventContext.OperationName) {
 			return nil
-		})
+		}
+		isDifferentAccount := true
+		if eventContext.BaseContext.Bearer != nil && eventContext.BaseContext.Bearer.Account != nil {
+			foundAccountId := eventContext.ModelID.(primitive.ObjectID).Hex()
+			requesterAccountId := eventContext.BaseContext.Bearer.Account.Id
+			if v, ok := requesterAccountId.(primitive.ObjectID); ok {
+				requesterAccountId = v.Hex()
+			}
+			isDifferentAccount = foundAccountId != requesterAccountId.(string)
+		}
+		if isDifferentAccount && !isAllowedForProtectedFields(eventContext.BaseContext.Bearer) {
+			for _, hiddenProperty := range loadedModel.Config.Protected {
+				delete(*eventContext.Data, hiddenProperty)
+			}
+		}
+		return nil
+	})
 
-		loadedModel.On("create", func(ctx *model.EventContext) error {
-			created, err := loadedModel.Create(*ctx.Data, ctx)
-			if err != nil {
-				return err
+	deleteByIdHandler := func(ctx *model.EventContext) error {
+		deleteResult, err := loadedModel.DeleteById(ctx.ModelID, ctx)
+		if err == nil {
+			deletedCount := deleteResult.DeletedCount
+			if deletedCount != 1 {
+				return wst.CreateError(fiber.ErrBadRequest, "BAD_REQUEST", fiber.Map{"message": fmt.Sprintf("Deleted %v instances for %v", deletedCount, ctx.ModelID)}, "Error")
 			}
-			ctx.StatusCode = fiber.StatusOK
-			ctx.Result = created.ToJSON()
-			return nil
-		})
+			ctx.StatusCode = fiber.StatusNoContent
+			ctx.Result = ""
+		}
+		return err
+	}
+	loadedModel.On("instance_delete", deleteByIdHandler)
 
-		loadedModel.On("instance_updateAttributes", func(ctx *model.EventContext) error {
-			inst, err := loadedModel.FindById(ctx.ModelID, nil, ctx)
-			if err != nil {
-				return err
-			}
-
-			updated, err := inst.UpdateAttributes(ctx.Data, ctx)
-			if err != nil {
-				return err
-			}
-			ctx.StatusCode = fiber.StatusOK
-			ctx.Result = updated.ToJSON()
-			return nil
-		})
-
-		protectedFieldsCount := len(loadedModel.Config.Protected)
-		loadedModel.Observe("before build", func(eventContext *model.EventContext) error {
-			if protectedFieldsCount <= 0 || eventContext.BaseContext.Bearer.Account.System || skipOperationForBeforeBuild(eventContext.OperationName) {
-				return nil
-			}
-			isDifferentAccount := true
-			if eventContext.BaseContext.Bearer != nil && eventContext.BaseContext.Bearer.Account != nil {
-				foundAccountId := eventContext.ModelID.(primitive.ObjectID).Hex()
-				requesterAccountId := eventContext.BaseContext.Bearer.Account.Id
-				if v, ok := requesterAccountId.(primitive.ObjectID); ok {
-					requesterAccountId = v.Hex()
-				}
-				isDifferentAccount = foundAccountId != requesterAccountId.(string)
-			}
-			if isDifferentAccount && !isAllowedForProtectedFields(eventContext.BaseContext.Bearer) {
-				for _, hiddenProperty := range loadedModel.Config.Protected {
-					delete(*eventContext.Data, hiddenProperty)
-				}
-			}
-			return nil
-		})
-
-		deleteByIdHandler := func(ctx *model.EventContext) error {
-			deleteResult, err := loadedModel.DeleteById(ctx.ModelID, ctx)
+	if config.Base == "Account" {
+		upsertAccountRolesHandler := func(ctx *model.EventContext) error {
+			var body UpserRequestBody
+			err := ctx.Ctx.BodyParser(&body)
 			if err == nil {
-				deletedCount := deleteResult.DeletedCount
-				if deletedCount != 1 {
-					return wst.CreateError(fiber.ErrBadRequest, "BAD_REQUEST", fiber.Map{"message": fmt.Sprintf("Deleted %v instances for %v", deletedCount, ctx.ModelID)}, "Error")
+				err = UpsertAccountRoles(app, ctx.ModelID, body.Roles, ctx)
+				if err == nil {
+					ctx.StatusCode = fiber.StatusOK
+					ctx.Result = wst.M{"result": "OK"}
 				}
-				ctx.StatusCode = fiber.StatusNoContent
-				ctx.Result = ""
 			}
 			return err
 		}
-		loadedModel.On("instance_delete", deleteByIdHandler)
-
-		if config.Base == "Account" {
-			upsertAccountRolesHandler := func(ctx *model.EventContext) error {
-				var body UpserRequestBody
-				err := ctx.Ctx.BodyParser(&body)
-				if err == nil {
-					err = UpsertAccountRoles(app, ctx.ModelID, body.Roles, ctx)
-					if err == nil {
-						ctx.StatusCode = fiber.StatusOK
-						ctx.Result = wst.M{"result": "OK"}
-					}
-				}
-				return err
-			}
-			loadedModel.On("user_upsertRoles", upsertAccountRolesHandler)
-		}
-
+		loadedModel.On("user_upsertRoles", upsertAccountRolesHandler)
 	}
+
 	return nil
 }
 

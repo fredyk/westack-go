@@ -17,6 +17,8 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+var accountCredentialsProperties = []string{"email", "username", "password", "access_token", "refresh_token"}
+
 func createCasbinModel(loadedModel *model.StatefulModel, app *WeStack, config *model.Config) error {
 	casbModel := casbinmodel.NewModel()
 
@@ -126,34 +128,39 @@ func setupAccountModel(loadedModel *model.StatefulModel, app *WeStack) {
 		} else {
 			where = wst.Where{"username": username}
 		}
-		accountsCursor := loadedModel.FindMany(&wst.Filter{
+		accountCredentialsCursor := app.accountCredentialsModel.FindMany(&wst.Filter{
 			Where: &where,
-		}, ctx)
-		accounts, err := accountsCursor.All()
+			Include: &wst.Include{
+				{Relation: "account"},
+			},
+		}, &model.EventContext{Bearer: &model.BearerToken{Account: &model.BearerAccount{System: true}}})
+		accounts, err := accountCredentialsCursor.All()
 		if err != nil {
 			return err
 		}
 		if len(accounts) == 0 {
-			if accountsCursor.(*model.ChannelCursor).Err != nil {
-				return accountsCursor.(*model.ChannelCursor).Err
+			if accountCredentialsCursor.(*model.ChannelCursor).Err != nil {
+				return accountCredentialsCursor.(*model.ChannelCursor).Err
 			}
 			if loadedModel.App.Debug {
 				app.Logger().Printf("no user found with email or username %v\n", email)
 			}
 			return wst.CreateError(fiber.ErrUnauthorized, "LOGIN_FAILED", fiber.Map{"message": "login failed"}, "Error")
 		}
-		firstAccount := accounts[0].(*model.StatefulInstance)
-		ctx.Instance = firstAccount
+		firstAccountCredentials := accounts[0]
+		//accountCredentialsData := firstAccountCredentials.ToJSON()
+		savedPassword := firstAccountCredentials.GetString("password")
 
-		firstAccountData := firstAccount.ToJSON()
-		savedPassword := firstAccountData["password"]
+		fullAccount := firstAccountCredentials.GetOne("account").(*model.StatefulInstance)
+		ctx.Instance = fullAccount
+
 		saltedPassword := fmt.Sprintf("%s%s", string(loadedModel.App.JwtSecretKey), (*data)["password"].(string))
-		err = bcrypt.CompareHashAndPassword([]byte(savedPassword.(string)), []byte(saltedPassword))
+		err = bcrypt.CompareHashAndPassword([]byte(savedPassword), []byte(saltedPassword))
 		if err != nil {
 			if loadedModel.App.Debug {
 				loadedModel.App.Logger().Printf("bcrypt.CompareHashAndPassword error: %v\n", err)
 			}
-			err = bcrypt.CompareHashAndPassword([]byte(savedPassword.(string)), []byte((*data)["password"].(string)))
+			err = bcrypt.CompareHashAndPassword([]byte(savedPassword), []byte((*data)["password"].(string)))
 		} else {
 			if loadedModel.App.Debug {
 				loadedModel.App.Logger().Printf("bcrypt.CompareHashAndPassword success with salt\n")
@@ -166,7 +173,7 @@ func setupAccountModel(loadedModel *model.StatefulModel, app *WeStack) {
 			return wst.CreateError(fiber.ErrUnauthorized, "LOGIN_FAILED", fiber.Map{"message": "login failed"}, "Error")
 		}
 
-		userIdHex := firstAccount.Id.(primitive.ObjectID).Hex()
+		userIdHex := fullAccount.Id.(primitive.ObjectID).Hex()
 
 		roleNames := []string{"USER"}
 		if app.roleMappingModel != nil {
@@ -189,7 +196,7 @@ func setupAccountModel(loadedModel *model.StatefulModel, app *WeStack) {
 						"principalId": userIdHex,
 					},
 					{
-						"principalId": firstAccount.Id,
+						"principalId": fullAccount.Id,
 					},
 				},
 			}, Include: &wst.Include{{Relation: "role"}}}, roleContext).All()
@@ -217,7 +224,7 @@ func setupAccountModel(loadedModel *model.StatefulModel, app *WeStack) {
 	})
 }
 
-func setupRoleModel(config *model.Config, app *WeStack, dataSource *datasource.Datasource) {
+func setupInternalModels(config *model.Config, app *WeStack, dataSource *datasource.Datasource) {
 	roleMappingModel := model.New(&model.Config{
 		Name:   "RoleMapping",
 		Plural: "role-mappings",
@@ -251,6 +258,97 @@ func setupRoleModel(config *model.Config, app *WeStack, dataSource *datasource.D
 	roleMappingModel.(*model.StatefulModel).Datasource = dataSource
 
 	app.roleMappingModel = roleMappingModel.(*model.StatefulModel)
+
+	foreignKey := "accountId"
+	accountCredentialsModel := model.New(&model.Config{
+		Name:   "AccountCredentials",
+		Plural: "account-credentials",
+		Base:   "AccountCredentials",
+		Public: false,
+		Properties: map[string]model.Property{
+			"type": {
+				Type: "string",
+			},
+			"email": {
+				Type: "email",
+			},
+			"password": {
+				Type: "string",
+			},
+			"access_token": {
+				Type: "string",
+			},
+			"refresh_token": {
+				Type: "string",
+			},
+		},
+		Validations: []model.Validation{
+			{
+				If: map[string]model.Condition{
+					"type": {
+						Equals: "password",
+					},
+				},
+				Then: &model.Validation{
+					Properties: map[string]model.Validation{
+						"password": {
+							NotEmpty: true,
+						},
+					},
+					OneOf: []model.Validation{
+						{
+							Properties: map[string]model.Validation{
+								"email": {
+									NotEmpty: true,
+								},
+							},
+						},
+						{
+							Properties: map[string]model.Validation{
+								"username": {
+									NotEmpty: true,
+								},
+							},
+						},
+					},
+				},
+			},
+			{
+				If: map[string]model.Condition{
+					"type": {
+						Equals: "oauth",
+					},
+				},
+				Then: &model.Validation{
+					Properties: map[string]model.Validation{
+						"access_token": {
+							NotEmpty: true,
+						},
+						"refresh_token": {
+							NotEmpty: true,
+						},
+					},
+				},
+			},
+		},
+		Relations: &map[string]*model.Relation{
+			"account": {
+				Type:       "belongsTo",
+				Model:      "Account",
+				ForeignKey: &foreignKey,
+			},
+		},
+		Hidden: []string{"password"},
+		Casbin: model.CasbinConfig{
+			Policies: []string{
+				"$owner,*,__get__account,allow",
+			},
+		},
+	}, app.modelRegistry)
+	accountCredentialsModel.(*model.StatefulModel).App = app.asInterface()
+	accountCredentialsModel.(*model.StatefulModel).Datasource = dataSource
+
+	app.accountCredentialsModel = accountCredentialsModel.(*model.StatefulModel)
 }
 
 func GetRoleNames(RoleMappingModel *model.StatefulModel, userIdHex string, userId primitive.ObjectID) ([]string, error) {
