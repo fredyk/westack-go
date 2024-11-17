@@ -28,6 +28,7 @@ type EventContext struct {
 	DisableTypeConversions bool
 	SkipFieldProtection    bool
 	OperationName          wst.OperationName
+	OperationId            int64
 	Handled                bool
 }
 
@@ -106,4 +107,8 @@ func (eventContext *EventContext) GetBearer(loadedModel *StatefulModel) (*Bearer
 		Raw:     rawToken,
 	}, nil
 
+}
+
+func (eventContext *EventContext) QueueOperation(operation string, fn func(nextCtx *EventContext) error) {
+	eventContext.Model.QueueOperation(operation, eventContext, fn)
 }

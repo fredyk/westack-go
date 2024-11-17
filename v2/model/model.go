@@ -84,17 +84,38 @@ type MongoConfig struct {
 }
 
 type Config struct {
-	Name       string                `json:"name"`
-	Plural     string                `json:"plural"`
-	Base       string                `json:"base"`
-	Public     bool                  `json:"public"`
-	Properties map[string]Property   `json:"properties"`
-	Relations  *map[string]*Relation `json:"relations"`
-	Hidden     []string              `json:"hidden"`
-	Protected  []string              `json:"protected"`
-	Casbin     CasbinConfig          `json:"casbin"`
-	Cache      CacheConfig           `json:"cache"`
-	Mongo      MongoConfig           `json:"mongo"`
+	Name        string                `json:"name"`
+	Plural      string                `json:"plural"`
+	Base        string                `json:"base"`
+	Public      bool                  `json:"public"`
+	Properties  map[string]Property   `json:"properties"`
+	Relations   *map[string]*Relation `json:"relations"`
+	Hidden      []string              `json:"hidden"`
+	Protected   []string              `json:"protected"`
+	Validations []Validation          `json:"validations"`
+	Casbin      CasbinConfig          `json:"casbin"`
+	Cache       CacheConfig           `json:"cache"`
+	Mongo       MongoConfig           `json:"mongo"`
+}
+
+type Validation struct {
+	If         map[string]Condition  `json:"if"`
+	Then       *Validation           `json:"then"`
+	AllOf      []Validation          `json:"allOf"`
+	OneOf      []Validation          `json:"oneOf"`
+	Properties map[string]Validation `json:"properties"`
+	NotEmpty   bool                  `json:"notEmpty"`
+}
+
+type Condition struct {
+	Equals      interface{}   `json:"equals"`
+	NotEquals   interface{}   `json:"notEquals"`
+	Contains    []interface{} `json:"contains"`
+	NotContains []interface{} `json:"notContains"`
+	Exists      bool          `json:"exists"`
+	NotExists   bool          `json:"notExists"`
+	Empty       bool          `json:"empty"`
+	NotEmpty    bool          `json:"notEmpty"`
 }
 
 type SimplifiedConfig struct {
@@ -131,6 +152,13 @@ type StatefulModel struct {
 
 	authCache           map[string]map[string]map[string]bool
 	hasHiddenProperties bool
+	pendingOperations   []pendingOperationEntry
+}
+
+type pendingOperationEntry struct {
+	eventKey    string
+	handler     func(eventContext *EventContext) error
+	operationId int64
 }
 
 func (loadedModel *StatefulModel) GetConfig() *Config {
@@ -157,10 +185,11 @@ func New(config *Config, modelRegistry *map[string]*StatefulModel) Model {
 		Config:           config,
 		DisabledHandlers: map[string]bool{},
 
-		modelRegistry:    modelRegistry,
-		eventHandlers:    map[string]func(eventContext *EventContext) error{},
-		remoteMethodsMap: map[string]*OperationItem{},
-		authCache:        map[string]map[string]map[string]bool{},
+		modelRegistry:     modelRegistry,
+		eventHandlers:     map[string]func(eventContext *EventContext) error{},
+		remoteMethodsMap:  map[string]*OperationItem{},
+		authCache:         map[string]map[string]map[string]bool{},
+		pendingOperations: []pendingOperationEntry{},
 	}
 	loadedModel.NilInstance = &StatefulInstance{
 		Model: loadedModel,
@@ -885,6 +914,8 @@ type BearerToken struct {
 
 type EphemeralData wst.M
 
+var operationCounter int64 = 1
+
 func wrapEventHandler(model *StatefulModel, eventKey string, handler func(eventContext *EventContext) error) func(eventContext *EventContext) error {
 	currentHandler := model.eventHandlers[eventKey]
 	if currentHandler != nil {
@@ -902,7 +933,50 @@ func wrapEventHandler(model *StatefulModel, eventKey string, handler func(eventC
 			}
 		}
 	}
-	return handler
+	wrappedHandler := func(eventContext *EventContext) error {
+		baseContext := FindBaseContext(eventContext)
+		if baseContext != nil {
+			if baseContext.OperationId == 0 {
+				baseContext.OperationId = operationCounter
+				operationCounter++
+			}
+
+			// First, process new callbacks and remove them
+			err := dispatchPendingOperations(eventContext, model, eventKey, baseContext)
+			if err != nil {
+				return err
+			}
+		}
+
+		return handler(eventContext)
+	}
+	return wrappedHandler
+}
+
+func dispatchPendingOperations(eventContext *EventContext, model *StatefulModel, eventKey string, baseContext *EventContext) error {
+	n := 0
+	for i, pendingOperation := range model.pendingOperations {
+		if pendingOperation.eventKey == eventKey && pendingOperation.operationId == baseContext.OperationId {
+			err := pendingOperation.handler(eventContext)
+			if err != nil {
+				return err
+			}
+			// splice taking into account the number of elements processed
+			model.pendingOperations = append(model.pendingOperations[:i-n], model.pendingOperations[i+1:]...)
+			n++
+		}
+	}
+	return nil
+}
+
+func (loadedModel *StatefulModel) QueueOperation(operation string, eventContext *EventContext, fn func(nextCtx *EventContext) error) {
+	eventKey := mapOperationName(operation)
+	loadedModel.DisabledHandlers[eventKey] = false
+	loadedModel.pendingOperations = append(loadedModel.pendingOperations, pendingOperationEntry{
+		eventKey:    eventKey,
+		handler:     fn,
+		operationId: FindBaseContext(eventContext).OperationId,
+	})
 }
 
 func (loadedModel *StatefulModel) On(event string, handler func(eventContext *EventContext) error) {
@@ -910,8 +984,11 @@ func (loadedModel *StatefulModel) On(event string, handler func(eventContext *Ev
 }
 
 func (loadedModel *StatefulModel) Observe(operation string, handler func(eventContext *EventContext) error) {
-	eventKey := "__operation__" + strings.ReplaceAll(strings.TrimSpace(operation), " ", "_")
-	loadedModel.On(eventKey, handler)
+	loadedModel.On(mapOperationName(operation), handler)
+}
+
+func mapOperationName(operation string) string {
+	return "__operation__" + strings.ReplaceAll(strings.TrimSpace(operation), " ", "_")
 }
 
 var handlerMutex = sync.Mutex{}
@@ -923,6 +1000,11 @@ func (loadedModel *StatefulModel) GetHandler(event string) func(eventContext *Ev
 		loadedModel.DisabledHandlers[event] = true
 		handlerMutex.Unlock()
 		res = func(eventContext *EventContext) error {
+			// First, process new callbacks and remove them
+			err := dispatchPendingOperations(eventContext, loadedModel, event, FindBaseContext(eventContext))
+			if err != nil {
+				return err
+			}
 			if loadedModel.App.Debug {
 				fmt.Println("no handler found for ", loadedModel.Name, ".", event)
 			}

@@ -764,7 +764,7 @@ func TestMain(m *testing.M) {
 	plainAccount := wst.M{
 		"email":    fmt.Sprintf("user-%d@example.com", userN),
 		"username": fmt.Sprintf("user_%d", userN),
-		"password": "abcd1234.",
+		"password": "Abcd1234.",
 	}
 	var t *testing.T = new(testing.T)
 	// Instantiate a test here using m
