@@ -36,9 +36,9 @@ func Test_FindMany(t *testing.T) {
 
 	user := createAccount(t, wst.M{
 		"username": fmt.Sprintf("user-%d", createRandomInt()),
-		"password": "abcd1234.",
+		"password": "Abcd1234.",
 	})
-	token, err := loginAccount(user.GetString("username"), "abcd1234.", t)
+	token, err := loginAccount(user.GetString("username"), "Abcd1234.", t)
 	assert.Nilf(t, err, "Error while logging in: %v", err)
 	assert.NotNilf(t, token, "Token is nil: %v", token)
 	assert.Contains(t, token, "id")
@@ -220,7 +220,7 @@ func Test_CreateAccountWithoutUsername(t *testing.T) {
 	t.Parallel()
 
 	user, err := invokeApiJsonM(t, "POST", "/accounts", wst.M{
-		"password": "abcd1234.",
+		"password": "Abcd1234.",
 	}, wst.M{
 		"Content-Type": "application/json",
 	})
@@ -235,7 +235,7 @@ func Test_LoginAccountWithoutUserOrEmail(t *testing.T) {
 	t.Parallel()
 
 	user, err := invokeApiJsonM(t, "POST", "/accounts/login", wst.M{
-		"password": "abcd1234.",
+		"password": "Abcd1234.",
 	}, wst.M{
 		"Content-Type": "application/json",
 	})
@@ -421,10 +421,10 @@ func Test_AccountUpdatesNote(t *testing.T) {
 	user2Username := fmt.Sprintf("user-%d", createRandomInt())
 	createAccount(t, wst.M{
 		"username": user2Username,
-		"password": "abcd1234.",
+		"password": "Abcd1234.",
 	})
 
-	user2Token, err := loginAccount(user2Username, "abcd1234.", t)
+	user2Token, err := loginAccount(user2Username, "Abcd1234.", t)
 	assert.NoError(t, err)
 	assert.NotEmpty(t, user2Token.GetString("id"))
 
@@ -456,14 +456,14 @@ func Test_CreateAccountTwiceByUsername(t *testing.T) {
 
 	user := createAccount(t, wst.M{
 		"username": fmt.Sprintf("user-%d", createRandomInt()),
-		"password": "abcd1234.",
+		"password": "Abcd1234.",
 	})
 	assert.NotNil(t, user)
 	assert.NotEmpty(t, user.GetString("id"))
 
 	user2, err := invokeApiJsonM(t, "POST", "/accounts", wst.M{
 		"username": user.GetString("username"),
-		"password": "abcd1234.",
+		"password": "Abcd1234.",
 	}, wst.M{
 		"Content-Type": "application/json",
 	})
@@ -479,14 +479,14 @@ func Test_CreateAccountTwiceByEmail(t *testing.T) {
 
 	user := createAccount(t, wst.M{
 		"email":    fmt.Sprintf("user-%d@example.com", createRandomInt()),
-		"password": "abcd1234.",
+		"password": "Abcd1234.",
 	})
 	assert.NotNil(t, user)
 	assert.NotEmpty(t, user.GetString("id"))
 
 	user2, err := invokeApiJsonM(t, "POST", "/accounts", wst.M{
 		"email":    user.GetString("email"),
-		"password": "abcd1234.",
+		"password": "Abcd1234.",
 	}, wst.M{
 		"Content-Type": "application/json",
 	})
@@ -502,7 +502,7 @@ func Test_CreateAccountInvalidEmail(t *testing.T) {
 
 	user, err := invokeApiJsonM(t, "POST", "/accounts", wst.M{
 		"email":    "invalidEmail",
-		"password": "abcd1234.",
+		"password": "Abcd1234.",
 	}, wst.M{
 		"Content-Type": "application/json",
 	})
@@ -536,12 +536,12 @@ func Test_UpdateAccountPassword(t *testing.T) {
 
 	user := createAccount(t, wst.M{
 		"username": fmt.Sprintf("user-%d", createRandomInt()),
-		"password": "abcd1234.",
+		"password": "Abcd1234.",
 	})
 	assert.NotNil(t, user)
 	assert.NotEmpty(t, user.GetString("id"))
 
-	token, err := loginAccount(user.GetString("username"), "abcd1234.", t)
+	token, err := loginAccount(user.GetString("username"), "Abcd1234.", t)
 	assert.NoError(t, err)
 	assert.Contains(t, token, "id")
 

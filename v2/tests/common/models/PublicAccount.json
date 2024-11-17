@@ -12,7 +12,6 @@
       "default": ""
     }
   },
-  "hidden": ["password"],
   "protected": [
     "email",
     "phone"

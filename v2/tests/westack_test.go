@@ -378,7 +378,7 @@ func Test_WeStackCreateUser(t *testing.T) {
 
 	randomUserSuffix := createRandomInt()
 	email := fmt.Sprintf("email%v@example.com", randomUserSuffix)
-	password := "test"
+	password := "Abcd1234."
 	plainUser := wst.M{"email": email, "password": password, "username": fmt.Sprintf("user%v", randomUserSuffix)}
 	createAccount(t, plainUser)
 
@@ -399,7 +399,7 @@ func Test_WeStackLogin(t *testing.T) {
 
 	n, _ := rand.Int(rand.Reader, big.NewInt(899999999))
 	email := fmt.Sprintf("email%v@example.com", 100000000+n.Int64())
-	password := "test"
+	password := "Abcd1234."
 
 	log.Println("Email", email)
 	plainUser := wst.M{"email": email, "password": password, "username": fmt.Sprintf("user%v", n)}
@@ -415,7 +415,7 @@ func Test_WeStackDelete(t *testing.T) {
 
 	n, _ := rand.Int(rand.Reader, big.NewInt(899999999))
 	email := fmt.Sprintf("email%v@example.com", 100000000+n.Int64())
-	password := "test"
+	password := "Abcd1234."
 	plainUser := wst.M{"email": email, "password": password, "username": fmt.Sprintf("user%v", n)}
 	createAccount(t, plainUser)
 

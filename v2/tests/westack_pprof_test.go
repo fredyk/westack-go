@@ -16,7 +16,7 @@ func Test_GetHeap(t *testing.T) {
 	assert.NoError(t, err)
 
 	basicAuthUsername := "test"
-	basicAuthPassword := "abcd1234."
+	basicAuthPassword := "Abcd1234."
 	request.SetBasicAuth(basicAuthUsername, basicAuthPassword)
 
 	response, err := http.DefaultClient.Do(request)
