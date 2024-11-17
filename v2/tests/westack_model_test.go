@@ -408,7 +408,7 @@ func Test_ProtectedFields(t *testing.T) {
 	// Create a random user
 	plainUser1 := wst.M{
 		"username": fmt.Sprintf("user%v", createRandomInt()),
-		"password": "abcd1234.",
+		"password": "Abcd1234.",
 		"phone":    "1234567890",
 	}
 	user1 := createAccount(t, plainUser1)
@@ -416,7 +416,7 @@ func Test_ProtectedFields(t *testing.T) {
 	// Another random user
 	plainUser2 := wst.M{
 		"username": fmt.Sprintf("user%v", createRandomInt()),
-		"password": "abcd1234.",
+		"password": "Abcd1234.",
 		"phone":    "9876543210",
 	}
 	createAccount(t, plainUser2)
@@ -424,7 +424,7 @@ func Test_ProtectedFields(t *testing.T) {
 	// Account with special privilege "__protectedFieldsPrivileged"
 	plainUser3 := wst.M{
 		"username": fmt.Sprintf("__protectedFieldsPrivileged_user%v", createRandomInt()),
-		"password": "abcd1234.",
+		"password": "Abcd1234.",
 	}
 
 	// Add the privilege "__protectedFieldsPrivileged" to the user3
