@@ -256,6 +256,28 @@ func (m *M) GetBoolean(path string) bool {
 	return false
 }
 
+func (m *M) Pick(properties []string) *M {
+	if m == nil {
+		return nil
+	}
+	out := make(M, len(properties))
+	for _, prop := range properties {
+		if v, ok := (*m)[prop]; ok {
+			out[prop] = v
+		}
+	}
+	return &out
+}
+
+func (m *M) ClearProperties(properties []string) {
+	if m == nil {
+		return
+	}
+	for _, prop := range properties {
+		delete(*m, prop)
+	}
+}
+
 func asInt(v interface{}) int {
 	if v1, ok := v.(int64); ok {
 		return int(v1)
@@ -826,4 +848,24 @@ func CreateDefaultMongoRegistry() *bsoncodec.Registry {
 		}))
 
 	return bsonRegistryBuilder.Build()
+}
+
+// IsSecurePassword Password length must be at least 8 characters and contain at least one uppercase letter, one lowercase letter, one number and one special character
+func IsSecurePassword(password string) bool {
+	if len(password) < 8 {
+		return false
+	}
+	var hasUpper, hasLower, hasNumber, hasSpecial bool
+	for _, ch := range password {
+		if ch >= 'A' && ch <= 'Z' {
+			hasUpper = true
+		} else if ch >= 'a' && ch <= 'z' {
+			hasLower = true
+		} else if ch >= '0' && ch <= '9' {
+			hasNumber = true
+		} else {
+			hasSpecial = true
+		}
+	}
+	return hasUpper && hasLower && hasNumber && hasSpecial
 }

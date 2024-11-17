@@ -18,7 +18,7 @@ func Test_NewUserAndRole(t *testing.T) {
 	randN := createRandomInt()
 	user, err := westack.UpsertAccountWithRoles(app, westack.AccountWithRoles{
 		Username: fmt.Sprintf("user-%v", randN),
-		Password: fmt.Sprintf("pwd-%v", randN),
+		Password: fmt.Sprintf("pwD-%v", randN),
 		Roles:    []string{fmt.Sprintf("role-%v", randN)},
 	}, systemContext)
 	assert.NoError(t, err)
@@ -39,7 +39,7 @@ func Test_NewUserAndRoleWithExistingRole(t *testing.T) {
 
 	user, err := westack.UpsertAccountWithRoles(app, westack.AccountWithRoles{
 		Username: fmt.Sprintf("user-%v", randN),
-		Password: fmt.Sprintf("pwd-%v", randN),
+		Password: fmt.Sprintf("pwD-%v", randN),
 		Roles:    []string{fmt.Sprintf("role-%v", randN)},
 	}, systemContext)
 	assert.NoError(t, err)
@@ -53,7 +53,7 @@ func Test_NewUserAndRoleWithExistingUser(t *testing.T) {
 	randN := createRandomInt()
 	user, err := invokeApiJsonM(t, "POST", "/accounts", wst.M{
 		"username": fmt.Sprintf("user-%v", randN),
-		"password": fmt.Sprintf("pwd-%v", randN),
+		"password": fmt.Sprintf("pwD-%v", randN),
 	}, wst.M{
 		"Content-Type": "application/json",
 	})
@@ -62,7 +62,7 @@ func Test_NewUserAndRoleWithExistingUser(t *testing.T) {
 
 	userFromUpsert, err := westack.UpsertAccountWithRoles(app, westack.AccountWithRoles{
 		Username: fmt.Sprintf("user-%v", randN),
-		Password: fmt.Sprintf("pwd-%v", randN),
+		Password: fmt.Sprintf("pwD-%v", randN),
 		Roles:    []string{fmt.Sprintf("role-%v", randN)},
 	}, systemContext)
 	assert.NoError(t, err)
@@ -83,7 +83,7 @@ func Test_NewUserAndRoleWithExistingUserAndRole(t *testing.T) {
 
 	user, err := invokeApiJsonM(t, "POST", "/accounts", wst.M{
 		"username": fmt.Sprintf("user-%v", randN),
-		"password": fmt.Sprintf("pwd-%v", randN),
+		"password": fmt.Sprintf("pwD-%v", randN),
 	}, wst.M{
 		"Content-Type": "application/json",
 	})
@@ -92,7 +92,7 @@ func Test_NewUserAndRoleWithExistingUserAndRole(t *testing.T) {
 
 	userFromUpsert, err := westack.UpsertAccountWithRoles(app, westack.AccountWithRoles{
 		Username: fmt.Sprintf("user-%v", randN),
-		Password: fmt.Sprintf("pwd-%v", randN),
+		Password: fmt.Sprintf("pwD-%v", randN),
 		Roles:    []string{fmt.Sprintf("role-%v", randN)},
 	}, systemContext)
 	assert.NoError(t, err)
@@ -113,7 +113,7 @@ func Test_NewUserAndRoleWithExistingUserAndRoleAndUserRolesAndRoleMapping(t *tes
 
 	user, err := invokeApiJsonM(t, "POST", "/accounts", wst.M{
 		"username": fmt.Sprintf("user-%v", randN),
-		"password": fmt.Sprintf("pwd-%v", randN),
+		"password": fmt.Sprintf("pwD-%v", randN),
 	}, wst.M{
 		"Content-Type": "application/json",
 	})
@@ -132,7 +132,7 @@ func Test_NewUserAndRoleWithExistingUserAndRoleAndUserRolesAndRoleMapping(t *tes
 
 	userFromUpsert, err := westack.UpsertAccountWithRoles(app, westack.AccountWithRoles{
 		Username: fmt.Sprintf("user-%v", randN),
-		Password: fmt.Sprintf("pwd-%v", randN),
+		Password: fmt.Sprintf("pwD-%v", randN),
 		Roles:    []string{fmt.Sprintf("role-%v", randN)},
 	}, systemContext)
 	assert.NoError(t, err)
@@ -146,7 +146,7 @@ func Test_NewUserAndRoleEmptyUsername(t *testing.T) {
 	randN := createRandomInt()
 	user, err := westack.UpsertAccountWithRoles(app, westack.AccountWithRoles{
 		Username: "",
-		Password: fmt.Sprintf("pwd-%v", randN),
+		Password: fmt.Sprintf("pwD-%v", randN),
 		Roles:    []string{fmt.Sprintf("role-%v", randN)},
 	}, systemContext)
 	assert.Error(t, err)
@@ -174,7 +174,7 @@ func Test_NewUserAndRoleEmptyRoles(t *testing.T) {
 	randN := createRandomInt()
 	user, err := westack.UpsertAccountWithRoles(app, westack.AccountWithRoles{
 		Username: fmt.Sprintf("user-%v", randN),
-		Password: fmt.Sprintf("pwd-%v", randN),
+		Password: fmt.Sprintf("pwD-%v", randN),
 		Roles:    []string{},
 	}, systemContext)
 	assert.Error(t, err)
@@ -198,7 +198,7 @@ func Test_RemoteAssignRole(t *testing.T) {
 	adminBearer := adminToken["id"].(string)
 
 	// Create a new user
-	password := fmt.Sprintf("pwd-%v", createRandomInt())
+	password := fmt.Sprintf("pwD-%v", createRandomInt())
 	user := createAccount(t, wst.M{
 		"username": fmt.Sprintf("user-%v", createRandomInt()),
 		"password": password,

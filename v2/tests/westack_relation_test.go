@@ -98,8 +98,7 @@ func Test_ExtractLookups(t *testing.T) {
 	assert.Equal(t, "$accountId", lookups.GetM("[0].$lookup.let").GetString("accountId"))
 	assert.Equal(t, "$_id", wst.GetTypedList[string](lookups.GetM("[0].$lookup.pipeline.[0].$match.$expr.$and.[0]"), "$eq")[0])
 	assert.Equal(t, "$$accountId", wst.GetTypedList[string](lookups.GetM("[0].$lookup.pipeline.[0].$match.$expr.$and.[0]"), "$eq")[1])
-	assert.Equal(t, false, lookups.GetM("[0].$lookup.pipeline.[1].$project").GetBoolean("password"))
-	assert.Equal(t, "John", lookups.GetString("[0].$lookup.pipeline.[2].$match.name"))
+	assert.Equal(t, "John", lookups.GetString("[0].$lookup.pipeline.[1].$match.name"))
 
 	assert.Contains(t, *lookups.GetAt(1), "$unwind")
 	assert.Equal(t, "$account", lookups.GetM("[1].$unwind").GetString("path"))
@@ -285,7 +284,7 @@ func Test_Aggregations(t *testing.T) {
 	randomUserName := fmt.Sprintf("testuser%d", createRandomInt())
 	randomUser := createAccount(t, wst.M{
 		"username":  randomUserName,
-		"password":  "abcd1234.",
+		"password":  "Abcd1234.",
 		"firstName": "John",
 		"lastName":  "Doe",
 	})
