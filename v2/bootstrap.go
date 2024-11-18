@@ -154,7 +154,6 @@ func buildRelationsGraph(app *WeStack) {
 							ErrorName: "ValidationError",
 						}
 					}
-					break
 				}
 			}
 		}
