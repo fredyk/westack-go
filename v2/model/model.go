@@ -152,13 +152,11 @@ type StatefulModel struct {
 
 	authCache           map[string]map[string]map[string]bool
 	hasHiddenProperties bool
-	pendingOperations   []pendingOperationEntry
+	pendingOperations   map[int64]map[string][]pendingOperationEntry
 }
 
 type pendingOperationEntry struct {
-	eventKey    string
-	handler     func(eventContext *EventContext) error
-	operationId int64
+	handler func(eventContext *EventContext) error
 }
 
 func (loadedModel *StatefulModel) GetConfig() *Config {
@@ -189,7 +187,7 @@ func New(config *Config, modelRegistry *map[string]*StatefulModel) Model {
 		eventHandlers:     map[string]func(eventContext *EventContext) error{},
 		remoteMethodsMap:  map[string]*OperationItem{},
 		authCache:         map[string]map[string]map[string]bool{},
-		pendingOperations: []pendingOperationEntry{},
+		pendingOperations: map[int64]map[string][]pendingOperationEntry{},
 	}
 	loadedModel.NilInstance = &StatefulInstance{
 		Model: loadedModel,
@@ -954,16 +952,18 @@ func wrapEventHandler(model *StatefulModel, eventKey string, handler func(eventC
 }
 
 func dispatchPendingOperations(eventContext *EventContext, model *StatefulModel, eventKey string, baseContext *EventContext) error {
-	n := 0
-	for i, pendingOperation := range model.pendingOperations {
-		if pendingOperation.eventKey == eventKey && pendingOperation.operationId == baseContext.OperationId {
-			err := pendingOperation.handler(eventContext)
-			if err != nil {
-				return err
+	if v, ok := model.pendingOperations[baseContext.OperationId]; ok {
+		if v2, ok := v[eventKey]; ok {
+			for _, pendingOperation := range v2 {
+				err := pendingOperation.handler(eventContext)
+				if err != nil {
+					return err
+				}
 			}
-			// splice taking into account the number of elements processed
-			model.pendingOperations = append(model.pendingOperations[:i-n], model.pendingOperations[i+1:]...)
-			n++
+			delete(v, eventKey)
+		}
+		if len(v) == 0 {
+			delete(model.pendingOperations, baseContext.OperationId)
 		}
 	}
 	return nil
@@ -972,10 +972,15 @@ func dispatchPendingOperations(eventContext *EventContext, model *StatefulModel,
 func (loadedModel *StatefulModel) QueueOperation(operation string, eventContext *EventContext, fn func(nextCtx *EventContext) error) {
 	eventKey := mapOperationName(operation)
 	loadedModel.DisabledHandlers[eventKey] = false
-	loadedModel.pendingOperations = append(loadedModel.pendingOperations, pendingOperationEntry{
-		eventKey:    eventKey,
-		handler:     fn,
-		operationId: FindBaseContext(eventContext).OperationId,
+	operationId := FindBaseContext(eventContext).OperationId
+	if _, ok := loadedModel.pendingOperations[operationId]; !ok {
+		loadedModel.pendingOperations[operationId] = map[string][]pendingOperationEntry{}
+	}
+	if _, ok := loadedModel.pendingOperations[operationId][eventKey]; !ok {
+		loadedModel.pendingOperations[operationId][eventKey] = []pendingOperationEntry{}
+	}
+	loadedModel.pendingOperations[operationId][eventKey] = append(loadedModel.pendingOperations[operationId][eventKey], pendingOperationEntry{
+		handler: fn,
 	})
 }
 
