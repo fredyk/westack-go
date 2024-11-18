@@ -450,6 +450,10 @@ func (app *WeStack) setupModel(loadedModel *model.StatefulModel, dataSource *dat
 				}
 			}
 
+			debugKey := model.FindBaseContext(ctx).Query.GetString("data-debug-key")
+			if app.debug && debugKey != "" {
+				fmt.Printf("[DEBUG] Debug key: %v\n", debugKey)
+			}
 			// Check inverse hasOne uniqueness
 			if _, ok := app.restrictModelUniquenessByField[loadedModel.Name]; ok {
 				for foreignKey, restriction := range app.restrictModelUniquenessByField[loadedModel.Name] {
