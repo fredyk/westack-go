@@ -682,7 +682,7 @@ func Test_NoteWith2Footers(t *testing.T) {
 	assert.NotEmpty(t, footer1.GetString("id"))
 
 	// Create second footer
-	footer2, err := invokeApiAsRandomAccount(t, "POST", "/footers", wst.M{
+	footer2, err := invokeApiAsRandomAccount(t, "POST", "/footers?data-debug-key=footer1202", wst.M{
 		"text":      "Footer 2",
 		"noteId":    note.GetString("id"),
 		"accountId": randomAccount.GetString("id"),
