@@ -106,7 +106,9 @@ func (loadedModel *StatefulModel) RemoteMethod(handler func(context *EventContex
 	loadedModel.remoteMethodsMap[options.Name] = createRemoteMethodOperationItem(handler, options)
 
 	(*loadedModel.Router).Options(path, func(ctx *fiber.Ctx) error {
-		ctx.Set("Allow", "GET, POST, PUT, PATCH, DELETE, OPTIONS, HEAD")
+		ctx.Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS, HEAD")
+		ctx.Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+		ctx.Set("Access-Control-Allow-Origin", "*")
 		return ctx.SendString("")
 	})
 
