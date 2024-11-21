@@ -105,6 +105,11 @@ func (loadedModel *StatefulModel) RemoteMethod(handler func(context *EventContex
 
 	loadedModel.remoteMethodsMap[options.Name] = createRemoteMethodOperationItem(handler, options)
 
+	(*loadedModel.Router).Options(fullPath, func(ctx *fiber.Ctx) error {
+		ctx.Set("Allow", "GET, POST, PUT, PATCH, DELETE, OPTIONS, HEAD")
+		return ctx.SendString("")
+	})
+
 	return toInvoke(path, createFiberHandler(options, loadedModel, verb, path)).Name(loadedModel.Name + "." + options.Name)
 }
 
