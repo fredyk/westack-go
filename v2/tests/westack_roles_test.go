@@ -2,6 +2,7 @@ package tests
 
 import (
 	"fmt"
+	"github.com/fredyk/westack-go/client/v2/wstfuncs"
 	"github.com/fredyk/westack-go/v2/westack"
 	"os"
 	"testing"
@@ -51,7 +52,7 @@ func Test_NewUserAndRoleWithExistingUser(t *testing.T) {
 	t.Parallel()
 
 	randN := createRandomInt()
-	user, err := invokeApiJsonM(t, "POST", "/accounts", wst.M{
+	user, err := wstfuncs.InvokeApiJsonM("POST", "/accounts", wst.M{
 		"username": fmt.Sprintf("user-%v", randN),
 		"password": fmt.Sprintf("pwD-%v", randN),
 	}, wst.M{
@@ -81,7 +82,7 @@ func Test_NewUserAndRoleWithExistingUserAndRole(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NotNil(t, role.GetID())
 
-	user, err := invokeApiJsonM(t, "POST", "/accounts", wst.M{
+	user, err := wstfuncs.InvokeApiJsonM("POST", "/accounts", wst.M{
 		"username": fmt.Sprintf("user-%v", randN),
 		"password": fmt.Sprintf("pwD-%v", randN),
 	}, wst.M{
@@ -111,7 +112,7 @@ func Test_NewUserAndRoleWithExistingUserAndRoleAndUserRolesAndRoleMapping(t *tes
 	assert.NoError(t, err)
 	assert.NotNil(t, role.GetID())
 
-	user, err := invokeApiJsonM(t, "POST", "/accounts", wst.M{
+	user, err := wstfuncs.InvokeApiJsonM("POST", "/accounts", wst.M{
 		"username": fmt.Sprintf("user-%v", randN),
 		"password": fmt.Sprintf("pwD-%v", randN),
 	}, wst.M{
@@ -207,7 +208,7 @@ func Test_RemoteAssignRole(t *testing.T) {
 	desiredRoles := []string{fmt.Sprintf("role-1-%v", createRandomInt()), fmt.Sprintf("role-2-%v", createRandomInt())}
 
 	url := fmt.Sprintf("/accounts/%v/roles", user["id"])
-	updateRolesResponse, err := invokeApiJsonM(t, "PUT", url, wst.M{
+	updateRolesResponse, err := wstfuncs.InvokeApiJsonM("PUT", url, wst.M{
 		"roles": desiredRoles,
 	}, wst.M{
 		"Authorization": fmt.Sprintf("Bearer %v", adminBearer),
@@ -235,7 +236,7 @@ func Test_RemoteAssignRole(t *testing.T) {
 
 	// Invoke remote method to assign role, but with a non-admin user. This should fail with 401
 	newDesiredRoles := []string{fmt.Sprintf("role-3-%v", createRandomInt()), fmt.Sprintf("role-4-%v", createRandomInt())}
-	resp, err := invokeApiJsonM(t, "PUT", url, wst.M{
+	resp, err := wstfuncs.InvokeApiJsonM("PUT", url, wst.M{
 		"roles": newDesiredRoles,
 	}, wst.M{
 		"Authorization": fmt.Sprintf("Bearer %v", userBearer),
