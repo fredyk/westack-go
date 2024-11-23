@@ -1,22 +1,18 @@
 package tests
 
 import (
-	"bytes"
 	"crypto/rand"
 	"fmt"
-	"github.com/fredyk/westack-go/v2/westack"
-	"io"
-	"math/big"
-	"net/http"
-	"strings"
-	"testing"
-	"time"
-
+	"github.com/fredyk/westack-go/client/v2/wstfuncs"
 	wst "github.com/fredyk/westack-go/v2/common"
 	"github.com/fredyk/westack-go/v2/model"
+	"github.com/fredyk/westack-go/v2/westack"
 	"github.com/goccy/go-json"
 	"github.com/golang-jwt/jwt"
 	"github.com/stretchr/testify/assert"
+	"math/big"
+	"strings"
+	"testing"
 )
 
 var app *westack.WeStack
@@ -65,62 +61,6 @@ func createRandomFloat(min float64, max float64) float64 {
 	return min + f*(max-min)
 }
 
-func invokeApiJsonM(t *testing.T, method string, url string, body wst.M, headers wst.M) (result wst.M, err error) {
-	result, err = invokeApiTyped[wst.M](t, method, url, body, headers)
-	return result, err
-}
-
-func invokeApiJsonA(t *testing.T, method string, url string, body wst.M, headers wst.M) (result wst.A, err error) {
-	return invokeApiTyped[wst.A](t, method, url, body, headers)
-}
-
-func invokeApiTyped[T any](t *testing.T, method string, url string, body wst.M, headers wst.M) (result T, err error) {
-	respBody := invokeApiBytes(t, method, url, body, headers)
-	var parsedRespBody T
-	err = json.Unmarshal(respBody, &parsedRespBody)
-	//err = easyjson.Unmarshal(respBody, parsedRespBody)
-	assert.NoError(t, err)
-
-	return parsedRespBody, err
-}
-
-func invokeApiBytes(t *testing.T, method string, url string, body wst.M, headers wst.M) []byte {
-	resp := invokeApiFullResponse(t, method, url, body, headers)
-	if resp == nil || resp.Body == nil {
-		t.Error("resp or resp.Body is nil")
-		return make([]byte, 0)
-	}
-	defer resp.Body.Close()
-	respBody, err := io.ReadAll(resp.Body)
-	assert.NoError(t, err)
-	return respBody
-}
-
-func invokeApiFullResponse(t *testing.T, method string, url string, body wst.M, headers wst.M) *http.Response {
-	//origin := ""
-	origin := "http://localhost:8019"
-	req, err := http.NewRequest(method, fmt.Sprintf("%v/api/v1%s", origin, url), jsonToReader(body))
-	assert.NoError(t, err)
-	for k, v := range headers {
-		req.Header.Add(k, v.(string))
-	}
-	//resp, err := app.Server.Test(req, 3000)
-	for k, v := range headers {
-		req.Header.Add(k, v.(string))
-	}
-	//resp, err := app.Server.Test(req, 600000)
-	client := &http.Client{
-		Timeout: 45 * time.Second,
-	}
-	client.CheckRedirect = func(req *http.Request, via []*http.Request) error {
-		return http.ErrUseLastResponse
-	}
-	resp, err := client.Do(req)
-	assert.NoError(t, err)
-	assert.NotNil(t, resp)
-	return resp
-}
-
 func invokeApiAsRandomAccount(t *testing.T, method string, url string, body wst.M, headers wst.M) (result wst.M, err error) {
 	if headers == nil {
 		headers = wst.M{}
@@ -128,13 +68,7 @@ func invokeApiAsRandomAccount(t *testing.T, method string, url string, body wst.
 	if v, ok := headers["Authorization"]; !ok || v == "" {
 		headers["Authorization"] = fmt.Sprintf("Bearer %v", randomAccountToken.GetString("id"))
 	}
-	return invokeApiJsonM(t, method, url, body, headers)
-}
-
-func jsonToReader(m wst.M) io.Reader {
-	out, err := json.Marshal(m)
-	fmt.Printf("Ignoring error %v\n", err)
-	return bytes.NewReader(out)
+	return wstfuncs.InvokeApiJsonM(method, url, body, headers)
 }
 
 func reduceByKey(notes wst.A, key string) []string {
