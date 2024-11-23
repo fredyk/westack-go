@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/fredyk/westack-go/client/v2/wstfuncs"
 	"github.com/fredyk/westack-go/v2/westack"
 	"github.com/golang-jwt/jwt"
 	"io"
@@ -679,7 +680,7 @@ func testSpecialDatePlaceholder(t *testing.T, specialDateKey string, specialDate
 	endpointWithFilter := fmt.Sprintf("/notes?filter=%s", encodedFilter)
 	fmt.Printf("Original filter: %s\n", filter)
 	fmt.Printf("Sending query: %s\n", endpointWithFilter)
-	out, err := invokeApiJsonA(t, "GET", endpointWithFilter, nil, wst.M{
+	out, err := wstfuncs.InvokeApiJsonA("GET", endpointWithFilter, nil, wst.M{
 		"Authorization": "Bearer " + randomAccountToken.GetString("id"),
 	})
 	assert.NoError(t, err)
@@ -692,6 +693,8 @@ func encodeUriComponent(st string) string {
 
 // before all tests
 func TestMain(m *testing.M) {
+
+	wstfuncs.SetBaseUrl("http://localhost:8019/api/v1")
 
 	var err error
 	userId, err = primitive.ObjectIDFromHex("5f9f1b5b9b9b9b9b9b9b9b9c")

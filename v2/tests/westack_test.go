@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/json"
 	"fmt"
+	"github.com/fredyk/westack-go/client/v2/wstfuncs"
 	"github.com/fredyk/westack-go/v2/westack"
 	"io"
 	"log"
@@ -320,7 +321,7 @@ func createMockLogger() wst.ILogger {
 func createAccount(t *testing.T, userData wst.M) wst.M {
 	var user wst.M
 	var err error
-	user, err = invokeApiJsonM(t, "POST", "/accounts", userData, wst.M{
+	user, err = wstfuncs.InvokeApiJsonM("POST", "/accounts", userData, wst.M{
 		"Content-Type": "application/json",
 	})
 	assert.NoError(t, err)
