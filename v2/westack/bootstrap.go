@@ -662,7 +662,7 @@ func traceChunkGenerator(app *WeStack, loadedModel *model.StatefulModel, ctx *mo
 	if err != nil {
 		return nil, err
 	}
-	var lastRequestEntries model.InstanceA
+	var lastRequestEntries wst.A
 	if err := lastRequestEntriesCursor.All(context.Background(), &lastRequestEntries); err != nil {
 		return nil, err
 	}
@@ -707,12 +707,12 @@ func traceChunkGenerator(app *WeStack, loadedModel *model.StatefulModel, ctx *mo
 	}
 }
 
-func findLastErrorEntries(internalDs *datasource.Datasource, filterSt string) (model.InstanceA, error) {
+func findLastErrorEntries(internalDs *datasource.Datasource, filterSt string) (wst.A, error) {
 	lastErrorEntriesCursor, err := internalDs.FindMany("chunkGeneratorTraceErrors", &wst.A{{"$match": wst.M{"_redId": filterSt}}})
 	if err != nil {
 		return nil, err
 	}
-	var lastErrorEntries model.InstanceA
+	var lastErrorEntries wst.A
 	if err := lastErrorEntriesCursor.All(context.Background(), &lastErrorEntries); err != nil {
 		return nil, err
 	}
