@@ -9,11 +9,12 @@ import (
 	"github.com/stretchr/testify/assert"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 
+	"github.com/fredyk/westack-go/client/v2/wstfuncs"
 	wst "github.com/fredyk/westack-go/v2/common"
 )
 
 func createNoteForAccount(userId string, token string, footerId string, t *testing.T) (note wst.M, err error) {
-	parsed, err := invokeApiJsonM(t, "POST", "/notes", wst.M{
+	parsed, err := wstfuncs.InvokeApiJsonM("POST", "/notes", wst.M{
 		"title":     "Test Note",
 		"content":   "This is a test note",
 		"accountId": userId,
@@ -53,7 +54,7 @@ func Test_FindMany(t *testing.T) {
 	assert.NotNilf(t, note, "Note is nil: %v", note)
 	assert.NotEmpty(t, note["id"].(string))
 
-	parsed, err := invokeApiJsonA(t, "GET", `/notes?filter={"include":[{"relation":"account"},{"relation":"footer1"},{"relation":"footer2"}]}`, nil, wst.M{
+	parsed, err := wstfuncs.InvokeApiJsonA("GET", `/notes?filter={"include":[{"relation":"account"},{"relation":"footer1"},{"relation":"footer2"}]}`, nil, wst.M{
 		"Authorization": fmt.Sprintf("Bearer %v", token["id"].(string)),
 	})
 	assert.NoError(t, err)
@@ -127,7 +128,7 @@ func Test_PostResetPassword(t *testing.T) {
 	t.Parallel()
 
 	// Request password reset
-	resetPasswordResponse, err := invokeApiJsonM(t, "POST", "/accounts/reset-password", wst.M{}, wst.M{
+	resetPasswordResponse, err := wstfuncs.InvokeApiJsonM("POST", "/accounts/reset-password", wst.M{}, wst.M{
 		"Content-Type": "application/json",
 	})
 	assert.NoError(t, err)
@@ -149,7 +150,7 @@ func Test_VerifyEmail(t *testing.T) {
 	assert.Equal(t, "Verification email sent", verifyEmailResponse.GetString("message"))
 
 	// Request email verification
-	performVerificationResponse := invokeApiFullResponse(t, "GET", fmt.Sprintf("/accounts/verify-mail?user_id=%s&access_token=%s&redirect_uri=%s",
+	performVerificationResponse, _ := wstfuncs.InvokeApiFullResponse("GET", fmt.Sprintf("/accounts/verify-mail?user_id=%s&access_token=%s&redirect_uri=%s",
 		randomAccount.GetString("id"),
 		verifyEmailResponse.GetString("bearer"),
 		encodeUriComponent("/api/v1/accounts/me"),
@@ -169,7 +170,7 @@ func Test_GetPerformEmailVerification(t *testing.T) {
 }
 
 func createFooter2ForAccount(token string, userId string, t *testing.T) (wst.M, error) {
-	parsed, err := invokeApiJsonM(t, "POST", "/footers", wst.M{
+	parsed, err := wstfuncs.InvokeApiJsonM("POST", "/footers", wst.M{
 		"accountId": userId,
 	}, wst.M{
 		"Content-Type":  "application/json",
@@ -184,7 +185,7 @@ func Test_EmptyArray(t *testing.T) {
 
 	t.Parallel()
 
-	parsed, err := invokeApiJsonA(t, "GET", "/empties", nil, wst.M{
+	parsed, err := wstfuncs.InvokeApiJsonA("GET", "/empties", nil, wst.M{
 		"Authorization": fmt.Sprintf("Bearer %v", randomAccountToken.GetString("id")),
 	})
 	assert.NoError(t, err)
@@ -207,7 +208,7 @@ func loginAccount(email string, password string, t *testing.T) (wst.M, error) {
 }
 
 func loginAsExplicitMode(email string, password string, mode string, t *testing.T) (wst.M, error) {
-	return invokeApiJsonM(t, "POST", "/accounts/login", wst.M{
+	return wstfuncs.InvokeApiJsonM("POST", "/accounts/login", wst.M{
 		mode:       email,
 		"password": password,
 	}, wst.M{
@@ -219,7 +220,7 @@ func Test_CreateAccountWithoutUsername(t *testing.T) {
 
 	t.Parallel()
 
-	user, err := invokeApiJsonM(t, "POST", "/accounts", wst.M{
+	user, err := wstfuncs.InvokeApiJsonM("POST", "/accounts", wst.M{
 		"password": "Abcd1234.",
 	}, wst.M{
 		"Content-Type": "application/json",
@@ -234,7 +235,7 @@ func Test_LoginAccountWithoutUserOrEmail(t *testing.T) {
 
 	t.Parallel()
 
-	user, err := invokeApiJsonM(t, "POST", "/accounts/login", wst.M{
+	user, err := wstfuncs.InvokeApiJsonM("POST", "/accounts/login", wst.M{
 		"password": "Abcd1234.",
 	}, wst.M{
 		"Content-Type": "application/json",
@@ -249,7 +250,7 @@ func Test_LoginAccountWithoutPassword(t *testing.T) {
 
 	t.Parallel()
 
-	user, err := invokeApiJsonM(t, "POST", "/accounts/login", wst.M{
+	user, err := wstfuncs.InvokeApiJsonM("POST", "/accounts/login", wst.M{
 		"username": fmt.Sprintf("user-%d-doesnotexist", createRandomInt()),
 	}, wst.M{
 		"Content-Type": "application/json",
@@ -264,7 +265,7 @@ func Test_LoginAccountWithWrongPassword(t *testing.T) {
 
 	t.Parallel()
 
-	user, err := invokeApiJsonM(t, "POST", "/accounts/login", wst.M{
+	user, err := wstfuncs.InvokeApiJsonM("POST", "/accounts/login", wst.M{
 		"username": randomAccount.GetString("username"),
 		"password": "wrongpassword",
 	}, wst.M{
@@ -298,7 +299,7 @@ func Test_RequestCache(t *testing.T) {
 
 	// Get all request cache entries
 	endpoint := fmt.Sprintf("/request-cache-entries?filter={\"where\":{\"_redId\":\"%s\"}}", requestCacheEntry.GetString("_redId"))
-	requestCacheEntries, err := invokeApiJsonA(t, "GET", endpoint, nil, wst.M{
+	requestCacheEntries, err := wstfuncs.InvokeApiJsonA("GET", endpoint, nil, wst.M{
 		"Content-Type":  "application/json",
 		"Authorization": fmt.Sprintf("Bearer %v", randomAccountToken.GetString("id")),
 	})
@@ -310,7 +311,7 @@ func Test_RequestCache(t *testing.T) {
 func Test_EndpointUsingCodecs(t *testing.T) {
 	t.Parallel()
 
-	result, err := invokeApiJsonM(t, "GET", "/endpoint-using-codecs", nil, nil)
+	result, err := wstfuncs.InvokeApiJsonM("GET", "/endpoint-using-codecs", nil, nil)
 	assert.NoError(t, err)
 	assert.NotEmpty(t, result.GetString("title"))
 	assert.NotEmpty(t, result.GetString("id"))
@@ -320,7 +321,7 @@ func Test_EndpointUsingCodecs(t *testing.T) {
 func Test_ForceError1719(t *testing.T) {
 	t.Parallel()
 
-	result, err := invokeApiJsonM(t, "GET", "/notes?forceError1719=true", nil, wst.M{
+	result, err := wstfuncs.InvokeApiJsonM("GET", "/notes?forceError1719=true", nil, wst.M{
 		"Authorization": fmt.Sprintf("Bearer %v", randomAccountToken.GetString("id")),
 	})
 	assert.NoError(t, err)
@@ -429,7 +430,7 @@ func Test_AccountUpdatesNote(t *testing.T) {
 	assert.NotEmpty(t, user2Token.GetString("id"))
 
 	// Update the footer
-	updatedFooter, err = invokeApiJsonM(t, "PATCH", "/footers/"+footer.GetString("id"), wst.M{
+	updatedFooter, err = wstfuncs.InvokeApiJsonM("PATCH", "/footers/"+footer.GetString("id"), wst.M{
 		"text": "Test Footer Updated 2",
 	}, wst.M{
 		"Content-Type":  "application/json",
@@ -439,7 +440,7 @@ func Test_AccountUpdatesNote(t *testing.T) {
 	assert.Equal(t, fiber.StatusUnauthorized, updatedFooter.GetInt("error.statusCode"))
 
 	// Also check that user2 cannot modify the note
-	updatedNote, err = invokeApiJsonM(t, "PATCH", "/notes/"+note.GetString("id"), wst.M{
+	updatedNote, err = wstfuncs.InvokeApiJsonM("PATCH", "/notes/"+note.GetString("id"), wst.M{
 		"title": "Test Note Updated 2",
 	}, wst.M{
 		"Content-Type":  "application/json",
@@ -461,7 +462,7 @@ func Test_CreateAccountTwiceByUsername(t *testing.T) {
 	assert.NotNil(t, user)
 	assert.NotEmpty(t, user.GetString("id"))
 
-	user2, err := invokeApiJsonM(t, "POST", "/accounts", wst.M{
+	user2, err := wstfuncs.InvokeApiJsonM("POST", "/accounts", wst.M{
 		"username": user.GetString("username"),
 		"password": "Abcd1234.",
 	}, wst.M{
@@ -484,7 +485,7 @@ func Test_CreateAccountTwiceByEmail(t *testing.T) {
 	assert.NotNil(t, user)
 	assert.NotEmpty(t, user.GetString("id"))
 
-	user2, err := invokeApiJsonM(t, "POST", "/accounts", wst.M{
+	user2, err := wstfuncs.InvokeApiJsonM("POST", "/accounts", wst.M{
 		"email":    user.GetString("email"),
 		"password": "Abcd1234.",
 	}, wst.M{
@@ -500,7 +501,7 @@ func Test_CreateAccountInvalidEmail(t *testing.T) {
 
 	t.Parallel()
 
-	user, err := invokeApiJsonM(t, "POST", "/accounts", wst.M{
+	user, err := wstfuncs.InvokeApiJsonM("POST", "/accounts", wst.M{
 		"email":    "invalidEmail",
 		"password": "Abcd1234.",
 	}, wst.M{
@@ -516,7 +517,7 @@ func Test_CreateAccountPasswordBlank(t *testing.T) {
 
 	t.Parallel()
 
-	user, err := invokeApiJsonM(t, "POST", "/accounts", wst.M{
+	user, err := wstfuncs.InvokeApiJsonM("POST", "/accounts", wst.M{
 		"username": fmt.Sprintf("user-%d", createRandomInt()),
 		"password": "",
 	}, wst.M{
@@ -545,7 +546,7 @@ func Test_UpdateAccountPassword(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Contains(t, token, "id")
 
-	user2, err := invokeApiJsonM(t, "PATCH", "/accounts/"+user.GetString("id"), wst.M{
+	user2, err := wstfuncs.InvokeApiJsonM("PATCH", "/accounts/"+user.GetString("id"), wst.M{
 		"password": "efgh5678,",
 	}, wst.M{
 		"Content-Type":  "application/json",
@@ -560,7 +561,7 @@ func Test_UpdateAccountPassword(t *testing.T) {
 	assert.Contains(t, token2, "id")
 
 	// Find self
-	user3, err := invokeApiJsonM(t, "GET", "/accounts/me", nil, wst.M{
+	user3, err := wstfuncs.InvokeApiJsonM("GET", "/accounts/me", nil, wst.M{
 		"Authorization": fmt.Sprintf("Bearer %v", token2.GetString("id")),
 	})
 	assert.NoError(t, err)
@@ -574,7 +575,7 @@ func Test_DeleteNonExistentNote(t *testing.T) {
 	t.Parallel()
 
 	// Delete note
-	result, err := invokeApiJsonM(t, "DELETE", "/notes/000000000000000000000000", nil, wst.M{
+	result, err := wstfuncs.InvokeApiJsonM("DELETE", "/notes/000000000000000000000000", nil, wst.M{
 		"Authorization": fmt.Sprintf("Bearer %s", adminAccountToken.GetString("id")),
 	})
 	assert.NoError(t, err)
@@ -602,13 +603,13 @@ func Test_DeleteNoteTwice(t *testing.T) {
 	assert.Equal(t, "Test Note", note.GetString("title"))
 
 	// Delete note
-	result := invokeApiFullResponse(t, "DELETE", "/notes/"+note.GetString("id"), nil, wst.M{
+	result, _ := wstfuncs.InvokeApiFullResponse("DELETE", "/notes/"+note.GetString("id"), nil, wst.M{
 		"Authorization": fmt.Sprintf("Bearer %s", randomAccountToken.GetString("id")),
 	})
 	assert.Equal(t, fiber.StatusNoContent, result.StatusCode)
 
 	// Delete note again
-	result2, err := invokeApiJsonM(t, "DELETE", "/notes/"+note.GetString("id"), nil, wst.M{
+	result2, err := wstfuncs.InvokeApiJsonM("DELETE", "/notes/"+note.GetString("id"), nil, wst.M{
 		"Authorization": fmt.Sprintf("Bearer %s", randomAccountToken.GetString("id")),
 	})
 	assert.NoError(t, err)
@@ -646,7 +647,7 @@ func Test_FindWithNestedRelations(t *testing.T) {
 	assert.Equal(t, note.GetString("id"), footer.GetString("noteId"))
 
 	// Find note with nested relations
-	note2, err := invokeApiJsonM(t, "GET", "/notes/"+note.GetString("id")+`?filter={"include":[{"relation":"footer1","scope":{"include":[{"relation":"note"}]}}]}`, nil, wst.M{
+	note2, err := wstfuncs.InvokeApiJsonM("GET", "/notes/"+note.GetString("id")+`?filter={"include":[{"relation":"footer1","scope":{"include":[{"relation":"note"}]}}]}`, nil, wst.M{
 		"Authorization": fmt.Sprintf("Bearer %s", randomAccountToken.GetString("id")),
 	})
 	assert.NoError(t, err)
@@ -746,7 +747,7 @@ func Test_ImageWithTwoThumbnails(t *testing.T) {
 	assert.Equal(t, thumbnail1.GetString("id"), image2.GetString("thumbnail.id"))
 	assert.Equal(t, thumbnail1.GetString("text"), image2.GetString("thumbnail.text"))
 
-	invalidThumbnails, err := invokeApiJsonA(t, "GET", "/images?filter={\"where\":{\"text\":\"Thumbnail 2\"}}", nil, wst.M{"Authorization": fmt.Sprintf("Bearer %v", randomAccountToken.GetString("id"))})
+	invalidThumbnails, err := wstfuncs.InvokeApiJsonA("GET", "/images?filter={\"where\":{\"text\":\"Thumbnail 2\"}}", nil, wst.M{"Authorization": fmt.Sprintf("Bearer %v", randomAccountToken.GetString("id"))})
 	assert.NoError(t, err)
 	assert.Equal(t, 0, len(invalidThumbnails))
 }
