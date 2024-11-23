@@ -2,6 +2,7 @@ package tests
 
 import (
 	"fmt"
+	"github.com/fredyk/westack-go/client/v2/wstfuncs"
 	"github.com/fredyk/westack-go/v2/westack"
 	"github.com/golang-jwt/jwt"
 	"os"
@@ -472,15 +473,9 @@ func Test_ProtectedFields(t *testing.T) {
 
 	// Get the user 1 through API with the user2
 	// Phone should not be returned with user2
-	user1RetrievedWithUser2, err := invokeApiJsonM(
-		t,
-		"GET",
-		fmt.Sprintf("/public-accounts/%v", user1.GetString("id")),
-		nil,
-		wst.M{
-			"Authorization": fmt.Sprintf("Bearer %v", user2Token["id"]),
-		},
-	)
+	user1RetrievedWithUser2, err := wstfuncs.InvokeApiJsonM("GET", fmt.Sprintf("/public-accounts/%v", user1.GetString("id")), nil, wst.M{
+		"Authorization": fmt.Sprintf("Bearer %v", user2Token["id"]),
+	})
 	assert.NoError(t, err)
 	assert.Equal(t, user1.GetString("id"), user1RetrievedWithUser2.GetString("id"))
 	assert.Equal(t, user1.GetString("username"), user1RetrievedWithUser2.GetString("username"))
@@ -494,15 +489,9 @@ func Test_ProtectedFields(t *testing.T) {
 			"_id": user1.GetString("id"),
 		},
 	})
-	users1RetrievedWithUser2, err := invokeApiJsonA(
-		t,
-		"GET",
-		fmt.Sprintf("/public-accounts?filter=%v", string(encodedFilter)),
-		nil,
-		wst.M{
-			"Authorization": fmt.Sprintf("Bearer %v", user2Token["id"]),
-		},
-	)
+	users1RetrievedWithUser2, err := wstfuncs.InvokeApiJsonA("GET", fmt.Sprintf("/public-accounts?filter=%v", string(encodedFilter)), nil, wst.M{
+		"Authorization": fmt.Sprintf("Bearer %v", user2Token["id"]),
+	})
 	assert.NoError(t, err)
 	assert.EqualValues(t, 1, len(users1RetrievedWithUser2))
 	user1RetrievedWithUser2 = users1RetrievedWithUser2[0]
@@ -514,15 +503,9 @@ func Test_ProtectedFields(t *testing.T) {
 
 	// Now get the user 1 through API with the admin token
 	// Phone should be returned with admin
-	user1RetrievedWithAdmin, err := invokeApiJsonM(
-		t,
-		"GET",
-		fmt.Sprintf("/public-accounts/%v", user1.GetString("id")),
-		nil,
-		wst.M{
-			"Authorization": fmt.Sprintf("Bearer %v", adminToken["id"]),
-		},
-	)
+	user1RetrievedWithAdmin, err := wstfuncs.InvokeApiJsonM("GET", fmt.Sprintf("/public-accounts/%v", user1.GetString("id")), nil, wst.M{
+		"Authorization": fmt.Sprintf("Bearer %v", adminToken["id"]),
+	})
 	assert.NoError(t, err)
 	assert.Equal(t, user1.GetString("id"), user1RetrievedWithAdmin.GetString("id"))
 	assert.Equal(t, user1.GetString("username"), user1RetrievedWithAdmin.GetString("username"))
@@ -530,15 +513,9 @@ func Test_ProtectedFields(t *testing.T) {
 	assert.Containsf(t, user1RetrievedWithAdmin, "phone", "Phone should be returned")
 
 	// Phone should be returned also with user1 because it is the $owner
-	user1RetrievedWithUser1, err := invokeApiJsonM(
-		t,
-		"GET",
-		fmt.Sprintf("/public-accounts/%v", user1.GetString("id")),
-		nil,
-		wst.M{
-			"Authorization": fmt.Sprintf("Bearer %v", user1Token["id"]),
-		},
-	)
+	user1RetrievedWithUser1, err := wstfuncs.InvokeApiJsonM("GET", fmt.Sprintf("/public-accounts/%v", user1.GetString("id")), nil, wst.M{
+		"Authorization": fmt.Sprintf("Bearer %v", user1Token["id"]),
+	})
 	assert.NoError(t, err)
 	assert.Equal(t, user1.GetString("id"), user1RetrievedWithUser1.GetString("id"))
 	assert.Equal(t, user1.GetString("username"), user1RetrievedWithUser1.GetString("username"))
@@ -547,15 +524,9 @@ func Test_ProtectedFields(t *testing.T) {
 	assert.Equalf(t, user1.GetString("phone"), user1RetrievedWithUser1.GetString("phone"), "Phone should be the same")
 
 	// And Phone should be returned also with userWithPrivileges
-	user1RetrievedWithUserWithPrivileges, err := invokeApiJsonM(
-		t,
-		"GET",
-		fmt.Sprintf("/public-accounts/%v", user1.GetString("id")),
-		nil,
-		wst.M{
-			"Authorization": fmt.Sprintf("Bearer %v", userWithPrivilegesToken["id"]),
-		},
-	)
+	user1RetrievedWithUserWithPrivileges, err := wstfuncs.InvokeApiJsonM("GET", fmt.Sprintf("/public-accounts/%v", user1.GetString("id")), nil, wst.M{
+		"Authorization": fmt.Sprintf("Bearer %v", userWithPrivilegesToken["id"]),
+	})
 	assert.NoError(t, err)
 	assert.Equal(t, user1.GetString("id"), user1RetrievedWithUserWithPrivileges.GetString("id"))
 	assert.Equal(t, user1.GetString("username"), user1RetrievedWithUserWithPrivileges.GetString("username"))
