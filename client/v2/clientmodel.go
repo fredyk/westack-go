@@ -11,7 +11,7 @@ import (
 
 type Model interface {
 	FindMany(filter *wst.Filter) ([]wst.M, error)
-	//FindById(id string, filter *wst.Filter) (*wst.M, error)
+	FindById(id string, filter *wst.Filter) (wst.M, error)
 	//FindOne(filter *wst.Filter) (*wst.M, error)
 	//Create(data wst.M) (*wst.M, error)
 	//UpdateById(id string, data wst.M) (*wst.M, error)
@@ -30,6 +30,16 @@ func (m *modelImpl) FindMany(filter *wst.Filter) ([]wst.M, error) {
 		return nil, err
 	}
 	return wstfuncs.InvokeApiJsonA("GET", fmt.Sprintf("/%v", m.plural), asMap, wst.M{
+		"Authorization": fmt.Sprintf("Bearer %s", m.client.GetToken()),
+	})
+}
+
+func (m *modelImpl) FindById(id string, filter *wst.Filter) (wst.M, error) {
+	asMap, err := convertToMap(filter)
+	if err != nil {
+		return nil, err
+	}
+	return wstfuncs.InvokeApiJsonM("GET", fmt.Sprintf("/%v/%v", m.plural, id), asMap, wst.M{
 		"Authorization": fmt.Sprintf("Bearer %s", m.client.GetToken()),
 	})
 }
