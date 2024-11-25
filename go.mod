@@ -14,7 +14,7 @@ require (
 	github.com/mailru/easyjson v0.7.7
 	github.com/oliveagle/jsonpath v0.0.0-20180606110733-2e52cf6e6852
 	github.com/spf13/viper v1.19.0
-	github.com/stretchr/testify v1.9.0
+	github.com/stretchr/testify v1.10.0
 	go.mongodb.org/mongo-driver v1.17.1
 	golang.org/x/crypto v0.29.0
 	google.golang.org/grpc v1.68.0
