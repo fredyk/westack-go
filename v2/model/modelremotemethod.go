@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"reflect"
 	"regexp"
 	"runtime"
 	"strconv"
@@ -90,7 +91,9 @@ func (loadedModel *StatefulModel) RemoteMethod(handler func(context *EventContex
 	pathDef := createOpenAPIPathDef(loadedModel, description, pathParams)
 
 	if verb == "post" || verb == "put" || verb == "patch" {
-		assignOpenAPIRequestBody(pathDef)
+		assignOpenAPIRequestBody(pathDef, wst.M{
+			"type": "object",
+		})
 	} else {
 		params := createOpenAPIAdditionalParams(loadedModel, options)
 		if len(params) > 0 {
@@ -184,14 +187,25 @@ func createOpenAPIAdditionalParams(loadedModel *StatefulModel, options RemoteMet
 	return params
 }
 
-func assignOpenAPIRequestBody(pathDef wst.M) {
+func assignOpenAPIRequestBody(pathDef wst.M, schema wst.M) {
 	pathDef["requestBody"] = wst.M{
 		"description": "data",
 		"required":    true,
 		"content": wst.M{
 			"application/json": wst.M{
-				"schema": wst.M{
-					"type": "object",
+				"schema": schema,
+			},
+		},
+	}
+}
+
+func assignOpenAPIResponse(pathDef wst.M, schema wst.M) {
+	pathDef["overrideResponses"] = wst.M{
+		"200": wst.M{
+			"description": "OK",
+			"content": wst.M{
+				"application/json": wst.M{
+					"schema": schema,
 				},
 			},
 		},
@@ -408,6 +422,14 @@ func (loadedModel *StatefulModel) HandleRemoteMethod(name string, eventContext *
 				return eventContext.Ctx.SendStream(resultAsGenerator.Reader(eventContext), -1)
 
 			} else {
+
+				// check struct
+				if eventContext.Result != nil {
+					if reflect.TypeOf(eventContext.Result).Kind() == reflect.Struct {
+						return eventContext.Ctx.Status(eventContext.StatusCode).JSON(eventContext.Result)
+					}
+				}
+
 				fmt.Printf("Unknown type: %T after remote method %v\n", eventContext.Result, name)
 				eventContext.Handled = false
 			}

@@ -608,6 +608,7 @@ type IApp struct {
 	FindModel      func(modelName string) (interface{}, error)
 	FindDatasource func(datasource string) (interface{}, error)
 	Logger         func() ILogger
+	CompletedSetup func() bool
 	JwtSecretKey   []byte
 	Viper          *viper.Viper
 	Bson           BsonOptions
