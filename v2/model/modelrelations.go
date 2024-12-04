@@ -84,7 +84,7 @@ func (loadedModel *StatefulModel) ExtractLookupsFromFilter(filterMap *wst.Filter
 							if strings.Contains(fieldValue.(string), ".") {
 								// Nested relation
 								placeToInsert = "AFTER"
-								// In adition, extract the first part of the "foo.bar", and check if foo is a valid relation of the loadedModel
+								// Input adition, extract the first part of the "foo.bar", and check if foo is a valid relation of the loadedModel
 								parts := strings.Split(fieldValue.(string), ".")
 								relationName := strings.ReplaceAll(parts[0], "$", "")
 								if relation, ok := (*loadedModel.Config.Relations)[relationName]; !ok {
