@@ -61,7 +61,7 @@ func (app *WeStack) loadModels() error {
 		return fmt.Errorf("missing or invalid ./server/model-config.json: " + err.Error())
 	}
 
-	app.swaggerHelper = swaggerhelper.NewSwaggerHelper()
+	app.swaggerHelper = swaggerhelper.NewSwaggerHelper(app.asInterface())
 	err = app.swaggerHelper.CreateOpenAPI()
 	if err != nil {
 		return err
@@ -736,6 +736,9 @@ func (app *WeStack) asInterface() *wst.IApp {
 		},
 		Logger: func() wst.ILogger {
 			return app.logger
+		},
+		CompletedSetup: func() bool {
+			return app.completedSetup
 		},
 	}
 }
