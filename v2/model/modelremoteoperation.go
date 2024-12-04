@@ -2,15 +2,19 @@ package model
 
 import (
 	"fmt"
-	wst "github.com/fredyk/westack-go/v2/common"
-	"github.com/gofiber/fiber/v2"
 	"reflect"
 	"regexp"
 	"runtime"
+	"slices"
 	"strings"
+
+	wst "github.com/fredyk/westack-go/v2/common"
+	"github.com/fredyk/westack-go/v2/lib/swaggerhelper"
+	"github.com/gofiber/fiber/v2"
 )
 
-func BindRemoteOperationWithContext[T any, R any](loadedModel *StatefulModel, handler func(req *RemoteOperationReq[T]) (R, error), options RemoteOperationOptions) fiber.Router {
+func BindRemoteOperationWithContext[T any, R any](loadedModel *StatefulModel, handler func(req *RemoteOperationReq[T]) (R, error), options *RemoteOperationOptions) fiber.Router {
+
 	if !loadedModel.Config.Public {
 		loadedModel.App.Logger().Fatalf("Trying to register a remote method in the private model: %v, you may set \"public\": true in the %v.json file", loadedModel.Name, loadedModel.Name)
 	}
@@ -25,6 +29,8 @@ func BindRemoteOperationWithContext[T any, R any](loadedModel *StatefulModel, ha
 	path := options.Path
 	description := options.Description
 	verb := "post"
+
+	fmt.Printf("[INFO] Binding remote operation %s at %s %s%s\n", options.Name, strings.ToUpper(verb), loadedModel.BaseUrl, path)
 
 	_, err := loadedModel.Enforcer.AddRoleForUser(options.Name, "*")
 	if err != nil {
@@ -44,9 +50,19 @@ func BindRemoteOperationWithContext[T any, R any](loadedModel *StatefulModel, ha
 
 	pathParams := regexp.MustCompile(`:(\w+)`).FindAllString(path, -1)
 
-	pathDef := createOpenAPIPathDef(loadedModel, description, pathParams)
+	inputSchemaName := swaggerhelper.RegisterGenericComponent[T](loadedModel.App.SwaggerHelper())
+	resultSchemaName := swaggerhelper.RegisterGenericComponent[R](loadedModel.App.SwaggerHelper())
 
-	assignOpenAPIRequestBody(pathDef)
+	inputSchema := wst.M{
+		"$ref": fmt.Sprintf("#/components/schemas/%v", inputSchemaName),
+	}
+	resultSchema := wst.M{
+		"$ref": fmt.Sprintf("#/components/schemas/%v", resultSchemaName),
+	}
+
+	pathDef := createOpenAPIPathDef(loadedModel, description, pathParams)
+	assignOpenAPIRequestBody(pathDef, inputSchema)
+	assignOpenAPIResponse(pathDef, resultSchema)
 
 	loadedModel.App.SwaggerHelper().AddPathSpec(fullPath, verb, pathDef)
 	// clean up memory
@@ -57,7 +73,15 @@ func BindRemoteOperationWithContext[T any, R any](loadedModel *StatefulModel, ha
 		Name: options.Name,
 	}
 
+	sortRateLimitsByTimePeriod(options.RateLimits)
+
 	handlerWrapper := func(ctx *EventContext) error {
+
+		for _, rl := range options.RateLimits {
+			if !rl.Allow(ctx) {
+				return ctx.Ctx.Status(fiber.StatusTooManyRequests).SendString("Rate limit exceeded")
+			}
+		}
 
 		req := &RemoteOperationReq[T]{
 			Ctx: ctx,
@@ -90,7 +114,29 @@ func BindRemoteOperationWithContext[T any, R any](loadedModel *StatefulModel, ha
 
 }
 
-func BindRemoteOperationWithOptions[T any, R any](loadedModel *StatefulModel, handler func(req T) (R, error), options RemoteOperationOptions) fiber.Router {
+func sortRateLimitsByTimePeriod(rateLimits []*RateLimit) {
+	// sort rate limits by largest time period first
+	slices.SortFunc(rateLimits, func(a *RateLimit, b *RateLimit) int {
+		if a.TimePeriod < b.TimePeriod {
+			return 1
+		}
+		if a.TimePeriod > b.TimePeriod {
+			return -1
+		}
+		return 0
+	})
+}
+
+func BindRemoteOperationWithOptions[T any, R any](loadedModel *StatefulModel, handler func(req T) (R, error), options *RemoteOperationOptions) fiber.Router {
+	if options.Name == "" {
+		options.Name = getFunctionName(handler)
+	}
+	if options.Path == "" {
+		options.Path = fmt.Sprintf("/hooks/%s", wst.DashedCase(options.Name))
+	}
+	if options.Description == "" {
+		options.Description = fmt.Sprintf("Invokes %s on %s", options.Name, loadedModel.Name)
+	}
 	return BindRemoteOperationWithContext[T, R](loadedModel, func(req *RemoteOperationReq[T]) (R, error) {
 		return handler(req.Input)
 	}, options)
@@ -103,13 +149,24 @@ func getFunctionName(fn interface{}) string {
 }
 
 func BindRemoteOperation[T any, R any](loadedModel *StatefulModel, handler func(req T) (R, error)) fiber.Router {
-	functionName := getFunctionName(handler)
-	slug := wst.DashedCase(functionName)
-	path := fmt.Sprintf("/hooks/%s", slug)
-	fmt.Printf("[INFO] Binding remote operation %s on %s at POST %s%s\n", functionName, loadedModel.Name, loadedModel.BaseUrl, path)
-	return BindRemoteOperationWithOptions[T, R](loadedModel, handler, RemoteOperationOptions{
-		Name:        functionName,
-		Path:        path,
-		Description: fmt.Sprintf("Invokes %s on %s", functionName, loadedModel.Name),
-	})
+	return BindRemoteOperationWithOptions[T, R](loadedModel, handler, &RemoteOperationOptions{})
+}
+
+func RemoteOptions() *RemoteOperationOptions {
+	return &RemoteOperationOptions{}
+}
+
+func (options *RemoteOperationOptions) WithName(name string) *RemoteOperationOptions {
+	options.Name = name
+	return options
+}
+
+func (options *RemoteOperationOptions) WithPath(path string) *RemoteOperationOptions {
+	options.Path = path
+	return options
+}
+
+func (options *RemoteOperationOptions) WithRateLimits(rateLimits ...*RateLimit) *RemoteOperationOptions {
+	options.RateLimits = rateLimits
+	return options
 }

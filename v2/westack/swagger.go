@@ -75,6 +75,12 @@ func swaggerDocsHandler(app *WeStack) func(ctx *fiber.Ctx) error {
 						},
 					},
 				}
+				if overrideResponses, ok := operation.(wst.M)["overrideResponses"]; ok {
+					delete(operation.(wst.M), "overrideResponses")
+					for k, v := range overrideResponses.(wst.M) {
+						operation.(wst.M)["responses"].(wst.M)[k] = v
+					}
+				}
 			}
 		}
 		// TODO: How to test this error?
