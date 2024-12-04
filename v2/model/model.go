@@ -888,6 +888,17 @@ type RemoteMethodOptions struct {
 	Http        RemoteMethodOptionsHttp
 }
 
+type RemoteOperationOptions struct {
+	Name        string
+	Description string
+	Path        string
+}
+
+type RemoteOperationReq[T any] struct {
+	Ctx   *EventContext
+	Input T
+}
+
 type OperationItem struct {
 	Handler func(context *EventContext) error
 	Options RemoteMethodOptions
