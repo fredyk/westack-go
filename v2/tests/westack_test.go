@@ -218,6 +218,14 @@ func init() {
 			return nil
 		})
 
+		model.BindRemoteOperation(noteModel, RemoteOperationExample)
+		model.BindRemoteOperationWithOptions(noteModel, RateLimitedOperation, model.RemoteOptions().
+			WithRateLimits(
+				model.NewRateLimit("rl-1-second", 1, time.Second, false),
+				model.NewRateLimit("rl-5-seconds", 4, 5*time.Second, false),
+				model.NewRateLimit("rl-14-seconds", 10, 14*time.Second, false),
+			))
+
 		app.Server.Get("/api/v1/endpoint-using-codecs", func(ctx *fiber.Ctx) error {
 			type localNote struct {
 				ID      primitive.ObjectID `json:"id" bson:"_id"`

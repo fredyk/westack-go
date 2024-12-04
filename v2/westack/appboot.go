@@ -1,6 +1,7 @@
 package westack
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -19,7 +20,12 @@ import (
 
 func appBoot(customRoutesCallbacks []func(app *WeStack), app *WeStack) {
 
-	err := app.loadDataSources()
+	err := createDataDirectory()
+	if err != nil {
+		app.logger.Fatalf("Error creating data directory: %v", err)
+	}
+
+	err = app.loadDataSources()
 	if err != nil {
 		app.logger.Fatalf("Error while loading datasources: %v", err)
 	}
@@ -160,6 +166,20 @@ func appBoot(customRoutesCallbacks []func(app *WeStack), app *WeStack) {
 	if err != nil {
 		fmt.Printf("Error while dumping swagger helper: %v\n", err)
 	}
+
+	app.completedSetup = true
+}
+
+func createDataDirectory() error {
+	// Create data directory if it doesn't exist
+	_, err := os.Stat("data")
+	if os.IsNotExist(err) {
+		err = os.Mkdir("data", 0755)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func createErrorHandler() func(ctx *fiber.Ctx) error {
@@ -169,7 +189,7 @@ func createErrorHandler() func(ctx *fiber.Ctx) error {
 		if err != nil {
 			log.Println("Error:", err)
 			log.Printf("%v: %v\n", method, c.OriginalURL())
-			if err == fiber.ErrUnauthorized {
+			if errors.Is(err, fiber.ErrUnauthorized) {
 				err = wst.CreateError(fiber.ErrUnauthorized, "UNAUTHORIZED", fiber.Map{"message": "Unauthorized"}, "Error")
 			}
 			switch err.(type) {
