@@ -87,7 +87,7 @@ func (app *WeStack) Boot(customRoutesCallbacks ...func(app *WeStack)) {
 }
 
 func (app *WeStack) Start() error {
-	log.Printf("DEBUG Server took %v ms to start\n", time.Now().UnixMilli()-app.init.UnixMilli())
+	log.Printf("[INFO] Swagger available at http://localhost:%v/swagger\n", app.port)
 	return app.Server.Listen(fmt.Sprintf("0.0.0.0:%v", app.port))
 }
 
@@ -138,8 +138,9 @@ func New(options ...Options) *WeStack {
 	var logger wst.ILogger
 
 	server := fiber.New(fiber.Config{
-		JSONEncoder: json.Marshal,
-		JSONDecoder: json.Unmarshal,
+		JSONEncoder:           json.Marshal,
+		JSONDecoder:           json.Unmarshal,
+		DisableStartupMessage: true,
 	})
 
 	modelRegistry := make(map[string]*model.StatefulModel)
