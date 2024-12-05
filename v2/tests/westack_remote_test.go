@@ -5,6 +5,7 @@ import (
 	wst "github.com/fredyk/westack-go/v2/common"
 	"github.com/stretchr/testify/assert"
 	"testing"
+	"time"
 )
 
 type TestInput struct {
@@ -55,7 +56,15 @@ func RemoteOperationExample(req TestInput) (TestOutput, error) {
 	}, nil
 }
 
+func RateLimitedOperation(req TestInput) (TestOutput, error) {
+	return TestOutput{
+		Response: "Hello, " + req.Message,
+	}, nil
+}
+
 func Test_BindRemoteOperation(t *testing.T) {
+
+	t.Parallel()
 
 	// Invoke the registered remote operation at init()
 	output, err := wstfuncs.InvokeApiTyped[TestOutput]("POST", "/notes/hooks/remote-operation-example", wst.M{
@@ -81,4 +90,77 @@ func Test_BindRemoteOperation(t *testing.T) {
 	assert.Equal(t, true, output.SomeBoolean)
 	assert.Equal(t, "value1", output.SomeMap.GetString("key1"))
 
+}
+
+func SubTestRateLimitedOperation1Second(t *testing.T) {
+	// First call should succeed
+	output, err := invokeRateLimited()
+	assert.NoError(t, err)
+	assert.Equal(t, "Hello, World", output.Response)
+	// Second call should fail
+	output, err = invokeRateLimited()
+	assert.Error(t, err)
+	// Server returns Rate limit exceeded
+	assert.Equal(t, "invalid character 'R' looking for beginning of value", err.Error())
+}
+
+func SubTestRateLimitedOperation3Seconds(t *testing.T) {
+	// only 2 operations allowed every 3 seconds
+
+	testRateLimitIterations(t, 2)
+
+}
+
+func SubTestRateLimitedOperation5Seconds(t *testing.T) {
+	// only 2 operations in the first 3 seconds
+	start := time.Now()
+	runIterations(t, 2)
+	time.Sleep(3100*time.Millisecond - time.Since(start))
+	// only 1 operation in the next 2 seconds
+	testRateLimitIterations(t, 1)
+}
+
+func testRateLimitIterations(t *testing.T, iterations int) {
+	runIterations(t, iterations)
+
+	// Third call should fail
+	output, err := invokeRateLimited()
+	assert.Error(t, err)
+	assert.Empty(t, output)
+	// Server returns Rate limit exceeded
+	assert.Equal(t, "invalid character 'R' looking for beginning of value", err.Error())
+}
+
+func runIterations(t *testing.T, iterations int) {
+	start := time.Now()
+	output, err := invokeRateLimited()
+	assert.NoError(t, err)
+	assert.Equal(t, "Hello, World", output.Response)
+
+	for i := 1; i < iterations; i++ {
+		time.Sleep(time.Duration(1000*i+100)*time.Millisecond - time.Since(start))
+		output, err := invokeRateLimited()
+		assert.NoError(t, err, "i=%d", i)
+		assert.Equal(t, "Hello, World", output.Response, "i=%d", i)
+	}
+}
+
+func Test_RateLimits(t *testing.T) {
+
+	t.Parallel()
+	t.Run("RateLimitedOperation1Second", SubTestRateLimitedOperation1Second)
+	time.Sleep(1100 * time.Millisecond)
+	t.Run("RateLimitedOperation3Seconds", SubTestRateLimitedOperation3Seconds)
+	time.Sleep(3100 * time.Millisecond)
+	t.Run("RateLimitedOperation5Seconds", SubTestRateLimitedOperation5Seconds)
+
+}
+
+func invokeRateLimited() (TestOutput, error) {
+	return wstfuncs.InvokeApiTyped[TestOutput]("POST", "/notes/hooks/rate-limited-operation", wst.M{
+		"message": "World",
+	}, wst.M{
+		"Authorization": "Bearer " + adminAccountToken.GetString("id"),
+		"Content-Type":  "application/json",
+	})
 }
