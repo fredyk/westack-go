@@ -5,6 +5,7 @@ import (
 	"reflect"
 	"regexp"
 	"runtime"
+	"slices"
 	"strings"
 
 	wst "github.com/fredyk/westack-go/v2/common"
@@ -72,17 +73,14 @@ func BindRemoteOperationWithContext[T any, R any](loadedModel *StatefulModel, ha
 		Name: options.Name,
 	}
 
+	sortRateLimitsByTimePeriod(options.RateLimits)
+
 	handlerWrapper := func(ctx *EventContext) error {
 
-		// Need to invoke all rate limits to set internal states
-		exceeded := false
 		for _, rl := range options.RateLimits {
 			if !rl.Allow(ctx) {
-				exceeded = true
+				return ctx.Ctx.Status(fiber.StatusTooManyRequests).SendString("Rate limit exceeded")
 			}
-		}
-		if exceeded {
-			return ctx.Ctx.Status(fiber.StatusTooManyRequests).SendString("Rate limit exceeded")
 		}
 
 		req := &RemoteOperationReq[T]{
@@ -114,6 +112,19 @@ func BindRemoteOperationWithContext[T any, R any](loadedModel *StatefulModel, ha
 
 	return toInvoke(path, createFiberHandler(remoteMethodOptions, loadedModel, verb, path)).Name(loadedModel.Name + "." + remoteMethodOptions.Name)
 
+}
+
+func sortRateLimitsByTimePeriod(rateLimits []*RateLimit) {
+	// sort rate limits by largest time period first
+	slices.SortFunc(rateLimits, func(a *RateLimit, b *RateLimit) int {
+		if a.TimePeriod < b.TimePeriod {
+			return 1
+		}
+		if a.TimePeriod > b.TimePeriod {
+			return -1
+		}
+		return 0
+	})
 }
 
 func BindRemoteOperationWithOptions[T any, R any](loadedModel *StatefulModel, handler func(req T) (R, error), options RemoteOperationOptions) fiber.Router {
