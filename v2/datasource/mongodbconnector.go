@@ -151,7 +151,7 @@ func (connector *MongoDBConnector) findByObjectId(collectionName string, _id int
 	}
 }
 
-func (connector *MongoDBConnector) Count(collectionName string, lookups *wst.A) (int64, error) {
+func (connector *MongoDBConnector) Count(collectionName string, lookups *wst.A) (wst.CountResult, error) {
 	var db = connector.db
 
 	database := db.Database(connector.dsViper.GetString("database"))
@@ -175,7 +175,7 @@ func (connector *MongoDBConnector) Count(collectionName string, lookups *wst.A) 
 	})
 	if err != nil {
 		fmt.Printf("error %v\n", err)
-		return 0, err
+		return wst.CountResult{}, err
 	}
 	defer func(cursor *mongo.Cursor, ctx context.Context) {
 		err := cursor.Close(ctx)
@@ -188,12 +188,12 @@ func (connector *MongoDBConnector) Count(collectionName string, lookups *wst.A) 
 	}
 	err = cursor.All(ctx, &documents)
 	if err != nil {
-		return 0, err
+		return wst.CountResult{}, err
 	}
 	if len(documents) == 0 {
-		return 0, nil
+		return wst.CountResult{}, nil
 	}
-	return documents[0].Count, nil
+	return wst.CountResult{Count: documents[0].Count}, nil
 }
 
 func (connector *MongoDBConnector) Create(collectionName string, data *wst.M) (*wst.M, error) {
@@ -237,7 +237,7 @@ func updateOneWithRetries(collection *mongo.Collection, connector *MongoDBConnec
 	return nil, nil
 }
 
-func (connector *MongoDBConnector) DeleteById(collectionName string, id interface{}) (result DeleteResult, err error) {
+func (connector *MongoDBConnector) DeleteById(collectionName string, id interface{}) (result wst.DeleteResult, err error) {
 	var db = connector.db
 
 	database := db.Database(connector.dsViper.GetString("database"))
@@ -246,10 +246,10 @@ func (connector *MongoDBConnector) DeleteById(collectionName string, id interfac
 	if err != nil {
 		return result, err
 	}
-	return DeleteResult{DeletedCount: mongoResult.DeletedCount}, nil
+	return wst.DeleteResult{DeletedCount: mongoResult.DeletedCount}, nil
 }
 
-func (connector *MongoDBConnector) DeleteMany(collectionName string, whereLookups *wst.A) (result DeleteResult, err error) {
+func (connector *MongoDBConnector) DeleteMany(collectionName string, whereLookups *wst.A) (result wst.DeleteResult, err error) {
 	db := connector.db
 	database := db.Database(connector.dsViper.GetString("database"))
 	collection := database.Collection(collectionName)
@@ -263,7 +263,7 @@ func (connector *MongoDBConnector) DeleteMany(collectionName string, whereLookup
 	if err != nil {
 		return result, err
 	}
-	return DeleteResult{DeletedCount: mongoResult.DeletedCount}, nil
+	return wst.DeleteResult{DeletedCount: mongoResult.DeletedCount}, nil
 }
 
 func (connector *MongoDBConnector) Disconnect() error {

@@ -67,7 +67,9 @@ func (app *WeStack) loadModels() error {
 		return err
 	}
 
-	swaggerhelper.RegisterGenericComponent[datasource.DeleteResult](app.swaggerHelper)
+	swaggerhelper.RegisterGenericComponent[wst.CountResult](app.swaggerHelper)
+	swaggerhelper.RegisterGenericComponent[wst.DeleteResult](app.swaggerHelper)
+	swaggerhelper.RegisterGenericComponent[wst.LoginResult](app.swaggerHelper)
 
 	var someAccountModel *model.StatefulModel
 	for _, fileInfo := range fileInfos {
@@ -303,19 +305,19 @@ func (app *WeStack) setupModel(loadedModel *model.StatefulModel, dataSource *dat
 		loadedModel.BaseUrl = app.restApiRoot + "/" + plural
 
 	}
-	loadedModel.On("findMany", func(ctx *model.EventContext) error {
+	loadedModel.On(string(wst.OperationNameFindMany), func(ctx *model.EventContext) error {
 		return handleFindMany(app, loadedModel, ctx)
 	})
-	loadedModel.On("count", func(ctx *model.EventContext) error {
+	loadedModel.On(string(wst.OperationNameCount), func(ctx *model.EventContext) error {
 		result, err := loadedModel.Count(ctx.Filter, ctx)
 		if err != nil {
 			return err
 		}
 		ctx.StatusCode = fiber.StatusOK
-		ctx.Result = wst.M{"count": result}
+		ctx.Result = result
 		return nil
 	})
-	loadedModel.On("findById", func(ctx *model.EventContext) error {
+	loadedModel.On(string(wst.OperationNameFindById), func(ctx *model.EventContext) error {
 		result, err := loadedModel.FindById(ctx.ModelID, ctx.Filter, ctx)
 		if err != nil {
 			return err
@@ -503,7 +505,7 @@ func (app *WeStack) setupModel(loadedModel *model.StatefulModel, dataSource *dat
 		return nil
 	})
 
-	loadedModel.On("create", func(ctx *model.EventContext) error {
+	loadedModel.On(string(wst.OperationNameCreate), func(ctx *model.EventContext) error {
 		created, err := loadedModel.Create(*ctx.Data, ctx)
 		if err != nil {
 			return err
@@ -513,7 +515,7 @@ func (app *WeStack) setupModel(loadedModel *model.StatefulModel, dataSource *dat
 		return nil
 	})
 
-	loadedModel.On("instance_updateAttributes", func(ctx *model.EventContext) error {
+	loadedModel.On(string(wst.OperationNameUpdateAttributes), func(ctx *model.EventContext) error {
 		inst, err := loadedModel.FindById(ctx.ModelID, nil, ctx)
 		if err != nil {
 			return err
@@ -562,7 +564,7 @@ func (app *WeStack) setupModel(loadedModel *model.StatefulModel, dataSource *dat
 		}
 		return err
 	}
-	loadedModel.On("instance_delete", deleteByIdHandler)
+	loadedModel.On(string(wst.OperationNameDeleteById), deleteByIdHandler)
 
 	if config.Base == "Account" {
 		upsertAccountRolesHandler := func(ctx *model.EventContext) error {
@@ -577,7 +579,7 @@ func (app *WeStack) setupModel(loadedModel *model.StatefulModel, dataSource *dat
 			}
 			return err
 		}
-		loadedModel.On("user_upsertRoles", upsertAccountRolesHandler)
+		loadedModel.On(string(wst.OperationNameUpsertRoles), upsertAccountRolesHandler)
 	}
 
 	return nil

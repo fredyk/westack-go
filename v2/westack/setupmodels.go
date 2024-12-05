@@ -109,7 +109,7 @@ func createCasbinModel(loadedModel *model.StatefulModel, app *WeStack, config *m
 }
 
 func setupAccountModel(loadedModel *model.StatefulModel, app *WeStack) {
-	loadedModel.On("login", func(ctx *model.EventContext) error {
+	loadedModel.On(string(wst.OperationNameLogin), func(ctx *model.EventContext) error {
 		data := ctx.Data
 		email := data.GetString("email")
 		username := data.GetString("username")
@@ -219,7 +219,7 @@ func setupAccountModel(loadedModel *model.StatefulModel, app *WeStack) {
 		tokenString, err := token.SignedString(loadedModel.App.JwtSecretKey)
 
 		ctx.StatusCode = fiber.StatusOK
-		ctx.Result = fiber.Map{"id": tokenString, "accountId": userIdHex}
+		ctx.Result = wst.LoginResult{Id: tokenString, AccountId: userIdHex}
 		return nil
 	})
 }
