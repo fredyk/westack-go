@@ -75,9 +75,11 @@ func Test_Count(t *testing.T) {
 	// assert.NotNil(t, deleteResult)
 
 	// Count notes
-	countResponse, err := invokeApiAsRandomAccount(t, "GET", "/notes/count?filter={\"where\":{\"title\":\"Note+for+count\"}}", nil, nil)
+	countResponse, err := wstfuncs.InvokeApiTyped[wst.CountResult]("GET", "/notes/count?filter={\"where\":{\"title\":\"Note+for+count\"}}", nil, wst.M{
+		"Authorization": fmt.Sprintf("Bearer %v", randomAccountToken.GetString("id")),
+	})
 	assert.NoError(t, err)
-	assert.EqualValues(t, 0, countResponse["count"])
+	assert.EqualValues(t, 0, countResponse.Count)
 
 	// Create a note
 	note, err := invokeApiAsRandomAccount(t, "POST", "/notes", wst.M{
@@ -91,9 +93,11 @@ func Test_Count(t *testing.T) {
 	assert.Equal(t, "Note for count", note.GetString("title"))
 
 	// Count notes again
-	newCount, err := invokeApiAsRandomAccount(t, "GET", "/notes/count?filter={\"where\":{\"title\":\"Note+for+count\"}}", nil, nil)
+	newCount, err := wstfuncs.InvokeApiTyped[wst.CountResult]("GET", "/notes/count?filter={\"where\":{\"title\":\"Note+for+count\"}}", nil, wst.M{
+		"Authorization": fmt.Sprintf("Bearer %v", randomAccountToken.GetString("id")),
+	})
 	assert.NoError(t, err)
-	assert.EqualValuesf(t, countResponse["count"].(float64)+1, newCount["count"], "Count is not increased: %v", newCount)
+	assert.EqualValuesf(t, countResponse.Count+1, newCount.Count, "Count is not increased: %v", newCount)
 
 }
 
@@ -603,10 +607,10 @@ func Test_DeleteNoteTwice(t *testing.T) {
 	assert.Equal(t, "Test Note", note.GetString("title"))
 
 	// Delete note
-	result, _ := wstfuncs.InvokeApiFullResponse("DELETE", "/notes/"+note.GetString("id"), nil, wst.M{
+	result, _ := wstfuncs.InvokeApiTyped[wst.DeleteResult]("DELETE", "/notes/"+note.GetString("id"), nil, wst.M{
 		"Authorization": fmt.Sprintf("Bearer %s", randomAccountToken.GetString("id")),
 	})
-	assert.Equal(t, fiber.StatusNoContent, result.StatusCode)
+	assert.EqualValues(t, 1, result.DeletedCount)
 
 	// Delete note again
 	result2, err := wstfuncs.InvokeApiJsonM("DELETE", "/notes/"+note.GetString("id"), nil, wst.M{
