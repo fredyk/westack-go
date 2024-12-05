@@ -80,6 +80,11 @@ func RunCli() {
 				printHelp()
 			}
 		}
+	case "generate":
+		err := generate()
+		if err != nil {
+			log.Fatalf("Error generating go files: %v", err)
+		}
 	case "help":
 		printHelp()
 	default:
