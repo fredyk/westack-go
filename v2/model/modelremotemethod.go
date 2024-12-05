@@ -120,7 +120,7 @@ func (loadedModel *StatefulModel) RemoteMethod(handler func(context *EventContex
 			assignOpenAPIRequestBody(pathDef, wst.M{
 				"$ref": fmt.Sprintf("#/components/schemas/%s", loadedModel.Name),
 			})
-		} else if options.Name == string(wst.OperationNameDeleteById) {
+		} else {
 			assignOpenAPIRequestBody(pathDef, wst.M{
 				"type": "object",
 			})

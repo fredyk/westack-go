@@ -438,7 +438,7 @@ func Test_WeStackDelete(t *testing.T) {
 		return
 	}
 
-	if !assert.Equal(t, 204, response.StatusCode) {
+	if !assert.Equal(t, fiber.StatusOK, response.StatusCode) {
 		return
 	}
 

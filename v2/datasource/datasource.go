@@ -134,7 +134,7 @@ func (ds *Datasource) FindMany(collectionName string, lookups *wst.A) (MongoCurs
 	return ds.connectorInstance.FindMany(collectionName, lookups)
 }
 
-func (ds *Datasource) Count(collectionName string, lookups *wst.A) (int64, error) {
+func (ds *Datasource) Count(collectionName string, lookups *wst.A) (wst.CountResult, error) {
 	return ds.connectorInstance.Count(collectionName, lookups)
 }
 
@@ -146,7 +146,7 @@ func (ds *Datasource) UpdateById(collectionName string, id interface{}, data *ws
 	return ds.connectorInstance.UpdateById(collectionName, id, data)
 }
 
-func (ds *Datasource) DeleteById(collectionName string, id interface{}) (DeleteResult, error) {
+func (ds *Datasource) DeleteById(collectionName string, id interface{}) (wst.DeleteResult, error) {
 	return ds.connectorInstance.DeleteById(collectionName, id)
 }
 
@@ -162,7 +162,7 @@ func (ds *Datasource) DeleteById(collectionName string, id interface{}) (DeleteR
 // ]
 // and is used to filter the documents to delete.
 // It cannot be nil or empty.
-func (ds *Datasource) DeleteMany(collectionName string, whereLookups *wst.A) (result DeleteResult, err error) {
+func (ds *Datasource) DeleteMany(collectionName string, whereLookups *wst.A) (result wst.DeleteResult, err error) {
 	if whereLookups == nil {
 		return result, errors.New("whereLookups cannot be nil")
 	}

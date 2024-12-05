@@ -100,9 +100,9 @@ func (app *WeStack) loadModelsFixedRoutes() error {
 
 func mountAccountModelFixedRoutes(loadedModel *model.StatefulModel, app *WeStack) {
 	loadedModel.RemoteMethod(func(eventContext *model.EventContext) error {
-		return handleEvent(eventContext, loadedModel, "login")
+		return handleEvent(eventContext, loadedModel, string(wst.OperationNameLogin))
 	}, model.RemoteMethodOptions{
-		Name:        "login",
+		Name:        string(wst.OperationNameLogin),
 		Description: "Logins an account",
 		Accepts: model.RemoteMethodOptionsHttpArgs{
 			{
@@ -127,10 +127,10 @@ func mountAccountModelFixedRoutes(loadedModel *model.StatefulModel, app *WeStack
 			return err
 		}
 		eventContext.ModelID = token.Account.Id
-		return loadedModel.HandleRemoteMethod("findById", eventContext)
+		return loadedModel.HandleRemoteMethod(string(wst.OperationNameFindById), eventContext)
 
 	}, model.RemoteMethodOptions{
-		Name:        "findSelf",
+		Name:        string(wst.OperationNameFindSelf),
 		Description: "Find user with their bearer",
 		Accepts: model.RemoteMethodOptionsHttpArgs{
 			{
@@ -300,7 +300,7 @@ func mountAccountModelFixedRoutes(loadedModel *model.StatefulModel, app *WeStack
 
 		return eventContext.Ctx.JSON(fiber.Map{"id": tokenString, "accountId": userIdHex})
 	}, model.RemoteMethodOptions{
-		Name:        "refreshToken",
+		Name:        string(wst.OperationNameRefreshToken),
 		Description: "Obtains current user",
 		Http: model.RemoteMethodOptionsHttp{
 			Path: "/refresh-token",
@@ -315,9 +315,9 @@ func mountBaseModelFixedRoutes(app *WeStack, loadedModel *model.StatefulModel) {
 		log.Println("Mount GET " + loadedModel.BaseUrl)
 	}
 	loadedModel.RemoteMethod(func(eventContext *model.EventContext) error {
-		return handleEvent(eventContext, loadedModel, "findMany")
+		return handleEvent(eventContext, loadedModel, string(wst.OperationNameFindMany))
 	}, model.RemoteMethodOptions{
-		Name: "findMany",
+		Name: string(wst.OperationNameFindMany),
 		Accepts: model.RemoteMethodOptionsHttpArgs{
 			{
 				Arg:         "filter",
@@ -339,9 +339,9 @@ func mountBaseModelFixedRoutes(app *WeStack, loadedModel *model.StatefulModel) {
 		log.Println("Mount GET " + loadedModel.BaseUrl + "/count")
 	}
 	loadedModel.RemoteMethod(func(eventContext *model.EventContext) error {
-		return handleEvent(eventContext, loadedModel, "count")
+		return handleEvent(eventContext, loadedModel, string(wst.OperationNameCount))
 	}, model.RemoteMethodOptions{
-		Name: "count",
+		Name: string(wst.OperationNameCount),
 		Accepts: model.RemoteMethodOptionsHttpArgs{
 			{
 				Arg:         "filter",
@@ -363,15 +363,9 @@ func mountBaseModelFixedRoutes(app *WeStack, loadedModel *model.StatefulModel) {
 		log.Println("Mount POST " + loadedModel.BaseUrl)
 	}
 	loadedModel.RemoteMethod(func(eventContext *model.EventContext) error {
-		//var data *wst.M
-		//err := json.Unmarshal(eventContext.Ctx.Body(), &data)
-		//if err != nil {
-		//	return err
-		//}
-		//eventContext.Data = data
-		return handleEvent(eventContext, loadedModel, "create")
+		return handleEvent(eventContext, loadedModel, string(wst.OperationNameCreate))
 	}, model.RemoteMethodOptions{
-		Name: "create",
+		Name: string(wst.OperationNameCreate),
 		Accepts: model.RemoteMethodOptionsHttpArgs{
 			{
 				Arg:         "body",
@@ -430,7 +424,7 @@ func mountAppDynamicRoutes(loadedModel *model.StatefulModel, app *WeStack) {
 		}
 		return nil
 	}, model.RemoteMethodOptions{
-		Name: "createToken",
+		Name: string(wst.OperationNameCreateToken),
 		Accepts: model.RemoteMethodOptionsHttpArgs{
 			{
 				Arg:         "data",
@@ -512,10 +506,10 @@ func (app *WeStack) loadModelsDynamicRoutes() {
 				eventContext.ModelID = id
 			}
 
-			return handleEvent(eventContext, loadedModel, "findById")
+			return handleEvent(eventContext, loadedModel, string(wst.OperationNameFindById))
 
 		}, model.RemoteMethodOptions{
-			Name: "findById",
+			Name: string(wst.OperationNameFindById),
 			Accepts: model.RemoteMethodOptionsHttpArgs{
 				{
 					Arg:         "filter",
@@ -540,9 +534,9 @@ func (app *WeStack) loadModelsDynamicRoutes() {
 				return err
 			}
 			eventContext.ModelID = &id
-			return handleEvent(eventContext, loadedModel, "instance_updateAttributes")
+			return handleEvent(eventContext, loadedModel, string(wst.OperationNameUpdateAttributes))
 		}, model.RemoteMethodOptions{
-			Name: "instance_updateAttributes",
+			Name: string(wst.OperationNameUpdateAttributes),
 			Accepts: model.RemoteMethodOptionsHttpArgs{
 				{
 					Arg:         "data",
@@ -567,9 +561,9 @@ func (app *WeStack) loadModelsDynamicRoutes() {
 				return err
 			}
 			eventContext.ModelID = &id
-			return handleEvent(eventContext, loadedModel, "instance_delete")
+			return handleEvent(eventContext, loadedModel, string(wst.OperationNameDeleteById))
 		}, model.RemoteMethodOptions{
-			Name: "instance_delete",
+			Name: string(wst.OperationNameDeleteById),
 			Http: model.RemoteMethodOptionsHttp{
 				Path: "/:id",
 				Verb: "delete",
@@ -583,9 +577,9 @@ func (app *WeStack) loadModelsDynamicRoutes() {
 					return err
 				}
 				eventContext.ModelID = &id
-				return handleEvent(eventContext, loadedModel, "user_upsertRoles")
+				return handleEvent(eventContext, loadedModel, string(wst.OperationNameUpsertRoles))
 			}, model.RemoteMethodOptions{
-				Name: "user_upsertRoles",
+				Name: string(wst.OperationNameUpsertRoles),
 				Http: model.RemoteMethodOptionsHttp{
 					Path: "/:id/roles",
 					Verb: "put",
