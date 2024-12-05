@@ -219,6 +219,12 @@ func init() {
 		})
 
 		model.BindRemoteOperation(noteModel, RemoteOperationExample)
+		model.BindRemoteOperationWithOptions(noteModel, RateLimitedOperation, *model.RemoteOptions().
+			WithRateLimits(
+				model.NewRateLimit("rl-1-second", 1, time.Second, false),
+				model.NewRateLimit("rl-3-seconds", 2, 3*time.Second, false),
+				model.NewRateLimit("rl-5-seconds", 4, 5*time.Second, false),
+			))
 
 		app.Server.Get("/api/v1/endpoint-using-codecs", func(ctx *fiber.Ctx) error {
 			type localNote struct {

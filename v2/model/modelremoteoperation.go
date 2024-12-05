@@ -112,6 +112,15 @@ func BindRemoteOperationWithContext[T any, R any](loadedModel *StatefulModel, ha
 }
 
 func BindRemoteOperationWithOptions[T any, R any](loadedModel *StatefulModel, handler func(req T) (R, error), options RemoteOperationOptions) fiber.Router {
+	if options.Name == "" {
+		options.Name = getFunctionName(handler)
+	}
+	if options.Path == "" {
+		options.Path = fmt.Sprintf("/hooks/%s", wst.DashedCase(options.Name))
+	}
+	if options.Description == "" {
+		options.Description = fmt.Sprintf("Invokes %s on %s", options.Name, loadedModel.Name)
+	}
 	return BindRemoteOperationWithContext[T, R](loadedModel, func(req *RemoteOperationReq[T]) (R, error) {
 		return handler(req.Input)
 	}, options)
@@ -124,14 +133,7 @@ func getFunctionName(fn interface{}) string {
 }
 
 func BindRemoteOperation[T any, R any](loadedModel *StatefulModel, handler func(req T) (R, error)) fiber.Router {
-	functionName := getFunctionName(handler)
-	slug := wst.DashedCase(functionName)
-	path := fmt.Sprintf("/hooks/%s", slug)
-	return BindRemoteOperationWithOptions[T, R](loadedModel, handler, RemoteOperationOptions{
-		Name:        functionName,
-		Path:        path,
-		Description: fmt.Sprintf("Invokes %s on %s", functionName, loadedModel.Name),
-	})
+	return BindRemoteOperationWithOptions[T, R](loadedModel, handler, RemoteOperationOptions{})
 }
 
 func RemoteOptions() *RemoteOperationOptions {
