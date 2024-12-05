@@ -2,7 +2,9 @@ package westack
 
 import (
 	"fmt"
+	"github.com/fredyk/westack-go/v2/datasource"
 	"github.com/goccy/go-json"
+	"reflect"
 	"runtime"
 	"strings"
 
@@ -63,14 +65,41 @@ func swaggerDocsHandler(app *WeStack) func(ctx *fiber.Ctx) error {
 						})
 					}
 				}
+				resultSchema := wst.M{
+					"type": "object",
+				}
+				if operationName, ok := operation.(wst.M)["x-operationName"]; ok {
+					switch {
+					case operationName == string(wst.OperationNameFindById) ||
+						operationName == string(wst.OperationNameUpdateAttributes) ||
+						operationName == string(wst.OperationNameCreate):
+						resultSchema = wst.M{
+							"$ref": fmt.Sprintf("#/components/schemas/%v", operation.(wst.M)["x-modelName"]),
+						}
+					case operationName == string(wst.OperationNameFindMany):
+						resultSchema = wst.M{
+							"type": "array",
+							"items": wst.M{
+								"$ref": fmt.Sprintf("#/components/schemas/%v", operation.(wst.M)["x-modelName"]),
+							},
+						}
+					case operationName == string(wst.OperationNameDeleteById):
+						resultSchema = wst.M{
+							"$ref": fmt.Sprintf("#/components/schemas/%v",
+								reflect.TypeFor[datasource.DeleteResult]().String()),
+						}
+					case operationName == string(wst.OperationNameCount):
+						resultSchema = wst.M{
+							"type": "integer",
+						}
+					}
+				}
 				operation.(wst.M)["responses"] = wst.M{
 					"200": wst.M{
 						"description": "OK",
 						"content": wst.M{
 							"application/json": wst.M{
-								"schema": wst.M{
-									"type": "object",
-								},
+								"schema": resultSchema,
 							},
 						},
 					},
