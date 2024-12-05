@@ -89,13 +89,15 @@ func (rateLimit *RateLimit) Allow(eventContext *EventContext) bool {
 		rateLimit.RequestsMadeByIp[ips] = 0
 	}
 
-	if time.Since(rateLimit.StartTime) > rateLimit.TimePeriod {
+	elapsed := time.Since(rateLimit.StartTime)
+	if elapsed > rateLimit.TimePeriod {
 		rateLimit.StartTime = time.Now()
 		rateLimit.RequestsMadeByIp[ips] = 0
+		//fmt.Printf("[DEBUG] [%s] New time period started\n", rateLimit.Name)
 	}
 
 	if rateLimit.RequestsMadeByIp[ips] >= rateLimit.MaxRequests {
-		fmt.Printf("[DEBUG] [%s] Too many requests by %s: %d\n", rateLimit.Name, ips, rateLimit.RequestsMadeByIp[ips])
+		fmt.Printf("[DEBUG] [%s] Too many requests by %s: %d in %v\n", rateLimit.Name, ips, rateLimit.RequestsMadeByIp[ips]+1, elapsed)
 		return false
 	}
 

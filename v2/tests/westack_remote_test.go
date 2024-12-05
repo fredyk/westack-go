@@ -104,20 +104,24 @@ func SubTestRateLimitedOperation1Second(t *testing.T) {
 	assert.Equal(t, "invalid character 'R' looking for beginning of value", err.Error())
 }
 
-func SubTestRateLimitedOperation3Seconds(t *testing.T) {
-	// only 2 operations allowed every 3 seconds
+func SubTestRateLimitedOperation5Seconds(t *testing.T) {
+	// only 3 operations allowed every 5 seconds
 
-	testRateLimitIterations(t, 2)
+	testRateLimitIterations(t, 4)
 
 }
 
-func SubTestRateLimitedOperation5Seconds(t *testing.T) {
-	// only 2 operations in the first 3 seconds
+func SubTestRateLimitedOperation14Seconds(t *testing.T) {
+	// only 9 operations every 10 seconds
 	start := time.Now()
+	runIterations(t, 4)
+	time.Sleep(5200*time.Millisecond - time.Since(start))
+	runIterations(t, 4)
+	time.Sleep(10300*time.Millisecond - time.Since(start))
 	runIterations(t, 2)
-	time.Sleep(3100*time.Millisecond - time.Since(start))
+	//time.Sleep(11200*time.Millisecond - time.Since(start))
 	// only 1 operation in the next 2 seconds
-	testRateLimitIterations(t, 1)
+	testRateLimitIterations(t, 0)
 }
 
 func testRateLimitIterations(t *testing.T, iterations int) {
@@ -133,26 +137,27 @@ func testRateLimitIterations(t *testing.T, iterations int) {
 
 func runIterations(t *testing.T, iterations int) {
 	start := time.Now()
-	output, err := invokeRateLimited()
-	assert.NoError(t, err)
-	assert.Equal(t, "Hello, World", output.Response)
-
-	for i := 1; i < iterations; i++ {
-		time.Sleep(time.Duration(1000*i+100)*time.Millisecond - time.Since(start))
+	for i := 0; i < iterations; i++ {
+		iterationStart := time.Now()
 		output, err := invokeRateLimited()
-		assert.NoError(t, err, "i=%d", i)
+		assert.NoError(t, err, "i=%d/%d", i, iterations)
 		assert.Equal(t, "Hello, World", output.Response, "i=%d", i)
+
+		time.Sleep(1001*time.Millisecond - time.Since(iterationStart))
+		time.Sleep(time.Duration(1000*(i+1)+100)*time.Millisecond - time.Since(start))
 	}
 }
 
 func Test_RateLimits(t *testing.T) {
 
 	t.Parallel()
-	t.Run("RateLimitedOperation1Second", SubTestRateLimitedOperation1Second)
-	time.Sleep(1200 * time.Millisecond)
-	t.Run("RateLimitedOperation3Seconds", SubTestRateLimitedOperation3Seconds)
-	time.Sleep(3100 * time.Millisecond)
-	t.Run("RateLimitedOperation5Seconds", SubTestRateLimitedOperation5Seconds)
+
+	start := time.Now()
+	t.Run("TestRateLimitedOperation1Second", SubTestRateLimitedOperation1Second)
+	time.Sleep(5100*time.Millisecond - time.Since(start))
+	t.Run("TestRateLimitedOperation5Seconds", SubTestRateLimitedOperation5Seconds)
+	time.Sleep(13100*time.Millisecond - time.Since(start))
+	t.Run("TestRateLimitedOperation14Seconds", SubTestRateLimitedOperation14Seconds)
 
 }
 

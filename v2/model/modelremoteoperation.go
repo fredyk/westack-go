@@ -74,10 +74,15 @@ func BindRemoteOperationWithContext[T any, R any](loadedModel *StatefulModel, ha
 
 	handlerWrapper := func(ctx *EventContext) error {
 
+		// Need to invoke all rate limits to set internal states
+		exceeded := false
 		for _, rl := range options.RateLimits {
 			if !rl.Allow(ctx) {
-				return ctx.Ctx.Status(fiber.StatusTooManyRequests).SendString("Rate limit exceeded")
+				exceeded = true
 			}
+		}
+		if exceeded {
+			return ctx.Ctx.Status(fiber.StatusTooManyRequests).SendString("Rate limit exceeded")
 		}
 
 		req := &RemoteOperationReq[T]{
