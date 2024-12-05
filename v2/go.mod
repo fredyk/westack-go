@@ -2,12 +2,12 @@ module github.com/fredyk/westack-go/v2
 
 go 1.22.9
 
-replace github.com/fredyk/westack-go/client/v2 => ../client/v2
+//replace github.com/fredyk/westack-go/client/v2 => ../client/v2
 
 require (
 	github.com/andybalholm/brotli v1.1.0
 	github.com/casbin/casbin/v2 v2.100.0
-	github.com/fredyk/westack-go/client/v2 v2.0.0-20241123145028-772286715367
+	github.com/fredyk/westack-go/client/v2 v2.0.0-20241205163851-126f3e3e91b3
 	github.com/goccy/go-json v0.10.3
 	github.com/gofiber/fiber/v2 v2.52.5
 	github.com/golang-jwt/jwt v3.2.2+incompatible
@@ -18,6 +18,7 @@ require (
 	github.com/spf13/cast v1.6.0
 	github.com/spf13/viper v1.19.0
 	github.com/stretchr/testify v1.9.0
+	github.com/tyler-sommer/stick v1.0.6
 	go.mongodb.org/mongo-driver v1.17.1
 	golang.org/x/crypto v0.29.0
 	google.golang.org/grpc v1.68.0
@@ -43,6 +44,7 @@ require (
 	github.com/rivo/uniseg v0.4.4 // indirect
 	github.com/sagikazarmark/locafero v0.4.0 // indirect
 	github.com/sagikazarmark/slog-shim v0.1.0 // indirect
+	github.com/shopspring/decimal v0.0.0-20180709203117-cd690d0c9e24 // indirect
 	github.com/sourcegraph/conc v0.3.0 // indirect
 	github.com/spf13/afero v1.11.0 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
