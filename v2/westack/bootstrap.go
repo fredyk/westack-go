@@ -67,6 +67,8 @@ func (app *WeStack) loadModels() error {
 		return err
 	}
 
+	app.registerControllers(&controllerRegistryImpl{app: app})
+
 	swaggerhelper.RegisterGenericComponent[wst.CountResult](app.swaggerHelper)
 	swaggerhelper.RegisterGenericComponent[wst.DeleteResult](app.swaggerHelper)
 	swaggerhelper.RegisterGenericComponent[wst.LoginResult](app.swaggerHelper)
