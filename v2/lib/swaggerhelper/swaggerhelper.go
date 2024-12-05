@@ -106,7 +106,7 @@ func (sH *swaggerHelper) CreateOpenAPI() error {
 	return err2
 }
 
-func (sH *swaggerHelper) AddPathSpec(path string, verb string, verbSpec wst.M) {
+func (sH *swaggerHelper) AddPathSpec(path string, verb string, verbSpec wst.M, operationName string, modelName string) {
 	if sH.app.CompletedSetup() {
 		os.Stderr.WriteString("Cannot add path spec after setup is completed\n")
 		os.Stderr.WriteString("Maybe you are trying to register a remote operation after the app.Boot() was called?\n")
@@ -116,6 +116,8 @@ func (sH *swaggerHelper) AddPathSpec(path string, verb string, verbSpec wst.M) {
 	if _, ok := (*sH.swaggerMap.(*wst.M))["paths"].(wst.M)[path]; !ok {
 		(*sH.swaggerMap.(*wst.M))["paths"].(wst.M)[path] = make(wst.M)
 	}
+	verbSpec["x-operationName"] = operationName
+	verbSpec["x-modelName"] = modelName
 	(*sH.swaggerMap.(*wst.M))["paths"].(wst.M)[path].(wst.M)[verb] = verbSpec
 	return
 }
@@ -152,17 +154,43 @@ func NewSwaggerHelper(app *wst.IApp) wst.SwaggerHelper {
 	}
 }
 
+type OpenApiModelDef struct {
+	Name       string
+	Properties wst.M
+}
+
+func RegisterModel(sH wst.SwaggerHelper, def OpenApiModelDef) {
+	// Register the model in the swagger helper
+	components := (*sH.(*swaggerHelper).swaggerMap.(*wst.M))["components"].(*wst.M)
+	if _, ok := (*components)["schemas"].(wst.M)[def.Name]; ok {
+		return
+	}
+	properties := def.Properties
+	for k, v := range properties {
+		if v.(wst.M)["type"] == "email" || v.(wst.M)["type"] == "password" || v.(wst.M)["type"] == "url" || v.(wst.M)["type"] == "date" {
+			properties[k].(wst.M)["type"] = "string"
+		}
+	}
+	(*components)["schemas"].(wst.M)[def.Name] = wst.M{
+		"type":       "object",
+		"properties": properties,
+	}
+}
+
 func RegisterGenericComponent[T any](sH wst.SwaggerHelper) string {
 	sample := new(T)
 	// important to set it to nil first to avoid infinite recursion
 	components := (*sH.(*swaggerHelper).swaggerMap.(*wst.M))["components"].(*wst.M)
 	t := reflect.TypeOf(sample)
+	if t.Kind() == reflect.Ptr {
+		t = t.Elem()
+	}
 	typeName := t.String()
 	schemaName := typeName
-	var pointerName string
-	if t.Kind() == reflect.Ptr {
-		pointerName = t.Elem().String()
-		schemaName = pointerName
+
+	if t.Name() == "" {
+		// anonymous struct
+		return "object"
 	}
 
 	if _, ok := (*components)["schemas"].(wst.M)[schemaName]; ok {

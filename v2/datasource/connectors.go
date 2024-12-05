@@ -9,7 +9,7 @@ import (
 // DeleteResult is the result of a DeleteMany operation.
 type DeleteResult struct {
 	// DeletedCount is the number of documents deleted.
-	DeletedCount int64
+	DeletedCount int64 `json:"deletedCount"`
 }
 
 type PersistedConnector interface {
