@@ -51,6 +51,7 @@ type WeStack struct {
 	jwtSecretKey                   []byte
 	swaggerHelper                  wst.SwaggerHelper
 	logger                         wst.ILogger
+	completedSetup                 bool
 }
 
 func (app *WeStack) FindModel(modelName string) (*model.StatefulModel, error) {

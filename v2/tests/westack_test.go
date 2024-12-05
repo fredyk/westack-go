@@ -218,6 +218,8 @@ func init() {
 			return nil
 		})
 
+		model.BindRemoteOperation(noteModel, RemoteOperationExample)
+
 		app.Server.Get("/api/v1/endpoint-using-codecs", func(ctx *fiber.Ctx) error {
 			type localNote struct {
 				ID      primitive.ObjectID `json:"id" bson:"_id"`

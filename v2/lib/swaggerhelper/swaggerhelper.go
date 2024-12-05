@@ -5,6 +5,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/mailru/easyjson"
 	"github.com/mailru/easyjson/jwriter"
+	"log"
 	"os"
 	"reflect"
 	"runtime"
@@ -17,6 +18,7 @@ type SwaggerMap interface {
 
 type swaggerHelper struct {
 	swaggerMap SwaggerMap
+	app        *wst.IApp
 }
 
 func (sH *swaggerHelper) GetOpenAPI() (wst.M, error) {
@@ -98,20 +100,17 @@ func (sH *swaggerHelper) CreateOpenAPI() error {
 	if err != nil {
 		return err
 	}
-	// Create data directory if it doesn't exist
-	_, err = os.Stat("data")
-	if os.IsNotExist(err) {
-		err = os.Mkdir("data", 0755)
-		if err != nil {
-			return err
-		}
-	}
 	// Save
 	err2 := os.WriteFile("data/swagger.json", swagger, 0600)
 	return err2
 }
 
 func (sH *swaggerHelper) AddPathSpec(path string, verb string, verbSpec wst.M) {
+	if sH.app.CompletedSetup() {
+		os.Stderr.WriteString("Cannot add path spec after setup is completed\n")
+		os.Stderr.WriteString("Maybe you are trying to register a remote operation after the app.Boot() was called?\n")
+		log.Fatal("Exiting")
+	}
 	// Add verbSpec to [path][verb]
 	if _, ok := (*sH.swaggerMap.(*wst.M))["paths"].(wst.M)[path]; !ok {
 		(*sH.swaggerMap.(*wst.M))["paths"].(wst.M)[path] = make(wst.M)
@@ -146,8 +145,10 @@ func (sH *swaggerHelper) free() {
 	runtime.GC()
 }
 
-func NewSwaggerHelper() wst.SwaggerHelper {
-	return &swaggerHelper{}
+func NewSwaggerHelper(app *wst.IApp) wst.SwaggerHelper {
+	return &swaggerHelper{
+		app: app,
+	}
 }
 
 func RegisterGenericComponent[T any](sH wst.SwaggerHelper) string {
@@ -160,9 +161,6 @@ func RegisterGenericComponent[T any](sH wst.SwaggerHelper) string {
 		schemaName = t.Elem().Name()
 	}
 
-	if _, ok := (*components)["schemas"]; !ok {
-		(*components)["schemas"] = wst.M{}
-	}
 	if _, ok := (*components)["schemas"].(wst.M)[schemaName]; ok {
 		return schemaName
 	}
@@ -170,16 +168,6 @@ func RegisterGenericComponent[T any](sH wst.SwaggerHelper) string {
 	(*components)["schemas"].(wst.M)[schemaName] = wst.M{
 		"type":       "object",
 		"properties": analyzeWithReflection(schemaName, t, components),
-	}
-	return schemaName
-}
-
-func getObjectTypeName(sample interface{}) string {
-	var schemaName string
-	if reflect.TypeOf(sample).Kind() == reflect.Ptr {
-		schemaName = reflect.TypeOf(sample).Elem().Name()
-	} else {
-		schemaName = reflect.TypeOf(sample).Name()
 	}
 	return schemaName
 }
@@ -192,7 +180,12 @@ func analyzeWithReflection(rootTypeName string, t reflect.Type, components *wst.
 	schema := wst.M{}
 	//valueOf := reflect.ValueOf(sample)
 	var fields int
-	if t.Kind() == reflect.Ptr || t.Kind() == reflect.Interface {
+	if t.Kind() == reflect.Map {
+		return wst.M{
+			"type":       "object",
+			"properties": wst.M{},
+		}
+	} else if t.Kind() == reflect.Ptr || t.Kind() == reflect.Interface {
 		fields = t.Elem().NumField()
 	} else {
 		fields = t.NumField()
@@ -293,9 +286,7 @@ func analyzeWithReflection(rootTypeName string, t reflect.Type, components *wst.
 				"$ref": "#/components/schemas/" + fieldObjectTypeName,
 			}
 		case reflect.Interface:
-			schema[tagged] = wst.M{
-				"$ref": "#/components/schemas/" + getObjectTypeName(field),
-			}
+			panic("Interfaces are not meant to be used in JSON serialization")
 		default:
 			panic("Unknown type " + field.Type.Kind().String())
 		}

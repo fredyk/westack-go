@@ -18,12 +18,12 @@ func SetBaseUrl(url string) {
 }
 
 func InvokeApiJsonM(method string, url string, body wst.M, headers wst.M) (result wst.M, err error) {
-	result, err = invokeApiTyped[wst.M](method, url, body, headers)
+	result, err = InvokeApiTyped[wst.M](method, url, body, headers)
 	return result, err
 }
 
 func InvokeApiJsonA(method string, url string, body wst.M, headers wst.M) (result wst.A, err error) {
-	return invokeApiTyped[wst.A](method, url, body, headers)
+	return InvokeApiTyped[wst.A](method, url, body, headers)
 }
 
 func InvokeApiFullResponse(method string, url string, body wst.M, headers wst.M) (*http.Response, error) {
@@ -53,7 +53,7 @@ func jsonToReaderOnlyIfNeeded(method string, body wst.M) io.Reader {
 	}
 }
 
-func invokeApiTyped[T any](method string, url string, body wst.M, headers wst.M) (result T, err error) {
+func InvokeApiTyped[T any](method string, url string, body wst.M, headers wst.M) (result T, err error) {
 	respBody, _ := invokeApiBytes(method, url, body, headers)
 	var parsedRespBody T
 	err = json.Unmarshal(respBody, &parsedRespBody)

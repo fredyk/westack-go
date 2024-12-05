@@ -87,6 +87,7 @@
     "policies": [
       "$authenticated,*,create,allow",
       "$authenticated,*,read,allow",
+      "$authenticated,*,RemoteOperationExample,allow",
       "$owner,*,write,allow",
       "$owner,*,__get__user,allow",
       "$owner,*,__get__footer1,allow",
