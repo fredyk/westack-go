@@ -150,7 +150,7 @@ func runIterations(t *testing.T, iterations int) {
 
 func Test_RateLimits(t *testing.T) {
 
-	t.Parallel()
+	//t.Parallel()
 
 	start := time.Now()
 	t.Run("TestRateLimitedOperation1Second", SubTestRateLimitedOperation1Second)
