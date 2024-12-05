@@ -2,7 +2,6 @@ package westack
 
 import (
 	"fmt"
-	"github.com/fredyk/westack-go/v2/datasource"
 	"github.com/goccy/go-json"
 	"reflect"
 	"runtime"
@@ -86,11 +85,17 @@ func swaggerDocsHandler(app *WeStack) func(ctx *fiber.Ctx) error {
 					case operationName == string(wst.OperationNameDeleteById):
 						resultSchema = wst.M{
 							"$ref": fmt.Sprintf("#/components/schemas/%v",
-								reflect.TypeFor[datasource.DeleteResult]().String()),
+								reflect.TypeFor[wst.DeleteResult]().String()),
 						}
 					case operationName == string(wst.OperationNameCount):
 						resultSchema = wst.M{
-							"type": "integer",
+							"$ref": fmt.Sprintf("#/components/schemas/%v",
+								reflect.TypeFor[wst.CountResult]().String()),
+						}
+					case operationName == string(wst.OperationNameLogin):
+						resultSchema = wst.M{
+							"$ref": fmt.Sprintf("#/components/schemas/%v",
+								reflect.TypeFor[wst.LoginResult]().String()),
 						}
 					}
 				}

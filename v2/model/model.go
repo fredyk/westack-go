@@ -30,8 +30,8 @@ type Model interface {
 	FindMany(filterMap *wst.Filter, currentContext *EventContext) Cursor
 	FindById(id interface{}, filterMap *wst.Filter, baseContext *EventContext) (Instance, error)
 	Create(data interface{}, currentContext *EventContext) (Instance, error)
-	Count(filterMap *wst.Filter, currentContext *EventContext) (int64, error)
-	DeleteById(id interface{}, currentContext *EventContext) (datasource.DeleteResult, error)
+	Count(filterMap *wst.Filter, currentContext *EventContext) (wst.CountResult, error)
+	DeleteById(id interface{}, currentContext *EventContext) (wst.DeleteResult, error)
 	UpdateById(id interface{}, data interface{}, currentContext *EventContext) (Instance, error)
 	GetConfig() *Config
 	GetName() string
@@ -466,13 +466,13 @@ func existingOrEmpty[T any](existing *T) *T {
 	return new(T)
 }
 
-func (loadedModel *StatefulModel) Count(filterMap *wst.Filter, currentContext *EventContext) (int64, error) {
+func (loadedModel *StatefulModel) Count(filterMap *wst.Filter, currentContext *EventContext) (wst.CountResult, error) {
 	currentContext = existingOrEmpty(currentContext)
 	var targetBaseContext = FindBaseContext(currentContext)
 
 	lookups, err := loadedModel.ExtractLookupsFromFilter(filterMap, currentContext.DisableTypeConversions)
 	if err != nil {
-		return 0, err
+		return wst.CountResult{}, err
 	}
 
 	eventContext := &EventContext{
@@ -489,13 +489,7 @@ func (loadedModel *StatefulModel) Count(filterMap *wst.Filter, currentContext *E
 
 	eventContext.Filter = filterMap
 
-	count, err := loadedModel.Datasource.Count(loadedModel.CollectionName, lookups)
-	if err != nil {
-		return 0, err
-	}
-
-	return count, nil
-
+	return loadedModel.Datasource.Count(loadedModel.CollectionName, lookups)
 }
 
 func (loadedModel *StatefulModel) FindOne(filterMap *wst.Filter, baseContext *EventContext) (Instance, error) {
@@ -651,7 +645,7 @@ func (loadedModel *StatefulModel) Create(data interface{}, currentContext *Event
 
 }
 
-func (loadedModel *StatefulModel) DeleteById(id interface{}, currentContext *EventContext) (datasource.DeleteResult, error) {
+func (loadedModel *StatefulModel) DeleteById(id interface{}, currentContext *EventContext) (wst.DeleteResult, error) {
 
 	var finalId interface{}
 	switch id.(type) {
@@ -684,7 +678,7 @@ func (loadedModel *StatefulModel) DeleteById(id interface{}, currentContext *Eve
 	if loadedModel.DisabledHandlers["__operation__before_delete"] != true {
 		err := loadedModel.GetHandler("__operation__before_delete")(eventContext)
 		if err != nil {
-			return datasource.DeleteResult{}, err
+			return wst.DeleteResult{}, err
 		}
 	}
 
@@ -698,7 +692,7 @@ func (loadedModel *StatefulModel) DeleteById(id interface{}, currentContext *Eve
 	return deleteResult, err
 }
 
-func (loadedModel *StatefulModel) DeleteMany(where *wst.Where, currentContext *EventContext) (result datasource.DeleteResult, err error) {
+func (loadedModel *StatefulModel) DeleteMany(where *wst.Where, currentContext *EventContext) (result wst.DeleteResult, err error) {
 	if where == nil {
 		return result, errors.New("where cannot be nil")
 	}
