@@ -42,7 +42,7 @@ func (rateLimit *RateLimit) Allow(eventContext *EventContext) bool {
 	if baseContext.Ctx != nil {
 		fiberContext = baseContext.Ctx
 	}
-	if baseContext.Bearer != nil {
+	if (len(WhiteListedUsers) > 0 || rateLimit.whileListAdmins) && baseContext.Bearer != nil {
 		bearer = baseContext.Bearer
 		if bearer != nil && bearer.Account != nil {
 			userIdAsSt := ""
