@@ -52,6 +52,11 @@ type WeStack struct {
 	swaggerHelper                  wst.SwaggerHelper
 	logger                         wst.ILogger
 	completedSetup                 bool
+	registerControllers            func(r model.ControllerRegistry)
+}
+
+type BootOptions struct {
+	RegisterControllers func(r model.ControllerRegistry)
 }
 
 func (app *WeStack) FindModel(modelName string) (*model.StatefulModel, error) {
@@ -81,8 +86,15 @@ func (app *WeStack) FindModelsWithClass(modelClass string) (foundModels []*model
 	return
 }
 
-func (app *WeStack) Boot(customRoutesCallbacks ...func(app *WeStack)) {
+func (app *WeStack) Boot(options BootOptions, customRoutesCallbacks ...func(app *WeStack)) {
 
+	if options.RegisterControllers == nil {
+		app.logger.Fatal(`RegisterControllers is required. Check your boot function contains following:
+		app.Boot(BootOptions{
+			RegisterControllers: models.RegisterControllers,
+		}, customRoutesCallbacks...)`)
+	}
+	app.registerControllers = options.RegisterControllers
 	appBoot(customRoutesCallbacks, app)
 
 }
@@ -270,7 +282,9 @@ func New(options ...Options) *WeStack {
 func InitAndServe(options Options, onBoot ...func(app *WeStack)) {
 	app := New(options)
 
-	app.Boot(onBoot...)
+	app.Boot(BootOptions{RegisterControllers: func(r model.ControllerRegistry) {
+
+	}}, onBoot...)
 
 	// Catch SIGINT signal and Stop()
 	go func() {

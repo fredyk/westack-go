@@ -3,7 +3,6 @@ package model
 import (
 	"errors"
 	"fmt"
-	"github.com/fredyk/westack-go/v2/lib/swaggerhelper"
 	"log"
 	"reflect"
 	"regexp"
@@ -92,33 +91,10 @@ func (loadedModel *StatefulModel) RemoteMethod(handler func(context *EventContex
 	pathDef := createOpenAPIPathDef(loadedModel, description, pathParams)
 
 	if verb == "post" || verb == "put" || verb == "patch" {
-
-		plainProperties := wst.M{}
-		for k, param := range loadedModel.Config.Properties {
-			plainProperties[k] = wst.M{
-				"type": param.Type,
-			}
-		}
-		if loadedModel.Config.Base == "Account" {
-			mergeProperties(&plainProperties, loadedModel.App.GetAccountCredentialsConfig()["properties"].(wst.M))
-		}
-		mergeProperties(&plainProperties, wst.M{
-			"created": wst.M{
-				"type": "date",
-			},
-			"modified": wst.M{
-				"type": "date",
-			},
-		})
-		swaggerhelper.RegisterModel(loadedModel.App.SwaggerHelper(), swaggerhelper.OpenApiModelDef{
-			Name:       loadedModel.Name,
-			Properties: plainProperties,
-		})
-
 		if options.Name == string(wst.OperationNameCreate) ||
 			options.Name == string(wst.OperationNameUpdateAttributes) {
 			assignOpenAPIRequestBody(pathDef, wst.M{
-				"$ref": fmt.Sprintf("#/components/schemas/%s", loadedModel.Name),
+				"$ref": fmt.Sprintf("#/components/schemas/models.%s", loadedModel.Name),
 			})
 		} else {
 			assignOpenAPIRequestBody(pathDef, wst.M{
@@ -132,7 +108,7 @@ func (loadedModel *StatefulModel) RemoteMethod(handler func(context *EventContex
 		}
 	}
 
-	loadedModel.App.SwaggerHelper().AddPathSpec(fullPath, verb, pathDef, options.Name, loadedModel.Name)
+	loadedModel.App.SwaggerHelper().AddPathSpec(fullPath, verb, pathDef, options.Name, "models."+loadedModel.Name)
 	// clean up memory
 	pathDef = nil
 	runtime.GC()
@@ -147,12 +123,6 @@ func (loadedModel *StatefulModel) RemoteMethod(handler func(context *EventContex
 	})
 
 	return toInvoke(path, createFiberHandler(options, loadedModel, verb, path)).Name(loadedModel.Name + "." + options.Name)
-}
-
-func mergeProperties(dst *wst.M, src wst.M) {
-	for k, v := range src {
-		(*dst)[k] = v
-	}
 }
 
 var activeRequestsPerModel = make(map[string]int)

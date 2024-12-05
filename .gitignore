@@ -19,3 +19,4 @@
 /v2/tests/data/*.policies.csv
 /v2/tests/data/*.casbin.dump.conf
 westack/tests/server/datasources.TESTING_PUBLIC.json
+*.wst.go

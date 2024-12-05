@@ -177,8 +177,7 @@ func RegisterModel(sH wst.SwaggerHelper, def OpenApiModelDef) {
 	}
 }
 
-func RegisterGenericComponent[T any](sH wst.SwaggerHelper) string {
-	sample := new(T)
+func RegisterGenericComponentForSample(sH wst.SwaggerHelper, sample any) string {
 	// important to set it to nil first to avoid infinite recursion
 	components := (*sH.(*swaggerHelper).swaggerMap.(*wst.M))["components"].(*wst.M)
 	t := reflect.TypeOf(sample)
@@ -202,6 +201,11 @@ func RegisterGenericComponent[T any](sH wst.SwaggerHelper) string {
 		"properties": analyzeWithReflection(schemaName, t, components),
 	}
 	return schemaName
+}
+
+func RegisterGenericComponent[T any](sH wst.SwaggerHelper) string {
+	sample := new(T)
+	return RegisterGenericComponentForSample(sH, sample)
 }
 
 func getStructTag(f reflect.StructField, tagName string) string {
@@ -320,23 +324,29 @@ func analyzeWithReflection(rootTypeName string, t reflect.Type, components *wst.
 				// anonymous struct
 				fieldObjectTypeName = rootTypeName + field.Name
 			}
-			if _, ok := (*components)["schemas"].(wst.M)[fieldObjectTypeName]; !ok {
-				(*components)["schemas"].(wst.M)[fieldObjectTypeName] = nil
-				(*components)["schemas"].(wst.M)[fieldObjectTypeName] = wst.M{
-					"type":       "object",
-					"properties": analyzeWithReflection(fieldObjectTypeName, field.Type, components),
-				}
-			}
-			if len((*components)["schemas"].(wst.M)[fieldObjectTypeName].(wst.M)["properties"].(wst.M)) == 0 {
-				// empty struct
+			if fieldObjectTypeName == "time.Time" {
 				schema[tagged] = wst.M{
-					"type": "object",
+					"type": "string",
 				}
-				// delete the empty struct
-				delete((*components)["schemas"].(wst.M), fieldObjectTypeName)
 			} else {
-				schema[tagged] = wst.M{
-					"$ref": "#/components/schemas/" + fieldObjectTypeName,
+				if _, ok := (*components)["schemas"].(wst.M)[fieldObjectTypeName]; !ok {
+					(*components)["schemas"].(wst.M)[fieldObjectTypeName] = nil
+					(*components)["schemas"].(wst.M)[fieldObjectTypeName] = wst.M{
+						"type":       "object",
+						"properties": analyzeWithReflection(fieldObjectTypeName, field.Type, components),
+					}
+				}
+				if len((*components)["schemas"].(wst.M)[fieldObjectTypeName].(wst.M)["properties"].(wst.M)) == 0 {
+					// empty struct
+					schema[tagged] = wst.M{
+						"type": "object",
+					}
+					// delete the empty struct
+					delete((*components)["schemas"].(wst.M), fieldObjectTypeName)
+				} else {
+					schema[tagged] = wst.M{
+						"$ref": "#/components/schemas/" + fieldObjectTypeName,
+					}
 				}
 			}
 		case reflect.Interface:
