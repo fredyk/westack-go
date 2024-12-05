@@ -95,7 +95,7 @@ func (connector *MemoryKVConnector) findByObjectId(collectionName string, _id in
 	panic("Not implemented")
 }
 
-func (connector *MemoryKVConnector) Count(collectionName string, lookups *wst.A) (int64, error) {
+func (connector *MemoryKVConnector) Count(collectionName string, lookups *wst.A) (wst.CountResult, error) {
 	//TODO implement me
 	panic("implement me")
 }
@@ -156,12 +156,12 @@ func (connector *MemoryKVConnector) UpdateById(collectionName string, id interfa
 	panic("implement me")
 }
 
-func (connector *MemoryKVConnector) DeleteById(collectionName string, id interface{}) (DeleteResult, error) {
+func (connector *MemoryKVConnector) DeleteById(collectionName string, id interface{}) (wst.DeleteResult, error) {
 	//TODO implement me
 	panic("implement me")
 }
 
-func (connector *MemoryKVConnector) DeleteMany(collectionName string, whereLookups *wst.A) (DeleteResult, error) {
+func (connector *MemoryKVConnector) DeleteMany(collectionName string, whereLookups *wst.A) (wst.DeleteResult, error) {
 	//TODO implement me
 	panic("implement me")
 }

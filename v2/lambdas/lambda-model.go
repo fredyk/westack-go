@@ -10,7 +10,6 @@ import (
 	"strings"
 
 	wst "github.com/fredyk/westack-go/v2/common"
-	"github.com/fredyk/westack-go/v2/datasource"
 	"github.com/fredyk/westack-go/v2/model"
 	"github.com/gofiber/fiber/v2"
 	"github.com/mailru/easyjson"
@@ -155,12 +154,12 @@ func (rtModel *lambdaRemoteModel) FindById(id interface{}, filterMap *wst.Filter
 	return nil, fmt.Errorf("not implemented")
 }
 
-func (rtModel *lambdaRemoteModel) Count(filterMap *wst.Filter, currentContext *model.EventContext) (int64, error) {
-	return 0, fmt.Errorf("not implemented")
+func (rtModel *lambdaRemoteModel) Count(filterMap *wst.Filter, currentContext *model.EventContext) (wst.CountResult, error) {
+	return wst.CountResult{}, fmt.Errorf("not implemented")
 }
 
-func (rtModel *lambdaRemoteModel) DeleteById(id interface{}, currentContext *model.EventContext) (datasource.DeleteResult, error) {
-	return datasource.DeleteResult{}, fmt.Errorf("not implemented")
+func (rtModel *lambdaRemoteModel) DeleteById(id interface{}, currentContext *model.EventContext) (wst.DeleteResult, error) {
+	return wst.DeleteResult{}, fmt.Errorf("not implemented")
 }
 
 func (rtModel *lambdaRemoteModel) UpdateById(id interface{}, data interface{}, currentContext *model.EventContext) (model.Instance, error) {

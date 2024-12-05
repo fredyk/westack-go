@@ -508,10 +508,20 @@ const (
 	OperationNameCount            OperationName = "count"
 	OperationNameCreate           OperationName = "create"
 	OperationNameUpdateAttributes OperationName = "instance_updateAttributes"
-	OperationNameUpdateById       OperationName = "updateById"
-	OperationNameUpdateMany       OperationName = "updateMany"
-	OperationNameDeleteById       OperationName = "instance_delete"
-	OperationNameDeleteMany       OperationName = "deleteMany"
+
+	// OperationNameUpdateById TODO: Check, this model method is not used
+	OperationNameUpdateById OperationName = "updateById"
+
+	OperationNameUpdateMany OperationName = "updateMany"
+	OperationNameDeleteById OperationName = "instance_delete"
+	OperationNameDeleteMany OperationName = "deleteMany"
+
+	OperationNameFindSelf     OperationName = "findSelf"
+	OperationNameLogin        OperationName = "login"
+	OperationNameRefreshToken OperationName = "refreshToken"
+	OperationNameCreateToken  OperationName = "createToken"
+
+	OperationNameUpsertRoles OperationName = "user_upsertRoles"
 )
 
 var (
@@ -592,6 +602,24 @@ type Filter struct {
 	Skip        int64              `json:"skip"`
 	Limit       int64              `json:"limit"`
 	Aggregation []AggregationStage `json:"aggregation"`
+}
+
+// DeleteResult is the result of a DeleteMany operation.
+type DeleteResult struct {
+	// DeletedCount is the number of documents deleted.
+	DeletedCount int64 `json:"deletedCount"`
+}
+
+// CountResult is the result of a Count operation.
+type CountResult struct {
+	// Count is the number of documents.
+	Count int64 `json:"count"`
+}
+
+// LoginResult is the result of a login operation.
+type LoginResult struct {
+	Id        string `json:"id"`
+	AccountId string `json:"accountId"`
 }
 
 type Stats struct {
