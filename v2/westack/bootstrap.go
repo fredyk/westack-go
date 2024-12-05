@@ -66,6 +66,9 @@ func (app *WeStack) loadModels() error {
 	if err != nil {
 		return err
 	}
+
+	swaggerhelper.RegisterGenericComponent[datasource.DeleteResult](app.swaggerHelper)
+
 	var someAccountModel *model.StatefulModel
 	for _, fileInfo := range fileInfos {
 
@@ -554,8 +557,8 @@ func (app *WeStack) setupModel(loadedModel *model.StatefulModel, dataSource *dat
 			if deletedCount != 1 {
 				return wst.CreateError(fiber.ErrBadRequest, "BAD_REQUEST", fiber.Map{"message": fmt.Sprintf("Deleted %v instances for %v", deletedCount, ctx.ModelID)}, "Error")
 			}
-			ctx.StatusCode = fiber.StatusNoContent
-			ctx.Result = ""
+			ctx.StatusCode = fiber.StatusOK
+			ctx.Result = deleteResult
 		}
 		return err
 	}
@@ -739,6 +742,18 @@ func (app *WeStack) asInterface() *wst.IApp {
 		},
 		CompletedSetup: func() bool {
 			return app.completedSetup
+		},
+		GetAccountCredentialsConfig: func() wst.M {
+			config := wst.M{}
+			if app.accountCredentialsModel != nil {
+				config["properties"] = wst.M{}
+				for propertyName, propertyConfig := range app.accountCredentialsModel.Config.Properties {
+					config["properties"].(wst.M)[propertyName] = wst.M{
+						"type": propertyConfig.Type,
+					}
+				}
+			}
+			return config
 		},
 	}
 }

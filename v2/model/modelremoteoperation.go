@@ -53,18 +53,32 @@ func BindRemoteOperationWithContext[T any, R any](loadedModel *StatefulModel, ha
 	inputSchemaName := swaggerhelper.RegisterGenericComponent[T](loadedModel.App.SwaggerHelper())
 	resultSchemaName := swaggerhelper.RegisterGenericComponent[R](loadedModel.App.SwaggerHelper())
 
-	inputSchema := wst.M{
-		"$ref": fmt.Sprintf("#/components/schemas/%v", inputSchemaName),
+	var inputSchema wst.M
+	var resultSchema wst.M
+	if inputSchemaName == "object" {
+		inputSchema = wst.M{
+			"type": "object",
+		}
+	} else {
+		inputSchema = wst.M{
+			"$ref": fmt.Sprintf("#/components/schemas/%v", inputSchemaName),
+		}
 	}
-	resultSchema := wst.M{
-		"$ref": fmt.Sprintf("#/components/schemas/%v", resultSchemaName),
+	if resultSchemaName == "object" {
+		resultSchema = wst.M{
+			"type": "object",
+		}
+	} else {
+		resultSchema = wst.M{
+			"$ref": fmt.Sprintf("#/components/schemas/%v", resultSchemaName),
+		}
 	}
 
 	pathDef := createOpenAPIPathDef(loadedModel, description, pathParams)
 	assignOpenAPIRequestBody(pathDef, inputSchema)
 	assignOpenAPIResponse(pathDef, resultSchema)
 
-	loadedModel.App.SwaggerHelper().AddPathSpec(fullPath, verb, pathDef)
+	loadedModel.App.SwaggerHelper().AddPathSpec(fullPath, verb, pathDef, options.Name, loadedModel.Name)
 	// clean up memory
 	pathDef = nil
 	runtime.GC()
