@@ -507,10 +507,10 @@ const (
 	OperationNameFindMany         OperationName = "findMany"
 	OperationNameCount            OperationName = "count"
 	OperationNameCreate           OperationName = "create"
-	OperationNameUpdateAttributes OperationName = "updateAttributes"
+	OperationNameUpdateAttributes OperationName = "instance_updateAttributes"
 	OperationNameUpdateById       OperationName = "updateById"
 	OperationNameUpdateMany       OperationName = "updateMany"
-	OperationNameDeleteById       OperationName = "deleteById"
+	OperationNameDeleteById       OperationName = "instance_delete"
 	OperationNameDeleteMany       OperationName = "deleteMany"
 )
 
@@ -603,15 +603,16 @@ type BsonOptions struct {
 }
 
 type IApp struct {
-	Debug          bool
-	SwaggerHelper  func() SwaggerHelper
-	FindModel      func(modelName string) (interface{}, error)
-	FindDatasource func(datasource string) (interface{}, error)
-	Logger         func() ILogger
-	CompletedSetup func() bool
-	JwtSecretKey   []byte
-	Viper          *viper.Viper
-	Bson           BsonOptions
+	Debug                       bool
+	SwaggerHelper               func() SwaggerHelper
+	FindModel                   func(modelName string) (interface{}, error)
+	FindDatasource              func(datasource string) (interface{}, error)
+	GetAccountCredentialsConfig func() M
+	Logger                      func() ILogger
+	CompletedSetup              func() bool
+	JwtSecretKey                []byte
+	Viper                       *viper.Viper
+	Bson                        BsonOptions
 }
 
 var RegexpIdEntire = regexp.MustCompile(`^([0-9a-f]{24})$`)
