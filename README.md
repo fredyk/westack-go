@@ -256,11 +256,14 @@ Response body: {"title":"Note 1","body":"I modified the note body","accountId":"
 ```
 ### Change Log
 
-- **v1.6.14**
+* **v2.0.1-alpha**
+    * Now the DELETE /:id endpoint returns a [wst.DeleteResult](https://github.com/fredyk/westack-go/blob/39d4e5a7b71fd3f3ce11d926a967a730d665a9fe/v2/common/common.go#L608) schema object instead of an empty response
+    * Now the GET /count endpoint returns a [wst.CountResult](https://github.com/fredyk/westack-go/blob/39d4e5a7b71fd3f3ce11d926a967a730d665a9fe/v2/common/common.go#L614) schema object instead of a root integer
 
-  - [#475 - Create tests for Datasource.DeleteMany()](https://github.com/fredyk/westack-go/issues/475)
-  - [#478 - Create tests for Datasource.Close()](https://github.com/fredyk/westack-go/issues/478)
-  - [Updated github.com/gofiber/fiber/v2 to v2.49.0](https://github.com/fredyk/westack-go/pull/499)
+* **v1.6.14**
+    * [#475 - Create tests for Datasource.DeleteMany()](https://github.com/fredyk/westack-go/issues/475)
+    * [#478 - Create tests for Datasource.Close()](https://github.com/fredyk/westack-go/issues/478)
+    * [Updated github.com/gofiber/fiber/v2 to v2.49.0](https://github.com/fredyk/westack-go/pull/499)
 
 - **v1.6.0**
 
