@@ -2,15 +2,15 @@ package model
 
 import (
 	"fmt"
+	wst "github.com/fredyk/westack-go/v2/common"
+	"github.com/fredyk/westack-go/v2/lib/swaggerhelper"
+	"github.com/gofiber/fiber/v2"
+	"mime/multipart"
 	"reflect"
 	"regexp"
 	"runtime"
 	"slices"
 	"strings"
-
-	wst "github.com/fredyk/westack-go/v2/common"
-	"github.com/fredyk/westack-go/v2/lib/swaggerhelper"
-	"github.com/gofiber/fiber/v2"
 )
 
 func BindRemoteOperationWithContext[T any, R any](loadedModel *StatefulModel, handler func(req *RemoteOperationReq[T]) (R, error), options *RemoteOperationOptions) fiber.Router {
@@ -75,7 +75,7 @@ func BindRemoteOperationWithContext[T any, R any](loadedModel *StatefulModel, ha
 	}
 
 	pathDef := createOpenAPIPathDef(loadedModel, description, pathParams)
-	assignOpenAPIRequestBody(pathDef, inputSchema)
+	assignOpenAPIRequestBody(pathDef, inputSchema, options.ContentType)
 	assignOpenAPIResponse(pathDef, resultSchema)
 
 	loadedModel.App.SwaggerHelper().AddPathSpec(fullPath, verb, pathDef, options.Name, loadedModel.Name)
@@ -100,9 +100,34 @@ func BindRemoteOperationWithContext[T any, R any](loadedModel *StatefulModel, ha
 		req := &RemoteOperationReq[T]{
 			Ctx: ctx,
 		}
-		err := ctx.Ctx.BodyParser(&req.Input)
+		pointerToInput := &req.Input
+		err := ctx.Ctx.BodyParser(pointerToInput)
 		if err != nil {
 			return ctx.Ctx.Status(fiber.StatusBadRequest).SendString(err.Error())
+		}
+
+		if options.ContentType == fiber.MIMEMultipartForm {
+			// parse form data files
+			structValueAddr := reflect.ValueOf(pointerToInput)
+			structValue := structValueAddr.Elem()
+			fieldCount := structValue.NumField()
+			for i := 0; i < fieldCount; i++ {
+				field := structValue.Field(i)
+				if field.Type() == reflect.TypeOf((*multipart.FileHeader)(nil)).Elem() {
+					structField := reflect.TypeOf(pointerToInput).Elem().Field(i)
+					tagged := structField.Tag.Get("json")
+					if tagged == "" {
+						tagged = structField.Name
+					} else {
+						tagged = strings.Split(tagged, ",")[0]
+					}
+					file, err := ctx.Ctx.FormFile(tagged)
+					if err != nil {
+						return ctx.Ctx.Status(fiber.StatusBadRequest).SendString(err.Error())
+					}
+					field.Set(reflect.ValueOf(file).Elem())
+				}
+			}
 		}
 
 		result, err := handler(req)
@@ -167,7 +192,9 @@ func BindRemoteOperation[T any, R any](loadedModel *StatefulModel, handler func(
 }
 
 func RemoteOptions() *RemoteOperationOptions {
-	return &RemoteOperationOptions{}
+	return &RemoteOperationOptions{
+		ContentType: fiber.MIMEApplicationJSON,
+	}
 }
 
 func (options *RemoteOperationOptions) WithName(name string) *RemoteOperationOptions {
@@ -177,6 +204,11 @@ func (options *RemoteOperationOptions) WithName(name string) *RemoteOperationOpt
 
 func (options *RemoteOperationOptions) WithPath(path string) *RemoteOperationOptions {
 	options.Path = path
+	return options
+}
+
+func (options *RemoteOperationOptions) WithContentType(contentType string) *RemoteOperationOptions {
+	options.ContentType = contentType
 	return options
 }
 
