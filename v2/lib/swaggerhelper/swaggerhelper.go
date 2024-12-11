@@ -244,6 +244,9 @@ func analyzeWithReflection(rootTypeName string, t reflect.Type, components *wst.
 		if tagged == "" {
 			tagged = field.Name
 		}
+		if field.Type.Kind() == reflect.Pointer {
+			field.Type = field.Type.Elem()
+		}
 		switch field.Type.Kind() {
 		case reflect.String:
 			schema[tagged] = wst.M{
@@ -329,6 +332,15 @@ func analyzeWithReflection(rootTypeName string, t reflect.Type, components *wst.
 					"type": "string",
 				}
 			} else {
+
+				// multipart.FileHeader maps to "type": "file"
+				if fieldObjectTypeName == "multipart.FileHeader" {
+					schema[tagged] = wst.M{
+						"type": "file",
+					}
+					continue
+				}
+
 				if _, ok := (*components)["schemas"].(wst.M)[fieldObjectTypeName]; !ok {
 					(*components)["schemas"].(wst.M)[fieldObjectTypeName] = nil
 					(*components)["schemas"].(wst.M)[fieldObjectTypeName] = wst.M{
