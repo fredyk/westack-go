@@ -95,11 +95,11 @@ func (loadedModel *StatefulModel) RemoteMethod(handler func(context *EventContex
 			options.Name == string(wst.OperationNameUpdateAttributes) {
 			assignOpenAPIRequestBody(pathDef, wst.M{
 				"$ref": fmt.Sprintf("#/components/schemas/models.%s", loadedModel.Name),
-			})
+			}, fiber.MIMEApplicationJSON)
 		} else {
 			assignOpenAPIRequestBody(pathDef, wst.M{
 				"type": "object",
-			})
+			}, fiber.MIMEApplicationJSON)
 		}
 	} else {
 		params := createOpenAPIAdditionalParams(loadedModel, options)
@@ -194,12 +194,12 @@ func createOpenAPIAdditionalParams(loadedModel *StatefulModel, options RemoteMet
 	return params
 }
 
-func assignOpenAPIRequestBody(pathDef wst.M, schema wst.M) {
+func assignOpenAPIRequestBody(pathDef wst.M, schema wst.M, contentType string) {
 	pathDef["requestBody"] = wst.M{
 		"description": "data",
 		"required":    true,
 		"content": wst.M{
-			"application/json": wst.M{
+			contentType: wst.M{
 				"schema": schema,
 			},
 		},

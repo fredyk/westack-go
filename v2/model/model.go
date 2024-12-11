@@ -887,6 +887,7 @@ type RemoteOperationOptions struct {
 	Description string
 	Path        string
 	RateLimits  []*RateLimit
+	ContentType string
 }
 
 type RemoteOperationReq[T any] struct {
