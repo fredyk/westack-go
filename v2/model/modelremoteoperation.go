@@ -176,6 +176,9 @@ func BindRemoteOperationWithOptions[T any, R any](loadedModel *StatefulModel, ha
 	if options.Description == "" {
 		options.Description = fmt.Sprintf("Invokes %s on %s", options.Name, loadedModel.Name)
 	}
+	if options.ContentType == "" {
+		options.ContentType = fiber.MIMEApplicationJSON
+	}
 	return BindRemoteOperationWithContext[T, R](loadedModel, func(req *RemoteOperationReq[T]) (R, error) {
 		return handler(req.Input)
 	}, options)
