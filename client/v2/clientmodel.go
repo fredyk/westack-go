@@ -2,11 +2,13 @@ package client
 
 import (
 	"fmt"
+	"regexp"
+	"strings"
+
 	"github.com/fredyk/westack-go/client/v2/wstfuncs"
 	wst "github.com/fredyk/westack-go/v2/common"
 	"github.com/fredyk/westack-go/v2/model"
-	"regexp"
-	"strings"
+	"github.com/goccy/go-json"
 )
 
 type Model interface {
@@ -25,21 +27,37 @@ type modelImpl struct {
 }
 
 func (m *modelImpl) FindMany(filter *wst.Filter) ([]wst.M, error) {
-	asMap, err := convertToMap(filter)
-	if err != nil {
-		return nil, err
+	fullUrl := fmt.Sprintf("/%v", m.plural)
+	if filter != nil {
+		asMap, err := convertToMap(filter)
+		if err != nil {
+			return nil, err
+		}
+		b, err := json.Marshal(asMap)
+		if err != nil {
+			return nil, err
+		}
+		fullUrl = fmt.Sprintf("%v?filter=%v", fullUrl, string(b))
 	}
-	return wstfuncs.InvokeApiJsonA("GET", fmt.Sprintf("/%v", m.plural), asMap, wst.M{
+	return wstfuncs.InvokeApiJsonA("GET", fullUrl, nil, wst.M{
 		"Authorization": fmt.Sprintf("Bearer %s", m.client.GetToken()),
 	})
 }
 
 func (m *modelImpl) FindById(id string, filter *wst.Filter) (wst.M, error) {
-	asMap, err := convertToMap(filter)
-	if err != nil {
-		return nil, err
+	fullUrl := fmt.Sprintf("/%v/%v", m.plural, id)
+	if filter != nil {
+		asMap, err := convertToMap(filter)
+		if err != nil {
+			return nil, err
+		}
+		b, err := json.Marshal(asMap)
+		if err != nil {
+			return nil, err
+		}
+		fullUrl = fmt.Sprintf("%v?filter=%v", fullUrl, string(b))
 	}
-	return wstfuncs.InvokeApiJsonM("GET", fmt.Sprintf("/%v/%v", m.plural, id), asMap, wst.M{
+	return wstfuncs.InvokeApiJsonM("GET", fullUrl, nil, wst.M{
 		"Authorization": fmt.Sprintf("Bearer %s", m.client.GetToken()),
 	})
 }
