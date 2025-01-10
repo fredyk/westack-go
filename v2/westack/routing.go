@@ -285,7 +285,7 @@ func mountAccountModelFixedRoutes(loadedModel *model.StatefulModel, app *WeStack
 					}
 					tokenString = newToken
 				} else {
-					fmt.Printf("[DEBUG] Invalid token: %s\n", err.Error())
+					fmt.Println("[DEBUG] Invalid token: wrong claims")
 
 					return errors.New("invalid token")
 				}
