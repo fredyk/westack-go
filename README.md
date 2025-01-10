@@ -1,222 +1,376 @@
-# westack-go
+# westack-go Documentation
 
-### Introduction
-westack-go is a strongly opinionated framework which allows you to quickly setup a REST API server in a few minutes.
+## Introduction
 
-Just define your models in `json` format and westack-go will setup and expose all basic [CRUD](https://es.wikipedia.org/wiki/CRUD) methods for you 
+westack-go is a modular Go framework designed to simplify the process of building scalable and extensible APIs. It provides utilities for managing data models, routing, and middleware, along with powerful integrations for Swagger documentation, CLI tools, and more.
 
-### Technologies
-westack-go uses technologies like [gofiber](https://github.com/gofiber/fiber) and [casbin](github.com/casbin/casbin) for REST and authentication
+### Key Features
 
-### Databases
-It is only compatible with [mongo](go.mongodb.org/mongo-driver).
+- **Model-Driven Architecture**: Define data models with ease and generate APIs automatically.
+- **Extensible Datasources**: Support for in-memory and MongoDB datasources out of the box.
+- **Role Management**: Built-in role-based access control (RBAC) support.
+- **CLI Utilities**: Command-line tools for common development tasks.
 
-### Authentication
-Define [RBAC](https://casbin.org/docs/en/rbac) policies in your `json` models to restrict access to data.
+### Prerequisites
 
-### Installing westack
+- Go (version 1.21 or higher)
+- MongoDB (if using MongoDB as a datasource)
+- Basic knowledge of Go programming
 
-```shell
-go install github.com/fredyk/westack-go@v1.5.46
-```
+## Quick Start
 
-### Initialize a new project
-```shell
-mkdir my-new-project
-cd my-new-project
-westack-go init .
-```
+Follow these steps to quickly set up and run a simple API:
 
-### Create a new model
-```shell
-# Usage: westack-go model add <model_name> <datasource_name>
-#   <datasource_name> defaults to "db" when you run `westack-go init .`
- 
-westack-go model add Note db
-```
+1. **Create the project directory**:
 
-### Getting started
+   Create a directory for your project and initialize a Go module:
 
-#### (Optional) Customize your models and datasources
+   ```bash
+   mkdir myproject && cd myproject
+   go mod init myproject
+   ```
 
-<details>
-  <summary>Account.json</summary>
+   This sets up the directory and initializes Go module management for your project.
 
-```json
-{
-  "name": "Account",
-  "base": "Account",
-  "public": true,
-  "hidden": [
-    "password"
-  ],
-  "properties": {
-    "email": {
-      "type": "string",
-      "required": true
-    },
-    "password": {
-      "type": "string",
-      "required": true
-    }
-  },
-  "relations": {
-    "notes": {
-      "type": "hasMany",
-      "model": "note"
-    }
-  }
-}
-```
+2. **Install the westack-go CLI**:
 
-</details>
+   Install the CLI tool to simplify project setup and management:
 
-<details>
-  <summary>Role.json</summary>
+   ```bash
+   go install github.com/fredyk/westack-go/v2@latest
+   ```
+
+   The CLI provides commands like `init` and `generate` for rapid development.
+
+3. **Initialize the project**:
+
+   Use the CLI to set up the project structure:
+
+   ```bash
+   westack-go init .
+   ```
+
+   This creates the basic structure, including configuration files and directories for models and controllers.
+
+4. **Define a model**:
+
+   Create a `models/note.json` file:
+
+   ```json
+   {
+     "name": "Note",
+     "base": "PersistedModel",
+     "properties": {
+       "title": {
+         "type": "string",
+         "required": true
+       },
+       "content": {
+         "type": "string"
+       }
+     },
+     "casbin": {
+       "policies": [
+         "$authenticated,*,*,allow",
+         "$everyone,*,read,allow",
+         "$owner,*,__get__footer,allow"
+       ]
+     }
+   }
+   ```
+
+5. **Generate the model**:
+
+   ```bash
+   westack-go generate
+   ```
+
+6. **Create the main application file**:
+
+   Create a `main.go` file with the following content:
+
+   ```go
+   package main
+
+   import (
+       "log"
+
+       "github.com/fredyk/westack-go/v2/westack"
+       "myproject/models"
+   )
+
+   func main() {
+       app := westack.New()
+
+       app.Boot(westack.BootOptions{
+           RegisterControllers: models.RegisterControllers,
+       })
+
+       log.Fatal(app.Start())
+   }
+   ```
+
+7. **Run the server**:
+
+   ```bash
+   go run main.go
+   ```
+
+8. **Test the API**:
+
+   Access the Swagger UI at `http://localhost:3000/swagger` to test your endpoints.
+
+---
+
+## Core Concepts
+
+### Architecture Overview
+
+westack-go is built around the following core components:
+
+- **Models**: Define the structure of your data and generate APIs automatically.
+- **Datasources**: Abstract the details of data storage, supporting MongoDB and in-memory stores.
+- **Routing**: Manage API endpoints and middleware.
+- **Controllers**: Centralize business logic.
+- **CLI Utilities**: Simplify repetitive tasks like generating models and controllers.
+
+### Key Components
+
+#### Models
+
+Models are the backbone of westack-go, defined in JSON files under the `models/` directory. These JSON files specify attributes, relationships, and access policies using Casbin. From these definitions, `westack-go` generates Go struct files with the `westack-go generate` command.
+
+Example of a JSON Model:
 
 ```json
 {
   "name": "Note",
   "base": "PersistedModel",
-  "public": true,
   "properties": {
     "title": {
       "type": "string",
       "required": true
     },
-    "body": {
-      "type": "string",
-      "required": true
-    }
-  },
-  "relations": {
-    "account": {
-      "type": "belongsTo",
-      "model": "Account"
+    "content": {
+      "type": "string"
     }
   },
   "casbin": {
     "policies": [
-      "$everyone,*,*,deny",
-      "$authenticated,*,create,allow",
-      "$owner,*,*,allow"
+      "$authenticated,*,*,allow",
+      "$everyone,*,read,allow",
+      "$owner,*,__get__footer,allow"
     ]
   }
 }
 ```
 
-</details>
+When you run:
 
-<details>
-  <summary>datasources.json</summary>
-
-```json
-{
-  "db": {
-    "name": "db",
-    "host": "localhost",
-    "port": 27017,
-    "database": "example_db",
-    "password": "",
-    "username": "",
-    "connector": "mongodb"
-  }
-}
+```bash
+westack-go generate
 ```
 
-</details>
+This generates `Note` in `models/note.go` (if it does not already exist). The Go file can then be extended for additional functionality without affecting the original JSON definitions.
 
-<details>
-  <summary>model-config.json</summary>
+This dual-layer approach allows developers to:
+
+- Keep JSON files as the source of truth for relationships and Casbin policies.
+- Extend models in Go for advanced functionality.
+
+> **Note**: In the future, the JSON files may be deprecated, and direct Go struct definitions might become the standard.
+
+By default, `westack-go` generates the following standard CRUD routes for the `Note` model:
+
+- `POST /notes`: Create a new note
+- `GET /notes`: Retrieve all notes
+- `GET /notes/{id}`: Retrieve a specific note by ID
+- `PATCH /notes/{id}`: Partially update fields of a specific note
+- `DELETE /notes/{id}`: Delete a specific note by ID
+
+#### Relating Models
+
+You can relate models using the `relations` property in the JSON definition. For example, to relate `Footer` to `Note` (and define that `Note` has one `Footer`):
+
+Create or update `models/footer.json`:
 
 ```json
 {
-  "Account": {
-    "dataSource": "db"
+  "name": "Footer",
+  "base": "PersistedModel",
+  "properties": {
+    "content": {
+      "type": "string",
+      "required": true
+    }
   },
-  "Note": {
-    "dataSource": "db"
+  "relations": {
+    "note": {
+      "type": "belongsTo",
+      "model": "Note",
+      "foreignKey": "noteId"
+    }
+  },
+  "casbin": {
+    "policies": [
+      "$authenticated,*,*,allow",
+      "$everyone,*,read,allow",
+      "$owner,*,__get__note,allow"
+    ]
   }
 }
 ```
 
-</details>
+Create or update `models/note.json`:
 
-
-### Run
-
-```shell
-westack-go server start
+```json
+{
+  "name": "Note",
+  "base": "PersistedModel",
+  "properties": {
+    "title": {
+      "type": "string",
+      "required": true
+    },
+    "content": {
+      "type": "string"
+    }
+  },
+  "relations": {
+    "footer": {
+      "type": "hasOne",
+      "model": "Footer",
+      "foreignKey": "noteId"
+    }
+  },
+  "casbin": {
+    "policies": [
+      "$authenticated,*,*,allow",
+      "$everyone,*,read,allow",
+      "$owner,*,__get__footer,allow"
+    ]
+  }
+}
 ```
 
-### Test it:
+Run the following command to regenerate the models:
 
-1. Create an account
-```shell
-$ curl -X POST http://localhost:8023/api/v1/accounts -H 'Content-Type: application/json' -d '{"email":"exampleuser@example.com","password":"1234"}'
+```bash
+westack-go generate
 ```
 
-2. Login
-```shell
-$ curl -X POST http://localhost:8023/api/v1/accounts/login -H 'Content-Type: application/json' -d '{"email":"exampleuser@example.com","password":"1234"}'
+This will establish the relationship where `Footer` belongs to `Note` and `Note` has one `Footer`, allowing CRUD operations to respect the relationship automatically.
 
-Response body: {"id":"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJjcmVhdGVkIjoxNjQ3MjUzMDczMTQ0LCJyb2xlcyI6WyJVU0VSIl0sInR0bCI6MTIwOTYwMDAwMCwidXNlcklkIjoiNjIyZjE2NDMzNzdjYTNmMWEzOTI0MWY0In0.sbl7QA2--X7MiPZ4DLRL2f5_z08VD5quItBDl2ybmGk","accountId":"622f1643377ca3f1a39241f4"}
+---
+
+## Building APIs
+
+### Creating a New API Endpoint
+
+1. **Define the Model** Create a JSON file in the `models/` directory and define your data structure.
+
+2. **Generate the Go Struct** Run the following command to generate the corresponding Go file:
+
+   ```bash
+   westack-go generate
+   ```
+
+3. **Extend the Model** If needed, extend the generated Go struct file for additional functionality.
+
+4. **Adding Custom Logic** Use `BindRemoteOperationWithOptions` to add new functionality or routes for an existing model.
+
+Example:
+
+```go
+package boot
+
+import (
+    "log"
+    "github.com/fredyk/westack-go/v2/model"
+    "github.com/fredyk/westack-go/v2/westack"
+)
+
+func SetupServer(app *westack.WeStack) {
+    NoteModel, err := app.FindModel("Note")
+    if err != nil {
+        log.Fatalf("Error finding model: %v", err)
+    }
+
+    model.BindRemoteOperationWithOptions(NoteModel, CustomHandler, model.RemoteOptions().
+        WithName("customEndpoint").
+        WithPath("/notes/custom").
+        WithContentType("application/json"))
+}
+
+type CustomInput struct {
+    Field1 string `json:"field1"`
+    Field2 int    `json:"field2"`
+}
+
+type CustomOutput struct {
+    Message string `json:"message"`
+    Status  string `json:"status"`
+}
+
+func CustomHandler(input CustomInput) (CustomOutput, error) {
+    return CustomOutput{
+        Message: "This is a custom endpoint.",
+        Status:  "success",
+    }, nil
+}
 ```
 
-3. Find account data
-```shell
-$ curl http://localhost:8023/api/v1/accounts/me -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJjcmVhdGVkIjoxNjQ3MjUzMDczMTQ0LCJyb2xlcyI6WyJVU0VSIl0sInR0bCI6MTIwOTYwMDAwMCwidXNlcklkIjoiNjIyZjE2NDMzNzdjYTNmMWEzOTI0MWY0In0.sbl7QA2--X7MiPZ4DLRL2f5_z08VD5quItBDl2ybmGk'
- 
-Response body: {"email":"exampleuser@example.com","id":"622f1643377ca3f1a39241f4"}
+---
+
+## Advanced Features
+
+### Swagger Integration
+
+westack-go automatically generates Swagger documentation for your APIs. The Swagger UI is available at:
+
+- `/swagger`: Interactive API documentation.
+- `/swagger/doc.json`: The OpenAPI specification in JSON format.
+
+---
+
+## Testing
+
+### Running Tests
+
+Run all tests:
+
+```bash
+go test ./...
 ```
 
-4. Create a note for the account
-```shell
-$ curl -X POST http://localhost:8023/api/v1/notes -H 'Content-Type: application/json' -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJjcmVhdGVkIjoxNjQ3MjUzMDczMTQ0LCJyb2xlcyI6WyJVU0VSIl0sInR0bCI6MTIwOTYwMDAwMCwidXNlcklkIjoiNjIyZjE2NDMzNzdjYTNmMWEzOTI0MWY0In0.sbl7QA2--X7MiPZ4DLRL2f5_z08VD5quItBDl2ybmGk' -d '{"title":"Note 1","body":"This is my first note","accountId":"622f1643377ca3f1a39241f4"}'
-```
+### Writing Test Cases
 
-5. Find again the account, now with their notes
-```shell
-$ curl 'http://localhost:8023/api/v1/accounts/me?filter=%7B"include":%5B%7B"relation":"notes"%7D%5D%7D' -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJjcmVhdGVkIjoxNjQ3MjUzMDczMTQ0LCJyb2xlcyI6WyJVU0VSIl0sInR0bCI6MTIwOTYwMDAwMCwidXNlcklkIjoiNjIyZjE2NDMzNzdjYTNmMWEzOTI0MWY0In0.sbl7QA2--X7MiPZ4DLRL2f5_z08VD5quItBDl2ybmGk'
+Create test files in the `tests/` directory.
 
-Response body: {"email":"exampleuser@example.com","id":"622f1643377ca3f1a39241f4","notes":[{"title":"Note 1","body":"This is my first note","accountId":"622f1643377ca3f1a39241f4","id":"622f1643377ca3f1a39241f5"}]}
-```
-
-6. Find the single note
-```shell
-$ curl http://localhost:8023/api/v1/notes/622f1643377ca3f1a39241f5 -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJjcmVhdGVkIjoxNjUwNDA2ODEzNDY3LCJyb2xlcyI6WyJVU0VSIl0sInR0bCI6MTIwOTYwMDAwMCwidXNlcklkIjoiNjI1ZjM1OTE0NzU5YWJiOGZhMmE1YzljIn0.hWeMlZrhTFAac4LXTSiSIQ7uy7VhAlg1L9DKG3QPTpg'
-
-Response body: {"title":"Note 1","body":"This is my first note","accountId":"622f1643377ca3f1a39241f4","id":"622f1643377ca3f1a39241f5"}
-```
-
-7. Update the note
-```shell
-$ curl -X PATCH http://localhost:8023/api/v1/notes/622f1643377ca3f1a39241f5 -H 'Content-Type: application/json' -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJjcmVhdGVkIjoxNjUwNDA2ODEzNDY3LCJyb2xlcyI6WyJVU0VSIl0sInR0bCI6MTIwOTYwMDAwMCwidXNlcklkIjoiNjI1ZjM1OTE0NzU5YWJiOGZhMmE1YzljIn0.hWeMlZrhTFAac4LXTSiSIQ7uy7VhAlg1L9DKG3QPTpg' -d '{"body":"I modified the note body"}'
-
-Response body: {"title":"Note 1","body":"I modified the note body","accountId":"622f1643377ca3f1a39241f4","id":"622f1643377ca3f1a39241f5"}
-```
 ### Change Log
 
-* **v2.0.1-alpha**
-    * Now the DELETE /:id endpoint returns a [wst.DeleteResult](https://github.com/fredyk/westack-go/blob/39d4e5a7b71fd3f3ce11d926a967a730d665a9fe/v2/common/common.go#L608) schema object instead of an empty response
-    * Now the GET /count endpoint returns a [wst.CountResult](https://github.com/fredyk/westack-go/blob/39d4e5a7b71fd3f3ce11d926a967a730d665a9fe/v2/common/common.go#L614) schema object instead of a root integer
+- **v2.0.1-alpha**
 
-* **v1.6.14**
-    * [#475 - Create tests for Datasource.DeleteMany()](https://github.com/fredyk/westack-go/issues/475)
-    * [#478 - Create tests for Datasource.Close()](https://github.com/fredyk/westack-go/issues/478)
-    * [Updated github.com/gofiber/fiber/v2 to v2.49.0](https://github.com/fredyk/westack-go/pull/499)
+  - Now the DELETE /\:id endpoint returns a [wst.DeleteResult](https://github.com/fredyk/westack-go/blob/39d4e5a7b71fd3f3ce11d926a967a730d665a9fe/v2/common/common.go#L608) schema object instead of an empty response
+  - Now the GET /count endpoint returns a [wst.CountResult](https://github.com/fredyk/westack-go/blob/39d4e5a7b71fd3f3ce11d926a967a730d665a9fe/v2/common/common.go#L614) schema object instead of a root integer
 
-* **v1.6.0**
+- **v1.6.14**
 
-    * Added parameter `strictSingleRelatedDocumentCheck` in config.json, defaults to `true`in new projects, and `false` in existing ones.
-    * `"hasOne"` and `"belongsTo"` relations are now checked after fetching documents from Mongo. If `strictSingleRelatedDocumentCheck` is `true` and the relation returns more than 1 document, an error is thrown. Otherwise, only the first document is used and a warning is logged.
-    * **Breaking changes**:
-      * `model.Build()` requires now parameter `sameLevelCache *buildCache` to be passed in. Can be generated with `model.NewBuildCache()`
-      * `model.Build()` returns now `error` as second value, in addition to the instance. So it is now `func (loadedModel *Model) Build(data wst.M, sameLevelCache *buildCache, baseContext *EventContext) (Instance, error)`
+  - [#475 - Create tests for Datasource.DeleteMany()](https://github.com/fredyk/westack-go/issues/475)
+  - [#478 - Create tests for Datasource.Close()](https://github.com/fredyk/westack-go/issues/478)
+  - [Updated github.com/gofiber/fiber/v2 to v2.49.0](https://github.com/fredyk/westack-go/pull/499)
 
-* **v1.5.48**
+- **v1.6.0**
 
-    * **Breaking change**: environment variables `WST_ADMIN_USERNAME` and `WST_ADMIN_PWD` are required to start the server
+  - Added parameter `strictSingleRelatedDocumentCheck` in config.json, defaults to `true`in new projects, and `false` in existing ones.
+  - `"hasOne"` and `"belongsTo"` relations are now checked after fetching documents from Mongo. If `strictSingleRelatedDocumentCheck` is `true` and the relation returns more than 1 document, an error is thrown. Otherwise, only the first document is used and a warning is logged.
+  - **Breaking changes**:
+    - `model.Build()` requires now parameter `sameLevelCache *buildCache` to be passed in. Can be generated with `model.NewBuildCache()`
+    - `model.Build()` returns now `error` as second value, in addition to the instance. So it is now `func (loadedModel *Model) Build(data wst.M, sameLevelCache *buildCache, baseContext *EventContext) (Instance, error)`
+
+- **v1.5.48**
+
+  - **Breaking change**: environment variables `WST_ADMIN_USERNAME` and `WST_ADMIN_PWD` are required to start the server
 
 ### Contribute
 
@@ -225,3 +379,4 @@ Write to [westack.team@gmail.com](mailto://westack.team@gmail.com) if you want t
 You are also welcome on our official [Discord](https://discord.gg/tFRYbGQWjZ)
 
 And of course... create as many pull requests as you want!
+
