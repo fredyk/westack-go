@@ -332,20 +332,185 @@ westack-go automatically generates Swagger documentation for your APIs. The Swag
 - `/swagger/doc.json`: The OpenAPI specification in JSON format.
 
 ---
+# Filters in westack-go
 
-## Testing
+## Overview
 
-### Running Tests
+Filters in westack-go allow developers to:
 
-Run all tests:
+- Query, sort, paginate, and limit data retrieved from models.
+- Build flexible APIs that support custom data slices without hardcoding query logic.
 
-```bash
-go test ./...
+### Automatic Fields
+
+westack-go automatically manages the following fields:
+
+- **`created`**: Added when a record is created.
+- **`modified`**: Updated whenever a record is modified.
+
+### Use Cases
+
+Filters can be applied to standard CRUD endpoints, such as `GET /notes`, to refine the data returned.
+
+## Syntax and Structure
+
+Filters are specified as JSON objects within the `filter` query parameter. Spaces within filter values should be replaced with the `+` character to ensure proper parsing by the API.
+
+### 1. Filtering by Fields
+
+You can filter records based on specific field values using the following format:
+
+```http
+GET /notes?filter={"where":{"field":"value"}}
 ```
 
-### Writing Test Cases
+Example:
 
-Create test files in the `tests/` directory.
+```http
+GET /notes?filter={"where":{"title":"Meeting"}}
+```
+
+This retrieves all `Note` records where the `title` field equals `Meeting`.
+
+### 2. Advanced Conditions
+
+For more complex filtering, you can use comparison operators:
+
+- `$gt` (greater than)
+- `$gte` (greater than or equal to)
+- `$lt` (less than)
+- `$lte` (less than or equal to)
+- `$ne` (not equal to)
+- `$in` (in array)
+- `$regex` (regular expression)
+
+Example:
+
+```http
+GET /notes?filter={"where":{"content":{"$regex":".*important.*"}}}
+```
+
+This retrieves all `Note` records where the `content` field contains the substring "important".
+
+### 3. Sorting
+
+You can sort records by one or more fields using the `order` parameter:
+
+```http
+GET /notes?filter={"order":["field+ASC"]}
+```
+
+Example:
+
+```http
+GET /notes?filter={"order":["title+ASC"]}
+```
+
+This retrieves all `Note` records sorted by the `title` field in ascending order.
+
+### 4. Pagination
+
+To limit the number of results returned and implement pagination, use the `limit` and `skip` parameters:
+
+- `limit`: Specifies the maximum number of records to return.
+- `skip`: Skips the specified number of records before returning results.
+
+Example:
+
+```http
+GET /notes?filter={"limit":10,"skip":20}
+```
+
+This retrieves 10 `Note` records starting from the 21st record.
+
+### 5. Field Selection
+
+To retrieve only specific fields from a record, use the `fields` parameter:
+
+```http
+GET /notes?filter={"fields":{"field1":true,"field2":false}}
+```
+
+Example:
+
+```http
+GET /notes?filter={"fields":{"title":true,"content":false}}
+```
+
+This retrieves only the `title` field and excludes the `content` field for all `Note` records.
+
+## Combining Filters
+
+Filters can be combined to build complex queries:
+
+```http
+GET /notes?filter={"where":{"title":"Meeting"},"order":["title+DESC"],"limit":5}
+```
+
+This retrieves up to 5 `Note` records where the `title` is "Meeting", sorted in descending order by `title`.
+
+## Examples in Practice
+
+### Example 1: Basic Filtering
+
+Retrieve all notes where `content` contains "urgent":
+
+```http
+GET /notes?filter={"where":{"content":{"$regex":".*urgent.*"}}}
+```
+
+### Example 2: Pagination and Sorting
+
+Retrieve the first 10 notes sorted by `created` in descending order:
+
+```http
+GET /notes?filter={"order":["created+DESC"],"limit":10}
+```
+
+### Example 3: Advanced Pagination
+
+Skip the first 5 notes and retrieve the next 15 notes:
+
+```http
+GET /notes?filter={"limit":15,"skip":5}
+```
+
+### Example 4: Complex Filtering
+
+Retrieve all notes where `title` is "Meeting" and `content` does not contain "canceled":
+
+```http
+GET /notes?filter={"where":{"title":"Meeting","content":{"$not":{"$regex":".*canceled.*"}}}}
+```
+
+## Including Relations
+
+To include related models, use the `include` parameter:
+
+```http
+GET /notes?filter={"include":[{"relation":"footer"}]}
+```
+
+This retrieves `Note` records along with their related `Footer` records.
+
+### Including Relations with Filtering
+
+You can include related models and apply additional filters simultaneously. For example:
+
+```http
+GET /notes?filter={"where":{"title":"Meeting"},"include":[{"relation":"footer"}]}
+```
+
+This retrieves `Note` records where the `title` is "Meeting" and includes the related `Footer` records.
+
+## Limitations and Considerations
+
+**Performance**: Complex filters might impact query performance, especially with large datasets.
+
+Filters are a powerful feature of westack-go, making it easy to build flexible, queryable APIs. For further customization or troubleshooting, consult the source code or westack-go examples.
+
+
+---
 
 ### Change Log
 
