@@ -1,218 +1,447 @@
-# westack-go
+# westack-go Documentation
 
-### Introduction
-westack-go is a strongly opinionated framework which allows you to quickly setup a REST API server in a few minutes.
+## Introduction
 
-Just define your models in `json` format and westack-go will setup and expose all basic [CRUD](https://es.wikipedia.org/wiki/CRUD) methods for you 
+westack-go is a modular Go framework designed to simplify the process of building scalable and extensible APIs. It provides utilities for managing data models, routing, and middleware, along with powerful integrations for Swagger documentation, CLI tools, and more.
 
-### Technologies
-westack-go uses technologies like [gofiber](https://github.com/gofiber/fiber) and [casbin](github.com/casbin/casbin) for REST and authentication
+### Key Features
 
-### Databases
-It is only compatible with [mongo](go.mongodb.org/mongo-driver).
+- **Model-Driven Architecture**: Define data models with ease and generate APIs automatically.
+- **Extensible Datasources**: Support for in-memory and MongoDB datasources out of the box.
+- **Role Management**: Built-in role-based access control (RBAC) support.
+- **CLI Utilities**: Command-line tools for common development tasks.
 
-### Authentication
-Define [RBAC](https://casbin.org/docs/en/rbac) policies in your `json` models to restrict access to data.
+### Prerequisites
 
-### Installing westack
+- Go (version 1.21 or higher)
+- MongoDB (if using MongoDB as a datasource)
+- Basic knowledge of Go programming
 
-```shell
-go install github.com/fredyk/westack-go@v1.5.46
-```
+## Quick Start
 
-### Initialize a new project
-```shell
-mkdir my-new-project
-cd my-new-project
-westack-go init .
-```
+Follow these steps to quickly set up and run a simple API:
 
-### Create a new model
-```shell
-# Usage: westack-go model add <model_name> <datasource_name>
-#   <datasource_name> defaults to "db" when you run `westack-go init .`
- 
-westack-go model add Note db
-```
+1. **Create the project directory**:
 
-### Getting started
+   Create a directory for your project and initialize a Go module:
 
-#### (Optional) Customize your models and datasources
+   ```bash
+   mkdir myproject && cd myproject
+   go mod init myproject
+   ```
 
-<details>
-  <summary>User.json</summary>
+   This sets up the directory and initializes Go module management for your project.
 
-```json
-{
-  "name": "User",
-  "base": "User",
-  "public": true,
-  "hidden": [
-    "password"
-  ],
-  "properties": {
-    "email": {
-      "type": "string",
-      "required": true
-    },
-    "password": {
-      "type": "string",
-      "required": true
-    }
-  },
-  "relations": {
-    "notes": {
-      "type": "hasMany",
-      "model": "note"
-    }
-  }
-}
-```
+2. **Install the westack-go CLI**:
 
-</details>
+   Install the CLI tool to simplify project setup and management:
 
-<details>
-  <summary>Role.json</summary>
+   ```bash
+   go install github.com/fredyk/westack-go@latest
+   ```
+
+   The CLI provides commands like `init` and `model add` for rapid development.
+
+3. **Initialize the project**:
+
+   Use the CLI to set up the project structure:
+
+   ```bash
+   westack-go init .
+   ```
+
+   This creates the basic structure, including configuration files and directories for models and controllers.
+
+4. **Define a model**:
+
+   Create a `models/note.json` file:
+
+   ```json
+   {
+     "name": "Note",
+     "base": "PersistedModel",
+     "properties": {
+       "title": {
+         "type": "string",
+         "required": true
+       },
+       "content": {
+         "type": "string"
+       }
+     },
+     "casbin": {
+       "policies": [
+         "$authenticated,*,*,allow",
+         "$everyone,*,read,allow",
+         "$owner,*,__get__footer,allow"
+       ]
+     }
+   }
+   ```
+
+5. **Create the main application file**:
+
+   Create a `main.go` file with the following content:
+
+   ```go
+   package main
+
+   import (
+       "log"
+
+       "github.com/fredyk/westack-go/westack"
+   )
+
+   func main() {
+       app := westack.New()
+
+       app.Boot()
+
+       log.Fatal(app.Start())
+   }
+   ```
+
+6. **Run the server**:
+
+   ```bash
+   go run main.go
+   ```
+
+7. **Test the API**:
+
+   Access the Swagger UI at `http://localhost:3000/swagger` to test your endpoints.
+
+---
+
+## Core Concepts
+
+### Architecture Overview
+
+westack-go is built around the following core components:
+
+- **Models**: Define the structure of your data and generate APIs automatically.
+- **Datasources**: Abstract the details of data storage, supporting MongoDB and in-memory stores.
+- **Routing**: Manage API endpoints and middleware.
+- **Controllers**: Centralize business logic.
+- **CLI Utilities**: Simplify repetitive tasks like generating models and controllers.
+
+### Key Components
+
+#### Models
+
+Models are the backbone of westack-go, defined in JSON files under the `models/` directory. These JSON files specify attributes, relationships, and access policies using Casbin.
+
+Example of a JSON Model:
 
 ```json
 {
   "name": "Note",
   "base": "PersistedModel",
-  "public": true,
   "properties": {
     "title": {
       "type": "string",
       "required": true
     },
-    "body": {
-      "type": "string",
-      "required": true
-    }
-  },
-  "relations": {
-    "user": {
-      "type": "belongsTo",
-      "model": "User"
+    "content": {
+      "type": "string"
     }
   },
   "casbin": {
     "policies": [
-      "$everyone,*,*,deny",
-      "$authenticated,*,create,allow",
-      "$owner,*,*,allow"
+      "$authenticated,*,*,allow",
+      "$everyone,*,read,allow",
+      "$owner,*,__get__footer,allow"
     ]
   }
 }
 ```
 
-</details>
+By default, `westack-go` generates the following standard CRUD routes for the `Note` model:
 
-<details>
-  <summary>datasources.json</summary>
+- `POST /notes`: Create a new note
+- `GET /notes`: Retrieve all notes
+- `GET /notes/{id}`: Retrieve a specific note by ID
+- `PATCH /notes/{id}`: Partially update fields of a specific note
+- `DELETE /notes/{id}`: Delete a specific note by ID
 
-```json
-{
-  "db": {
-    "name": "db",
-    "host": "localhost",
-    "port": 27017,
-    "database": "example_db",
-    "password": "",
-    "username": "",
-    "connector": "mongodb"
-  }
-}
-```
+#### Relating Models
 
-</details>
+You can relate models using the `relations` property in the JSON definition. For example, to relate `Footer` to `Note` (and define that `Note` has one `Footer`):
 
-<details>
-  <summary>model-config.json</summary>
+Create or update `models/footer.json`:
 
 ```json
 {
-  "User": {
-    "dataSource": "db"
+  "name": "Footer",
+  "base": "PersistedModel",
+  "properties": {
+    "content": {
+      "type": "string",
+      "required": true
+    }
   },
-  "Note": {
-    "dataSource": "db"
+  "relations": {
+    "note": {
+      "type": "belongsTo",
+      "model": "Note",
+      "foreignKey": "noteId"
+    }
+  },
+  "casbin": {
+    "policies": [
+      "$authenticated,*,*,allow",
+      "$everyone,*,read,allow",
+      "$owner,*,__get__note,allow"
+    ]
   }
 }
 ```
 
-</details>
+Create or update `models/note.json`:
 
-
-### Run
-
-```shell
-westack-go server start
+```json
+{
+  "name": "Note",
+  "base": "PersistedModel",
+  "properties": {
+    "title": {
+      "type": "string",
+      "required": true
+    },
+    "content": {
+      "type": "string"
+    }
+  },
+  "relations": {
+    "footer": {
+      "type": "hasOne",
+      "model": "Footer",
+      "foreignKey": "noteId"
+    }
+  },
+  "casbin": {
+    "policies": [
+      "$authenticated,*,*,allow",
+      "$everyone,*,read,allow",
+      "$owner,*,__get__footer,allow"
+    ]
+  }
+}
 ```
 
-### Test it:
+This will establish the relationship where `Footer` belongs to `Note` and `Note` has one `Footer`, allowing CRUD operations to respect the relationship automatically.
 
-1. Create a user
-```shell
-$ curl -X POST http://localhost:8023/api/v1/users -H 'Content-Type: application/json' -d '{"email":"exampleuser@example.com","password":"1234"}'
+---
+
+## Advanced Features
+
+### Swagger Integration
+
+westack-go automatically generates Swagger documentation for your APIs. The Swagger UI is available at:
+
+- `/swagger`: Interactive API documentation.
+- `/swagger/doc.json`: The OpenAPI specification in JSON format.
+
+---
+# Filters in westack-go
+
+## Overview
+
+Filters in westack-go allow developers to:
+
+- Query, sort, paginate, and limit data retrieved from models.
+- Build flexible APIs that support custom data slices without hardcoding query logic.
+
+### Automatic Fields
+
+westack-go automatically manages the following fields:
+
+- **`created`**: Added when a record is created.
+- **`modified`**: Updated whenever a record is modified.
+
+### Use Cases
+
+Filters can be applied to standard CRUD endpoints, such as `GET /notes`, to refine the data returned.
+
+## Syntax and Structure
+
+Filters are specified as JSON objects within the `filter` query parameter. Spaces within filter values should be replaced with the `+` character to ensure proper parsing by the API.
+
+### 1. Filtering by Fields
+
+You can filter records based on specific field values using the following format:
+
+```http
+GET /notes?filter={"where":{"field":"value"}}
 ```
 
-2. Login
-```shell
-$ curl -X POST http://localhost:8023/api/v1/users/login -H 'Content-Type: application/json' -d '{"email":"exampleuser@example.com","password":"1234"}'
+Example:
 
-Response body: {"id":"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJjcmVhdGVkIjoxNjQ3MjUzMDczMTQ0LCJyb2xlcyI6WyJVU0VSIl0sInR0bCI6MTIwOTYwMDAwMCwidXNlcklkIjoiNjIyZjE2NDMzNzdjYTNmMWEzOTI0MWY0In0.sbl7QA2--X7MiPZ4DLRL2f5_z08VD5quItBDl2ybmGk","userId":"622f1643377ca3f1a39241f4"}
+```http
+GET /notes?filter={"where":{"title":"Meeting"}}
 ```
 
-3. Find user data
-```shell
-$ curl http://localhost:8023/api/v1/users/me -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJjcmVhdGVkIjoxNjQ3MjUzMDczMTQ0LCJyb2xlcyI6WyJVU0VSIl0sInR0bCI6MTIwOTYwMDAwMCwidXNlcklkIjoiNjIyZjE2NDMzNzdjYTNmMWEzOTI0MWY0In0.sbl7QA2--X7MiPZ4DLRL2f5_z08VD5quItBDl2ybmGk'
- 
-Response body: {"email":"exampleuser@example.com","id":"622f1643377ca3f1a39241f4"}
+This retrieves all `Note` records where the `title` field equals `Meeting`.
+
+### 2. Advanced Conditions
+
+For more complex filtering, you can use comparison operators:
+
+- `$gt` (greater than)
+- `$gte` (greater than or equal to)
+- `$lt` (less than)
+- `$lte` (less than or equal to)
+- `$ne` (not equal to)
+- `$in` (in array)
+- `$regex` (regular expression)
+
+Example:
+
+```http
+GET /notes?filter={"where":{"content":{"$regex":".*important.*"}}}
 ```
 
-4. Create a note for the user
-```shell
-$ curl -X POST http://localhost:8023/api/v1/notes -H 'Content-Type: application/json' -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJjcmVhdGVkIjoxNjQ3MjUzMDczMTQ0LCJyb2xlcyI6WyJVU0VSIl0sInR0bCI6MTIwOTYwMDAwMCwidXNlcklkIjoiNjIyZjE2NDMzNzdjYTNmMWEzOTI0MWY0In0.sbl7QA2--X7MiPZ4DLRL2f5_z08VD5quItBDl2ybmGk' -d '{"title":"Note 1","body":"This is my first note","userId":"622f1643377ca3f1a39241f4"}'
+This retrieves all `Note` records where the `content` field contains the substring "important".
+
+### 3. Sorting
+
+You can sort records by one or more fields using the `order` parameter:
+
+```http
+GET /notes?filter={"order":["field+ASC"]}
 ```
 
-5. Find again the user, now with their notes
-```shell
-$ curl 'http://localhost:8023/api/v1/users/me?filter=%7B"include":%5B%7B"relation":"notes"%7D%5D%7D' -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJjcmVhdGVkIjoxNjQ3MjUzMDczMTQ0LCJyb2xlcyI6WyJVU0VSIl0sInR0bCI6MTIwOTYwMDAwMCwidXNlcklkIjoiNjIyZjE2NDMzNzdjYTNmMWEzOTI0MWY0In0.sbl7QA2--X7MiPZ4DLRL2f5_z08VD5quItBDl2ybmGk'
+Example:
 
-Response body: {"email":"exampleuser@example.com","id":"622f1643377ca3f1a39241f4","notes":[{"title":"Note 1","body":"This is my first note","userId":"622f1643377ca3f1a39241f4","id":"622f1643377ca3f1a39241f5"}]}
+```http
+GET /notes?filter={"order":["title+ASC"]}
 ```
 
-6. Find the single note
-```shell
-$ curl http://localhost:8023/api/v1/notes/622f1643377ca3f1a39241f5 -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJjcmVhdGVkIjoxNjUwNDA2ODEzNDY3LCJyb2xlcyI6WyJVU0VSIl0sInR0bCI6MTIwOTYwMDAwMCwidXNlcklkIjoiNjI1ZjM1OTE0NzU5YWJiOGZhMmE1YzljIn0.hWeMlZrhTFAac4LXTSiSIQ7uy7VhAlg1L9DKG3QPTpg'
+This retrieves all `Note` records sorted by the `title` field in ascending order.
 
-Response body: {"title":"Note 1","body":"This is my first note","userId":"622f1643377ca3f1a39241f4","id":"622f1643377ca3f1a39241f5"}
+### 4. Pagination
+
+To limit the number of results returned and implement pagination, use the `limit` and `skip` parameters:
+
+- `limit`: Specifies the maximum number of records to return.
+- `skip`: Skips the specified number of records before returning results.
+
+Example:
+
+```http
+GET /notes?filter={"limit":10,"skip":20}
 ```
 
-7. Update the note
-```shell
-$ curl -X PATCH http://localhost:8023/api/v1/notes/622f1643377ca3f1a39241f5 -H 'Content-Type: application/json' -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJjcmVhdGVkIjoxNjUwNDA2ODEzNDY3LCJyb2xlcyI6WyJVU0VSIl0sInR0bCI6MTIwOTYwMDAwMCwidXNlcklkIjoiNjI1ZjM1OTE0NzU5YWJiOGZhMmE1YzljIn0.hWeMlZrhTFAac4LXTSiSIQ7uy7VhAlg1L9DKG3QPTpg' -d '{"body":"I modified the note body"}'
+This retrieves 10 `Note` records starting from the 21st record.
 
-Response body: {"title":"Note 1","body":"I modified the note body","userId":"622f1643377ca3f1a39241f4","id":"622f1643377ca3f1a39241f5"}
+### 5. Field Selection
+
+To retrieve only specific fields from a record, use the `fields` parameter:
+
+```http
+GET /notes?filter={"fields":{"field1":true,"field2":false}}
 ```
+
+Example:
+
+```http
+GET /notes?filter={"fields":{"title":true,"content":false}}
+```
+
+This retrieves only the `title` field and excludes the `content` field for all `Note` records.
+
+## Combining Filters
+
+Filters can be combined to build complex queries:
+
+```http
+GET /notes?filter={"where":{"title":"Meeting"},"order":["title+DESC"],"limit":5}
+```
+
+This retrieves up to 5 `Note` records where the `title` is "Meeting", sorted in descending order by `title`.
+
+## Examples in Practice
+
+### Example 1: Basic Filtering
+
+Retrieve all notes where `content` contains "urgent":
+
+```http
+GET /notes?filter={"where":{"content":{"$regex":".*urgent.*"}}}
+```
+
+### Example 2: Pagination and Sorting
+
+Retrieve the first 10 notes sorted by `created` in descending order:
+
+```http
+GET /notes?filter={"order":["created+DESC"],"limit":10}
+```
+
+### Example 3: Advanced Pagination
+
+Skip the first 5 notes and retrieve the next 15 notes:
+
+```http
+GET /notes?filter={"limit":15,"skip":5}
+```
+
+### Example 4: Complex Filtering
+
+Retrieve all notes where `title` is "Meeting" and `content` does not contain "canceled":
+
+```http
+GET /notes?filter={"where":{"title":"Meeting","content":{"$not":{"$regex":".*canceled.*"}}}}
+```
+
+## Including Relations
+
+To include related models, use the `include` parameter:
+
+```http
+GET /notes?filter={"include":[{"relation":"footer"}]}
+```
+
+This retrieves `Note` records along with their related `Footer` records.
+
+### Including Relations with Filtering
+
+You can include related models and apply additional filters simultaneously. For example:
+
+```http
+GET /notes?filter={"where":{"title":"Meeting"},"include":[{"relation":"footer"}]}
+```
+
+This retrieves `Note` records where the `title` is "Meeting" and includes the related `Footer` records.
+
+## Limitations and Considerations
+
+**Performance**: Complex filters might impact query performance, especially with large datasets.
+
+Filters are a powerful feature of westack-go, making it easy to build flexible, queryable APIs. For further customization or troubleshooting, consult the source code or westack-go examples.
+
+
+---
+
 ### Change Log
 
-* **v1.6.14**
-    * [#475 - Create tests for Datasource.DeleteMany()](https://github.com/fredyk/westack-go/issues/475)
-    * [#478 - Create tests for Datasource.Close()](https://github.com/fredyk/westack-go/issues/478)
-    * [Updated github.com/gofiber/fiber/v2 to v2.49.0](https://github.com/fredyk/westack-go/pull/499)
+- **v1.6.14**
 
-* **v1.6.0**
+  - [#475 - Create tests for Datasource.DeleteMany()](https://github.com/fredyk/westack-go/issues/475)
+  - [#478 - Create tests for Datasource.Close()](https://github.com/fredyk/westack-go/issues/478)
+  - [Updated github.com/gofiber/fiber/v2 to v2.49.0](https://github.com/fredyk/westack-go/pull/499)
 
-    * Added parameter `strictSingleRelatedDocumentCheck` in config.json, defaults to `true`in new projects, and `false` in existing ones.
-    * `"hasOne"` and `"belongsTo"` relations are now checked after fetching documents from Mongo. If `strictSingleRelatedDocumentCheck` is `true` and the relation returns more than 1 document, an error is thrown. Otherwise, only the first document is used and a warning is logged.
-    * **Breaking changes**:
-      * `model.Build()` requires now parameter `sameLevelCache *buildCache` to be passed in. Can be generated with `model.NewBuildCache()`
-      * `model.Build()` returns now `error` as second value, in addition to the instance. So it is now `func (loadedModel *Model) Build(data wst.M, sameLevelCache *buildCache, baseContext *EventContext) (Instance, error)`
+- **v1.6.0**
 
-* **v1.5.48**
+  - Added parameter `strictSingleRelatedDocumentCheck` in config.json, defaults to `true`in new projects, and `false` in existing ones.
+  - `"hasOne"` and `"belongsTo"` relations are now checked after fetching documents from Mongo. If `strictSingleRelatedDocumentCheck` is `true` and the relation returns more than 1 document, an error is thrown. Otherwise, only the first document is used and a warning is logged.
+  - **Breaking changes**:
+    - `model.Build()` requires now parameter `sameLevelCache *buildCache` to be passed in. Can be generated with `model.NewBuildCache()`
+    - `model.Build()` returns now `error` as second value, in addition to the instance. So it is now `func (loadedModel *Model) Build(data wst.M, sameLevelCache *buildCache, baseContext *EventContext) (Instance, error)`
 
-    * **Breaking change**: environment variables `WST_ADMIN_USERNAME` and `WST_ADMIN_PWD` are required to start the server
+- **v1.5.48**
+
+  - **Breaking change**: environment variables `WST_ADMIN_USERNAME` and `WST_ADMIN_PWD` are required to start the server
 
 ### Contribute
 
@@ -221,3 +450,4 @@ Write to [westack.team@gmail.com](mailto://westack.team@gmail.com) if you want t
 You are also welcome on our official [Discord](https://discord.gg/tFRYbGQWjZ)
 
 And of course... create as many pull requests as you want!
+
