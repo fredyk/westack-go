@@ -53,12 +53,12 @@ func (app *WeStack) loadModels() error {
 	fileInfos, err := fs.ReadDir(os.DirFS("./common/models"), ".")
 
 	if err != nil {
-		return fmt.Errorf("error while loading models: " + err.Error())
+		return fmt.Errorf("%s", "error while loading models: "+err.Error())
 	}
 
 	var globalModelConfig *map[string]*model.SimplifiedConfig
 	if err := wst.LoadFile("./server/model-config.json", &globalModelConfig); err != nil {
-		return fmt.Errorf("missing or invalid ./server/model-config.json: " + err.Error())
+		return fmt.Errorf("missing or invalid ./server/model-config.json: %v", err)
 	}
 
 	app.swaggerHelper = swaggerhelper.NewSwaggerHelper(app.asInterface())
@@ -95,7 +95,7 @@ func (app *WeStack) loadModels() error {
 		configFromGlobal := (*globalModelConfig)[config.Name]
 
 		if configFromGlobal == nil {
-			return fmt.Errorf("missing model " + config.Name + " in model-config.json")
+			return fmt.Errorf("missing model %s in model-config.json", config.Name)
 		}
 
 		dataSource := (*app.datasources)[configFromGlobal.Datasource]
@@ -243,7 +243,7 @@ func (app *WeStack) loadDataSources() error {
 				log.Println("Connected to database", dsViper.GetString(key+".database"))
 			}
 		} else {
-			return fmt.Errorf("connector " + connector + " not supported")
+			return fmt.Errorf("connector %s not supported", connector)
 		}
 	}
 
@@ -694,18 +694,6 @@ func traceChunkGenerator(app *WeStack, loadedModel *model.StatefulModel, ctx *mo
 				break
 			}
 			docs = append(docs, doc)
-		}
-		if err != nil {
-			_, err2 := internalDs.Create("chunkGeneratorTraceErrors", &wst.M{
-				"_redId": filterSt,
-				"_entries": wst.A{
-					{"hadError": true},
-				},
-			})
-			if err2 != nil {
-				return nil, err2
-			}
-			return nil, err
 		}
 		chunkGenerator := model.NewInstanceAChunkGenerator(loadedModel, docs, "application/json")
 		return chunkGenerator, nil

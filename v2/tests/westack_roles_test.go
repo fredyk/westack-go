@@ -2,10 +2,11 @@ package tests
 
 import (
 	"fmt"
-	"github.com/fredyk/westack-go/client/v2/wstfuncs"
-	"github.com/fredyk/westack-go/v2/westack"
 	"os"
 	"testing"
+
+	"github.com/fredyk/westack-go/client/v2/wstfuncs"
+	"github.com/fredyk/westack-go/v2/westack"
 
 	"github.com/stretchr/testify/assert"
 
@@ -191,7 +192,7 @@ func Test_RemoteAssignRole(t *testing.T) {
 	adminPassword := os.Getenv("WST_ADMIN_PWD")
 
 	// Login as admin
-	adminToken, err := loginAccount(adminUser, adminPassword, t)
+	adminToken, err := loginAccount(adminUser, adminPassword)
 	assert.Nil(t, err)
 	if !assert.Contains(t, adminToken, "id") {
 		t.Fatal("Missing id in result token")
@@ -219,7 +220,7 @@ func Test_RemoteAssignRole(t *testing.T) {
 	assert.Equal(t, "OK", updateRolesResponse["result"])
 
 	// Login as the user
-	userToken, err := loginAccount(user.GetString("username"), password, t)
+	userToken, err := loginAccount(user.GetString("username"), password)
 	assert.Nil(t, err)
 	if !assert.Contains(t, userToken, "id") {
 		t.Fatal("Missing id in result token")
@@ -247,7 +248,7 @@ func Test_RemoteAssignRole(t *testing.T) {
 	assert.EqualValues(t, 401, resp["error"].(map[string]interface{})["statusCode"])
 
 	// Login again
-	userToken, err = loginAccount(user.GetString("username"), password, t)
+	userToken, err = loginAccount(user.GetString("username"), password)
 	assert.Nil(t, err)
 	if !assert.Contains(t, userToken, "id") {
 		t.Fatal("Missing id in result token")

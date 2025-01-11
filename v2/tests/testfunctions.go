@@ -3,6 +3,10 @@ package tests
 import (
 	"crypto/rand"
 	"fmt"
+	"math/big"
+	"strings"
+	"testing"
+
 	"github.com/fredyk/westack-go/client/v2/wstfuncs"
 	wst "github.com/fredyk/westack-go/v2/common"
 	"github.com/fredyk/westack-go/v2/model"
@@ -10,9 +14,6 @@ import (
 	"github.com/goccy/go-json"
 	"github.com/golang-jwt/jwt"
 	"github.com/stretchr/testify/assert"
-	"math/big"
-	"strings"
-	"testing"
 )
 
 var app *westack.WeStack
@@ -61,7 +62,7 @@ func createRandomFloat(min float64, max float64) float64 {
 	return min + f*(max-min)
 }
 
-func invokeApiAsRandomAccount(t *testing.T, method string, url string, body wst.M, headers wst.M) (result wst.M, err error) {
+func invokeApiAsRandomAccount(method, url string, body, headers wst.M) (result wst.M, err error) {
 	if headers == nil {
 		headers = wst.M{}
 	}

@@ -128,24 +128,15 @@ func appBoot(customRoutesCallbacks []func(app *WeStack), app *WeStack) {
 			//request.Header.Set("Cache-Control", "no-cache")
 
 			response, err := http.DefaultClient.Do(request)
+			if err != nil {
+				return err
+			}
 
 			for _, v := range response.Header["Content-Encoding"] {
 				swaggerContentEncoding = v
 			}
 
-			var reader io.Reader
-			//// decompress
-			//switch swaggerContentEncoding {
-			//case "gzip":
-			//	reader, err = gzip.NewReader(response.Body)
-			//	if err != nil {
-			//		break
-			//	}
-			//case "br":
-			//	reader = brotli.NewReader(response.Body)
-			//case "deflate", "":
-			reader = response.Body
-			//}
+			reader := response.Body
 			swaggerUIStatic, err = io.ReadAll(reader)
 			if err != nil {
 				return err
@@ -192,26 +183,26 @@ func createErrorHandler() func(ctx *fiber.Ctx) error {
 			if errors.Is(err, fiber.ErrUnauthorized) {
 				err = wst.CreateError(fiber.ErrUnauthorized, "UNAUTHORIZED", fiber.Map{"message": "Unauthorized"}, "Error")
 			}
-			switch err.(type) {
+			switch err := err.(type) {
 			case *fiber.Error:
-				if err.(*fiber.Error).Code == fiber.StatusNotFound {
-					return c.Status(err.(*fiber.Error).Code).JSON(fiber.Map{"error": fiber.Map{"status": err.(*fiber.Error).Code, "message": fmt.Sprintf("Unknown method %v %v", method, c.Path())}})
+				if err.Code == fiber.StatusNotFound {
+					return c.Status(err.Code).JSON(fiber.Map{"error": fiber.Map{"status": err.Code, "message": fmt.Sprintf("Unknown method %v %v", method, c.Path())}})
 				} else {
-					return c.Status(err.(*fiber.Error).Code).JSON(fiber.Map{"error": fiber.Map{"status": err.(*fiber.Error).Code, "message": err.(*fiber.Error).Message}})
+					return c.Status(err.Code).JSON(fiber.Map{"error": fiber.Map{"status": err.Code, "message": err.Message}})
 				}
 			case *wst.WeStackError:
-				errorName := err.(*wst.WeStackError).Name
+				errorName := err.Name
 				if errorName == "" {
 					errorName = "Error"
 				}
-				return c.Status((err).(*wst.WeStackError).FiberError.Code).JSON(fiber.Map{
+				return c.Status(err.FiberError.Code).JSON(fiber.Map{
 					"error": fiber.Map{
-						"statusCode": (err).(*wst.WeStackError).FiberError.Code,
+						"statusCode": err.FiberError.Code,
 						"name":       errorName,
-						"code":       err.(*wst.WeStackError).Code,
-						"error":      err.(*wst.WeStackError).FiberError.Error(),
-						"message":    (err.(*wst.WeStackError).Details)["message"],
-						"details":    err.(*wst.WeStackError).Details,
+						"code":       err.Code,
+						"error":      err.FiberError.Error(),
+						"message":    (err.Details)["message"],
+						"details":    err.Details,
 					},
 				})
 			default:
