@@ -5,9 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/fredyk/westack-go/client/v2/wstfuncs"
-	"github.com/fredyk/westack-go/v2/westack"
-	"github.com/golang-jwt/jwt"
 	"io"
 	"log"
 	"net"
@@ -18,6 +15,10 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/fredyk/westack-go/client/v2/wstfuncs"
+	"github.com/fredyk/westack-go/v2/westack"
+	"github.com/golang-jwt/jwt"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/mailru/easyjson"
@@ -728,7 +729,9 @@ func TestMain(m *testing.M) {
 	// start a mock grpc server
 	go startMockGrpcServer()
 
-	server.Boot(func(app *westack.WeStack) {
+	server.Boot(westack.BootOptions{
+		RegisterControllers: func(r model.ControllerRegistry) {},
+	}, func(app *westack.WeStack) {
 		// for valid connections
 		app.Server.Get("/test-grpc-get", func(ctx *fiber.Ctx) error {
 			var timeout float32 = 15.0
