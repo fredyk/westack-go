@@ -306,9 +306,7 @@ func Test_SpecialFilterNow(t *testing.T) {
 
 	// Create a note for checking the filter
 	randomTitle := fmt.Sprintf("Test_SpecialFilterNow_%d", createRandomInt())
-	note, err := invokeApiAsRandomAccount(t, "POST", "/notes", wst.M{
-		"title": randomTitle,
-	}, wst.M{"Content-Type": "application/json"})
+	note, err := invokeApiAsRandomAccount("POST", "/notes", wst.M{"title": randomTitle}, wst.M{"Content-Type": "application/json"})
 	assert.NoError(t, err)
 	assert.Contains(t, note, "id")
 
@@ -325,11 +323,7 @@ func Test_SpecialFilterToday(t *testing.T) {
 
 	// Create a note for checking the filter
 	randomTitle := fmt.Sprintf("Test_SpecialFilterToday_%d", createRandomInt())
-	note, err := invokeApiAsRandomAccount(t, "POST", "/notes", wst.M{
-		// Created 24 hours ago
-		"created": time.Now().Add(-24 * time.Hour),
-		"title":   randomTitle,
-	}, wst.M{"Content-Type": "application/json"})
+	note, err := invokeApiAsRandomAccount("POST", "/notes", wst.M{"created": time.Now().Add(-24 * time.Hour), "title": randomTitle}, wst.M{"Content-Type": "application/json"})
 	assert.NoError(t, err)
 	assert.NotNil(t, note)
 	assert.Contains(t, note, "id")
@@ -347,11 +341,7 @@ func Test_SpecialFilterYesterday(t *testing.T) {
 
 	// Create a note for checking the filter
 	randomTitle := fmt.Sprintf("Test_SpecialFilterYesterday_%d", createRandomInt())
-	note, err := invokeApiAsRandomAccount(t, "POST", "/notes", wst.M{
-		// Created 48 hours ago
-		"created": time.Now().Add(-48 * time.Hour),
-		"title":   randomTitle,
-	}, wst.M{"Content-Type": "application/json"})
+	note, err := invokeApiAsRandomAccount("POST", "/notes", wst.M{"created": time.Now().Add(-48 * time.Hour), "title": randomTitle}, wst.M{"Content-Type": "application/json"})
 	assert.NoError(t, err)
 	assert.Contains(t, note, "id")
 
@@ -368,9 +358,7 @@ func Test_SpecialFilterTomorrow(t *testing.T) {
 
 	// Create a note for checking the filter
 	randomTitle := fmt.Sprintf("Test_SpecialFilterTomorrow_%d", createRandomInt())
-	note, err := invokeApiAsRandomAccount(t, "POST", "/notes", wst.M{
-		"title": randomTitle,
-	}, wst.M{"Content-Type": "application/json"})
+	note, err := invokeApiAsRandomAccount("POST", "/notes", wst.M{"title": randomTitle}, wst.M{"Content-Type": "application/json"})
 	assert.NoError(t, err)
 	assert.Contains(t, note, "id")
 
@@ -387,11 +375,7 @@ func Test_SpecialFilter7DaysAgo(t *testing.T) {
 
 	// Create a note for checking the filter
 	randomTitle := fmt.Sprintf("Test_SpecialFilter7DaysAgo_%d", createRandomInt())
-	note, err := invokeApiAsRandomAccount(t, "POST", "/notes", wst.M{
-		// Created 8 days ago
-		"created": time.Now().Add(-8 * 24 * time.Hour),
-		"title":   randomTitle,
-	}, wst.M{"Content-Type": "application/json"})
+	note, err := invokeApiAsRandomAccount("POST", "/notes", wst.M{"created": time.Now().Add(-8 * 24 * time.Hour), "title": randomTitle}, wst.M{"Content-Type": "application/json"})
 	assert.NoError(t, err)
 	assert.Contains(t, note, "id")
 
@@ -408,11 +392,7 @@ func Test_SpecialFilter4WeeksAgo(t *testing.T) {
 
 	// Create a note for checking the filter
 	randomTitle := fmt.Sprintf("Test_SpecialFilter4WeeksAgo_%d", createRandomInt())
-	note, err := invokeApiAsRandomAccount(t, "POST", "/notes", wst.M{
-		// Created 5 weeks ago
-		"created": time.Now().Add(-5 * 7 * 24 * time.Hour),
-		"title":   randomTitle,
-	}, wst.M{"Content-Type": "application/json"})
+	note, err := invokeApiAsRandomAccount("POST", "/notes", wst.M{"created": time.Now().Add(-5 * 7 * 24 * time.Hour), "title": randomTitle}, wst.M{"Content-Type": "application/json"})
 	assert.NoError(t, err)
 	assert.Contains(t, note, "id")
 
@@ -429,11 +409,7 @@ func Test_SpecialFilter3MonthsAgo(t *testing.T) {
 
 	// Create a note for checking the filter
 	randomTitle := fmt.Sprintf("Test_SpecialFilter3MonthsAgo_%d", createRandomInt())
-	note, err := invokeApiAsRandomAccount(t, "POST", "/notes", wst.M{
-		// Created 4 months ago
-		"created": time.Now().Add(-4 * 30 * 24 * time.Hour),
-		"title":   randomTitle,
-	}, wst.M{"Content-Type": "application/json"})
+	note, err := invokeApiAsRandomAccount("POST", "/notes", wst.M{"created": time.Now().Add(-4 * 30 * 24 * time.Hour), "title": randomTitle}, wst.M{"Content-Type": "application/json"})
 	assert.NoError(t, err)
 	assert.Contains(t, note, "id")
 
@@ -450,11 +426,7 @@ func Test_SpecialFilter2YearsAgo(t *testing.T) {
 
 	// Create a note for checking the filter
 	randomTitle := fmt.Sprintf("Test_SpecialFilter2YearsAgo_%d", createRandomInt())
-	note, err := invokeApiAsRandomAccount(t, "POST", "/notes", wst.M{
-		// Created 3 years ago
-		"created": time.Now().Add(-3 * 365 * 24 * time.Hour),
-		"title":   randomTitle,
-	}, wst.M{"Content-Type": "application/json"})
+	note, err := invokeApiAsRandomAccount("POST", "/notes", wst.M{"created": time.Now().Add(-3 * 365 * 24 * time.Hour), "title": randomTitle}, wst.M{"Content-Type": "application/json"})
 	assert.NoError(t, err)
 	assert.Contains(t, note, "id")
 
@@ -471,11 +443,7 @@ func Test_SpecialFilter15SecondsAgo(t *testing.T) {
 
 	// Create a note for checking the filter
 	randomTitle := fmt.Sprintf("Test_SpecialFilter15SecondsAgo_%d", createRandomInt())
-	note, err := invokeApiAsRandomAccount(t, "POST", "/notes", wst.M{
-		// Created 16 seconds ago
-		"created": time.Now().Add(-16 * time.Second),
-		"title":   randomTitle,
-	}, wst.M{"Content-Type": "application/json"})
+	note, err := invokeApiAsRandomAccount("POST", "/notes", wst.M{"created": time.Now().Add(-16 * time.Second), "title": randomTitle}, wst.M{"Content-Type": "application/json"})
 	assert.NoError(t, err)
 	assert.Contains(t, note, "id")
 
@@ -492,11 +460,7 @@ func Test_SpecialFilter10MinutesAgo(t *testing.T) {
 
 	// Create a note for checking the filter
 	randomTitle := fmt.Sprintf("Test_SpecialFilter10MinutesAgo_%d", createRandomInt())
-	note, err := invokeApiAsRandomAccount(t, "POST", "/notes", wst.M{
-		// Created 11 minutes ago
-		"created": time.Now().Add(-11 * time.Minute),
-		"title":   randomTitle,
-	}, wst.M{"Content-Type": "application/json"})
+	note, err := invokeApiAsRandomAccount("POST", "/notes", wst.M{"created": time.Now().Add(-11 * time.Minute), "title": randomTitle}, wst.M{"Content-Type": "application/json"})
 	assert.NoError(t, err)
 	assert.Contains(t, note, "id")
 
@@ -513,11 +477,7 @@ func Test_SpecialFilter5HoursAgo(t *testing.T) {
 
 	// Create a note for checking the filter
 	randomTitle := fmt.Sprintf("Test_SpecialFilter5HoursAgo_%d", createRandomInt())
-	note, err := invokeApiAsRandomAccount(t, "POST", "/notes", wst.M{
-		// Created 6 hours ago
-		"created": time.Now().Add(-6 * time.Hour),
-		"title":   randomTitle,
-	}, wst.M{"Content-Type": "application/json"})
+	note, err := invokeApiAsRandomAccount("POST", "/notes", wst.M{"created": time.Now().Add(-6 * time.Hour), "title": randomTitle}, wst.M{"Content-Type": "application/json"})
 	assert.NoError(t, err)
 	assert.Contains(t, note, "id")
 
@@ -775,7 +735,7 @@ func TestMain(m *testing.M) {
 	var t *testing.T = new(testing.T)
 	// Instantiate a test here using m
 	randomAccount = createAccount(t, plainAccount)
-	randomAccountToken, err = loginAccount(plainAccount.GetString("username"), plainAccount.GetString("password"), t)
+	randomAccountToken, err = loginAccount(plainAccount.GetString("username"), plainAccount.GetString("password"))
 	if err != nil {
 		log.Fatalf("failed to login user: %v", err)
 	}
@@ -783,7 +743,7 @@ func TestMain(m *testing.M) {
 		log.Fatalf("failed to login user: %v", err)
 	}
 
-	adminAccountToken, err = loginAccount(os.Getenv("WST_ADMIN_USERNAME"), os.Getenv("WST_ADMIN_PWD"), t)
+	adminAccountToken, err = loginAccount(os.Getenv("WST_ADMIN_USERNAME"), os.Getenv("WST_ADMIN_PWD"))
 	if err != nil {
 		log.Fatalf("failed to login admin user: %v", err)
 	}

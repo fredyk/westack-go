@@ -2,12 +2,13 @@ package tests
 
 import (
 	"fmt"
-	"github.com/fredyk/westack-go/client/v2/wstfuncs"
-	"github.com/fredyk/westack-go/v2/westack"
-	"github.com/golang-jwt/jwt"
 	"os"
 	"testing"
 	"time"
+
+	"github.com/fredyk/westack-go/client/v2/wstfuncs"
+	"github.com/fredyk/westack-go/v2/westack"
+	"github.com/golang-jwt/jwt"
 
 	"github.com/goccy/go-json"
 
@@ -168,9 +169,7 @@ func Test_CreateWithOverrideResultError(t *testing.T) {
 
 	t.Parallel()
 
-	result, err := invokeApiAsRandomAccount(t, "POST", "/notes", wst.M{
-		"__forceError": true,
-	}, wst.M{"Content-Type": "application/json"})
+	result, err := invokeApiAsRandomAccount("POST", "/notes", wst.M{"__forceError": true}, wst.M{"Content-Type": "application/json"})
 	assert.NoError(t, err)
 	assert.Contains(t, result, "error")
 }
@@ -179,9 +178,7 @@ func Test_CreateWithOverrideInvalid(t *testing.T) {
 
 	t.Parallel()
 
-	result, err := invokeApiAsRandomAccount(t, "POST", "/notes", wst.M{
-		"__overwriteWith": 1,
-	}, wst.M{"Content-Type": "application/json"})
+	result, err := invokeApiAsRandomAccount("POST", "/notes", wst.M{"__overwriteWith": 1}, wst.M{"Content-Type": "application/json"})
 	assert.NoError(t, err)
 	assert.Contains(t, result, "error")
 }
@@ -200,9 +197,7 @@ func Test_CreateWithForcingError(t *testing.T) {
 
 	t.Parallel()
 
-	result, err := invokeApiAsRandomAccount(t, "POST", "/notes", wst.M{
-		"__forceAfterError": true,
-	}, wst.M{"Content-Type": "application/json"})
+	result, err := invokeApiAsRandomAccount("POST", "/notes", wst.M{"__forceAfterError": true}, wst.M{"Content-Type": "application/json"})
 	assert.NoError(t, err)
 	assert.Contains(t, result, "error")
 }
@@ -280,7 +275,7 @@ func Test_CreateWithDefaultStringValue(t *testing.T) {
 
 	t.Parallel()
 
-	created, err := invokeApiAsRandomAccount(t, "POST", "/notes", wst.M{}, wst.M{"Content-Type": "application/json"})
+	created, err := invokeApiAsRandomAccount("POST", "/notes", wst.M{}, wst.M{"Content-Type": "application/json"})
 	assert.Nil(t, err)
 	assert.Equal(t, "default", created.GetString("defaultString"))
 }
@@ -289,7 +284,7 @@ func Test_CreateWithDefaultIntValue(t *testing.T) {
 
 	t.Parallel()
 
-	created, err := invokeApiAsRandomAccount(t, "POST", "/notes", wst.M{}, wst.M{"Content-Type": "application/json"})
+	created, err := invokeApiAsRandomAccount("POST", "/notes", wst.M{}, wst.M{"Content-Type": "application/json"})
 	assert.Nil(t, err)
 	assert.EqualValues(t, 1, created["defaultInt"])
 }
@@ -298,7 +293,7 @@ func Test_CreateWithDefaultFloatValue(t *testing.T) {
 
 	t.Parallel()
 
-	created, err := invokeApiAsRandomAccount(t, "POST", "/notes", wst.M{}, wst.M{"Content-Type": "application/json"})
+	created, err := invokeApiAsRandomAccount("POST", "/notes", wst.M{}, wst.M{"Content-Type": "application/json"})
 	assert.Nil(t, err)
 	assert.EqualValues(t, 87436874647.8761781676, created["defaultFloat"])
 }
@@ -307,7 +302,7 @@ func Test_CreateWithDefaultBooleanValue(t *testing.T) {
 
 	t.Parallel()
 
-	created, err := invokeApiAsRandomAccount(t, "POST", "/notes", wst.M{}, wst.M{"Content-Type": "application/json"})
+	created, err := invokeApiAsRandomAccount("POST", "/notes", wst.M{}, wst.M{"Content-Type": "application/json"})
 	assert.Nil(t, err)
 	assert.EqualValues(t, true, created["defaultBoolean"])
 }
@@ -316,7 +311,7 @@ func Test_CreateWithDefaultListValue(t *testing.T) {
 
 	t.Parallel()
 
-	created, err := invokeApiAsRandomAccount(t, "POST", "/notes", wst.M{}, wst.M{"Content-Type": "application/json"})
+	created, err := invokeApiAsRandomAccount("POST", "/notes", wst.M{}, wst.M{"Content-Type": "application/json"})
 	assert.Nil(t, err)
 	assert.Contains(t, created, "defaultList")
 	assert.IsType(t, []interface{}{}, created["defaultList"])
@@ -327,7 +322,7 @@ func Test_CreateWithDefaultMapValue(t *testing.T) {
 
 	t.Parallel()
 
-	created, err := invokeApiAsRandomAccount(t, "POST", "/notes", wst.M{}, wst.M{"Content-Type": "application/json"})
+	created, err := invokeApiAsRandomAccount("POST", "/notes", wst.M{}, wst.M{"Content-Type": "application/json"})
 	assert.Nil(t, err)
 	assert.Contains(t, created, "defaultMap")
 	assert.IsType(t, map[string]interface{}{}, created["defaultMap"])
@@ -339,7 +334,7 @@ func Test_CreateWithDefaultNilValue(t *testing.T) {
 
 	t.Parallel()
 
-	created, err := invokeApiAsRandomAccount(t, "POST", "/notes", wst.M{}, wst.M{"Content-Type": "application/json"})
+	created, err := invokeApiAsRandomAccount("POST", "/notes", wst.M{}, wst.M{"Content-Type": "application/json"})
 	assert.Nil(t, err)
 	assert.Contains(t, created, "defaultNull")
 	assert.Nil(t, created["defaultNull"])
@@ -353,7 +348,7 @@ func Test_CreateWithDefaultTimeValue(t *testing.T) {
 	lowerSeconds := probablyTime.Unix()
 	// Should be 16 seconds after at most
 	upperSeconds := probablyTime.Unix() + 16
-	created, err := invokeApiAsRandomAccount(t, "POST", "/notes", wst.M{}, wst.M{"Content-Type": "application/json"})
+	created, err := invokeApiAsRandomAccount("POST", "/notes", wst.M{}, wst.M{"Content-Type": "application/json"})
 	assert.Nil(t, err)
 	assert.Contains(t, created, "defaultTimeNow")
 	var parsedTime time.Time
@@ -371,7 +366,7 @@ func Test_CreateWithDefaultTimeHourAgo(t *testing.T) {
 	lowerSeconds := probablyTime.Unix() - 3600
 	// Should be 15 milliseconds after at most
 	upperSeconds := probablyTime.Unix() - 3597
-	created, err := invokeApiAsRandomAccount(t, "POST", "/notes", wst.M{}, wst.M{"Content-Type": "application/json"})
+	created, err := invokeApiAsRandomAccount("POST", "/notes", wst.M{}, wst.M{"Content-Type": "application/json"})
 	assert.Nil(t, err)
 	assert.Contains(t, created, "defaultTimeHourAgo")
 	var parsedTime time.Time
@@ -390,7 +385,7 @@ func Test_CreateWithDefaultTimeHourFromNow(t *testing.T) {
 	lowerSeconds := probablyTime.Unix() + 3600
 	// Should be 15 seconds after at most
 	upperSeconds := probablyTime.Unix() + 3615
-	created, err := invokeApiAsRandomAccount(t, "POST", "/notes", wst.M{}, wst.M{"Content-Type": "application/json"})
+	created, err := invokeApiAsRandomAccount("POST", "/notes", wst.M{}, wst.M{"Content-Type": "application/json"})
 	assert.Nil(t, err)
 	assert.Contains(t, created, "defaultTimeHourFromNow")
 	var parsedTime time.Time
@@ -442,29 +437,21 @@ func Test_ProtectedFields(t *testing.T) {
 	// Login the user1
 	username1 := plainUser1.GetString("username")
 	password1 := plainUser1.GetString("password")
-	user1Token, err := loginAccount(username1, password1, t)
+	user1Token, err := loginAccount(username1, password1)
 	assert.NoError(t, err)
 
 	// Login the user2
-	user2Token, err := loginAccount(plainUser2.GetString("username"), plainUser2.GetString("password"), t)
+	user2Token, err := loginAccount(plainUser2.GetString("username"), plainUser2.GetString("password"))
 	assert.NoError(t, err)
 
 	// Login with admin
 	adminUsername := os.Getenv("WST_ADMIN_USERNAME")
 	adminPwd := os.Getenv("WST_ADMIN_PWD")
-	adminToken, err := loginAccount(
-		adminUsername,
-		adminPwd,
-		t,
-	)
+	adminToken, err := loginAccount(adminUsername, adminPwd)
 	assert.NoError(t, err)
 
 	// Login with userWithPrivileges
-	userWithPrivilegesToken, err := loginAccount(
-		plainUserWithPrivileges.Username,
-		plainUserWithPrivileges.Password,
-		t,
-	)
+	userWithPrivilegesToken, err := loginAccount(plainUserWithPrivileges.Username, plainUserWithPrivileges.Password)
 	assert.NoError(t, err)
 	privilegedUserBearer := userWithPrivilegesToken.GetString("id")
 	// Extract the payload from the bearer
