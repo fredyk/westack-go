@@ -5,8 +5,6 @@ import (
 	"crypto/rand"
 	"encoding/json"
 	"fmt"
-	"github.com/fredyk/westack-go/client/v2/wstfuncs"
-	"github.com/fredyk/westack-go/v2/westack"
 	"io"
 	"log"
 	"math/big"
@@ -15,6 +13,9 @@ import (
 	"strconv"
 	"testing"
 	"time"
+
+	"github.com/fredyk/westack-go/client/v2/wstfuncs"
+	"github.com/fredyk/westack-go/v2/westack"
 
 	"github.com/fredyk/westack-go/v2/datasource"
 	"github.com/fredyk/westack-go/v2/model"
@@ -42,7 +43,9 @@ func init() {
 		Logger: createMockLogger(),
 	})
 	var err error
-	app.Boot(func(app *westack.WeStack) {
+	app.Boot(westack.BootOptions{
+		RegisterControllers: func(r model.ControllerRegistry) {},
+	}, func(app *westack.WeStack) {
 
 		// Some hooks
 		noteModel, err = app.FindModel("Note")
@@ -488,7 +491,9 @@ func Test_MissingCasbinOutputDirectory(t *testing.T) {
 		}
 	}()
 
-	app.Boot()
+	app.Boot(westack.BootOptions{
+		RegisterControllers: func(r model.ControllerRegistry) {},
+	})
 
 }
 
@@ -510,7 +515,9 @@ func Test_InvalidCasbinOutputDirectory1(t *testing.T) {
 		}
 	}()
 
-	app.Boot()
+	app.Boot(westack.BootOptions{
+		RegisterControllers: func(r model.ControllerRegistry) {},
+	})
 
 }
 
@@ -534,7 +541,9 @@ func Test_InvalidCasbinOutputDirectory2(t *testing.T) {
 		}
 	}()
 
-	app.Boot()
+	app.Boot(westack.BootOptions{
+		RegisterControllers: func(r model.ControllerRegistry) {},
+	})
 
 }
 
@@ -564,7 +573,9 @@ func Test_WeStackStop(t *testing.T) {
 		Port:              8022,
 		DisablePortEnvVar: true,
 	})
-	app.Boot()
+	app.Boot(westack.BootOptions{
+		RegisterControllers: func(r model.ControllerRegistry) {},
+	})
 
 	go func() {
 		time.Sleep(3 * time.Second)
