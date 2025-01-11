@@ -596,26 +596,17 @@ func Test_RelationWithoutAuth(t *testing.T) {
 	t.Parallel()
 
 	// Create a note
-	note, err := invokeApiAsRandomAccount(t, "POST", "/notes", wst.M{
-		"title": "Note 1",
-	}, wst.M{
-		"Content-Type": "application/json",
-	})
+	note, err := invokeApiAsRandomAccount("POST", "/notes", wst.M{"title": "Note 1"}, wst.M{"Content-Type": "application/json"})
 	assert.NoError(t, err)
 	assert.Contains(t, note, "id")
 
 	// Create a footer
-	footer, err := invokeApiAsRandomAccount(t, "POST", "/footers", wst.M{
-		"title":        "Public Footer 1",
-		"publicNoteId": note.GetString("id"),
-	}, wst.M{
-		"Content-Type": "application/json",
-	})
+	footer, err := invokeApiAsRandomAccount("POST", "/footers", wst.M{"title": "Public Footer 1", "publicNoteId": note.GetString("id")}, wst.M{"Content-Type": "application/json"})
 	assert.NoError(t, err)
 	assert.Contains(t, footer, "id")
 
 	// Get the note including the footer
-	noteWithFooter, err := invokeApiAsRandomAccount(t, "GET", "/notes/"+note.GetString("id")+"?filter=%7B%22include%22%3A%5B%7B%22relation%22%3A%22publicFooter%22%7D%5D%7D", nil, nil)
+	noteWithFooter, err := invokeApiAsRandomAccount("GET", "/notes/"+note.GetString("id")+"?filter=%7B%22include%22%3A%5B%7B%22relation%22%3A%22publicFooter%22%7D%5D%7D", nil, nil)
 	assert.NoError(t, err)
 	assert.Contains(t, noteWithFooter, "id")
 	assert.Contains(t, noteWithFooter, "publicFooter")

@@ -3,10 +3,11 @@ package tests
 import (
 	"errors"
 	"fmt"
-	"github.com/fredyk/westack-go/client/v2/wstfuncs"
 	"io"
 	"net/http"
 	"testing"
+
+	"github.com/fredyk/westack-go/client/v2/wstfuncs"
 
 	"github.com/mailru/easyjson"
 
@@ -173,15 +174,12 @@ func Test_AfterLoadShouldReturnEmpty(t *testing.T) {
 
 	// create 5 notes
 	for i := 0; i < 5; i++ {
-		note, err := invokeApiAsRandomAccount(t, "POST", "/notes", wst.M{
-			"title": fmt.Sprintf("Note %d", i+1),
-			"body":  fmt.Sprintf("This is note %d", i+1),
-		}, wst.M{"Content-Type": "application/json"})
+		note, err := invokeApiAsRandomAccount("POST", "/notes", wst.M{"title": fmt.Sprintf("Note %d", i+1), "body": fmt.Sprintf("This is note %d", i+1)}, wst.M{"Content-Type": "application/json"})
 		assert.NoError(t, err)
 		assert.NotEmpty(t, note.GetString("id"))
 	}
 
-	resp, err := invokeApiAsRandomAccount(t, "GET", "/notes?forceError1753=true", nil, nil)
+	resp, err := invokeApiAsRandomAccount("GET", "/notes?forceError1753=true", nil, nil)
 	assert.NoError(t, err)
 	assert.Equal(t, "forced error 1753", resp.GetString("error.message"))
 	// "after load" cannot handle errors. It skips failed instances.
@@ -193,7 +191,7 @@ func Test_BeforeBuildReturnsError(t *testing.T) {
 
 	t.Parallel()
 
-	resp, err := invokeApiAsRandomAccount(t, "GET", "/notes?forceError1556=true", nil, nil)
+	resp, err := invokeApiAsRandomAccount("GET", "/notes?forceError1556=true", nil, nil)
 	assert.NoError(t, err)
 	assert.Equal(t, "error in __operation__before_build: forced error 1556", resp.GetString("error.message"))
 }
