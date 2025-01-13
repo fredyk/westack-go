@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/json"
 	"fmt"
+	"github.com/fredyk/westack-go/v2/lib/uploads"
 	"io"
 	"log"
 	"math/big"
@@ -221,6 +222,30 @@ func init() {
 			return nil
 		})
 
+		noteModel.RemoteMethod(func(ctx *model.EventContext) error {
+			d := ctx.Query.GetString("someDate")
+			ctx.Result = wst.M{
+				"someDate": d,
+			}
+			return nil
+		}, model.RemoteMethodOptions{
+			Name:        "remoteMethodWithDate",
+			Description: "",
+			Accepts: model.RemoteMethodOptionsHttpArgs{
+				{
+					Arg:         "someDate",
+					Type:        "date",
+					Description: "",
+					Http:        model.ArgHttp{Source: "query"},
+					Required:    true,
+				},
+			},
+			Http: model.RemoteMethodOptionsHttp{
+				Path: "/method-with-date",
+				Verb: "get",
+			},
+		})
+
 		model.BindRemoteOperation(noteModel, RemoteOperationExample)
 		model.BindRemoteOperationWithOptions(noteModel, RateLimitedOperation, model.RemoteOptions().
 			WithRateLimits(
@@ -228,6 +253,20 @@ func init() {
 				model.NewRateLimit("rl-5-seconds", 4, 5*time.Second, false),
 				model.NewRateLimit("rl-14-seconds", 10, 14*time.Second, false),
 			))
+
+		minioDomain := os.Getenv("MINIO_DOMAIN")
+		minioClient := uploads.MinioClient{
+			Bucket:    "wstuploadstest",
+			Endpoint:  fmt.Sprintf("%v:443", minioDomain),
+			AccessKey: os.Getenv("MINIO_ACCESS_KEY"),
+			SecretKey: os.Getenv("MINIO_SECRET_KEY"),
+			PublicUrl: fmt.Sprintf("https://%v", minioDomain),
+			Region:    "us-east-1",
+		}
+		model.BindRemoteOperationWithOptions(appModel, minioClient.UploadFile, model.RemoteOptions().
+			WithName("upload").
+			WithPath("/upload").
+			WithContentType("multipart/form-data"))
 
 		app.Server.Get("/api/v1/endpoint-using-codecs", func(ctx *fiber.Ctx) error {
 			type localNote struct {

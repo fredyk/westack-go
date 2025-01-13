@@ -100,6 +100,13 @@ func BindRemoteOperationWithContext[T any, R any](loadedModel *StatefulModel, ha
 		req := &RemoteOperationReq[T]{
 			Ctx: ctx,
 		}
+
+		if options.StrictContentType && wst.CleanContentType(string(ctx.Ctx.Request().Header.ContentType())) != options.ContentType {
+			return ctx.Ctx.Status(fiber.StatusBadRequest).SendString(
+				fmt.Sprintf("invalid content type %v, expected %v", ctx.Ctx.Get("Content-Type"),
+					options.ContentType))
+		}
+
 		pointerToInput := &req.Input
 		err := ctx.Ctx.BodyParser(pointerToInput)
 		if err != nil {
@@ -212,6 +219,7 @@ func (options *RemoteOperationOptions) WithPath(path string) *RemoteOperationOpt
 
 func (options *RemoteOperationOptions) WithContentType(contentType string) *RemoteOperationOptions {
 	options.ContentType = contentType
+	options.StrictContentType = true
 	return options
 }
 

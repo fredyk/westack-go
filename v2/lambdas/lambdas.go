@@ -62,7 +62,7 @@ func invoke(name string, method string, path string, payload wst.M) (result *Lam
 
 	result = &LambdaResult{
 		StatusCode:  resp.StatusCode,
-		ContentType: resp.Header.Get("Content-Type"),
+		ContentType: wst.CleanContentType(resp.Header.Get("Content-Type")),
 		Headers:     headers,
 	}
 	if resp.ContentLength > 0 {

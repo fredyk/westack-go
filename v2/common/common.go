@@ -899,3 +899,7 @@ func IsSecurePassword(password string) bool {
 	}
 	return hasUpper && hasLower && hasNumber && hasSpecial
 }
+
+func CleanContentType(contentType string) string {
+	return strings.TrimSpace(strings.Split(contentType, ";")[0])
+}

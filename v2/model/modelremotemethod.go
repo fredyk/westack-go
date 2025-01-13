@@ -282,14 +282,14 @@ func (loadedModel *StatefulModel) HandleRemoteMethod(name string, eventContext *
 
 	if strings.ToLower(options.Http.Verb) == "post" || strings.ToLower(options.Http.Verb) == "put" || strings.ToLower(options.Http.Verb) == "patch" {
 		// if application/json
-		if c.Get("Content-Type") == "application/json" {
+		if wst.CleanContentType(c.Get("Content-Type")) == "application/json" {
 			var data wst.M
 			err := eventContext.Ctx.BodyParser(&data)
 			if err != nil {
 				return wst.CreateError(fiber.ErrBadRequest, "INVALID_BODY", fiber.Map{"message": err.Error()}, "ValidationError")
 			}
 			eventContext.Data = &data
-		} else if /*application/x-www-form-urlencoded*/ c.Get("Content-Type") == "application/x-www-form-urlencoded" {
+		} else if /*application/x-www-form-urlencoded*/ wst.CleanContentType(c.Get("Content-Type")) == "application/x-www-form-urlencoded" {
 			rawBodyBytes := c.BodyRaw()
 			rawBody := string(rawBodyBytes)
 			parts := strings.Split(rawBody, "&")
@@ -300,7 +300,7 @@ func (loadedModel *StatefulModel) HandleRemoteMethod(name string, eventContext *
 					(*eventContext.Data)[kv[0]] = (*eventContext.Data)[kv[0]].(string) + "=" + kv[i]
 				}
 			}
-		} else if /*form-data*/ strings.Contains(c.Get("Content-Type"), "multipart/form-data") {
+		} else if /*form-data*/ strings.Contains(wst.CleanContentType(c.Get("Content-Type")), "multipart/form-data") {
 			form, err := c.MultipartForm()
 			if err != nil {
 				return wst.CreateError(fiber.ErrBadRequest, "INVALID_BODY", fiber.Map{"message": err.Error()}, "ValidationError")

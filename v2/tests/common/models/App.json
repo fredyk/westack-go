@@ -17,7 +17,12 @@
     "roleDefinition": "",
     "policyEffect": "",
     "matchersDefinition": "",
-    "policies": null
+    "policies": [
+      "admin,*,create,allow",
+      "$owner,*,read_write,allow",
+      "$owner,*,createToken,allow",
+      "$authenticated,*,upload,allow"
+    ]
   },
   "cache": {
     "datasource": "",

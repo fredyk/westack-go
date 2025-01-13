@@ -3,9 +3,13 @@ package uploads
 import (
 	"context"
 	"fmt"
+	wst "github.com/fredyk/westack-go/v2/common"
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
+	"io"
 	"mime/multipart"
+	"net/textproto"
+	"os"
 	"regexp"
 	"strings"
 )
@@ -71,6 +75,7 @@ func (client MinioClient) UploadFile(upload MinioUpload) (MinioUploadResponse, e
 	buffer, err := file.Open()
 	minioUploadResponse := MinioUploadResponse{}
 	if err != nil {
+		fmt.Printf("Error opening file: %v\n", err)
 		return minioUploadResponse, err
 	}
 	defer buffer.Close()
@@ -78,6 +83,7 @@ func (client MinioClient) UploadFile(upload MinioUpload) (MinioUploadResponse, e
 	// Create minio connection.
 	minioClient, err := minioConnection(client)
 	if err != nil {
+		fmt.Printf("Error creating minio connection: %v\n", err)
 		return minioUploadResponse, err
 	}
 
@@ -99,12 +105,13 @@ func (client MinioClient) UploadFile(upload MinioUpload) (MinioUploadResponse, e
 	// add the directory
 	objectName := upload.Directory + "/" + fileName
 	fileBuffer := buffer
-	contentType := file.Header.Get("Content-Type")
+	contentType := wst.CleanContentType(file.Header.Get("Content-Type"))
 	fileSize := file.Size
 
 	// Upload the zip File with PutObject
 	info, err := minioClient.PutObject(ctx, bucketName, objectName, fileBuffer, fileSize, minio.PutObjectOptions{ContentType: contentType})
 	if err != nil {
+		fmt.Printf("Error uploading file: %v\n", err)
 		return minioUploadResponse, err
 	}
 	resInfo := fmt.Sprintf("%s/%s/%s", client.PublicUrl, info.Bucket, info.Key)
@@ -112,4 +119,72 @@ func (client MinioClient) UploadFile(upload MinioUpload) (MinioUploadResponse, e
 	minioUploadResponse.Url = resInfo
 
 	return minioUploadResponse, nil
+}
+
+func CreateRawMultipart(fileName string, directory string, f *os.File, mimeType string) ([]byte, string, error) {
+
+	w := new(strings.Builder)
+	writer := multipart.NewWriter(w)
+	var boundary string
+	part, err := writer.CreatePart(mimeHeader("form-data; name=\"file\"; filename=\""+fileName+"\"", mimeType))
+	if err != nil {
+		return nil, boundary, err
+	}
+
+	b, err := readFile(f)
+	if err != nil {
+		return nil, boundary, err
+	}
+	n, err := part.Write(b)
+	if err != nil {
+		return nil, boundary, err
+	}
+	fmt.Printf("Wrote %d bytes\n", n)
+
+	_ = writer.WriteField("name", fileName)
+	_ = writer.WriteField("directory", directory)
+
+	err = writer.Close()
+	if err != nil {
+		return nil, boundary, err
+	}
+	boundary = writer.Boundary()
+
+	//// Now read the part
+	//reader := multipart.NewReader(strings.NewReader(writer.FormDataContentType()), boundary)
+	//var buff []byte
+	//for {
+	//	part, err := reader.NextPart()
+	//	if err == io.EOF {
+	//		break
+	//	}
+	//	if err != nil {
+	//		return nil, boundary, err
+	//	}
+	//	b, err := io.ReadAll(part)
+	//	if err != nil {
+	//		return nil, boundary, err
+	//	}
+	//	buff = append(buff, b...)
+	//}
+
+	buff := []byte(w.String())
+
+	return buff, boundary, nil
+}
+
+func mimeHeader(head string, mimeType string) textproto.MIMEHeader {
+	header := make(textproto.MIMEHeader)
+	header.Set("Content-Disposition", head)
+	header.Set("Content-Type", mimeType)
+	return header
+}
+
+func readFile(file multipart.File) ([]byte, error) {
+	var fileBytes []byte
+	fileBytes, err := io.ReadAll(file)
+	if err != nil {
+		return nil, err
+	}
+	return fileBytes, nil
 }

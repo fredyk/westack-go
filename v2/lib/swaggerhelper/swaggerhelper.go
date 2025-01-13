@@ -159,24 +159,6 @@ type OpenApiModelDef struct {
 	Properties wst.M
 }
 
-func RegisterModel(sH wst.SwaggerHelper, def OpenApiModelDef) {
-	// Register the model in the swagger helper
-	components := (*sH.(*swaggerHelper).swaggerMap.(*wst.M))["components"].(*wst.M)
-	if _, ok := (*components)["schemas"].(wst.M)[def.Name]; ok {
-		return
-	}
-	properties := def.Properties
-	for k, v := range properties {
-		if v.(wst.M)["type"] == "email" || v.(wst.M)["type"] == "password" || v.(wst.M)["type"] == "url" || v.(wst.M)["type"] == "date" {
-			properties[k].(wst.M)["type"] = "string"
-		}
-	}
-	(*components)["schemas"].(wst.M)[def.Name] = wst.M{
-		"type":       "object",
-		"properties": properties,
-	}
-}
-
 func RegisterGenericComponentForSample(sH wst.SwaggerHelper, sample any) string {
 	// important to set it to nil first to avoid infinite recursion
 	components := (*sH.(*swaggerHelper).swaggerMap.(*wst.M))["components"].(*wst.M)
