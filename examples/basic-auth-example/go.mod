@@ -6,7 +6,7 @@ toolchain go1.22.9
 require (
 	github.com/fredyk/westack-go v1.8.7
 	github.com/gofiber/fiber/v2 v2.52.6
-	go.mongodb.org/mongo-driver v1.17.1
+	go.mongodb.org/mongo-driver v1.17.2
 )
 
 require (
