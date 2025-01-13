@@ -1,15 +1,29 @@
 package tests
 
 import (
+	"bytes"
+	"encoding/json"
+	"fmt"
 	"github.com/fredyk/westack-go/client/v2/wstfuncs"
 	wst "github.com/fredyk/westack-go/v2/common"
+	"github.com/fredyk/westack-go/v2/lib/uploads"
 	"github.com/stretchr/testify/assert"
+	"io"
+	"mime/multipart"
+	"net/http"
+	"os"
 	"testing"
 	"time"
 )
 
 type TestInput struct {
 	Message string `json:"message"`
+}
+
+type EmptyStruct struct{}
+
+type unexportedType struct {
+	Field string
 }
 
 type TestOutput struct {
@@ -19,14 +33,19 @@ type TestOutput struct {
 			Name string `json:"name"`
 		} `json:"items"`
 	} `json:"metadata"`
-	Ints        []int      `json:"ints"`
-	Floats      []float64  `json:"floats"`
-	Booleans    []bool     `json:"booleans"`
-	SomeInt     int        `json:"someInt"`
-	SomeFloat   float64    `json:"someFloat"`
-	SomeBoolean bool       `json:"someBoolean"`
-	SomeMap     wst.M      `json:"someMap"`
-	EmptySlice  []struct{} `json:"emptySlice"`
+	Ints        []int                `json:"ints"`
+	Floats      []float64            `json:"floats"`
+	Booleans    []bool               `json:"booleans"`
+	SomeInt     int                  `json:"someInt"`
+	SomeFloat   float64              `json:"someFloat"`
+	SomeBoolean bool                 `json:"someBoolean"`
+	SomeMap     wst.M                `json:"someMap"`
+	EmptySlice  []struct{}           `json:"emptySlice"`
+	File        multipart.FileHeader `json:"file"`
+	TimeField   time.Time            `json:"timeField"`
+
+	UntaggedField   EmptyStruct
+	unexportedField unexportedType
 }
 
 func RemoteOperationExample(req TestInput) (TestOutput, error) {
@@ -93,6 +112,98 @@ func Test_BindRemoteOperation(t *testing.T) {
 	assert.Equal(t, true, output.SomeBoolean)
 	assert.Equal(t, "value1", output.SomeMap.GetString("key1"))
 
+}
+
+func Test_MinioUpload(t *testing.T) {
+
+	t.Parallel()
+
+	// read file from disk
+	f, err := os.Open("fixtures/upload_file.txt")
+	assert.NoError(t, err)
+	assert.NotNil(t, f)
+	defer f.Close()
+
+	reqBody := uploads.MinioUpload{
+		Name:      "changed_filename.txt",
+		Directory: "examples",
+	}
+	req, err := createMultipartRequest("POST", fmt.Sprintf("%s/apps/upload", wstfuncs.GetBaseUrl()),
+		reqBody.Name, reqBody.Directory, f, wst.M{
+			"Authorization": "Bearer " + adminAccountToken.GetString("id"),
+		})
+	assert.NoError(t, err)
+	assert.NotNil(t, req)
+
+	resp, err := (&http.Client{Timeout: time.Duration(120) * time.Second}).Do(req)
+	assert.NoError(t, err)
+	assert.NotNil(t, resp)
+	assert.Equal(t, 200, resp.StatusCode, readBodyOnError(resp))
+
+	var output uploads.MinioUploadResponse
+	// Notice the original '_' in the filename was automatically replaced with '-'
+	expectedUrl := fmt.Sprintf("https://%s/wstuploadstest/examples/changed-filename.txt", os.Getenv("MINIO_DOMAIN"))
+	err = readMultipartResponse(resp, &output)
+	assert.NoError(t, err)
+	assert.Equal(t, expectedUrl, output.Url)
+
+	// Now read the file
+	req, err = http.NewRequest("GET", output.Url, nil)
+	assert.NoError(t, err)
+	resp, err = (&http.Client{Timeout: time.Duration(120) * time.Second}).Do(req)
+	assert.NoError(t, err)
+	assert.NotNil(t, resp)
+	assert.Equal(t, 200, resp.StatusCode, readBodyOnError(resp))
+
+	expectedContents := "This file should be uploaded to the server."
+
+	defer resp.Body.Close()
+	buf := new(bytes.Buffer)
+	n, err := buf.ReadFrom(resp.Body)
+	assert.NoError(t, err)
+	assert.Equal(t, int64(len(expectedContents)), n)
+	assert.Equal(t, expectedContents, buf.String())
+
+}
+
+func readBodyOnError(resp *http.Response) string {
+	if resp.StatusCode == 200 {
+		return ""
+	}
+	body := resp.Body
+	defer body.Close()
+	buf := new(bytes.Buffer)
+	buf.ReadFrom(body)
+	return buf.String()
+}
+
+func readMultipartResponse(resp *http.Response, u *uploads.MinioUploadResponse) error {
+	defer resp.Body.Close()
+	b, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return err
+	}
+	err = json.Unmarshal(b, u)
+	return err
+}
+
+func createMultipartRequest(method string, url string, fileName string, directory string, f *os.File, headers wst.M) (*http.Request, error) {
+	b, boundary, err := uploads.CreateRawMultipart(fileName, directory, f, "text/plain")
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(method, url, bytes.NewReader(b))
+	if err != nil {
+		return req, err
+	}
+
+	headers["Content-Type"] = fmt.Sprintf("multipart/form-data; boundary=%s", boundary)
+	for k, v := range headers {
+		req.Header.Add(k, v.(string))
+	}
+
+	return req, err
 }
 
 func SubTestRateLimitedOperation1Second(t *testing.T) {
@@ -171,4 +282,16 @@ func invokeRateLimited() (TestOutput, error) {
 		"Authorization": "Bearer " + adminAccountToken.GetString("id"),
 		"Content-Type":  "application/json",
 	})
+}
+
+func Test_OptionsVerb(t *testing.T) {
+
+	t.Parallel()
+
+	resp, err := wstfuncs.InvokeApiFullResponse("OPTIONS", "/notes/hooks/remote-operation-example",
+		nil, wst.M{
+			"Authorization": "Bearer " + adminAccountToken.GetString("id"),
+		})
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusNoContent, resp.StatusCode)
 }

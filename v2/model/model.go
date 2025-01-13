@@ -883,11 +883,12 @@ type RemoteMethodOptions struct {
 }
 
 type RemoteOperationOptions struct {
-	Name        string
-	Description string
-	Path        string
-	RateLimits  []*RateLimit
-	ContentType string
+	Name              string
+	Description       string
+	Path              string
+	RateLimits        []*RateLimit
+	ContentType       string
+	StrictContentType bool
 }
 
 type RemoteOperationReq[T any] struct {

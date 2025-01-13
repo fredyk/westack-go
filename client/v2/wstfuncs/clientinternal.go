@@ -4,11 +4,12 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	wst "github.com/fredyk/westack-go/v2/common"
 	"io"
 	"net/http"
 	"strings"
 	"time"
+
+	wst "github.com/fredyk/westack-go/v2/common"
 )
 
 var baseUrl string
@@ -17,17 +18,24 @@ func SetBaseUrl(url string) {
 	baseUrl = url
 }
 
-func InvokeApiJsonM(method string, url string, body wst.M, headers wst.M) (result wst.M, err error) {
-	result, err = InvokeApiTyped[wst.M](method, url, body, headers)
-	return result, err
+func GetBaseUrl() string {
+	return baseUrl
 }
 
-func InvokeApiJsonA(method string, url string, body wst.M, headers wst.M) (result wst.A, err error) {
+func InvokeApiJsonM(method string, url string, body wst.M, headers wst.M) (wst.M, error) {
+	return InvokeApiTyped[wst.M](method, url, body, headers)
+}
+
+func InvokeApiJsonA(method string, url string, body wst.M, headers wst.M) (wst.A, error) {
 	return InvokeApiTyped[wst.A](method, url, body, headers)
 }
 
 func InvokeApiFullResponse(method string, url string, body wst.M, headers wst.M) (*http.Response, error) {
-	req, err := http.NewRequest(method, fmt.Sprintf("%s%s", baseUrl, url), jsonToReaderOnlyIfNeeded(method, body))
+	bodyReader, err := jsonToReaderOnlyIfNeeded(method, body)
+	if err != nil {
+		return nil, err
+	}
+	req, err := http.NewRequest(method, fmt.Sprintf("%s%s", baseUrl, url), bodyReader)
 	if err != nil {
 		return nil, err
 	}
@@ -44,34 +52,42 @@ func InvokeApiFullResponse(method string, url string, body wst.M, headers wst.M)
 	return client.Do(req)
 }
 
-func jsonToReaderOnlyIfNeeded(method string, body wst.M) io.Reader {
+func jsonToReaderOnlyIfNeeded(method string, body wst.M) (io.Reader, error) {
 	switch strings.ToLower(method) {
 	case "get", "head", "delete":
-		return nil
+		return nil, nil
 	default:
 		return jsonToReader(body)
 	}
 }
 
-func InvokeApiTyped[T any](method string, url string, body wst.M, headers wst.M) (result T, err error) {
-	respBody, _ := invokeApiBytes(method, url, body, headers)
+func InvokeApiTyped[T any](method string, url string, body wst.M, headers wst.M) (T, error) {
+	respBody, err := invokeApiBytes(method, url, body, headers)
 	var parsedRespBody T
+	if err != nil {
+		return parsedRespBody, err
+	}
 	err = json.Unmarshal(respBody, &parsedRespBody)
 
 	return parsedRespBody, err
 }
 
 func invokeApiBytes(method string, url string, body wst.M, headers wst.M) ([]byte, error) {
-	resp, _ := InvokeApiFullResponse(method, url, body, headers)
+	resp, err := InvokeApiFullResponse(method, url, body, headers)
+	if err != nil {
+		return nil, err
+	}
 	if resp == nil || resp.Body == nil {
-		return make([]byte, 0), fmt.Errorf("nil or empty response")
+		return nil, fmt.Errorf("nil or empty response")
 	}
 	defer resp.Body.Close()
 	return io.ReadAll(resp.Body)
 }
 
-func jsonToReader(m wst.M) io.Reader {
+func jsonToReader(m wst.M) (io.Reader, error) {
 	out, err := json.Marshal(m)
-	fmt.Printf("Ignoring error %v\n", err)
-	return bytes.NewReader(out)
+	if err != nil {
+		return nil, err
+	}
+	return bytes.NewReader(out), nil
 }

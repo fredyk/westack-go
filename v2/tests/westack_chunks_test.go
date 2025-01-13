@@ -54,7 +54,7 @@ func Test_ChannelChunkGeneratorError(t *testing.T) {
 		"invalid": make(chan int),
 	}, systemContext)
 	assert.NoError(t, err)
-	var input chan model.Instance = make(chan model.Instance)
+	var input = make(chan model.Instance)
 	go func() {
 		input <- build
 		close(input)
@@ -83,7 +83,7 @@ func Test_ChannelChunkGeneratorClosedError(t *testing.T) {
 	//	"invalid": make(chan int),
 	//}, model.NewBuildCache(), systemContext)
 	//assert.NoError(t, err)
-	var input chan model.Instance = make(chan model.Instance)
+	var input = make(chan model.Instance)
 	go func() {
 		//input <- &build
 		close(input)
@@ -98,6 +98,50 @@ func Test_ChannelChunkGeneratorClosedError(t *testing.T) {
 	assert.Error(t, err)
 	assert.Equal(t, 0, len(outBytes))
 
+}
+
+func Test_GoodChunkGenerator(t *testing.T) {
+
+	t.Parallel()
+
+	var err error
+
+	// unmarshable map
+	note1, err := noteModel.Build(wst.M{
+		"title": "Note 0015",
+		"body":  "This is a note",
+	}, systemContext)
+	assert.NoError(t, err)
+	note2, err := noteModel.Build(wst.M{
+		"title": "Note 0016",
+		"body":  "This is another note",
+	}, systemContext)
+	var input = make(chan model.Instance)
+	go func() {
+		input <- note1
+		input <- note2
+		close(input)
+	}()
+	cursor := model.NewChannelCursor(input)
+
+	chunkGenerator := model.NewCursorChunkGenerator(noteModel, cursor)
+	chunkGenerator.SetDebug(true)
+
+	outBytes, err := io.ReadAll(chunkGenerator.Reader(systemContext))
+	assert.NoError(t, err)
+	// The line break is added by the chunk generator to allow the client read line by line
+	assert.Contains(t, string(outBytes), "\n")
+
+	var output wst.A
+	err = easyjson.Unmarshal(outBytes, &output)
+	assert.NoError(t, err)
+	assert.Equal(t, 2, len(output))
+	assert.Equal(t, "Note 0015", output[0].GetString("title"))
+	assert.Equal(t, "This is a note", output[0].GetString("body"))
+	assert.Equal(t, "", output[0].GetString("id"))
+	assert.Equal(t, "Note 0016", output[1].GetString("title"))
+	assert.Equal(t, "This is another note", output[1].GetString("body"))
+	assert.Equal(t, "", output[1].GetString("id"))
 }
 
 func Test_FixedBeforeLoadMock124401(t *testing.T) {

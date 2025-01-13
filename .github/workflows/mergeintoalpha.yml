@@ -66,6 +66,9 @@ jobs:
       GITHUB_TOKEN: ${{ secrets.PULL_REQUEST_TOKEN }}
       DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
       DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+      MINIO_DOMAIN: ${{ secrets.MINIO_DOMAIN }}
+      MINIO_ACCESS_KEY: ${{ secrets.MINIO_ACCESS_KEY }}
+      MINIO_SECRET_KEY: ${{ secrets.MINIO_SECRET_KEY }}
       MIN_COVERAGE_THRESHOLD: 81.3
       JWT_SECRET: abcD12345678.
       GO_ENV: TESTING
