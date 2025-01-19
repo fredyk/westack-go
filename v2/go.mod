@@ -2,12 +2,12 @@ module github.com/fredyk/westack-go/v2
 
 go 1.22.9
 
-replace github.com/fredyk/westack-go/client/v2 => ../client/v2
+// replace github.com/fredyk/westack-go/client/v2 => ../client/v2
 
 require (
 	github.com/andybalholm/brotli v1.1.0
 	github.com/casbin/casbin/v2 v2.102.0
-	github.com/fredyk/westack-go/client/v2 v2.0.0-00010101000000-000000000000
+	github.com/fredyk/westack-go/client/v2 v2.0.0-20250119173214-d4de0aadbdf4
 	github.com/goccy/go-json v0.10.4
 	github.com/gofiber/fiber/v2 v2.52.6
 	github.com/golang-jwt/jwt v3.2.2+incompatible
