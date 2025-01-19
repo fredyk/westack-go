@@ -2,7 +2,7 @@ module github.com/fredyk/westack-go/v2
 
 go 1.22.9
 
-replace github.com/fredyk/westack-go/client/v2 => ../client/v2
+// replace github.com/fredyk/westack-go/client/v2 => ../client/v2
 
 require (
 	github.com/andybalholm/brotli v1.1.0
