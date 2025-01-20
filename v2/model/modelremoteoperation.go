@@ -2,15 +2,16 @@ package model
 
 import (
 	"fmt"
-	wst "github.com/fredyk/westack-go/v2/common"
-	"github.com/fredyk/westack-go/v2/lib/swaggerhelper"
-	"github.com/gofiber/fiber/v2"
 	"mime/multipart"
 	"reflect"
 	"regexp"
 	"runtime"
 	"slices"
 	"strings"
+
+	wst "github.com/fredyk/westack-go/v2/common"
+	"github.com/fredyk/westack-go/v2/lib/swaggerhelper"
+	"github.com/gofiber/fiber/v2"
 )
 
 func BindRemoteOperationWithContext[T any, R any](loadedModel *StatefulModel, handler func(req *RemoteOperationReq[T]) (R, error), options *RemoteOperationOptions) fiber.Router {
@@ -147,6 +148,7 @@ func BindRemoteOperationWithContext[T any, R any](loadedModel *StatefulModel, ha
 		return nil
 	}
 
+	remoteMethodOptions.Http.Verb = verb
 	loadedModel.remoteMethodsMap[options.Name] = createRemoteMethodOperationItem(handlerWrapper, remoteMethodOptions)
 
 	(*loadedModel.Router).Options(path, func(ctx *fiber.Ctx) error {
