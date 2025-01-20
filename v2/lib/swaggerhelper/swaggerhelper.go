@@ -1,15 +1,16 @@
 package swaggerhelper
 
 import (
-	wst "github.com/fredyk/westack-go/v2/common"
-	"github.com/gofiber/fiber/v2"
-	"github.com/mailru/easyjson"
-	"github.com/mailru/easyjson/jwriter"
 	"log"
 	"os"
 	"reflect"
 	"runtime"
 	"strings"
+
+	wst "github.com/fredyk/westack-go/v2/common"
+	"github.com/gofiber/fiber/v2"
+	"github.com/mailru/easyjson"
+	"github.com/mailru/easyjson/jwriter"
 )
 
 type SwaggerMap interface {
@@ -229,6 +230,18 @@ func analyzeWithReflection(rootTypeName string, t reflect.Type, components *wst.
 		if field.Type.Kind() == reflect.Pointer {
 			field.Type = field.Type.Elem()
 		}
+		switch field.Type.Name() {
+		case "ObjectID":
+			schema[tagged] = wst.M{
+				"type": "string",
+			}
+			continue
+		case "Time":
+			schema[tagged] = wst.M{
+				"type": "string",
+			}
+			continue
+		}
 		switch field.Type.Kind() {
 		case reflect.String:
 			schema[tagged] = wst.M{
@@ -246,10 +259,7 @@ func analyzeWithReflection(rootTypeName string, t reflect.Type, components *wst.
 			}
 		//case wst.M:
 		case reflect.Map:
-			schema[tagged] = wst.M{
-				"type":       "object",
-				"properties": analyzeWithReflection(rootTypeName, field.Type, components),
-			}
+			schema[tagged] = analyzeWithReflection(rootTypeName, field.Type, components)
 		//case []interface{}:
 		case reflect.Slice:
 			fieldElem := field.Type.Elem()
