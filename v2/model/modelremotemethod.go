@@ -280,7 +280,8 @@ func (loadedModel *StatefulModel) HandleRemoteMethod(name string, eventContext *
 		(*eventContext.Query)[k] = v
 	}
 
-	if strings.ToLower(options.Http.Verb) == "post" || strings.ToLower(options.Http.Verb) == "put" || strings.ToLower(options.Http.Verb) == "patch" {
+	shouldHaveBody := strings.ToLower(options.Http.Verb) == "post" || strings.ToLower(options.Http.Verb) == "put" || strings.ToLower(options.Http.Verb) == "patch"
+	if shouldHaveBody {
 		// if application/json
 		if wst.CleanContentType(c.Get("Content-Type")) == "application/json" {
 			var data wst.M
@@ -314,6 +315,10 @@ func (loadedModel *StatefulModel) HandleRemoteMethod(name string, eventContext *
 			} else {
 				return wst.CreateError(fiber.ErrUnsupportedMediaType, "UNSUPPORTED_MEDIA_TYPE", fiber.Map{"message": "Unsupported media type"}, "ValidationError")
 			}
+		}
+	} else {
+		if c.Get("Content-Length", "0") != "0" {
+			return wst.CreateError(fiber.ErrBadRequest, "INVALID_BODY", fiber.Map{"message": "Body not expected"}, "ValidationError")
 		}
 	}
 
