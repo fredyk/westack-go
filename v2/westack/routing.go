@@ -324,13 +324,27 @@ func mountAccountModelFixedRoutes(loadedModel *model.StatefulModel, app *WeStack
 
 	// oauth2 client
 	clientID := app.Viper.GetString("oauth2.google.clientID")
+	appPublicOrigin := app.Viper.GetString("publicOrigin")
+	googleRedirectUri := fmt.Sprintf("%s%s/oauth/google/callback", appPublicOrigin, loadedModel.BaseUrl)
+	const loginPath = "/oauth/google"
+	fullLoginPath := fmt.Sprintf("%s%s%s", appPublicOrigin, loadedModel.BaseUrl, loginPath)
+
 	googleOauthConfig := &oauth2.Config{
 		ClientID:     clientID,
 		ClientSecret: app.Viper.GetString("oauth2.google.clientSecret"),
-		RedirectURL:  fmt.Sprintf("%s%s/oauth/google/callback", app.Viper.GetString("publicOrigin"), loadedModel.BaseUrl),
+		RedirectURL:  googleRedirectUri,
 		Scopes:       []string{"https://www.googleapis.com/auth/userinfo.email"},
 		Endpoint:     google.Endpoint,
 	}
+
+	fmt.Println(`
+	=========================================
+	
+	[INFO] Google Oauth login: ` + fullLoginPath + `
+	[INFO] Google Oauth Redirect URI: ` + googleRedirectUri + `
+
+	=========================================
+	`)
 
 	// google login endpoint
 	loadedModel.RemoteMethod(func(eventContext *model.EventContext) error {
@@ -354,7 +368,7 @@ func mountAccountModelFixedRoutes(loadedModel *model.StatefulModel, app *WeStack
 		Name:        string(wst.OperationNameGoogleLogin),
 		Description: "Logins with Google",
 		Http: model.RemoteMethodOptionsHttp{
-			Path: "/oauth/google",
+			Path: loginPath,
 			Verb: "get",
 		},
 	})
