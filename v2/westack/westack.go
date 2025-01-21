@@ -227,6 +227,13 @@ func New(options ...Options) *WeStack {
 		}
 	}
 
+	appViper.SetEnvPrefix("wst")
+	replacer := strings.NewReplacer(".", "_")
+	appViper.SetEnvKeyReplacer(replacer)
+	appViper.AutomaticEnv()
+
+	replaceEnvVars(appViper)
+
 	if finalOptions.RestApiRoot == "" {
 		finalOptions.RestApiRoot = appViper.GetString("restApiRoot")
 	}

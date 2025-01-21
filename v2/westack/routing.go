@@ -43,7 +43,7 @@ func (app *WeStack) loadModelsFixedRoutes() error {
 
 		e, err := casbin.NewEnforcer(*loadedModel.CasbinModel, *loadedModel.CasbinAdapter, app.debug)
 		if err != nil {
-			return fmt.Errorf("could not create casbin enforcer: %v", err)
+			return fmt.Errorf("could not create casbin enforcer: %w", err)
 		}
 
 		loadedModel.Enforcer = e
@@ -58,12 +58,12 @@ func (app *WeStack) loadModelsFixedRoutes() error {
 
 		err = e.SavePolicy()
 		if err != nil {
-			return fmt.Errorf("could not save policy: %v", err)
+			return fmt.Errorf("could not save policy: %w", err)
 		}
 
 		err = e.LoadPolicy()
 		if err != nil {
-			return fmt.Errorf("could not load policy: %v", err)
+			return fmt.Errorf("could not load policy: %w", err)
 		}
 
 		if app.debug {
@@ -78,7 +78,7 @@ func (app *WeStack) loadModelsFixedRoutes() error {
 			}
 			err = os.WriteFile(fmt.Sprintf("%v/%v.casbin.dump.conf", modelsDumpDir, loadedModel.Name), []byte(text), 0600)
 			if err != nil {
-				return fmt.Errorf("could not write casbin dump: %v", err)
+				return fmt.Errorf("could not write casbin dump: %w", err)
 			}
 		}
 
@@ -322,14 +322,39 @@ func mountAccountModelFixedRoutes(loadedModel *model.StatefulModel, app *WeStack
 		},
 	})
 
+	appPublicOrigin := app.Viper.GetString("publicOrigin")
+	googleRedirectUri := fmt.Sprintf("%s%s/oauth/google/callback", appPublicOrigin, loadedModel.BaseUrl)
+	const loginPath = "/oauth/google"
+	fullLoginPath := fmt.Sprintf("%s%s%s", appPublicOrigin, loadedModel.BaseUrl, loginPath)
+	successUrl := app.Viper.GetString("oauth2.successRedirect")
+	failureUrl := app.Viper.GetString("oauth2.failureRedirect")
+	finalTokenTtl := app.Viper.GetFloat64("ttl")
+	if finalTokenTtl <= 0.0 {
+		finalTokenTtl = 30 * 86400
+	}
+
+	scopes := []string{"https://www.googleapis.com/auth/userinfo.email"}
+	if v := app.Viper.GetStringSlice("oauth2.google.scopes"); v != nil {
+		scopes = append(scopes, v...)
+	}
+
 	// oauth2 client
 	googleOauthConfig := &oauth2.Config{
 		ClientID:     app.Viper.GetString("oauth2.google.clientID"),
 		ClientSecret: app.Viper.GetString("oauth2.google.clientSecret"),
-		RedirectURL:  fmt.Sprintf("%s%s/oauth/google/callback", app.Viper.GetString("oauth2.publicOrigin"), loadedModel.BaseUrl),
-		Scopes:       []string{"https://www.googleapis.com/auth/userinfo.email"},
+		RedirectURL:  googleRedirectUri,
+		Scopes:       scopes,
 		Endpoint:     google.Endpoint,
 	}
+
+	fmt.Println(`
+	=========================================
+	
+	[INFO] Google Oauth login: ` + fullLoginPath + `
+	[INFO] Google Oauth Redirect URI: ` + googleRedirectUri + `
+
+	=========================================
+	`)
 
 	// google login endpoint
 	loadedModel.RemoteMethod(func(eventContext *model.EventContext) error {
@@ -353,7 +378,7 @@ func mountAccountModelFixedRoutes(loadedModel *model.StatefulModel, app *WeStack
 		Name:        string(wst.OperationNameGoogleLogin),
 		Description: "Logins with Google",
 		Http: model.RemoteMethodOptionsHttp{
-			Path: "/oauth/google",
+			Path: loginPath,
 			Verb: "get",
 		},
 	})
@@ -364,23 +389,23 @@ func mountAccountModelFixedRoutes(loadedModel *model.StatefulModel, app *WeStack
 		cookie := eventContext.Ctx.Cookies("SSID")
 		oauthState, ok := utils.GetOauthState(cookie)
 		if !ok {
-			return wst.CreateError(fiber.ErrForbidden, "ERR_MISSING_OAUTH_STATE", fiber.Map{"message": "missing oauth state"}, "Error")
+			return verboseRedirect(eventContext, failureUrl, fmt.Errorf("missing oauth state"))
 		}
 
 		receivedState := eventContext.Query.GetString("state")
 		if oauthState != receivedState {
-			return wst.CreateError(fiber.ErrForbidden, "ERR_INVALID_OAUTH_STATE", fiber.Map{"message": "invalid oauth state"}, "Error")
+			return verboseRedirect(eventContext, failureUrl, fmt.Errorf("invalid oauth state"))
 		}
 
 		oauthCode := eventContext.Query.GetString("code")
 		token, err := googleOauthConfig.Exchange(eventContext.Ctx.Context(), oauthCode)
 		if err != nil {
-			return wst.CreateError(fiber.ErrForbidden, "ERR_OAUTH_EXCHANGE", fiber.Map{"message": "oauth exchange failed: " + err.Error()}, "Error")
+			return verboseRedirect(eventContext, failureUrl, fmt.Errorf("oauth exchange failed: %w", err))
 		}
 
 		userInfo, err := googleOauthConfig.Client(eventContext.Ctx.Context(), token).Get("https://www.googleapis.com/oauth2/v3/userinfo")
 		if err != nil {
-			return wst.CreateError(fiber.ErrForbidden, "ERR_OAUTH_USERINFO", fiber.Map{"message": "failed to get user info: " + err.Error()}, "Error")
+			return verboseRedirect(eventContext, failureUrl, fmt.Errorf("failed to get user info: %w", err))
 		}
 
 		defer userInfo.Body.Close()
@@ -392,14 +417,14 @@ func mountAccountModelFixedRoutes(loadedModel *model.StatefulModel, app *WeStack
 		var userInfoData userInfoResponse
 		err = json.NewDecoder(userInfo.Body).Decode(&userInfoData)
 		if err != nil {
-			return wst.CreateError(fiber.ErrForbidden, "ERR_OAUTH_USERINFO_DECODE", fiber.Map{"message": "failed to decode user info: " + err.Error()}, "Error")
+			return verboseRedirect(eventContext, failureUrl, fmt.Errorf("failed to decode user info: %w", err))
 		}
 
 		// check if userCredentials exists
 		userCredentials, err := app.accountCredentialsModel.FindOne(&wst.Filter{
 			Where: &wst.Where{
 				"email":    userInfoData.Email,
-				"provider": ProviderGoogleOAuth2,
+				"provider": string(ProviderGoogleOAuth2),
 			},
 			Include: &wst.Include{
 				{
@@ -410,7 +435,7 @@ func mountAccountModelFixedRoutes(loadedModel *model.StatefulModel, app *WeStack
 
 		if err != nil {
 			fmt.Printf("[DEBUG] Error while fetching credentials by email-provider: %v\n", err)
-			return err
+			return verboseRedirect(eventContext, failureUrl, fmt.Errorf("failed to fetch oauth credentials: %w", err))
 		}
 
 		var account *model.StatefulInstance
@@ -435,7 +460,7 @@ func mountAccountModelFixedRoutes(loadedModel *model.StatefulModel, app *WeStack
 
 			if err != nil {
 				fmt.Printf("[DEBUG] Error while fetching credentials by email-password: %v\n", err)
-				return err
+				return verboseRedirect(eventContext, failureUrl, fmt.Errorf("failed to fetch password credentials: %w", err))
 			}
 
 			if userCredentials == nil {
@@ -445,12 +470,12 @@ func mountAccountModelFixedRoutes(loadedModel *model.StatefulModel, app *WeStack
 				createdAccount, err := loadedModel.Create(wst.M{
 					"email":         userInfoData.Email,
 					"emailVerified": true,
-					"provider":      ProviderGoogleOAuth2,
+					"provider":      string(ProviderGoogleOAuth2),
 				}, systemContext)
 
 				if err != nil {
 					fmt.Printf("[DEBUG] Error while creating account: %v\n", err)
-					return err
+					return verboseRedirect(eventContext, failureUrl, fmt.Errorf("failed to create account: %w", err))
 				}
 
 				account = createdAccount.(*model.StatefulInstance)
@@ -469,7 +494,7 @@ func mountAccountModelFixedRoutes(loadedModel *model.StatefulModel, app *WeStack
 			_, err = app.accountCredentialsModel.Create(wst.M{
 				"accountId":    accountId,
 				"email":        userInfoData.Email,
-				"provider":     ProviderGoogleOAuth2,
+				"provider":     string(ProviderGoogleOAuth2),
 				"accessToken":  token.AccessToken,
 				"refreshToken": token.RefreshToken,
 				"expiry":       token.Expiry,
@@ -479,11 +504,12 @@ func mountAccountModelFixedRoutes(loadedModel *model.StatefulModel, app *WeStack
 
 			if err != nil {
 				fmt.Printf("[DEBUG] Error while creating credentials: %v\n", err)
-				return err
+				return verboseRedirect(eventContext, failureUrl, fmt.Errorf("failed to create credentials: %w", err))
 			}
 
 		} else {
 			account = userCredentials.GetOne("account").(*model.StatefulInstance)
+			accountId = account.GetString("id")
 
 			// update credentials
 			fmt.Printf("[DEBUG] Updating credentials for email: %v\n", userInfoData.Email)
@@ -495,8 +521,7 @@ func mountAccountModelFixedRoutes(loadedModel *model.StatefulModel, app *WeStack
 			}, systemContext)
 
 			if err != nil {
-				fmt.Printf("[DEBUG] Error while updating credentials: %v\n", err)
-				return err
+				fmt.Printf("[ERROR] Could not update credentials: %v\n", err)
 			}
 
 		}
@@ -526,15 +551,15 @@ func mountAccountModelFixedRoutes(loadedModel *model.StatefulModel, app *WeStack
 		}
 
 		ttl := 30 * 86400.0
-		bearer := model.CreateBearer(eventContext.ModelID, float64(time.Now().Unix()), ttl, roleNames)
+		bearer := model.CreateBearer(accountId, float64(time.Now().Unix()), ttl, roleNames)
 		// sign the bearer
 		jwtToken := jwt.NewWithClaims(jwt.SigningMethodHS256, bearer.Claims)
 		tokenString, err := jwtToken.SignedString(loadedModel.App.JwtSecretKey)
 		if err != nil {
-			return err
+			return verboseRedirect(eventContext, failureUrl, fmt.Errorf("failed to sign token: %w", err))
 		}
 
-		return eventContext.Ctx.Redirect(app.Viper.GetString("oauth2.successRedirect") + "?access_token=" + tokenString)
+		return eventContext.Ctx.Redirect(successUrl + "?access_token=" + tokenString)
 
 	}, model.RemoteMethodOptions{
 		Name:        string(wst.OperationNameGoogleLoginCallback),
@@ -545,6 +570,11 @@ func mountAccountModelFixedRoutes(loadedModel *model.StatefulModel, app *WeStack
 		},
 	})
 
+}
+
+func verboseRedirect(eventContext *model.EventContext, failureUrl string, err error) error {
+	fmt.Printf("[DEBUG] Redirecting to %v: %v\n", failureUrl, err)
+	return eventContext.Ctx.Redirect(fmt.Sprintf("%v?error=%v", failureUrl, err.Error()))
 }
 
 func mountBaseModelFixedRoutes(app *WeStack, loadedModel *model.StatefulModel) {
