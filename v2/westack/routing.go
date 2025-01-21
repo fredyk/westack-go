@@ -499,6 +499,7 @@ func mountAccountModelFixedRoutes(loadedModel *model.StatefulModel, app *WeStack
 
 		} else {
 			account = userCredentials.GetOne("account").(*model.StatefulInstance)
+			accountId = account.GetString("id")
 
 			// update credentials
 			fmt.Printf("[DEBUG] Updating credentials for email: %v\n", userInfoData.Email)
@@ -541,7 +542,7 @@ func mountAccountModelFixedRoutes(loadedModel *model.StatefulModel, app *WeStack
 		}
 
 		ttl := 30 * 86400.0
-		bearer := model.CreateBearer(eventContext.ModelID, float64(time.Now().Unix()), ttl, roleNames)
+		bearer := model.CreateBearer(accountId, float64(time.Now().Unix()), ttl, roleNames)
 		// sign the bearer
 		jwtToken := jwt.NewWithClaims(jwt.SigningMethodHS256, bearer.Claims)
 		tokenString, err := jwtToken.SignedString(loadedModel.App.JwtSecretKey)
