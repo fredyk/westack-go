@@ -421,7 +421,7 @@ func (app *WeStack) setupModel(loadedModel *model.StatefulModel, dataSource *dat
 					}
 				}
 
-				if provider == string(ProviderPassword) {
+				if provider == "" || provider == string(ProviderPassword) {
 					if strings.TrimSpace(password) == "" {
 						return wst.CreateError(fiber.ErrBadRequest, "PASSWORD_BLANK", fiber.Map{"message": "Invalid password"}, "ValidationError")
 					} else if !wst.IsSecurePassword(password) {
