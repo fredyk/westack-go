@@ -265,6 +265,20 @@ func (app *WeStack) loadDataSources() error {
 	return nil
 }
 
+func replaceEnvVars(dsViper *viper.Viper) {
+	for _, key := range dsViper.AllKeys() {
+		value := dsViper.GetString(key)
+		if strings.HasPrefix(value, "$") {
+			envVar := value[1:]
+			if envValue, present := os.LookupEnv(envVar); present {
+				dsViper.Set(key, envValue)
+			} else {
+				fmt.Printf("[ERROR] Environment variable %v not found\n", envVar)
+			}
+		}
+	}
+}
+
 func (app *WeStack) setupModel(loadedModel *model.StatefulModel, dataSource *datasource.Datasource) error {
 
 	loadedModel.App = app.asInterface()

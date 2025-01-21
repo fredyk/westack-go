@@ -323,10 +323,11 @@ func mountAccountModelFixedRoutes(loadedModel *model.StatefulModel, app *WeStack
 	})
 
 	// oauth2 client
+	clientID := app.Viper.GetString("oauth2.google.clientID")
 	googleOauthConfig := &oauth2.Config{
-		ClientID:     app.Viper.GetString("oauth2.google.clientID"),
+		ClientID:     clientID,
 		ClientSecret: app.Viper.GetString("oauth2.google.clientSecret"),
-		RedirectURL:  fmt.Sprintf("%s%s/oauth/google/callback", app.Viper.GetString("oauth2.publicOrigin"), loadedModel.BaseUrl),
+		RedirectURL:  fmt.Sprintf("%s%s/oauth/google/callback", app.Viper.GetString("publicOrigin"), loadedModel.BaseUrl),
 		Scopes:       []string{"https://www.googleapis.com/auth/userinfo.email"},
 		Endpoint:     google.Endpoint,
 	}
