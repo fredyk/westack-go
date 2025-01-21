@@ -84,6 +84,8 @@ func createCasbinModel(loadedModel *model.StatefulModel, app *WeStack, config *m
 	}
 
 	if config.Base == "Account" {
+		casbModel.AddPolicy("p", "p", []string{replaceVarNames("$everyone,*,googleLogin,allow")})
+		casbModel.AddPolicy("p", "p", []string{replaceVarNames("$everyone,*,googleLoginCallback,allow")})
 		casbModel.AddPolicy("p", "p", []string{replaceVarNames("$everyone,*,create,allow")})
 		casbModel.AddPolicy("p", "p", []string{replaceVarNames("$everyone,*,login,allow")})
 		casbModel.AddPolicy("p", "p", []string{replaceVarNames("$everyone,*,resetPassword,allow")})
@@ -266,7 +268,7 @@ func setupInternalModels(config *model.Config, app *WeStack, dataSource *datasou
 		Base:   "AccountCredentials",
 		Public: false,
 		Properties: map[string]model.Property{
-			"type": {
+			"provider": {
 				Type: "string",
 			},
 			"email": {
@@ -275,17 +277,17 @@ func setupInternalModels(config *model.Config, app *WeStack, dataSource *datasou
 			"password": {
 				Type: "string",
 			},
-			"access_token": {
+			"accessToken": {
 				Type: "string",
 			},
-			"refresh_token": {
+			"refreshToken": {
 				Type: "string",
 			},
 		},
 		Validations: []model.Validation{
 			{
 				If: map[string]model.Condition{
-					"type": {
+					"provider": {
 						Equals: "password",
 					},
 				},
@@ -315,16 +317,16 @@ func setupInternalModels(config *model.Config, app *WeStack, dataSource *datasou
 			},
 			{
 				If: map[string]model.Condition{
-					"type": {
+					"provider": {
 						Equals: "oauth",
 					},
 				},
 				Then: &model.Validation{
 					Properties: map[string]model.Validation{
-						"access_token": {
+						"accessToken": {
 							NotEmpty: true,
 						},
-						"refresh_token": {
+						"refreshToken": {
 							NotEmpty: true,
 						},
 					},

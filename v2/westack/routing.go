@@ -1,6 +1,7 @@
 package westack
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -12,9 +13,12 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/golang-jwt/jwt"
 	"go.mongodb.org/mongo-driver/bson/primitive"
+	"golang.org/x/oauth2"
+	"golang.org/x/oauth2/google"
 
 	wst "github.com/fredyk/westack-go/v2/common"
 	"github.com/fredyk/westack-go/v2/model"
+	"github.com/fredyk/westack-go/v2/utils"
 )
 
 func (app *WeStack) loadNotFoundRoutes() {
@@ -99,6 +103,16 @@ func (app *WeStack) loadModelsFixedRoutes() error {
 }
 
 func mountAccountModelFixedRoutes(loadedModel *model.StatefulModel, app *WeStack) {
+
+	systemContext := &model.EventContext{
+		Bearer: &model.BearerToken{
+			Account: &model.BearerAccount{
+				System: true,
+			},
+			Roles: []model.BearerRole{},
+		},
+	}
+
 	loadedModel.RemoteMethod(func(eventContext *model.EventContext) error {
 		return handleEvent(eventContext, loadedModel, string(wst.OperationNameLogin))
 	}, model.RemoteMethodOptions{
@@ -305,6 +319,229 @@ func mountAccountModelFixedRoutes(loadedModel *model.StatefulModel, app *WeStack
 		Http: model.RemoteMethodOptionsHttp{
 			Path: "/refresh-token",
 			Verb: "post",
+		},
+	})
+
+	// oauth2 client
+	googleOauthConfig := &oauth2.Config{
+		ClientID:     app.Viper.GetString("oauth2.google.clientID"),
+		ClientSecret: app.Viper.GetString("oauth2.google.clientSecret"),
+		RedirectURL:  fmt.Sprintf("%s%s/oauth/google/callback", app.Viper.GetString("oauth2.publicOrigin"), loadedModel.BaseUrl),
+		Scopes:       []string{"https://www.googleapis.com/auth/userinfo.email"},
+		Endpoint:     google.Endpoint,
+	}
+
+	// google login endpoint
+	loadedModel.RemoteMethod(func(eventContext *model.EventContext) error {
+
+		oauthStateString := wst.CreateOauthStateString()
+		cookie := ""
+		if eventContext.Ctx.Cookies("SSID") != "" {
+			cookie = eventContext.Ctx.Cookies("SSID")
+		} else {
+			cookie = wst.GenerateCookie()
+			eventContext.Ctx.Cookie(&fiber.Cookie{
+				Name:  "SSID",
+				Value: cookie,
+			})
+		}
+		utils.RegisterOauthState(cookie, oauthStateString)
+
+		url := googleOauthConfig.AuthCodeURL(oauthStateString, oauth2.AccessTypeOffline)
+		return eventContext.Ctx.Redirect(url)
+	}, model.RemoteMethodOptions{
+		Name:        string(wst.OperationNameGoogleLogin),
+		Description: "Logins with Google",
+		Http: model.RemoteMethodOptionsHttp{
+			Path: "/oauth/google",
+			Verb: "get",
+		},
+	})
+
+	// google callback endpoint
+	loadedModel.RemoteMethod(func(eventContext *model.EventContext) error {
+
+		cookie := eventContext.Ctx.Cookies("SSID")
+		oauthState, ok := utils.GetOauthState(cookie)
+		if !ok {
+			return wst.CreateError(fiber.ErrForbidden, "ERR_MISSING_OAUTH_STATE", fiber.Map{"message": "missing oauth state"}, "Error")
+		}
+
+		receivedState := eventContext.Query.GetString("state")
+		if oauthState != receivedState {
+			return wst.CreateError(fiber.ErrForbidden, "ERR_INVALID_OAUTH_STATE", fiber.Map{"message": "invalid oauth state"}, "Error")
+		}
+
+		oauthCode := eventContext.Query.GetString("code")
+		token, err := googleOauthConfig.Exchange(eventContext.Ctx.Context(), oauthCode)
+		if err != nil {
+			return wst.CreateError(fiber.ErrForbidden, "ERR_OAUTH_EXCHANGE", fiber.Map{"message": "oauth exchange failed: " + err.Error()}, "Error")
+		}
+
+		userInfo, err := googleOauthConfig.Client(eventContext.Ctx.Context(), token).Get("https://www.googleapis.com/oauth2/v3/userinfo")
+		if err != nil {
+			return wst.CreateError(fiber.ErrForbidden, "ERR_OAUTH_USERINFO", fiber.Map{"message": "failed to get user info: " + err.Error()}, "Error")
+		}
+
+		defer userInfo.Body.Close()
+
+		type userInfoResponse struct {
+			Email string `json:"email"`
+		}
+
+		var userInfoData userInfoResponse
+		err = json.NewDecoder(userInfo.Body).Decode(&userInfoData)
+		if err != nil {
+			return wst.CreateError(fiber.ErrForbidden, "ERR_OAUTH_USERINFO_DECODE", fiber.Map{"message": "failed to decode user info: " + err.Error()}, "Error")
+		}
+
+		// check if userCredentials exists
+		userCredentials, err := app.accountCredentialsModel.FindOne(&wst.Filter{
+			Where: &wst.Where{
+				"email":    userInfoData.Email,
+				"provider": ProviderGoogleOAuth2,
+			},
+			Include: &wst.Include{
+				{
+					Relation: "account",
+				},
+			},
+		}, systemContext)
+
+		if err != nil {
+			fmt.Printf("[DEBUG] Error while fetching credentials by email-provider: %v\n", err)
+			return err
+		}
+
+		var account *model.StatefulInstance
+		var accountId string
+
+		if userCredentials == nil {
+			// search by password
+			userCredentials, err = app.accountCredentialsModel.FindOne(&wst.Filter{
+				Where: &wst.Where{
+					"email": userInfoData.Email,
+					"$or": []wst.M{
+						{"provider": ProviderPassword},
+						{"password": wst.M{"$exists": true}},
+					},
+				},
+				Include: &wst.Include{
+					{
+						Relation: "account",
+					},
+				},
+			}, systemContext)
+
+			if err != nil {
+				fmt.Printf("[DEBUG] Error while fetching credentials by email-password: %v\n", err)
+				return err
+			}
+
+			if userCredentials == nil {
+
+				// create new account
+				fmt.Printf("[DEBUG] Creating new account for email: %v\n", userInfoData.Email)
+				createdAccount, err := loadedModel.Create(wst.M{
+					"email":         userInfoData.Email,
+					"emailVerified": true,
+					"provider":      ProviderGoogleOAuth2,
+				}, systemContext)
+
+				if err != nil {
+					fmt.Printf("[DEBUG] Error while creating account: %v\n", err)
+					return err
+				}
+
+				account = createdAccount.(*model.StatefulInstance)
+				accountId = account.GetString("id")
+
+			} else {
+
+				accountId = userCredentials.GetString("accountId")
+
+				account = userCredentials.GetOne("account").(*model.StatefulInstance)
+
+			}
+
+			// create new credentials
+			fmt.Printf("[DEBUG] Creating new credentials for email: %v\n", userInfoData.Email)
+			_, err = app.accountCredentialsModel.Create(wst.M{
+				"accountId":    accountId,
+				"email":        userInfoData.Email,
+				"provider":     ProviderGoogleOAuth2,
+				"accessToken":  token.AccessToken,
+				"refreshToken": token.RefreshToken,
+				"expiry":       token.Expiry,
+				"tokenType":    token.TokenType,
+				"scope":        token.Extra("scope"),
+			}, systemContext)
+
+			if err != nil {
+				fmt.Printf("[DEBUG] Error while creating credentials: %v\n", err)
+				return err
+			}
+
+		} else {
+			account = userCredentials.GetOne("account").(*model.StatefulInstance)
+
+			// update credentials
+			fmt.Printf("[DEBUG] Updating credentials for email: %v\n", userInfoData.Email)
+			_, err = userCredentials.UpdateAttributes(wst.M{
+				"accessToken": token.AccessToken,
+				"expiry":      token.Expiry,
+				"tokenType":   token.TokenType,
+				"scope":       token.Extra("scope"),
+			}, systemContext)
+
+			if err != nil {
+				fmt.Printf("[DEBUG] Error while updating credentials: %v\n", err)
+				return err
+			}
+
+		}
+
+		roleNames := []string{"USER"}
+
+		roleContext := &model.EventContext{
+			BaseContext:            systemContext,
+			DisableTypeConversions: true,
+		}
+
+		roleEntries, _ := app.roleMappingModel.FindMany(&wst.Filter{Where: &wst.Where{
+			"principalType": "USER",
+			"$or": []wst.M{
+				{
+					"principalId": accountId,
+				},
+				{
+					"principalId": account.Id,
+				},
+			},
+		}, Include: &wst.Include{{Relation: "role"}}}, roleContext).All()
+
+		for _, roleEntry := range roleEntries {
+			role := roleEntry.GetOne("role")
+			roleNames = append(roleNames, role.ToJSON()["name"].(string))
+		}
+
+		ttl := 30 * 86400.0
+		bearer := model.CreateBearer(eventContext.ModelID, float64(time.Now().Unix()), ttl, roleNames)
+		// sign the bearer
+		jwtToken := jwt.NewWithClaims(jwt.SigningMethodHS256, bearer.Claims)
+		tokenString, err := jwtToken.SignedString(loadedModel.App.JwtSecretKey)
+		if err != nil {
+			return err
+		}
+
+		return eventContext.Ctx.Redirect(app.Viper.GetString("oauth2.successRedirect") + "?access_token=" + tokenString)
+
+	}, model.RemoteMethodOptions{
+		Name:        string(wst.OperationNameGoogleLoginCallback),
+		Description: "Google OAuth2 callback",
+		Http: model.RemoteMethodOptionsHttp{
+			Path: "/oauth/google/callback",
+			Verb: "get",
 		},
 	})
 
