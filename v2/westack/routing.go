@@ -51,7 +51,7 @@ func (app *WeStack) loadModelsFixedRoutes() error {
 		e.EnableAutoSave(true)
 		e.AddFunction("isOwner", casbinOwnerFn(loadedModel))
 
-		err = addDefaultCasbinRoles(app, err, e)
+		err = addDefaultCasbinRoles(app, e)
 		if err != nil {
 			return err
 		}
@@ -708,7 +708,7 @@ func mountAppDynamicRoutes(loadedModel *model.StatefulModel, app *WeStack) {
 	})
 }
 
-func addDefaultCasbinRoles(app *WeStack, err error, e *casbin.Enforcer) error {
+func addDefaultCasbinRoles(app *WeStack, e *casbin.Enforcer) (err error) {
 	_, err = e.AddRoleForUser("findMany", replaceVarNames("read"))
 	if app.debug {
 		app.logger.Printf("[DEBUG] Added role findMany for user %v, err: %v\n", replaceVarNames("read"), err)
@@ -857,7 +857,7 @@ func (app *WeStack) loadModelsDynamicRoutes() {
 }
 
 func handleEvent(eventContext *model.EventContext, loadedModel *model.StatefulModel, event string) (err error) {
-	if loadedModel.DisabledHandlers[event] != true {
+	if !loadedModel.DisabledHandlers[event] {
 		err = loadedModel.GetHandler(event)(eventContext)
 		if err != nil {
 			return
@@ -896,7 +896,7 @@ func casbinOwnerFn(loadedModel *model.StatefulModel) func(arguments ...interface
 		policyObj := arguments[2]
 
 		if loadedModel.App.Debug {
-			log.Println(fmt.Sprintf("isOwner() of %v ?", policyObj))
+			fmt.Printf("isOwner() of %v ?", policyObj)
 		}
 
 		objId = strings.TrimSpace(objId)
