@@ -399,6 +399,8 @@ func (app *WeStack) setupModel(loadedModel *model.StatefulModel, dataSource *dat
 				email := data.GetString("email")
 				password := data.GetString("password")
 				provider := data.GetString("provider")
+				isPasswordProvider := provider == "" || provider == string(ProviderPassword)
+
 				if (strings.TrimSpace(username) == "") && (strings.TrimSpace(email) == "") {
 					return wst.CreateError(fiber.ErrBadRequest, "EMAIL_PRESENCE", fiber.Map{"message": "Either username or email is required", "codes": wst.M{"email": []string{"presence"}}}, "ValidationError")
 				}
@@ -418,7 +420,7 @@ func (app *WeStack) setupModel(loadedModel *model.StatefulModel, dataSource *dat
 					}
 				}
 
-				if strings.TrimSpace(email) != "" {
+				if strings.TrimSpace(email) != "" && isPasswordProvider {
 					filter := wst.Filter{Where: &wst.Where{
 						"email": email,
 						"$or": []wst.M{
@@ -435,7 +437,7 @@ func (app *WeStack) setupModel(loadedModel *model.StatefulModel, dataSource *dat
 					}
 				}
 
-				if provider == "" || provider == string(ProviderPassword) {
+				if isPasswordProvider {
 					if strings.TrimSpace(password) == "" {
 						return wst.CreateError(fiber.ErrBadRequest, "PASSWORD_BLANK", fiber.Map{"message": "Invalid password"}, "ValidationError")
 					} else if !wst.IsSecurePassword(password) {
