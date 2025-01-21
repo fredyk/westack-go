@@ -17,7 +17,7 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-var accountCredentialsProperties = []string{"email", "username", "password", "access_token", "refresh_token"}
+var accountCredentialsProperties = []string{"email", "username", "password", "accessToken", "refreshToken", "scope", "expiry", "tokenType", "provider"}
 
 func createCasbinModel(loadedModel *model.StatefulModel, app *WeStack, config *model.Config) error {
 	casbModel := casbinmodel.NewModel()

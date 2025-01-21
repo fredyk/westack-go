@@ -265,6 +265,20 @@ func (app *WeStack) loadDataSources() error {
 	return nil
 }
 
+func replaceEnvVars(dsViper *viper.Viper) {
+	for _, key := range dsViper.AllKeys() {
+		value := dsViper.GetString(key)
+		if strings.HasPrefix(value, "$") {
+			envVar := value[1:]
+			if envValue, present := os.LookupEnv(envVar); present {
+				dsViper.Set(key, envValue)
+			} else {
+				fmt.Printf("[ERROR] Environment variable %v not found\n", envVar)
+			}
+		}
+	}
+}
+
 func (app *WeStack) setupModel(loadedModel *model.StatefulModel, dataSource *datasource.Datasource) error {
 
 	loadedModel.App = app.asInterface()
@@ -385,6 +399,8 @@ func (app *WeStack) setupModel(loadedModel *model.StatefulModel, dataSource *dat
 				email := data.GetString("email")
 				password := data.GetString("password")
 				provider := data.GetString("provider")
+				isPasswordProvider := provider == "" || provider == string(ProviderPassword)
+
 				if (strings.TrimSpace(username) == "") && (strings.TrimSpace(email) == "") {
 					return wst.CreateError(fiber.ErrBadRequest, "EMAIL_PRESENCE", fiber.Map{"message": "Either username or email is required", "codes": wst.M{"email": []string{"presence"}}}, "ValidationError")
 				}
@@ -404,7 +420,7 @@ func (app *WeStack) setupModel(loadedModel *model.StatefulModel, dataSource *dat
 					}
 				}
 
-				if strings.TrimSpace(email) != "" {
+				if strings.TrimSpace(email) != "" && isPasswordProvider {
 					filter := wst.Filter{Where: &wst.Where{
 						"email": email,
 						"$or": []wst.M{
@@ -421,7 +437,7 @@ func (app *WeStack) setupModel(loadedModel *model.StatefulModel, dataSource *dat
 					}
 				}
 
-				if provider == string(ProviderPassword) {
+				if isPasswordProvider {
 					if strings.TrimSpace(password) == "" {
 						return wst.CreateError(fiber.ErrBadRequest, "PASSWORD_BLANK", fiber.Map{"message": "Invalid password"}, "ValidationError")
 					} else if !wst.IsSecurePassword(password) {
@@ -437,12 +453,8 @@ func (app *WeStack) setupModel(loadedModel *model.StatefulModel, dataSource *dat
 						return wst.CreateError(fiber.ErrBadRequest, "EMAIL_BLANK", fiber.Map{"message": "Invalid email"}, "ValidationError")
 					} else {
 						accessToken := data.GetString("accessToken")
-						refreshToken := data.GetString("refreshToken")
 						if strings.TrimSpace(accessToken) == "" {
 							return wst.CreateError(fiber.ErrBadRequest, "ACCESS_TOKEN_BLANK", fiber.Map{"message": "Invalid access token"}, "ValidationError")
-						}
-						if strings.TrimSpace(refreshToken) == "" {
-							return wst.CreateError(fiber.ErrBadRequest, "REFRESH_TOKEN_BLANK", fiber.Map{"message": "Invalid refresh token"}, "ValidationError")
 						}
 					}
 				} else {
@@ -482,6 +494,7 @@ func (app *WeStack) setupModel(loadedModel *model.StatefulModel, dataSource *dat
 						fmt.Printf("Create Account: ('%v', '%v')\n", (*data)["username"], (*data)["email"])
 					}
 				} else if provider == string(ProviderGoogleOAuth2) {
+					data.ClearProperties([]string{"provider"})
 					fmt.Printf("[WARNING] Pending provider validation for %v\n", provider)
 				} else {
 					return wst.CreateError(fiber.ErrBadRequest, "ACCOUNT_INVALID_PROVIDER", fiber.Map{"message": "Invalid provider"}, "ValidationError")

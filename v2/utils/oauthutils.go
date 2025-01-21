@@ -1,19 +1,23 @@
 package utils
 
-import "sync"
+import (
+	"crypto/sha256"
+	"encoding/hex"
+	"fmt"
 
-var lock = &sync.Mutex{}
-var oauthStatesByCookies = make(map[string]string)
+	"go.mongodb.org/mongo-driver/bson/primitive"
+)
 
-func RegisterOauthState(cookie, state string) {
-	lock.Lock()
-	defer lock.Unlock()
-	oauthStatesByCookies[cookie] = state
+func CreateOauthStateString(cookie string) string {
+	oauthState := primitive.NewObjectID().Hex()
+	hash := sha256.New()
+	hash.Write([]byte(oauthState + cookie))
+	return fmt.Sprintf("%s.%x", oauthState, hash.Sum(nil))
 }
 
-func GetOauthState(cookie string) (string, bool) {
-	lock.Lock()
-	defer lock.Unlock()
-	state, ok := oauthStatesByCookies[cookie]
-	return state, ok
+func VerifyOauthState(cookie, stateWithHash string) bool {
+	oauthState := stateWithHash[:24]
+	hash := sha256.New()
+	hash.Write([]byte(oauthState + cookie))
+	return stateWithHash[25:] == hex.EncodeToString(hash.Sum(nil))
 }
