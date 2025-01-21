@@ -1,6 +1,8 @@
 package wst
 
 import (
+	"crypto/rand"
+	"encoding/base64"
 	"fmt"
 	"log"
 	"os"
@@ -52,14 +54,16 @@ func (m *M) GetString(path string) string {
 	}
 	segments := strings.Split(path, ".")
 	if len(segments) == 1 {
-		v := (*m)[segments[0]]
-		if v == nil {
+		v, ok := (*m)[segments[0]]
+		if !ok || v == nil {
 			return ""
 		}
 		if vv, ok := v.(string); ok {
 			return vv
 		} else if vv, ok := v.(primitive.ObjectID); ok {
 			return vv.Hex()
+		} else {
+			return fmt.Sprintf("%v", v)
 		}
 	} else {
 		source := obtainSourceFromM(m, segments[:len(segments)-1])
@@ -522,6 +526,10 @@ const (
 	OperationNameCreateToken  OperationName = "createToken"
 
 	OperationNameUpsertRoles OperationName = "user_upsertRoles"
+
+	// oauth2
+	OperationNameGoogleLogin         OperationName = "googleLogin"
+	OperationNameGoogleLoginCallback OperationName = "googleLoginCallback"
 )
 
 var (
@@ -902,4 +910,18 @@ func IsSecurePassword(password string) bool {
 
 func CleanContentType(contentType string) string {
 	return strings.TrimSpace(strings.Split(contentType, ";")[0])
+}
+
+func CreateOauthStateString() string {
+	return primitive.NewObjectID().Hex()
+}
+
+func GenerateCookie() string {
+	// create a new random cookie
+	cookie := make([]byte, 32)
+	_, err := rand.Read(cookie)
+	if err != nil {
+		return ""
+	}
+	return base64.StdEncoding.EncodeToString(cookie)
 }

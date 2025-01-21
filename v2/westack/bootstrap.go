@@ -384,6 +384,7 @@ func (app *WeStack) setupModel(loadedModel *model.StatefulModel, dataSource *dat
 				username := data.GetString("username")
 				email := data.GetString("email")
 				password := data.GetString("password")
+				provider := data.GetString("provider")
 				if (strings.TrimSpace(username) == "") && (strings.TrimSpace(email) == "") {
 					return wst.CreateError(fiber.ErrBadRequest, "EMAIL_PRESENCE", fiber.Map{"message": "Either username or email is required", "codes": wst.M{"email": []string{"presence"}}}, "ValidationError")
 				}
@@ -404,7 +405,13 @@ func (app *WeStack) setupModel(loadedModel *model.StatefulModel, dataSource *dat
 				}
 
 				if strings.TrimSpace(email) != "" {
-					filter := wst.Filter{Where: &wst.Where{"email": email}}
+					filter := wst.Filter{Where: &wst.Where{
+						"email": email,
+						"$or": []wst.M{
+							{"provider": ProviderPassword},
+							{"password": wst.M{"$exists": true}},
+						},
+					}}
 					existent, err2 := loadedModel.FindOne(&filter, ctx)
 					if err2 != nil {
 						return err2
@@ -414,45 +421,70 @@ func (app *WeStack) setupModel(loadedModel *model.StatefulModel, dataSource *dat
 					}
 				}
 
-				if strings.TrimSpace(password) == "" {
-					return wst.CreateError(fiber.ErrBadRequest, "PASSWORD_BLANK", fiber.Map{"message": "Invalid password"}, "ValidationError")
-				} else if !wst.IsSecurePassword(password) {
-					return wst.CreateError(fiber.ErrBadRequest, "PASSWORD_INSECURE", fiber.Map{"message": "Password length must be at least 8 characters and contain at least one uppercase letter, one lowercase letter, one number and one special character"}, "ValidationError")
+				if provider == string(ProviderPassword) {
+					if strings.TrimSpace(password) == "" {
+						return wst.CreateError(fiber.ErrBadRequest, "PASSWORD_BLANK", fiber.Map{"message": "Invalid password"}, "ValidationError")
+					} else if !wst.IsSecurePassword(password) {
+						return wst.CreateError(fiber.ErrBadRequest, "PASSWORD_INSECURE", fiber.Map{"message": "Password length must be at least 8 characters and contain at least one uppercase letter, one lowercase letter, one number and one special character"}, "ValidationError")
+					}
+					hashed, err := bcrypt.GenerateFromPassword([]byte(fmt.Sprintf("%s%s", string(loadedModel.App.JwtSecretKey), password)), 11)
+					if err != nil {
+						return err
+					}
+					(*data)["password"] = string(hashed)
+				} else if provider == string(ProviderGoogleOAuth2) {
+					if strings.TrimSpace(email) == "" {
+						return wst.CreateError(fiber.ErrBadRequest, "EMAIL_BLANK", fiber.Map{"message": "Invalid email"}, "ValidationError")
+					} else {
+						accessToken := data.GetString("accessToken")
+						refreshToken := data.GetString("refreshToken")
+						if strings.TrimSpace(accessToken) == "" {
+							return wst.CreateError(fiber.ErrBadRequest, "ACCESS_TOKEN_BLANK", fiber.Map{"message": "Invalid access token"}, "ValidationError")
+						}
+						if strings.TrimSpace(refreshToken) == "" {
+							return wst.CreateError(fiber.ErrBadRequest, "REFRESH_TOKEN_BLANK", fiber.Map{"message": "Invalid refresh token"}, "ValidationError")
+						}
+					}
+				} else {
+					return wst.CreateError(fiber.ErrBadRequest, "CREDENTIALS_INVALID_PROVIDER", fiber.Map{"message": "Invalid provider"}, "ValidationError")
 				}
-				hashed, err := bcrypt.GenerateFromPassword([]byte(fmt.Sprintf("%s%s", string(loadedModel.App.JwtSecretKey), password)), 11)
-				if err != nil {
-					return err
-				}
-				(*data)["password"] = string(hashed)
 
 			}
 
 			if config.Base == "Account" {
 
-				plainCredentials := data.Pick(accountCredentialsProperties)
-				data.ClearProperties([]string{"password"})
+				provider := data.GetString("provider")
 
-				accountCredentials, err := app.accountCredentialsModel.Create(plainCredentials, &model.EventContext{
-					Bearer:      ctx.Bearer,
-					BaseContext: ctx,
-				})
-				if err != nil {
-					return err
-				}
+				if provider == "" || provider == string(ProviderPassword) {
+					plainCredentials := data.Pick(accountCredentialsProperties)
+					data.ClearProperties([]string{"password"})
 
-				ctx.QueueOperation("after save", func(nextCtx *model.EventContext) error {
-					updated, err := accountCredentials.UpdateAttributes(wst.M{"accountId": nextCtx.Instance.Id}, nextCtx)
+					accountCredentials, err := app.accountCredentialsModel.Create(plainCredentials, &model.EventContext{
+						Bearer:      ctx.Bearer,
+						BaseContext: ctx,
+					})
 					if err != nil {
 						return err
 					}
-					if app.debug {
-						fmt.Printf("Update AccountCredentials: ('%v', '%v')\n", updated.GetString("username"), updated.GetString("email"))
-					}
-					return nil
-				})
 
-				if app.debug {
-					fmt.Printf("Create Account: ('%v', '%v')\n", (*data)["username"], (*data)["email"])
+					ctx.QueueOperation("after save", func(nextCtx *model.EventContext) error {
+						updated, err := accountCredentials.UpdateAttributes(wst.M{"accountId": nextCtx.Instance.Id}, nextCtx)
+						if err != nil {
+							return err
+						}
+						if app.debug {
+							fmt.Printf("Update AccountCredentials: ('%v', '%v')\n", updated.GetString("username"), updated.GetString("email"))
+						}
+						return nil
+					})
+
+					if app.debug {
+						fmt.Printf("Create Account: ('%v', '%v')\n", (*data)["username"], (*data)["email"])
+					}
+				} else if provider == string(ProviderGoogleOAuth2) {
+					fmt.Printf("[WARNING] Pending provider validation for %v\n", provider)
+				} else {
+					return wst.CreateError(fiber.ErrBadRequest, "ACCOUNT_INVALID_PROVIDER", fiber.Map{"message": "Invalid provider"}, "ValidationError")
 				}
 			}
 
