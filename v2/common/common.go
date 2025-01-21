@@ -912,10 +912,6 @@ func CleanContentType(contentType string) string {
 	return strings.TrimSpace(strings.Split(contentType, ";")[0])
 }
 
-func CreateOauthStateString() string {
-	return primitive.NewObjectID().Hex()
-}
-
 func GenerateCookie() string {
 	// create a new random cookie
 	cookie := make([]byte, 32)
