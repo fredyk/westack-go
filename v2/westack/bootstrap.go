@@ -482,6 +482,7 @@ func (app *WeStack) setupModel(loadedModel *model.StatefulModel, dataSource *dat
 						fmt.Printf("Create Account: ('%v', '%v')\n", (*data)["username"], (*data)["email"])
 					}
 				} else if provider == string(ProviderGoogleOAuth2) {
+					data.ClearProperties([]string{"provider"})
 					fmt.Printf("[WARNING] Pending provider validation for %v\n", provider)
 				} else {
 					return wst.CreateError(fiber.ErrBadRequest, "ACCOUNT_INVALID_PROVIDER", fiber.Map{"message": "Invalid provider"}, "ValidationError")
