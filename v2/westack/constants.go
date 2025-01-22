@@ -4,5 +4,5 @@ type AuthProvider string
 
 var (
 	ProviderPassword     AuthProvider = "password"
-	ProviderGoogleOAuth2 AuthProvider = "google_oauth2"
+	ProviderOAuth2Prefix AuthProvider = "oauth2_"
 )

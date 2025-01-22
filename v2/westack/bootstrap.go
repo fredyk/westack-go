@@ -448,7 +448,7 @@ func (app *WeStack) setupModel(loadedModel *model.StatefulModel, dataSource *dat
 						return err
 					}
 					(*data)["password"] = string(hashed)
-				} else if provider == string(ProviderGoogleOAuth2) {
+				} else if strings.HasPrefix(provider, string(ProviderOAuth2Prefix)) {
 					if strings.TrimSpace(email) == "" {
 						return wst.CreateError(fiber.ErrBadRequest, "EMAIL_BLANK", fiber.Map{"message": "Invalid email"}, "ValidationError")
 					} else {
@@ -493,7 +493,7 @@ func (app *WeStack) setupModel(loadedModel *model.StatefulModel, dataSource *dat
 					if app.debug {
 						fmt.Printf("Create Account: ('%v', '%v')\n", (*data)["username"], (*data)["email"])
 					}
-				} else if provider == string(ProviderGoogleOAuth2) {
+				} else if strings.HasPrefix(provider, string(ProviderOAuth2Prefix)) {
 					data.ClearProperties([]string{"provider"})
 					fmt.Printf("[WARNING] Pending provider validation for %v\n", provider)
 				} else {

@@ -14,5 +14,12 @@
       "type": "hasMany",
       "model": "Note"
     }
+  },
+  "casbin": {
+    "policies": [
+      "$everyone,*,westackAuthorize,allow",
+      "$everyone,*,westackToken,allow",
+      "$everyone,*,westackUserInfo,allow"
+    ]
   }
 }
