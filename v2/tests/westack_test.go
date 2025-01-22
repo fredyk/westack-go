@@ -256,16 +256,7 @@ func init() {
 				model.NewRateLimit("rl-14-seconds", 10, 14*time.Second, false),
 			))
 
-		minioDomain := os.Getenv("MINIO_DOMAIN")
-		minioClient := uploads.MinioClient{
-			Bucket:    "wstuploadstest",
-			Endpoint:  fmt.Sprintf("%v:443", minioDomain),
-			AccessKey: os.Getenv("MINIO_ACCESS_KEY"),
-			SecretKey: os.Getenv("MINIO_SECRET_KEY"),
-			PublicUrl: fmt.Sprintf("https://%v", minioDomain),
-			Region:    "us-east-1",
-		}
-		model.BindRemoteOperationWithOptions(appModel, minioClient.UploadFile, model.RemoteOptions().
+		model.BindRemoteOperationWithOptions(appModel, getMinioClient().UploadFile, model.RemoteOptions().
 			WithName("upload").
 			WithPath("/upload").
 			WithContentType("multipart/form-data"))
@@ -313,6 +304,19 @@ func init() {
 		}
 	}()
 	time.Sleep(300 * time.Millisecond)
+}
+
+func getMinioClient() uploads.MinioClient {
+	minioDomain := os.Getenv("MINIO_DOMAIN")
+	minioClient := uploads.MinioClient{
+		Bucket:    "wstuploadstest",
+		Endpoint:  fmt.Sprintf("%v:443", minioDomain),
+		AccessKey: os.Getenv("MINIO_ACCESS_KEY"),
+		SecretKey: os.Getenv("MINIO_SECRET_KEY"),
+		PublicUrl: fmt.Sprintf("https://%v", minioDomain),
+		Region:    "us-east-1",
+	}
+	return minioClient
 }
 
 type mockLogger struct {
