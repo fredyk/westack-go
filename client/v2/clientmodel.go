@@ -15,7 +15,7 @@ type Model interface {
 	FindMany(filter *wst.Filter) ([]wst.M, error)
 	FindById(id string, filter *wst.Filter) (wst.M, error)
 	//FindOne(filter *wst.Filter) (*wst.M, error)
-	//Create(data wst.M) (*wst.M, error)
+	Create(data wst.M) (wst.M, error)
 	//UpdateById(id string, data wst.M) (*wst.M, error)
 	//DeleteById(id string) error
 }
@@ -60,6 +60,16 @@ func (m *modelImpl) FindById(id string, filter *wst.Filter) (wst.M, error) {
 	return wstfuncs.InvokeApiJsonM("GET", fullUrl, nil, wst.M{
 		"Authorization": fmt.Sprintf("Bearer %s", m.client.GetToken()),
 	})
+}
+
+func (m *modelImpl) Create(data wst.M) (wst.M, error) {
+	headers := wst.M{
+		"Content-Type": "application/json",
+	}
+	if m.client.GetToken() != "" {
+		headers["Authorization"] = fmt.Sprintf("Bearer %s", m.client.GetToken())
+	}
+	return wstfuncs.InvokeApiJsonM("POST", fmt.Sprintf("/%v", m.plural), data, headers)
 }
 
 func NewModel(config model.Config, client Client) Model {

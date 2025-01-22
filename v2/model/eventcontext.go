@@ -63,7 +63,7 @@ func (eventContext *EventContext) GetBearer(loadedModel *StatefulModel) (*Bearer
 	roles := make([]BearerRole, 0)
 	bearerClaims := jwt.MapClaims{}
 	rawToken := ""
-	if len(authBearerPair) == 2 {
+	if len(authBearerPair) == 2 && authBearerPair[1] != "" {
 
 		rawToken = authBearerPair[1]
 
