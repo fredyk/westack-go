@@ -22,7 +22,7 @@
         "clientSecret": "westack-client-secret",
         "authUrl": "http://localhost:8019/api/v1/accounts/oauth/westack-authorize",
         "tokenUrl": "http://localhost:8019/api/v1/accounts/oauth/westack-token",
-        "userInfoUrl": "http://localhost:8019/api/v1/accounts/oauth/westack-userinfo"
+        "userInfoUrl": "https://iot-cloud.fhcreations.com/api/v1/users/me"
       }
     },
     "successRedirect": "/dashboard/oauth/success",
