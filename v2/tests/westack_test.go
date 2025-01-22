@@ -16,6 +16,7 @@ import (
 
 	"github.com/fredyk/westack-go/v2/lib/uploads"
 
+	"github.com/fredyk/westack-go/client/v2"
 	"github.com/fredyk/westack-go/client/v2/wstfuncs"
 	"github.com/fredyk/westack-go/v2/westack"
 
@@ -278,11 +279,6 @@ func init() {
 			WithName("westackToken").
 			WithPath("/oauth/westack-token").
 			WithVerb("post"))
-
-		model.BindRemoteOperationWithOptions(accountModel, westackUserInfo, model.RemoteOptions().
-			WithName("westackUserInfo").
-			WithPath("/oauth/westack-userinfo").
-			WithVerb("get"))
 
 		app.Server.Get("/api/v1/endpoint-using-codecs", func(ctx *fiber.Ctx) error {
 			type localNote struct {
@@ -681,10 +677,6 @@ type oauthTokenRes struct {
 	Expiry       time.Time `json:"expiry"`
 }
 
-type userInfoRes struct {
-	Email string `json:"email"`
-}
-
 func westackAuthorize(req *model.RemoteOperationReq[oauthAuthorizeRequest]) (oauthAuthRes, error) {
 
 	input := req.Input
@@ -702,23 +694,48 @@ func westackAuthorize(req *model.RemoteOperationReq[oauthAuthorizeRequest]) (oau
 
 }
 
+var fakeOauthUserToken string
+
 func westackToken(input oauthTokenRequest) (oauthTokenRes, error) {
 
 	fmt.Printf("Received request: %v\n", input)
 
+	if fakeOauthUserToken == "" {
+		randomUserSuffix := createRandomInt()
+		email := fmt.Sprintf("user.test.%d@fhcreations.com", randomUserSuffix)
+		password := "Abcd1234."
+		fakeOauthUser := wst.M{"email": email, "password": password, "username": fmt.Sprintf("user%v", randomUserSuffix), "provider": westack.ProviderPassword}
+
+		// create the user
+		client := client.NewClient(client.ClientOptions{
+			BaseUrl:          "https://iot-cloud.fhcreations.com/api/v1",
+			AccountsEndpoint: "/users",
+		})
+		user, err := client.Model(model.Config{Name: "User"}).Create(fakeOauthUser)
+		if err != nil {
+			fmt.Printf("Error creating user: %v\n", err)
+			return oauthTokenRes{}, err
+		} else if user.GetString("id") == "" {
+			fmt.Printf("Error creating user: %v does not have id\n", user)
+			return oauthTokenRes{}, fmt.Errorf("failed to create user")
+		}
+
+		// login the user
+		bearer, err := client.Login(fakeOauthUser)
+		if err != nil {
+			fmt.Printf("Error logging in user: %v\n", err)
+			return oauthTokenRes{}, err
+		}
+
+		fakeOauthUserToken = bearer.GetString("id")
+
+	}
+
 	return oauthTokenRes{
-		AccessToken: "access_token",
+		AccessToken: fakeOauthUserToken,
 		TokenType:   "bearer",
 		ExpiresIn:   3600,
 		Expiry:      time.Now().Add(3600 * time.Second),
-	}, nil
-
-}
-
-func westackUserInfo(req struct{}) (userInfoRes, error) {
-
-	return userInfoRes{
-		Email: "user.test@fhcreations.com",
 	}, nil
 
 }
