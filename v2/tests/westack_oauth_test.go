@@ -11,13 +11,19 @@ import (
 
 func Test_OauthAuthorize(t *testing.T) {
 
-	t.Parallel()
+	// does not run in parallel because it internally modifies wstfuncs.baseUrl
+	// t.Parallel()
+
+	baseUrl := wstfuncs.GetBaseUrl()
 
 	t.Run("Test_OauthAuthorizeTwice", func(t *testing.T) {
 		// Run twice, to cover the case when the user was already created
-		doTestOauth(t)
-		doTestOauth(t)
+		t.Run("Test_OauthAuthorizeTwice_1", doTestOauth)
+		wstfuncs.SetBaseUrl(baseUrl)
+		t.Run("Test_OauthAuthorizeTwice_2", doTestOauth)
 	})
+
+	wstfuncs.SetBaseUrl(baseUrl)
 
 }
 
@@ -29,7 +35,9 @@ func doTestOauth(t *testing.T) {
 
 	defer res.Body.Close()
 
-	assert.Contains(t, res.Request.URL.String(), "/dashboard/oauth/success?access_token=")
+	urlString := res.Request.URL.String()
+	fmt.Printf("URL: %s\n", urlString)
+	assert.Contains(t, urlString, "/dashboard/oauth/success?access_token=")
 
 	var accessToken string
 	queryParams := res.Request.URL.Query()
