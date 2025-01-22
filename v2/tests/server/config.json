@@ -12,5 +12,20 @@
     }
   },
   "restApiRoot": "/api/v1",
-  "port": 8019
+  "port": 8019,
+  "publicOrigin": "http://localhost:8019",
+  "ttl": 7776000,
+  "oauth2": {
+    "providers": {
+      "westack": {
+        "clientID": "westack-client-id",
+        "clientSecret": "westack-client-secret",
+        "authUrl": "http://localhost:8019/api/v1/accounts/oauth/westack-authorize",
+        "tokenUrl": "http://localhost:8019/api/v1/accounts/oauth/westack-token",
+        "userInfoUrl": "http://localhost:8019/api/v1/accounts/oauth/westack-userinfo"
+      }
+    },
+    "successRedirect": "/dashboard/oauth/success",
+    "failureRedirect": "/dashboard/oauth/failure"
+  }
 }

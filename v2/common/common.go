@@ -528,8 +528,8 @@ const (
 	OperationNameUpsertRoles OperationName = "user_upsertRoles"
 
 	// oauth2
-	OperationNameGoogleLogin         OperationName = "googleLogin"
-	OperationNameGoogleLoginCallback OperationName = "googleLoginCallback"
+	OperationNameOauthLogin         OperationName = "%sLogin"
+	OperationNameOauthLoginCallback OperationName = "%sLoginCallback"
 )
 
 var (

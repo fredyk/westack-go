@@ -5,7 +5,6 @@ import (
 	"crypto/rand"
 	"encoding/json"
 	"fmt"
-	"github.com/fredyk/westack-go/v2/lib/uploads"
 	"io"
 	"log"
 	"math/big"
@@ -14,6 +13,8 @@ import (
 	"strconv"
 	"testing"
 	"time"
+
+	"github.com/fredyk/westack-go/v2/lib/uploads"
 
 	"github.com/fredyk/westack-go/client/v2/wstfuncs"
 	"github.com/fredyk/westack-go/v2/westack"
@@ -87,11 +88,11 @@ func init() {
 			return nil
 		})
 
-		userModel, err = app.FindModel("Account")
+		accountModel, err = app.FindModel("Account")
 		if err != nil {
 			log.Fatalf("failed to find model: %v", err)
 		}
-		userModel.Observe("before save", func(ctx *model.EventContext) error {
+		accountModel.Observe("before save", func(ctx *model.EventContext) error {
 			if !ctx.IsNewInstance && ctx.Data.GetString("testEphemeral") == "ephemeralAttribute1503" {
 				delete(*ctx.Data, "testEphemeral")
 				ctx.BaseContext.UpdateEphemeral(&wst.M{
@@ -101,7 +102,7 @@ func init() {
 			return nil
 		})
 
-		userModel.On("sendResetPasswordEmail", func(ctx *model.EventContext) error {
+		accountModel.On("sendResetPasswordEmail", func(ctx *model.EventContext) error {
 			fmt.Println("sending reset password email")
 			ctx.Result = wst.M{
 				"result":  "OK",
@@ -110,7 +111,7 @@ func init() {
 			return nil
 		})
 
-		userModel.On("sendVerificationEmail", func(ctx *model.EventContext) error {
+		accountModel.On("sendVerificationEmail", func(ctx *model.EventContext) error {
 			fmt.Println("sending verify email")
 			// This bearer would be sent in the email in a real case, because it contains
 			// a special claim that allows the user to verify the email
@@ -123,7 +124,7 @@ func init() {
 			return nil
 		})
 
-		userModel.On("performEmailVerification", func(ctx *model.EventContext) error {
+		accountModel.On("performEmailVerification", func(ctx *model.EventContext) error {
 			fmt.Println("performing email verification")
 			ctx.Result = wst.M{
 				"result":  "OK",
@@ -267,6 +268,21 @@ func init() {
 			WithName("upload").
 			WithPath("/upload").
 			WithContentType("multipart/form-data"))
+
+		model.BindRemoteOperationWithContext(accountModel, westackAuthorize, model.RemoteOptions().
+			WithName("westackAuthorize").
+			WithPath("/oauth/westack-authorize").
+			WithVerb("get"))
+
+		model.BindRemoteOperationWithOptions(accountModel, westackToken, model.RemoteOptions().
+			WithName("westackToken").
+			WithPath("/oauth/westack-token").
+			WithVerb("post"))
+
+		model.BindRemoteOperationWithOptions(accountModel, westackUserInfo, model.RemoteOptions().
+			WithName("westackUserInfo").
+			WithPath("/oauth/westack-userinfo").
+			WithVerb("get"))
 
 		app.Server.Get("/api/v1/endpoint-using-codecs", func(ctx *fiber.Ctx) error {
 			type localNote struct {
@@ -636,5 +652,73 @@ func Test_GetWeStackLoggerPrefix(t *testing.T) {
 	logger := app.Logger()
 	logger.SetPrefix("test")
 	assert.Equal(t, "test", logger.Prefix())
+
+}
+
+type oauthAuthorizeRequest struct {
+	AccessType   string `json:"access_type" query:"access_type"`
+	ClientId     string `json:"client_id" query:"client_id"`
+	RedirectUri  string `json:"redirect_uri" query:"redirect_uri"`
+	ResponseType string `json:"response_type" query:"response_type"`
+	State        string `json:"state" query:"state"`
+}
+
+type oauthTokenRequest struct {
+	GrantType    string `json:"grant_type" query:"grant_type"`
+	Code         string `json:"code" query:"code"`
+	RedirectUri  string `json:"redirect_uri" query:"redirect_uri"`
+	ClientId     string `json:"client_id" query:"client_id"`
+	ClientSecret string `json:"client_secret" query:"client_secret"`
+}
+
+type oauthAuthRes struct{}
+
+type oauthTokenRes struct {
+	AccessToken  string    `json:"access_token"`
+	TokenType    string    `json:"token_type"`
+	ExpiresIn    int       `json:"expires_in"`
+	RefreshToken string    `json:"refresh_token"`
+	Expiry       time.Time `json:"expiry"`
+}
+
+type userInfoRes struct {
+	Email string `json:"email"`
+}
+
+func westackAuthorize(req *model.RemoteOperationReq[oauthAuthorizeRequest]) (oauthAuthRes, error) {
+
+	input := req.Input
+
+	fmt.Printf("Received request: %v\n", input)
+
+	code := 1234
+	state := input.State
+
+	url := fmt.Sprintf("%v?code=%v&state=%v", input.RedirectUri, code, state)
+
+	fmt.Printf("Redirecting to %v\n", url)
+
+	return oauthAuthRes{}, req.Ctx.Ctx.Redirect(url)
+
+}
+
+func westackToken(input oauthTokenRequest) (oauthTokenRes, error) {
+
+	fmt.Printf("Received request: %v\n", input)
+
+	return oauthTokenRes{
+		AccessToken: "access_token",
+		TokenType:   "bearer",
+		ExpiresIn:   3600,
+		Expiry:      time.Now().Add(3600 * time.Second),
+	}, nil
+
+}
+
+func westackUserInfo(req struct{}) (userInfoRes, error) {
+
+	return userInfoRes{
+		Email: "user.test@fhcreations.com",
+	}, nil
 
 }

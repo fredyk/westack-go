@@ -105,7 +105,7 @@ func Test_ExtractLookups(t *testing.T) {
 	assert.Equal(t, true, lookups.GetM("[1].$unwind").GetBoolean("preserveNullAndEmptyArrays"))
 
 	// test include hasMany
-	lookups, err = userModel.ExtractLookupsFromFilter(&wst.Filter{
+	lookups, err = accountModel.ExtractLookupsFromFilter(&wst.Filter{
 		Include: &wst.Include{{Relation: "notes"}},
 	}, false)
 	assert.NoError(t, err)
@@ -374,7 +374,7 @@ func Test_AggregationsLimitAfterLookups(t *testing.T) {
 
 	t.Parallel()
 
-	firstUser, err := userModel.FindOne(nil, systemContext)
+	firstUser, err := accountModel.FindOne(nil, systemContext)
 	assert.NoError(t, err)
 	assert.NotNil(t, firstUser)
 
@@ -424,7 +424,7 @@ func Test_AggregationsLimitBeforeLookups(t *testing.T) {
 
 	t.Parallel()
 
-	firstUser, err := userModel.FindOne(nil, systemContext)
+	firstUser, err := accountModel.FindOne(nil, systemContext)
 	assert.NoError(t, err)
 	assert.NotNil(t, firstUser)
 

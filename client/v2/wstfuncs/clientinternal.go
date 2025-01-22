@@ -5,14 +5,21 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
+	"net/http/cookiejar"
 	"strings"
 	"time"
 
 	wst "github.com/fredyk/westack-go/v2/common"
+	"golang.org/x/net/publicsuffix"
 )
 
 var baseUrl string
+
+type RequestOptions struct {
+	FollowRedirects bool
+}
 
 func SetBaseUrl(url string) {
 	baseUrl = url
@@ -30,7 +37,7 @@ func InvokeApiJsonA(method string, url string, body wst.M, headers wst.M) (wst.A
 	return InvokeApiTyped[wst.A](method, url, body, headers)
 }
 
-func InvokeApiFullResponse(method string, url string, body wst.M, headers wst.M) (*http.Response, error) {
+func InvokeApiFullResponse(method string, url string, body wst.M, headers wst.M, options ...RequestOptions) (*http.Response, error) {
 	bodyReader, err := jsonToReaderOnlyIfNeeded(method, body)
 	if err != nil {
 		return nil, err
@@ -42,13 +49,32 @@ func InvokeApiFullResponse(method string, url string, body wst.M, headers wst.M)
 	for k, v := range headers {
 		req.Header.Add(k, v.(string))
 	}
+
+	// All users of cookiejar should import "golang.org/x/net/publicsuffix"
+	jar, err := cookiejar.New(&cookiejar.Options{PublicSuffixList: publicsuffix.List})
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	//resp, err := app.Server.Test(req, 600000)
 	client := &http.Client{
 		Timeout: 45 * time.Second,
+		Jar:     jar,
 	}
+
+	followRedirects := false
+	if len(options) > 0 {
+		followRedirects = options[0].FollowRedirects
+	}
+
 	client.CheckRedirect = func(req *http.Request, via []*http.Request) error {
-		return http.ErrUseLastResponse
+		if !followRedirects {
+			return http.ErrUseLastResponse
+		} else {
+			return nil
+		}
 	}
+
 	return client.Do(req)
 }
 

@@ -29,7 +29,7 @@ func BindRemoteOperationWithContext[T any, R any](loadedModel *StatefulModel, ha
 
 	path := options.Path
 	description := options.Description
-	verb := "post"
+	verb := options.Verb
 
 	fmt.Printf("[INFO] Binding remote operation %s at %s %s%s\n", options.Name, strings.ToUpper(verb), loadedModel.BaseUrl, path)
 
@@ -38,7 +38,25 @@ func BindRemoteOperationWithContext[T any, R any](loadedModel *StatefulModel, ha
 		loadedModel.App.Logger().Fatalf("Error adding role '%v' for user '%v': %v", options.Name, "*", err)
 	}
 
-	toInvoke := (*loadedModel.Router).Post
+	var toInvoke func(string, ...fiber.Handler) fiber.Router
+
+	router := *loadedModel.Router
+	switch verb {
+	case "get":
+		toInvoke = router.Get
+	case "options":
+		toInvoke = router.Options
+	case "head":
+		toInvoke = router.Head
+	case "post":
+		toInvoke = router.Post
+	case "put":
+		toInvoke = router.Put
+	case "patch":
+		toInvoke = router.Patch
+	case "delete":
+		toInvoke = router.Delete
+	}
 	operation := ""
 
 	fullPath := loadedModel.BaseUrl + "/" + path
@@ -109,9 +127,17 @@ func BindRemoteOperationWithContext[T any, R any](loadedModel *StatefulModel, ha
 		}
 
 		pointerToInput := &req.Input
-		err := ctx.Ctx.BodyParser(pointerToInput)
-		if err != nil {
-			return ctx.Ctx.Status(fiber.StatusBadRequest).SendString(err.Error())
+
+		if verb == "get" {
+			err := ctx.Ctx.QueryParser(pointerToInput)
+			if err != nil {
+				return ctx.Ctx.Status(fiber.StatusBadRequest).SendString(err.Error())
+			}
+		} else {
+			err := ctx.Ctx.BodyParser(pointerToInput)
+			if err != nil {
+				return ctx.Ctx.Status(fiber.StatusBadRequest).SendString(err.Error())
+			}
 		}
 
 		if options.ContentType == fiber.MIMEMultipartForm {
@@ -144,6 +170,10 @@ func BindRemoteOperationWithContext[T any, R any](loadedModel *StatefulModel, ha
 		}
 
 		ctx.Result = result
+
+		if ctx.Ctx.Response().StatusCode() != 0 {
+			ctx.StatusCode = ctx.Ctx.Response().StatusCode()
+		}
 
 		return nil
 	}
@@ -188,6 +218,9 @@ func BindRemoteOperationWithOptions[T any, R any](loadedModel *StatefulModel, ha
 	if options.ContentType == "" {
 		options.ContentType = fiber.MIMEApplicationJSON
 	}
+	if options.Verb == "" {
+		options.Verb = "post"
+	}
 	return BindRemoteOperationWithContext[T, R](loadedModel, func(req *RemoteOperationReq[T]) (R, error) {
 		return handler(req.Input)
 	}, options)
@@ -216,6 +249,11 @@ func (options *RemoteOperationOptions) WithName(name string) *RemoteOperationOpt
 
 func (options *RemoteOperationOptions) WithPath(path string) *RemoteOperationOptions {
 	options.Path = path
+	return options
+}
+
+func (options *RemoteOperationOptions) WithVerb(verb string) *RemoteOperationOptions {
+	options.Verb = verb
 	return options
 }
 

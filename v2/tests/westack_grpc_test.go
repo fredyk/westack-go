@@ -40,7 +40,7 @@ var server *westack.WeStack
 var userId primitive.ObjectID
 var noteId primitive.ObjectID
 var noteModel *model.StatefulModel
-var userModel *model.StatefulModel
+var accountModel *model.StatefulModel
 var customerModel *model.StatefulModel
 var orderModel *model.StatefulModel
 var storeModel *model.StatefulModel
@@ -827,7 +827,7 @@ func revertAllTests() error {
 	}
 	for _, modelToPurge := range []*model.StatefulModel{
 		noteModel,
-		userModel,
+		accountModel,
 		customerModel,
 		orderModel,
 		storeModel,

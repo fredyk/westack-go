@@ -886,6 +886,7 @@ type RemoteOperationOptions struct {
 	Name              string
 	Description       string
 	Path              string
+	Verb              string
 	RateLimits        []*RateLimit
 	ContentType       string
 	StrictContentType bool
