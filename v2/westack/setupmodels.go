@@ -52,7 +52,7 @@ func createCasbinModel(loadedModel *model.StatefulModel, app *WeStack, config *m
 	policyDefinition := "sub, obj, act, eft"
 	roleDefinition := "_, _"
 	policyEffect := "subjectPriority(p.eft) || deny"
-	matchersDefinition := fmt.Sprintf("(	((p.sub == '$owner' && isOwner(r.sub, r.obj, p.obj)) || g(r.sub, p.sub)) && keyMatch(r.obj, p.obj) && (g(r.act, p.act) || keyMatch(r.act, p.act))  )")
+	matchersDefinition := "(	((HasPrefix(p.sub, '_OWNER') && r.sub != '_EVERYONE_' && isOwner(r.sub, r.obj, p.sub, p.obj, p.act)) || g(r.sub, p.sub)) && keyMatch(r.obj, p.obj) && (g(r.act, p.act) || keyMatch(r.act, p.act))  )"
 	if loadedModel.Config.Casbin.RequestDefinition != "" {
 		requestDefinition = loadedModel.Config.Casbin.RequestDefinition
 	}
@@ -98,6 +98,7 @@ func createCasbinModel(loadedModel *model.StatefulModel, app *WeStack, config *m
 		// TODO: check https://github.com/fredyk/westack-go/issues/447
 		casbModel.AddPolicy("p", "p", []string{replaceVarNames("$owner,*,instance_delete,allow")})
 		casbModel.AddPolicy("p", "p", []string{replaceVarNames("admin,*,user_upsertRoles,allow")})
+		casbModel.AddPolicy("p", "p", []string{replaceVarNames("$owner,*,user_enableMfa,allow")})
 	}
 	if config.Base == "App" {
 		casbModel.AddPolicy("p", "p", []string{replaceVarNames("admin,*,create,allow")})
@@ -182,6 +183,7 @@ func setupAccountModel(loadedModel *model.StatefulModel, app *WeStack) {
 		data := ctx.Data
 		email := data.GetString("email")
 		username := data.GetString("username")
+		mfaVerificationCode := data.GetString("verificationCode")
 
 		if email == "" && username == "" {
 			return wst.CreateError(fiber.ErrBadRequest, "USERNAME_EMAIL_REQUIRED", fiber.Map{"message": "username or email is required"}, "ValidationError")
@@ -244,7 +246,28 @@ func setupAccountModel(loadedModel *model.StatefulModel, app *WeStack) {
 
 		userIdHex := fullAccount.Id.(primitive.ObjectID).Hex()
 
+		mfaEnabled, err := model.HasMfaEnabled(app.mfaModel, userIdHex)
+		if err != nil {
+			return wst.CreateError(fiber.ErrInternalServerError, "MFA_INTERNAL_ERROR", fiber.Map{"message": "MFA internal error"}, "Error")
+		}
+
+		if mfaEnabled {
+			if mfaVerificationCode == "" {
+				return wst.CreateError(fiber.ErrUnauthorized, "MFA_REQUIRED", fiber.Map{"message": "MFA verification code required"}, "Error")
+			}
+			ok, err := model.LoginVerifyMfa(app.mfaModel, userIdHex, mfaVerificationCode)
+			if err != nil {
+				return wst.CreateError(fiber.ErrBadRequest, "MFA_ERROR", fiber.Map{"message": "MFA error"}, "Error")
+			}
+			if !ok {
+				return wst.CreateError(fiber.ErrUnauthorized, "MFA_FAILED", fiber.Map{"message": "MFA failed"}, "Error")
+			}
+		}
+
 		roleNames := []string{"USER"}
+		if mfaEnabled {
+			roleNames = append(roleNames, "USER:mfa")
+		}
 		if app.roleMappingModel != nil {
 			ctx.Bearer = &model.BearerToken{
 				Account: &model.BearerAccount{
@@ -350,6 +373,9 @@ func setupInternalModels(config *model.Config, app *WeStack, dataSource *datasou
 			"refreshToken": {
 				Type: "string",
 			},
+			"mfaEnabled": {
+				Type: "boolean",
+			},
 		},
 		Validations: []model.Validation{
 			{
@@ -415,9 +441,50 @@ func setupInternalModels(config *model.Config, app *WeStack, dataSource *datasou
 		},
 	}, app.modelRegistry)
 	accountCredentialsModel.(*model.StatefulModel).App = app.asInterface()
-	accountCredentialsModel.(*model.StatefulModel).Datasource = dataSource
 
 	app.accountCredentialsModel = accountCredentialsModel.(*model.StatefulModel)
+
+	// Mfa model
+	mfaModel := model.New(&model.Config{
+		Name:   "Mfa",
+		Plural: "mfas",
+		Base:   "Mfa",
+		Public: false,
+		Properties: map[string]model.Property{
+			"provider": {
+				Type:    "string",
+				Default: "totp",
+			},
+			"status": {
+				Type:     "string",
+				Required: true,
+			},
+			"secretKey": {
+				Type:     "string",
+				Required: true,
+			},
+			"backupCodes": {
+				Type:     "string",
+				Required: true,
+			},
+		},
+		Relations: &map[string]*model.Relation{
+			"account": {
+				Type:       "belongsTo",
+				Model:      "Account",
+				ForeignKey: &foreignKey,
+			},
+		},
+		Casbin: model.CasbinConfig{
+			Policies: []string{
+				"$owner,*,__get__account,allow",
+			},
+		},
+	}, app.modelRegistry)
+	mfaModel.(*model.StatefulModel).App = app.asInterface()
+
+	app.mfaModel = mfaModel.(*model.StatefulModel)
+
 }
 
 func GetRoleNames(RoleMappingModel *model.StatefulModel, userIdHex string, userId primitive.ObjectID) ([]string, error) {

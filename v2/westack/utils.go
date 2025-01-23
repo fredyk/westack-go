@@ -150,7 +150,7 @@ func SendInternalError(ctx *fiber.Ctx, err error) error {
 }
 
 func replaceVarNames(definition string) string {
-	return regexp.MustCompile("\\$(\\w+)").ReplaceAllStringFunc(definition, func(match string) string {
+	return regexp.MustCompile(`\$([\w:]+)`).ReplaceAllStringFunc(definition, func(match string) string {
 		return "_" + strings.ToUpper(match[1:]) + "_"
 	})
 }

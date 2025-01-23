@@ -2,11 +2,12 @@ package model
 
 import (
 	"fmt"
-	"go.mongodb.org/mongo-driver/bson/primitive"
 	"log"
 	"strings"
 	"sync"
 	"time"
+
+	"go.mongodb.org/mongo-driver/bson/primitive"
 
 	"github.com/gofiber/fiber/v2"
 )
@@ -79,6 +80,14 @@ func (loadedModel *StatefulModel) EnforceEx(token *BearerToken, objId string, ac
 		defer AuthMutex.Unlock()
 		locked = true
 
+		hasMfa := false
+		for _, r := range token.Roles {
+			if r.Name == "USER:mfa" {
+				hasMfa = true
+				break
+			}
+		}
+
 		_, err := loadedModel.Enforcer.AddRoleForUser(bearerAccountIdSt, "_EVERYONE_")
 		if err != nil {
 			return err, false
@@ -87,10 +96,34 @@ func (loadedModel *StatefulModel) EnforceEx(token *BearerToken, objId string, ac
 		if err != nil {
 			return err, false
 		}
+		if hasMfa {
+			_, err = loadedModel.Enforcer.AddRoleForUser(bearerAccountIdSt, "_AUTHENTICATED:MFA_")
+			if err != nil {
+				return err, false
+			}
+		} else {
+			_, err = loadedModel.Enforcer.AddRoleForUser(bearerAccountIdSt, "_AUTHENTICATED:NOT:MFA_")
+			if err != nil {
+				return err, false
+			}
+		}
 		for _, r := range token.Roles {
 			_, err := loadedModel.Enforcer.AddRoleForUser(bearerAccountIdSt, r.Name)
 			if err != nil {
 				return err, false
+			}
+			if r.Name != "USER:mfa" {
+				if hasMfa {
+					_, err := loadedModel.Enforcer.AddRoleForUser(bearerAccountIdSt, r.Name+":mfa")
+					if err != nil {
+						return err, false
+					}
+				} else {
+					_, err := loadedModel.Enforcer.AddRoleForUser(bearerAccountIdSt, r.Name+":not:mfa")
+					if err != nil {
+						return err, false
+					}
+				}
 			}
 		}
 		err = loadedModel.Enforcer.SavePolicy()

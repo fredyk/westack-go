@@ -46,6 +46,7 @@ type WeStack struct {
 	restApiRoot                    string
 	roleMappingModel               *model.StatefulModel
 	accountCredentialsModel        *model.StatefulModel
+	mfaModel                       *model.StatefulModel
 	dataSourceOptions              *map[string]*datasource.Options
 	init                           time.Time
 	jwtSecretKey                   []byte
