@@ -523,9 +523,11 @@ const (
 	OperationNameFindSelf     OperationName = "findSelf"
 	OperationNameLogin        OperationName = "login"
 	OperationNameRefreshToken OperationName = "refreshToken"
-	OperationNameCreateToken  OperationName = "createToken"
+
+	OperationNameCreateToken OperationName = "createToken"
 
 	OperationNameUpsertRoles OperationName = "user_upsertRoles"
+	OperationNameEnableMfa   OperationName = "user_enableMfa"
 
 	// oauth2
 	OperationNameOauthLogin         OperationName = "%sLogin"

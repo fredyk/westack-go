@@ -28,6 +28,10 @@ type UpserRequestBody struct {
 	Roles []string `json:"roles"`
 }
 
+type GenericOperationResponse struct {
+	Result string `json:"result"` // OK or ERROR
+}
+
 var ValidEmailRegex = regexp.MustCompile(`^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$`)
 
 func isAllowedForProtectedFields(bearer *model.BearerToken) bool {
@@ -122,7 +126,12 @@ func (app *WeStack) loadModels() error {
 		}
 	}
 	(*app.accountCredentialsModel.Config.Relations)["account"].Model = someAccountModel.Name
-	err = app.setupModel(app.accountCredentialsModel, app.accountCredentialsModel.Datasource)
+	err = app.setupModel(app.accountCredentialsModel, someAccountModel.Datasource)
+	if err != nil {
+		return err
+	}
+	(*app.mfaModel.Config.Relations)["account"].Model = someAccountModel.Name
+	err = app.setupModel(app.mfaModel, someAccountModel.Datasource)
 	if err != nil {
 		return err
 	}

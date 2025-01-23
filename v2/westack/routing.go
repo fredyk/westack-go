@@ -46,6 +46,9 @@ func (app *WeStack) loadModelsFixedRoutes() error {
 
 		e.EnableAutoSave(true)
 		e.AddFunction("isOwner", casbinOwnerFn(loadedModel))
+		e.AddFunction("HasPrefix", func(arguments ...interface{}) (interface{}, error) {
+			return strings.HasPrefix(arguments[0].(string), arguments[1].(string)), nil
+		})
 
 		err = addDefaultCasbinRoles(app, e)
 		if err != nil {
@@ -602,6 +605,21 @@ func (app *WeStack) loadModelsDynamicRoutes() {
 					Verb: "put",
 				},
 			})
+
+			model.BindRemoteOperationWithContext(loadedModel, func(eventContext *model.RemoteOperationReq[model.EnableMfaBody]) (model.EnableMfaResponse, error) {
+				id, err := primitive.ObjectIDFromHex(eventContext.Ctx.Ctx.Params("id"))
+				if err != nil {
+					return model.EnableMfaResponse{}, err
+				}
+				eventContext.Ctx.ModelID = &id
+
+				return model.EnableMfa(app.mfaModel, eventContext.Ctx, eventContext.Input)
+
+			}, model.RemoteOptions().
+				WithName(string(wst.OperationNameEnableMfa)).
+				WithPath("/:id/enable-mfa").
+				WithVerb("post"))
+
 		}
 	}
 }
@@ -630,23 +648,60 @@ func casbinOwnerFn(loadedModel *model.StatefulModel) func(arguments ...interface
 		rawToken := arguments[0].(string)
 		objId := arguments[1].(string)
 
+		policySubj := arguments[2].(string)
+		policyObj := arguments[3].(string)
+		action := arguments[4].(string)
+
+		requiresMfa := policySubj == "_OWNER:MFA_"
+		requiresExplicitNotMfa := policySubj == "_OWNER:NOT:MFA_"
+
+		if rawToken == "" {
+			return false, nil
+		}
+
 		// Decode the token
 		token, err := jwt.Parse(rawToken, func(token *jwt.Token) (interface{}, error) {
 			return loadedModel.App.JwtSecretKey, nil
 		})
 		if err != nil {
-			return false, err
+			return false, fmt.Errorf("could not parse token '%v': %w", rawToken, err)
 		}
+		var hasMfa *bool
 		if claims, ok := token.Claims.(jwt.MapClaims); ok && token.Valid {
 			subId = claims["accountId"].(string)
+			if requiresMfa || requiresExplicitNotMfa {
+				for _, role := range claims["roles"].([]interface{}) {
+					if role == "USER:mfa" {
+						t := true
+						hasMfa = &t
+						break
+					}
+				}
+				if hasMfa == nil {
+					f := false
+					hasMfa = &f
+				}
+			}
 		} else {
 			return false, errors.New("invalid token")
 		}
 
-		policyObj := arguments[2]
+		if loadedModel.App.Debug {
+			fmt.Printf("Checking %v,%v,%v for %v (hasMfa=%v)\n", policySubj, policyObj, action, subId, hasMfa != nil && *hasMfa)
+		}
+
+		if requiresMfa && !*hasMfa {
+			fmt.Printf("[DEBUG] MFA required for %v,%v\n", policyObj, action)
+			return false, nil
+		}
+
+		if requiresExplicitNotMfa && *hasMfa {
+			fmt.Printf("[DEBUG] MFA not allowed for %v,%v\n", policyObj, action)
+			return false, nil
+		}
 
 		if loadedModel.App.Debug {
-			fmt.Printf("isOwner() of %v ?", policyObj)
+			fmt.Printf("isOwner(%v) of %v ?\n", subId, policyObj)
 		}
 
 		objId = strings.TrimSpace(objId)
