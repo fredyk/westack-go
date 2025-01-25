@@ -139,6 +139,7 @@ type Options struct {
 	DatasourceOptions *map[string]*datasource.Options
 	EnableCompression bool
 	CompressionConfig compress.Config
+	BodyLimit         int
 
 	debug             bool
 	adminUsername     string
@@ -151,19 +152,25 @@ func New(options ...Options) *WeStack {
 
 	var logger wst.ILogger
 
-	server := fiber.New(fiber.Config{
-		JSONEncoder:           json.Marshal,
-		JSONDecoder:           json.Unmarshal,
-		DisableStartupMessage: true,
-	})
-
-	modelRegistry := make(map[string]*model.StatefulModel)
-	datasources := make(map[string]*datasource.Datasource)
+	var bodyLimit int = 4 * 1024 * 1024
 
 	var finalOptions Options
 	if len(options) > 0 {
 		finalOptions = options[0]
+		if finalOptions.BodyLimit > 0 {
+			bodyLimit = finalOptions.BodyLimit
+		}
 	}
+
+	server := fiber.New(fiber.Config{
+		JSONEncoder:           json.Marshal,
+		JSONDecoder:           json.Unmarshal,
+		DisableStartupMessage: true,
+		BodyLimit:             bodyLimit,
+	})
+
+	modelRegistry := make(map[string]*model.StatefulModel)
+	datasources := make(map[string]*datasource.Datasource)
 
 	if finalOptions.Logger != nil {
 		logger = finalOptions.Logger
