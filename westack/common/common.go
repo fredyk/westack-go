@@ -2,7 +2,6 @@ package wst
 
 import (
 	"fmt"
-	"go.mongodb.org/mongo-driver/bson/bsonrw"
 	"log"
 	"os"
 	"reflect"
@@ -10,6 +9,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"go.mongodb.org/mongo-driver/bson/bsonrw"
 
 	"github.com/mailru/easyjson/jlexer"
 
@@ -226,6 +227,12 @@ func asInt(v interface{}) int {
 		return int(v)
 	case float64:
 		return int(v)
+	case string:
+		i, err := strconv.Atoi(v)
+		if err != nil {
+			return 0
+		}
+		return i
 	}
 	return 0
 }
