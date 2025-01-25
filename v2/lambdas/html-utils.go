@@ -23,6 +23,10 @@ func convertHttpPathToFileLocation(basePath string, path string) string {
 	fmt.Printf("[DEBUG] Regexp: %s\n", re)
 	path = regexp.MustCompile(re).ReplaceAllString(path, "./assets/dist/")
 
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		return "./assets/dist/index.html"
+	}
+
 	return path
 }
 
