@@ -25,6 +25,11 @@ func convertHttpPathToFileLocation(basePath string, path string) string {
 
 	if _, err := os.Stat(path); os.IsNotExist(err) {
 		return "./assets/dist/index.html"
+	} else {
+		// if it is a directory, return the index.html file
+		if info, err := os.Stat(path); err == nil && info.IsDir() {
+			return fmt.Sprintf("%s/index.html", path)
+		}
 	}
 
 	return path
