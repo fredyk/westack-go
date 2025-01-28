@@ -370,6 +370,7 @@ func (app *WeStack) setupModel(loadedModel *model.StatefulModel, dataSource *dat
 				(*data)["created"] = timeNow
 			}
 
+			allErrorsCodes := wst.M{}
 			for propertyName, propertyConfig := range config.Properties {
 				defaultValue := propertyConfig.Default
 				if defaultValue != nil {
@@ -401,9 +402,27 @@ func (app *WeStack) setupModel(loadedModel *model.StatefulModel, dataSource *dat
 					}
 				}
 
-				if propertyConfig.Required && (*data)[propertyName] == nil {
-					return wst.CreateError(fiber.ErrBadRequest, "REQUIRED", fiber.Map{"message": fmt.Sprintf("Property %v is required", propertyName), "codes": wst.M{propertyName: []string{"presence"}}}, "ValidationError")
+				if propertyConfig.Required {
+					isMissing := false
+					if propertyConfig.Type == "string" && strings.TrimSpace(data.GetString(propertyName)) == "" {
+						isMissing = true
+					} else if (propertyConfig.Type == "number" || propertyConfig.Type == "int" || propertyConfig.Type == "integer" || propertyConfig.Type == "float") && data.GetFloat64(propertyName) == 0 {
+						isMissing = true
+					} else if (*data)[propertyName] == nil {
+						isMissing = true
+					}
+
+					if isMissing {
+						if allErrorsCodes[propertyName] == nil {
+							allErrorsCodes[propertyName] = []string{}
+						}
+						allErrorsCodes[propertyName] = append(allErrorsCodes[propertyName].([]string), "presence")
+					}
 				}
+			}
+
+			if len(allErrorsCodes) > 0 {
+				return wst.CreateError(fiber.ErrBadRequest, "ERR_VALIDATION", fiber.Map{"message": "Required fields are missing", "codes": allErrorsCodes}, "ValidationError")
 			}
 
 			if config.Base == "AccountCredentials" {
