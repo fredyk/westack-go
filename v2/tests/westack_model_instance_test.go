@@ -252,12 +252,57 @@ func Test_UpdateAttributes(t *testing.T) {
 	assert.Equal(t, "Second note updated for Instance", updated.GetString("title"))
 
 	updated, err = createdNote.UpdateAttributes(struct {
-		Title string `bson:"title"`
+		Title       string                   `bson:"title"`
+		StringSlice []string                 `bson:"stringSlice"`
+		IntSlice    []int                    `bson:"intSlice"`
+		FloatSlice  []float64                `bson:"floatSlice"`
+		BoolSlice   []bool                   `bson:"boolSlice"`
+		MapSlice    []map[string]interface{} `bson:"mapSlice"`
+		SomeMap     wst.M                    `bson:"someMap"`
+		OtherMap    map[string]interface{}   `bson:"otherMap"`
+		NestedMap   wst.M                    `bson:"nestedMap"`
 	}{
-		Title: "Title from struct",
+		Title:       "Title from struct",
+		StringSlice: []string{"one", "two"},
+		IntSlice:    []int{1, 2},
+		FloatSlice:  []float64{1.1, 2.2},
+		BoolSlice:   []bool{true, false},
+		MapSlice: []map[string]interface{}{
+			{"key": "value"},
+		},
+		SomeMap: wst.M{
+			"key2": "value2",
+		},
+		OtherMap: map[string]interface{}{
+			"key3": "value3",
+		},
+		NestedMap: wst.M{
+			"nested": map[string]interface{}{
+				"key4": "value4",
+			},
+		},
 	}, systemContext)
 	assert.NoError(t, err)
 	assert.Equal(t, "Title from struct", updated.GetString("title"))
+	plainUpdated := updated.ToJSON()
+	assert.EqualValues(t, primitive.A{"one", "two"}, plainUpdated["stringSlice"])
+	assert.EqualValues(t, primitive.A{int32(1), int32(2)}, plainUpdated["intSlice"])
+	assert.EqualValues(t, primitive.A{1.1, 2.2}, plainUpdated["floatSlice"])
+	assert.EqualValues(t, primitive.A{true, false}, plainUpdated["boolSlice"])
+	assert.EqualValues(t, primitive.A{wst.M{
+		"key": "value",
+	}}, plainUpdated["mapSlice"])
+	assert.EqualValues(t, wst.M{
+		"key2": "value2",
+	}, plainUpdated["someMap"])
+	assert.EqualValues(t, map[string]interface{}{
+		"key3": "value3",
+	}, plainUpdated["otherMap"])
+	assert.EqualValues(t, wst.M{
+		"nested": wst.M{
+			"key4": "value4",
+		},
+	}, plainUpdated["nestedMap"])
 
 	updated, err = createdNote.UpdateAttributes(&struct {
 		Title chan string `bson:"title"`
