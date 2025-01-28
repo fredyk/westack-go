@@ -364,13 +364,48 @@ func (app *WeStack) setupModel(loadedModel *model.StatefulModel, dataSource *dat
 			(*data)["modified"] = timeNow
 		}
 
+		// Perform required validation
+		// If it is not a new instance, we need to merge the data with the existing instance
+		allErrorsCodes := wst.M{}
+		mergedData := data
+		if !ctx.IsNewInstance {
+			plainInstance := ctx.Instance.ToJSON()
+			mergedData = &plainInstance
+			for k, v := range *data {
+				(*mergedData)[k] = v
+			}
+		}
+
+		for propertyName, propertyConfig := range config.Properties {
+			if propertyConfig.Required {
+				isMissing := false
+				if propertyConfig.Type == "string" && strings.TrimSpace(mergedData.GetString(propertyName)) == "" {
+					isMissing = true
+				} else if (propertyConfig.Type == "number" || propertyConfig.Type == "int" || propertyConfig.Type == "integer" || propertyConfig.Type == "float") && mergedData.GetFloat64(propertyName) == 0 {
+					isMissing = true
+				} else if (*mergedData)[propertyName] == nil {
+					isMissing = true
+				}
+
+				if isMissing {
+					if allErrorsCodes[propertyName] == nil {
+						allErrorsCodes[propertyName] = []string{}
+					}
+					allErrorsCodes[propertyName] = append(allErrorsCodes[propertyName].([]string), "presence")
+				}
+			}
+		}
+
+		if len(allErrorsCodes) > 0 {
+			return wst.CreateError(fiber.ErrBadRequest, "ERR_VALIDATION", fiber.Map{"message": "Required fields are missing", "codes": allErrorsCodes}, "ValidationError")
+		}
+
 		if ctx.IsNewInstance {
 			if _, ok := (*data)["created"]; !ok {
 				timeNow := time.Now()
 				(*data)["created"] = timeNow
 			}
 
-			allErrorsCodes := wst.M{}
 			for propertyName, propertyConfig := range config.Properties {
 				defaultValue := propertyConfig.Default
 				if defaultValue != nil {
@@ -401,28 +436,6 @@ func (app *WeStack) setupModel(loadedModel *model.StatefulModel, dataSource *dat
 						(*data)[propertyName] = defaultValue
 					}
 				}
-
-				if propertyConfig.Required {
-					isMissing := false
-					if propertyConfig.Type == "string" && strings.TrimSpace(data.GetString(propertyName)) == "" {
-						isMissing = true
-					} else if (propertyConfig.Type == "number" || propertyConfig.Type == "int" || propertyConfig.Type == "integer" || propertyConfig.Type == "float") && data.GetFloat64(propertyName) == 0 {
-						isMissing = true
-					} else if (*data)[propertyName] == nil {
-						isMissing = true
-					}
-
-					if isMissing {
-						if allErrorsCodes[propertyName] == nil {
-							allErrorsCodes[propertyName] = []string{}
-						}
-						allErrorsCodes[propertyName] = append(allErrorsCodes[propertyName].([]string), "presence")
-					}
-				}
-			}
-
-			if len(allErrorsCodes) > 0 {
-				return wst.CreateError(fiber.ErrBadRequest, "ERR_VALIDATION", fiber.Map{"message": "Required fields are missing", "codes": allErrorsCodes}, "ValidationError")
 			}
 
 			if config.Base == "AccountCredentials" {
