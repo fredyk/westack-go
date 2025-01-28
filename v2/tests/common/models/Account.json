@@ -5,8 +5,7 @@
   "public": true,
   "properties": {
     "email": {
-      "type": "string",
-      "required": true
+      "type": "string"
     }
   },
   "relations": {
