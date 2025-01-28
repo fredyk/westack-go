@@ -400,6 +400,10 @@ func (app *WeStack) setupModel(loadedModel *model.StatefulModel, dataSource *dat
 						(*data)[propertyName] = defaultValue
 					}
 				}
+
+				if propertyConfig.Required && (*data)[propertyName] == nil {
+					return wst.CreateError(fiber.ErrBadRequest, "REQUIRED", fiber.Map{"message": fmt.Sprintf("Property %v is required", propertyName), "codes": wst.M{propertyName: []string{"presence"}}}, "ValidationError")
+				}
 			}
 
 			if config.Base == "AccountCredentials" {
