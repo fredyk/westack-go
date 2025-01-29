@@ -57,23 +57,26 @@ func (app *WeStack) loadModels() error {
 
 	include := app.Viper.GetStringSlice("models.include")
 
-	var fileInfos []fs.DirEntry
+	fileInfos := make(map[string][]fs.DirEntry, 0)
 	if _, err := os.Stat("common/models"); os.IsNotExist(err) {
 		if len(include) == 0 {
 			return fmt.Errorf("missing common/models directory")
 		}
 	} else {
-		fileInfos, err = fs.ReadDir(os.DirFS("./common/models"), ".")
+		listedFiles, err := fs.ReadDir(os.DirFS("./common/models"), ".")
 		if err != nil {
 			return fmt.Errorf("error while reading common/models directory: %v", err)
 		}
+		fileInfos["./common/models"] = listedFiles
 	}
 
 	if len(include) > 0 {
 		for _, includeDir := range include {
 			// includeDir is a path with more models
+			// clear the path and read the files
+			includeDir = strings.TrimRight(includeDir, "/")
 			if v, err := fs.ReadDir(os.DirFS(includeDir), "."); err == nil {
-				fileInfos = append(fileInfos, v...)
+				fileInfos[includeDir] = v
 			} else {
 				return fmt.Errorf("error while reading %v directory: %v", includeDir, err)
 			}
@@ -98,45 +101,48 @@ func (app *WeStack) loadModels() error {
 	swaggerhelper.RegisterGenericComponent[wst.LoginResult](app.swaggerHelper)
 
 	var someAccountModel *model.StatefulModel
-	for _, fileInfo := range fileInfos {
 
-		if fileInfo.IsDir() {
-			continue
-		}
+	for basePath, fileInfos := range fileInfos {
+		for _, fileInfo := range fileInfos {
 
-		if strings.Split(fileInfo.Name(), ".")[1] != "json" {
-			continue
-		}
-		var config *model.Config
-		err := wst.LoadFile("./common/models/"+fileInfo.Name(), &config)
-		if err != nil {
-			return fmt.Errorf("error while loading model %v: %v", fileInfo.Name(), err)
-		}
-		if config.Relations == nil {
-			config.Relations = &map[string]*model.Relation{}
-		}
-
-		configFromGlobal := (*globalModelConfig)[config.Name]
-
-		// IMPORTANT: Remember that the datasource can stay as nil for non-persisted models
-		var dataSource *datasource.Datasource
-
-		if configFromGlobal == nil && wst.IsPersisedModel(config.Base) {
-			return fmt.Errorf("missing persisted model model %s in model-config.json", config.Name)
-		} else if configFromGlobal != nil {
-			dataSource = (*app.datasources)[configFromGlobal.Datasource]
-			if dataSource == nil {
-				return fmt.Errorf("missing or invalid datasource file for %v", dataSource)
+			if fileInfo.IsDir() {
+				continue
 			}
-		}
 
-		loadedModel := model.New(config, app.modelRegistry)
-		err = app.setupModel(loadedModel.(*model.StatefulModel), dataSource)
-		if err != nil {
-			return err
-		}
-		if loadedModel.(*model.StatefulModel).Config.Base == "Account" {
-			someAccountModel = loadedModel.(*model.StatefulModel)
+			if strings.Split(fileInfo.Name(), ".")[1] != "json" {
+				continue
+			}
+			var config *model.Config
+			err := wst.LoadFile(basePath+"/"+fileInfo.Name(), &config)
+			if err != nil {
+				return fmt.Errorf("error while loading model %v: %v", fileInfo.Name(), err)
+			}
+			if config.Relations == nil {
+				config.Relations = &map[string]*model.Relation{}
+			}
+
+			configFromGlobal := (*globalModelConfig)[config.Name]
+
+			// IMPORTANT: Remember that the datasource can stay as nil for non-persisted models
+			var dataSource *datasource.Datasource
+
+			if configFromGlobal == nil && wst.IsPersisedModel(config.Base) {
+				return fmt.Errorf("missing persisted model model %s in model-config.json", config.Name)
+			} else if configFromGlobal != nil {
+				dataSource = (*app.datasources)[configFromGlobal.Datasource]
+				if dataSource == nil {
+					return fmt.Errorf("missing or invalid datasource file for %v", dataSource)
+				}
+			}
+
+			loadedModel := model.New(config, app.modelRegistry)
+			err = app.setupModel(loadedModel.(*model.StatefulModel), dataSource)
+			if err != nil {
+				return err
+			}
+			if loadedModel.(*model.StatefulModel).Config.Base == "Account" {
+				someAccountModel = loadedModel.(*model.StatefulModel)
+			}
 		}
 	}
 
