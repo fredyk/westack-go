@@ -88,7 +88,9 @@ func (app *WeStack) loadModelsFixedRoutes() error {
 			continue
 		}
 
-		mountBaseModelFixedRoutes(app, loadedModel)
+		if wst.IsPersisedModel(loadedModel.Config.Base) {
+			mountBaseModelFixedRoutes(app, loadedModel)
+		}
 
 		if loadedModel.Config.Base == "Account" {
 
@@ -511,116 +513,122 @@ func (app *WeStack) loadModelsDynamicRoutes() {
 			continue
 		}
 
-		if app.debug {
-			log.Println("Mount GET " + loadedModel.BaseUrl + "/:id")
+		if wst.IsPersisedModel(loadedModel.Config.Base) {
+			registerPersistedModelDynamicHooks(app, loadedModel)
 		}
-		loadedModel.RemoteMethod(func(eventContext *model.EventContext) error {
+	}
+}
 
-			id := eventContext.Ctx.Params("id")
-			var asSt string
-			var asStOk bool
-			if eventContext.ModelID != nil {
-				asSt, asStOk = eventContext.ModelID.(string)
-			}
-			if eventContext.ModelID == nil || asStOk && len(strings.TrimSpace(asSt)) == 0 {
-				eventContext.ModelID = id
-			}
+func registerPersistedModelDynamicHooks(app *WeStack, loadedModel *model.StatefulModel) {
+	if app.debug {
+		log.Println("Mount GET " + loadedModel.BaseUrl + "/:id")
+	}
+	loadedModel.RemoteMethod(func(eventContext *model.EventContext) error {
 
-			return handleEvent(eventContext, loadedModel, string(wst.OperationNameFindById))
-
-		}, model.RemoteMethodOptions{
-			Name: string(wst.OperationNameFindById),
-			Accepts: model.RemoteMethodOptionsHttpArgs{
-				{
-					Arg:         "filter",
-					Type:        "string",
-					Description: "",
-					Http:        model.ArgHttp{Source: "query"},
-					Required:    false,
-				},
-			},
-			Http: model.RemoteMethodOptionsHttp{
-				Path: "/:id",
-				Verb: "get",
-			},
-		})
-
-		if app.debug {
-			log.Println("Mount PATCH " + loadedModel.BaseUrl + "/:id")
+		id := eventContext.Ctx.Params("id")
+		var asSt string
+		var asStOk bool
+		if eventContext.ModelID != nil {
+			asSt, asStOk = eventContext.ModelID.(string)
 		}
+		if eventContext.ModelID == nil || asStOk && len(strings.TrimSpace(asSt)) == 0 {
+			eventContext.ModelID = id
+		}
+
+		return handleEvent(eventContext, loadedModel, string(wst.OperationNameFindById))
+
+	}, model.RemoteMethodOptions{
+		Name: string(wst.OperationNameFindById),
+		Accepts: model.RemoteMethodOptionsHttpArgs{
+			{
+				Arg:         "filter",
+				Type:        "string",
+				Description: "",
+				Http:        model.ArgHttp{Source: "query"},
+				Required:    false,
+			},
+		},
+		Http: model.RemoteMethodOptionsHttp{
+			Path: "/:id",
+			Verb: "get",
+		},
+	})
+
+	if app.debug {
+		log.Println("Mount PATCH " + loadedModel.BaseUrl + "/:id")
+	}
+	loadedModel.RemoteMethod(func(eventContext *model.EventContext) error {
+		id, err := primitive.ObjectIDFromHex(eventContext.Ctx.Params("id"))
+		if err != nil {
+			return err
+		}
+		eventContext.ModelID = &id
+		return handleEvent(eventContext, loadedModel, string(wst.OperationNameUpdateAttributes))
+	}, model.RemoteMethodOptions{
+		Name: string(wst.OperationNameUpdateAttributes),
+		Accepts: model.RemoteMethodOptionsHttpArgs{
+			{
+				Arg:         "data",
+				Type:        "object",
+				Description: "",
+				Http:        model.ArgHttp{Source: "body"},
+				Required:    true,
+			},
+		},
+		Http: model.RemoteMethodOptionsHttp{
+			Path: "/:id",
+			Verb: "patch",
+		},
+	})
+
+	if app.debug {
+		log.Println("Mount DELETE " + loadedModel.BaseUrl + "/:id")
+	}
+	loadedModel.RemoteMethod(func(eventContext *model.EventContext) error {
+		id, err := primitive.ObjectIDFromHex(eventContext.Ctx.Params("id"))
+		if err != nil {
+			return err
+		}
+		eventContext.ModelID = &id
+		return handleEvent(eventContext, loadedModel, string(wst.OperationNameDeleteById))
+	}, model.RemoteMethodOptions{
+		Name: string(wst.OperationNameDeleteById),
+		Http: model.RemoteMethodOptionsHttp{
+			Path: "/:id",
+			Verb: "delete",
+		},
+	})
+
+	if loadedModel.Config.Base == "Account" {
 		loadedModel.RemoteMethod(func(eventContext *model.EventContext) error {
 			id, err := primitive.ObjectIDFromHex(eventContext.Ctx.Params("id"))
 			if err != nil {
 				return err
 			}
 			eventContext.ModelID = &id
-			return handleEvent(eventContext, loadedModel, string(wst.OperationNameUpdateAttributes))
+			return handleEvent(eventContext, loadedModel, string(wst.OperationNameUpsertRoles))
 		}, model.RemoteMethodOptions{
-			Name: string(wst.OperationNameUpdateAttributes),
-			Accepts: model.RemoteMethodOptionsHttpArgs{
-				{
-					Arg:         "data",
-					Type:        "object",
-					Description: "",
-					Http:        model.ArgHttp{Source: "body"},
-					Required:    true,
-				},
-			},
+			Name: string(wst.OperationNameUpsertRoles),
 			Http: model.RemoteMethodOptionsHttp{
-				Path: "/:id",
-				Verb: "patch",
+				Path: "/:id/roles",
+				Verb: "put",
 			},
 		})
 
-		if app.debug {
-			log.Println("Mount DELETE " + loadedModel.BaseUrl + "/:id")
-		}
-		loadedModel.RemoteMethod(func(eventContext *model.EventContext) error {
-			id, err := primitive.ObjectIDFromHex(eventContext.Ctx.Params("id"))
+		model.BindRemoteOperationWithContext(loadedModel, func(eventContext *model.RemoteOperationReq[model.EnableMfaBody]) (model.EnableMfaResponse, error) {
+			id, err := primitive.ObjectIDFromHex(eventContext.Ctx.Ctx.Params("id"))
 			if err != nil {
-				return err
+				return model.EnableMfaResponse{}, err
 			}
-			eventContext.ModelID = &id
-			return handleEvent(eventContext, loadedModel, string(wst.OperationNameDeleteById))
-		}, model.RemoteMethodOptions{
-			Name: string(wst.OperationNameDeleteById),
-			Http: model.RemoteMethodOptionsHttp{
-				Path: "/:id",
-				Verb: "delete",
-			},
-		})
+			eventContext.Ctx.ModelID = &id
 
-		if loadedModel.Config.Base == "Account" {
-			loadedModel.RemoteMethod(func(eventContext *model.EventContext) error {
-				id, err := primitive.ObjectIDFromHex(eventContext.Ctx.Params("id"))
-				if err != nil {
-					return err
-				}
-				eventContext.ModelID = &id
-				return handleEvent(eventContext, loadedModel, string(wst.OperationNameUpsertRoles))
-			}, model.RemoteMethodOptions{
-				Name: string(wst.OperationNameUpsertRoles),
-				Http: model.RemoteMethodOptionsHttp{
-					Path: "/:id/roles",
-					Verb: "put",
-				},
-			})
+			return model.EnableMfa(app.mfaModel, eventContext.Ctx, eventContext.Input)
 
-			model.BindRemoteOperationWithContext(loadedModel, func(eventContext *model.RemoteOperationReq[model.EnableMfaBody]) (model.EnableMfaResponse, error) {
-				id, err := primitive.ObjectIDFromHex(eventContext.Ctx.Ctx.Params("id"))
-				if err != nil {
-					return model.EnableMfaResponse{}, err
-				}
-				eventContext.Ctx.ModelID = &id
+		}, model.RemoteOptions().
+			WithName(string(wst.OperationNameEnableMfa)).
+			WithPath("/:id/enable-mfa").
+			WithVerb("post"))
 
-				return model.EnableMfa(app.mfaModel, eventContext.Ctx, eventContext.Input)
-
-			}, model.RemoteOptions().
-				WithName(string(wst.OperationNameEnableMfa)).
-				WithPath("/:id/enable-mfa").
-				WithVerb("post"))
-
-		}
 	}
 }
 

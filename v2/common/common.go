@@ -914,3 +914,7 @@ func GenerateCookie() string {
 	}
 	return base64.StdEncoding.EncodeToString(cookie)
 }
+
+func IsPersisedModel(modelBase string) bool {
+	return modelBase == "PersistedModel" || modelBase == "Account" || modelBase == "AccountCredentials" || modelBase == "Role" || modelBase == "App" || modelBase == "Mfa"
+}
