@@ -330,6 +330,15 @@ func (app *WeStack) setupModel(loadedModel *model.StatefulModel, dataSource *dat
 		loadedModel.BaseUrl = app.restApiRoot + "/" + plural
 
 	}
+
+	if wst.IsPersisedModel(config.Base) {
+		registerPersistedModelFixedHooks(loadedModel, app, config)
+	}
+
+	return nil
+}
+
+func registerPersistedModelFixedHooks(loadedModel *model.StatefulModel, app *WeStack, config *model.Config) {
 	loadedModel.On(string(wst.OperationNameFindMany), func(ctx *model.EventContext) error {
 		return handleFindMany(app, loadedModel, ctx)
 	})
@@ -673,8 +682,6 @@ func (app *WeStack) setupModel(loadedModel *model.StatefulModel, dataSource *dat
 		}
 		loadedModel.On(string(wst.OperationNameUpsertRoles), upsertAccountRolesHandler)
 	}
-
-	return nil
 }
 
 func handleFindMany(app *WeStack, loadedModel *model.StatefulModel, ctx *model.EventContext) error {
