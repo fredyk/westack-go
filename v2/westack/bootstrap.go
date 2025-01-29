@@ -103,7 +103,9 @@ func (app *WeStack) loadModels() error {
 			return fmt.Errorf("missing persisted model model %s in model-config.json", config.Name)
 		}
 
-		dataSource = (*app.datasources)[configFromGlobal.Datasource]
+		if configFromGlobal != nil {
+			dataSource = (*app.datasources)[configFromGlobal.Datasource]
+		}
 
 		if dataSource == nil {
 			return fmt.Errorf("missing or invalid datasource file for %v", dataSource)
