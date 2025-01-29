@@ -54,10 +54,30 @@ func (app *WeStack) loadModels() error {
 	// List directory common/models without using ioutil.ReadDir
 	// https://stackoverflow.com/questions/5884154/read-all-files-in-a-directory-in-go
 	//fileInfos, err := ioutil.ReadDir("./common/models")
-	fileInfos, err := fs.ReadDir(os.DirFS("./common/models"), ".")
 
-	if err != nil {
-		return fmt.Errorf("%s", "error while loading models: "+err.Error())
+	include := app.Viper.GetStringSlice("models.include")
+
+	var fileInfos []fs.DirEntry
+	if _, err := os.Stat("common/models"); os.IsNotExist(err) {
+		if len(include) == 0 {
+			return fmt.Errorf("missing common/models directory")
+		}
+	} else {
+		fileInfos, err = fs.ReadDir(os.DirFS("./common/models"), ".")
+		if err != nil {
+			return fmt.Errorf("error while reading common/models directory: %v", err)
+		}
+	}
+
+	if len(include) > 0 {
+		for _, includeDir := range include {
+			// includeDir is a path with more models
+			if v, err := fs.ReadDir(os.DirFS(includeDir), "."); err == nil {
+				fileInfos = append(fileInfos, v...)
+			} else {
+				return fmt.Errorf("error while reading %v directory: %v", includeDir, err)
+			}
+		}
 	}
 
 	var globalModelConfig *map[string]*model.SimplifiedConfig
@@ -66,7 +86,7 @@ func (app *WeStack) loadModels() error {
 	}
 
 	app.swaggerHelper = swaggerhelper.NewSwaggerHelper(app.asInterface())
-	err = app.swaggerHelper.CreateOpenAPI()
+	err := app.swaggerHelper.CreateOpenAPI()
 	if err != nil {
 		return err
 	}
