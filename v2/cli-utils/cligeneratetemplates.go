@@ -43,9 +43,6 @@ func (m *{{ config.Name }}) GetModelName() string {
 	return "{{ config.Name }}"
 }
 
-func (m *{{ config.Name }}) GetCreated() time.Time {
-	return m.Created
-}
 `
 
 var RegisterFileTemplate = `package models
