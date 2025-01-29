@@ -97,12 +97,13 @@ func (app *WeStack) loadModels() error {
 		}
 
 		configFromGlobal := (*globalModelConfig)[config.Name]
+		var dataSource *datasource.Datasource
 
-		if configFromGlobal == nil {
-			return fmt.Errorf("missing model %s in model-config.json", config.Name)
+		if configFromGlobal == nil && wst.IsPersisedModel(config.Base) {
+			return fmt.Errorf("missing persisted model model %s in model-config.json", config.Name)
 		}
 
-		dataSource := (*app.datasources)[configFromGlobal.Datasource]
+		dataSource = (*app.datasources)[configFromGlobal.Datasource]
 
 		if dataSource == nil {
 			return fmt.Errorf("missing or invalid datasource file for %v", dataSource)
