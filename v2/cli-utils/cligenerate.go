@@ -4,50 +4,85 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"github.com/fredyk/westack-go/v2/model"
-	"github.com/tyler-sommer/stick"
 	"go/format"
 	"io"
 	"log"
 	"os"
 	"strings"
+
+	"github.com/fredyk/westack-go/v2/model"
+	"github.com/spf13/viper"
+	"github.com/tyler-sommer/stick"
 )
 
+var defaultModelsPath = "common/models"
+
 func generate() error {
-	if _, err := os.Stat("common/models"); os.IsNotExist(err) {
-		return fmt.Errorf("not in a westack project")
-	}
 
-	log.Println("Generating go files from .json files under common/models")
+	config := viper.New()
 
-	entries, err := os.ReadDir("common/models")
+	config.SetConfigName("config")
+
+	config.SetConfigType("json")
+
+	config.AddConfigPath("server")
+	config.AddConfigPath(".")
+
+	err := config.ReadInConfig()
 	if err != nil {
-		log.Fatalln(err)
+		return fmt.Errorf("error reading config file: %w", err)
 	}
 
-	var configs []model.Config
-	for _, f := range entries {
-		if !f.IsDir() && strings.HasSuffix(f.Name(), ".json") {
-			config, err := generateModelForFile(f.Name())
-			if err != nil {
-				return err
-			}
-			configs = append(configs, config)
+	var allModelPaths []string
+	if _, err := os.Stat(defaultModelsPath); !os.IsNotExist(err) {
+		allModelPaths = append(allModelPaths, defaultModelsPath)
+	}
+
+	additionalIncluded := config.GetStringSlice("models.include")
+	allModelPaths = append(allModelPaths, additionalIncluded...)
+
+	if len(allModelPaths) == 0 {
+		return fmt.Errorf("no models to generate")
+	}
+
+	var goRegisterFilePath string
+	for idx, modelsPath := range allModelPaths {
+
+		modelsPath := strings.TrimSuffix(modelsPath, "/")
+
+		fmt.Printf("Generating go files from .json files under %s\n", modelsPath)
+
+		if idx == 0 {
+			goRegisterFilePath = fmt.Sprintf("%s/registercontrollers.wst.go", modelsPath)
 		}
-	}
 
-	goRegisterFilePath := "common/models/registercontrollers.wst.go"
+		entries, err := os.ReadDir(modelsPath)
+		if err != nil {
+			log.Fatalln(err)
+		}
 
-	stickEnv := createGlobalStickContext(configs)
-	data := convertToMap(model.Config{}, configs, goRegisterFilePath, "")
-	file, err := os.OpenFile(goRegisterFilePath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-	err = executeStickForGo(RegisterFileTemplate, stickEnv, file, data)
-	if err != nil {
-		return fmt.Errorf("error generating model for %s: %w", goRegisterFilePath, err)
+		var configs []model.Config
+		for _, f := range entries {
+			if !f.IsDir() && strings.HasSuffix(f.Name(), ".json") {
+				config, err := generateModelForFile(modelsPath, f.Name())
+				if err != nil {
+					return err
+				}
+				configs = append(configs, config)
+			}
+		}
+
+		stickEnv := createGlobalStickContext(modelsPath, configs)
+		data := convertToMap(modelsPath, model.Config{}, configs, goRegisterFilePath, "")
+		file, err := os.OpenFile(goRegisterFilePath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
+		if err != nil {
+			return err
+		}
+		defer file.Close()
+		err = executeStickForGo(RegisterFileTemplate, stickEnv, file, data)
+		if err != nil {
+			return fmt.Errorf("error generating model for %s: %w", goRegisterFilePath, err)
+		}
 	}
 
 	return nil
@@ -72,9 +107,9 @@ func executeStickForGo(template string, stickEnv *stick.Env, file *os.File, data
 	return nil
 }
 
-func generateModelForFile(jsonFileName string) (model.Config, error) {
+func generateModelForFile(modelsPath, jsonFileName string) (model.Config, error) {
 	var modelConfig model.Config
-	bytes, err := os.ReadFile("common/models/" + jsonFileName)
+	bytes, err := os.ReadFile(fmt.Sprintf("%s/%s", modelsPath, jsonFileName))
 	if err != nil {
 		return modelConfig, err
 	}
@@ -86,10 +121,10 @@ func generateModelForFile(jsonFileName string) (model.Config, error) {
 
 	modelName := modelConfig.Name
 	targetGoBaseName := strings.ToLower(modelName) + ".go"
-	goInterfaceFilePath := "common/models/" + targetGoBaseName
-	goImplementationFilePath := fmt.Sprintf("common/models/%s.wst.go", strings.ToLower(modelName))
+	goInterfaceFilePath := fmt.Sprintf("%s/%s", modelsPath, targetGoBaseName)
+	goImplementationFilePath := fmt.Sprintf("%s/%s.wst.go", modelsPath, strings.ToLower(modelName))
 
-	stickEnv, data := createSingleModelStickContext(modelConfig, goInterfaceFilePath, jsonFileName)
+	stickEnv, data := createSingleModelStickContext(modelsPath, modelConfig, goInterfaceFilePath, jsonFileName)
 
 	if _, err := os.Stat(goInterfaceFilePath); os.IsNotExist(err) {
 		err := generateModelForConfig(StructFileTemplate, goInterfaceFilePath, stickEnv, data, modelConfig, jsonFileName)
@@ -123,12 +158,12 @@ func generateModelForConfig(template string, goFilePath string, stickEnv *stick.
 	return nil
 }
 
-func createSingleModelStickContext(config model.Config, goFilePath string, jsonFileName string) (*stick.Env, map[string]stick.Value) {
+func createSingleModelStickContext(modelsPath string, config model.Config, goFilePath string, jsonFileName string) (*stick.Env, map[string]stick.Value) {
 	stickEnv := stick.New(nil)
 
 	addWestackProperties(&config)
 
-	data := convertToMap(config, nil, goFilePath, jsonFileName)
+	data := convertToMap(modelsPath, config, nil, goFilePath, jsonFileName)
 
 	addStickFunctions(config, nil, stickEnv, data)
 
@@ -152,9 +187,9 @@ func addWestackProperties(c *model.Config) {
 	c.Properties = allProperties
 }
 
-func createGlobalStickContext(configs []model.Config) *stick.Env {
+func createGlobalStickContext(modelsPath string, configs []model.Config) *stick.Env {
 	stickEnv := stick.New(nil)
-	data := convertToMap(model.Config{}, configs, "", "")
+	data := convertToMap(modelsPath, model.Config{}, configs, "", "")
 
 	addStickFunctions(model.Config{}, configs, stickEnv, data)
 
@@ -176,7 +211,7 @@ func processNeededImports(config model.Config) []string {
 	return neededImports
 }
 
-func convertToMap(config model.Config, configs []model.Config, path string, jsonFileName string) map[string]stick.Value {
+func convertToMap(modelsPath string, config model.Config, configs []model.Config, path string, jsonFileName string) map[string]stick.Value {
 	//bytes, _ := json.Marshal(config)
 	//var parsedConfig wst.M
 	//json.Unmarshal(bytes, &parsedConfig)
@@ -185,6 +220,6 @@ func convertToMap(config model.Config, configs []model.Config, path string, json
 		"configs":      configs,
 		"path":         path,
 		"jsonFileName": jsonFileName,
-		"jsonFilePath": fmt.Sprintf("common/models/%s", jsonFileName),
+		"jsonFilePath": fmt.Sprintf("%s/%s", modelsPath, jsonFileName),
 	}
 }
