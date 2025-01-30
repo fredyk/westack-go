@@ -1,10 +1,11 @@
 package cliutils
 
 import (
-	"github.com/fredyk/westack-go/v2/model"
-	"github.com/tyler-sommer/stick"
 	"log"
 	"strings"
+
+	"github.com/fredyk/westack-go/v2/model"
+	"github.com/tyler-sommer/stick"
 )
 
 func addStickFunctions(config model.Config, configs []model.Config, stickEnv *stick.Env, data map[string]stick.Value) {
@@ -14,10 +15,13 @@ func addStickFunctions(config model.Config, configs []model.Config, stickEnv *st
 	}
 
 	stickEnv.Functions["renderImports"] = func(ctx stick.Context, args ...stick.Value) stick.Value {
-		neededImports := processNeededImports(config)
+		includeStructImports := args[0].(bool)
+		neededImports := processNeededImports(config, includeStructImports)
 		additionalImports := make([]string, 0)
-		for _, c := range args {
-			additionalImports = append(additionalImports, "\""+c.(string)+"\"")
+		for idx, c := range args {
+			if idx >= 1 {
+				additionalImports = append(additionalImports, "\""+c.(string)+"\"")
+			}
 		}
 		neededImports = append(neededImports, additionalImports...)
 		if len(neededImports) == 0 {
