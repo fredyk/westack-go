@@ -214,6 +214,7 @@ func processNeededImports(config model.Config, includeStructImports bool) []stri
 }
 
 func convertToMap(modelsPath string, config model.Config, configs []model.Config, path string, jsonFileName string) map[string]stick.Value {
+	packageName /* last segment from modelsPath */ := modelsPath[strings.LastIndex(modelsPath, "/")+1:]
 	//bytes, _ := json.Marshal(config)
 	//var parsedConfig wst.M
 	//json.Unmarshal(bytes, &parsedConfig)
@@ -223,5 +224,6 @@ func convertToMap(modelsPath string, config model.Config, configs []model.Config
 		"path":         path,
 		"jsonFileName": jsonFileName,
 		"jsonFilePath": fmt.Sprintf("%s/%s", modelsPath, jsonFileName),
+		"packageName":  packageName,
 	}
 }

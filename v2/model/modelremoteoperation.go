@@ -31,6 +31,8 @@ func BindRemoteOperationWithContext[T any, R any](loadedModel *StatefulModel, ha
 	description := options.Description
 	verb := options.Verb
 
+	isVerbWithBody := verb == "post" || verb == "put" || verb == "patch"
+
 	fmt.Printf("[INFO] Binding remote operation %s at %s %s%s\n", options.Name, strings.ToUpper(verb), loadedModel.BaseUrl, path)
 
 	_, err := loadedModel.Enforcer.AddRoleForUser(options.Name, "*")
@@ -63,44 +65,51 @@ func BindRemoteOperationWithContext[T any, R any](loadedModel *StatefulModel, ha
 	fullPath = regexp.MustCompile("//+").ReplaceAllString(fullPath, "/")
 	fullPath = regexp.MustCompile(`:(\w+)`).ReplaceAllString(fullPath, "{$1}")
 
-	if description == "" {
-		description = fmt.Sprintf("%v %v.", operation, loadedModel.Config.Plural)
+	if !loadedModel.earlyDisabledMethods[options.Name] {
+		if description == "" {
+			description = fmt.Sprintf("%v %v.", operation, loadedModel.Config.Plural)
+		}
+
+		pathParams := regexp.MustCompile(`:(\w+)`).FindAllString(path, -1)
+
+		inputSchemaName := swaggerhelper.RegisterGenericComponent[T](loadedModel.App.SwaggerHelper())
+		resultSchemaName := swaggerhelper.RegisterGenericComponent[R](loadedModel.App.SwaggerHelper())
+
+		var inputSchema wst.M
+		var resultSchema wst.M
+		if inputSchemaName == "object" {
+			inputSchema = wst.M{
+				"type": "object",
+			}
+		} else {
+			inputSchema = wst.M{
+				"$ref": fmt.Sprintf("#/components/schemas/%v", inputSchemaName),
+			}
+		}
+		if resultSchemaName == "object" {
+			resultSchema = wst.M{
+				"type": "object",
+			}
+		} else {
+			resultSchema = wst.M{
+				"$ref": fmt.Sprintf("#/components/schemas/%v", resultSchemaName),
+			}
+		}
+
+		pathDef := createOpenAPIPathDef(loadedModel, description, pathParams)
+
+		if isVerbWithBody {
+			assignOpenAPIRequestBody(pathDef, inputSchema, options.ContentType)
+		} else {
+			assignOpenAPIRequestQueryParams(pathDef, inputSchema, loadedModel.App.SwaggerHelper().GetComponents())
+		}
+		assignOpenAPIResponse(pathDef, resultSchema)
+
+		loadedModel.App.SwaggerHelper().AddPathSpec(fullPath, verb, pathDef, options.Name, loadedModel.Name)
+		// clean up memory
+		pathDef = nil
+		runtime.GC()
 	}
-
-	pathParams := regexp.MustCompile(`:(\w+)`).FindAllString(path, -1)
-
-	inputSchemaName := swaggerhelper.RegisterGenericComponent[T](loadedModel.App.SwaggerHelper())
-	resultSchemaName := swaggerhelper.RegisterGenericComponent[R](loadedModel.App.SwaggerHelper())
-
-	var inputSchema wst.M
-	var resultSchema wst.M
-	if inputSchemaName == "object" {
-		inputSchema = wst.M{
-			"type": "object",
-		}
-	} else {
-		inputSchema = wst.M{
-			"$ref": fmt.Sprintf("#/components/schemas/%v", inputSchemaName),
-		}
-	}
-	if resultSchemaName == "object" {
-		resultSchema = wst.M{
-			"type": "object",
-		}
-	} else {
-		resultSchema = wst.M{
-			"$ref": fmt.Sprintf("#/components/schemas/%v", resultSchemaName),
-		}
-	}
-
-	pathDef := createOpenAPIPathDef(loadedModel, description, pathParams)
-	assignOpenAPIRequestBody(pathDef, inputSchema, options.ContentType)
-	assignOpenAPIResponse(pathDef, resultSchema)
-
-	loadedModel.App.SwaggerHelper().AddPathSpec(fullPath, verb, pathDef, options.Name, loadedModel.Name)
-	// clean up memory
-	pathDef = nil
-	runtime.GC()
 
 	remoteMethodOptions := RemoteMethodOptions{
 		Name: options.Name,
@@ -179,7 +188,7 @@ func BindRemoteOperationWithContext[T any, R any](loadedModel *StatefulModel, ha
 	}
 
 	remoteMethodOptions.Http.Verb = verb
-	loadedModel.remoteMethodsMap[options.Name] = createRemoteMethodOperationItem(handlerWrapper, remoteMethodOptions)
+	loadedModel.remoteMethodsMap[options.Name] = createRemoteMethodOperationItem(loadedModel, handlerWrapper, remoteMethodOptions)
 
 	(*loadedModel.Router).Options(path, func(ctx *fiber.Ctx) error {
 		ctx.Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS, HEAD")

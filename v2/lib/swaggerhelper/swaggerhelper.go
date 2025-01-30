@@ -1,6 +1,7 @@
 package swaggerhelper
 
 import (
+	"fmt"
 	"log"
 	"os"
 	"reflect"
@@ -107,6 +108,28 @@ func (sH *swaggerHelper) CreateOpenAPI() error {
 	return err2
 }
 
+func (sH *swaggerHelper) RemovePathSpec(path string, verb string) {
+	if sH.app.CompletedSetup() {
+		os.Stderr.WriteString("Cannot remove path spec after setup is completed\n")
+		os.Stderr.WriteString("Maybe you are trying to register a remote operation after the app.Boot() was called?\n")
+		log.Fatal("Exiting")
+	}
+	// Remove [path][verb]
+	if _, ok := (*sH.swaggerMap.(*wst.M))["paths"].(wst.M)[path]; ok {
+		if _, ok := (*sH.swaggerMap.(*wst.M))["paths"].(wst.M)[path].(wst.M)[verb]; ok {
+			delete((*sH.swaggerMap.(*wst.M))["paths"].(wst.M)[path].(wst.M), verb)
+
+			if len((*sH.swaggerMap.(*wst.M))["paths"].(wst.M)[path].(wst.M)) == 0 {
+				delete((*sH.swaggerMap.(*wst.M))["paths"].(wst.M), path)
+			}
+		} else {
+			os.Stderr.WriteString("Spec not found for: " + path + " " + verb + "\n")
+		}
+	} else {
+		os.Stderr.WriteString("Path not found: " + path + "\n")
+	}
+}
+
 func (sH *swaggerHelper) AddPathSpec(path string, verb string, verbSpec wst.M, operationName string, modelName string) {
 	if sH.app.CompletedSetup() {
 		os.Stderr.WriteString("Cannot add path spec after setup is completed\n")
@@ -121,6 +144,10 @@ func (sH *swaggerHelper) AddPathSpec(path string, verb string, verbSpec wst.M, o
 	verbSpec["x-modelName"] = modelName
 	(*sH.swaggerMap.(*wst.M))["paths"].(wst.M)[path].(wst.M)[verb] = verbSpec
 	return
+}
+
+func (sH *swaggerHelper) GetComponents() wst.M {
+	return *(*sH.swaggerMap.(*wst.M))["components"].(*wst.M)
 }
 
 func (sH *swaggerHelper) Dump() error {
@@ -167,12 +194,45 @@ func RegisterGenericComponentForSample(sH wst.SwaggerHelper, sample any) string 
 	if t.Kind() == reflect.Ptr {
 		t = t.Elem()
 	}
-	typeName := t.String()
-	schemaName := typeName
+	itemSchemaName := t.String()
+	schemaName := itemSchemaName
 
 	if t.Name() == "" {
-		// anonymous struct
-		return "object"
+
+		// check if it is a slice
+		if t.Kind() == reflect.Slice {
+			t = t.Elem()
+			itemSchemaName = t.String()
+
+			if t.Kind() == reflect.Ptr {
+				t = t.Elem()
+				itemSchemaName = t.String()
+			}
+			if t.Name() == "" {
+				// anonymous struct
+				itemSchemaName = "object"
+			}
+			if t.Kind() == reflect.Struct {
+				itemSchemaName = RegisterGenericComponentForSample(sH, reflect.New(t).Interface())
+			}
+
+			schemaName = fmt.Sprintf("%sList", itemSchemaName)
+			if _, ok := (*components)["schemas"].(wst.M)[schemaName]; ok {
+				return schemaName
+			}
+			(*components)["schemas"].(wst.M)[schemaName] = nil
+			(*components)["schemas"].(wst.M)[schemaName] = wst.M{
+				"type": "array",
+				"items": wst.M{
+					"$ref": "#/components/schemas/" + itemSchemaName,
+				},
+			}
+			return schemaName
+		} else {
+			fmt.Printf("Anonymous struct %v %T\n", t, sample)
+			// anonymous struct
+			return "object"
+		}
 	}
 
 	if _, ok := (*components)["schemas"].(wst.M)[schemaName]; ok {

@@ -322,7 +322,7 @@ func setupInternalModels(config *model.Config, app *WeStack, dataSource *datasou
 		Plural: "role-mappings",
 		Base:   "PersistedModel",
 		//Datasource: config.Datasource,
-		Public:     true,
+		Public:     false,
 		Properties: nil,
 		Relations: &map[string]*model.Relation{
 			"role": {

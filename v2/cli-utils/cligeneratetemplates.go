@@ -2,7 +2,7 @@ package cliutils
 
 // uses twig template engine
 
-var StructFileTemplate = `package models
+var StructFileTemplate = `package {{ packageName }}
 
 {{ renderImports(true, "github.com/fredyk/westack-go/v2/model") }}
 {{ renderStruct() }}
@@ -24,7 +24,7 @@ type {{ config.Name }} struct {
 `
 
 var ImplementationFileTemplate = `//wst:generated Don't edit this file
-package models
+package {{ packageName }}
 
 {{ renderImports(false, "github.com/fredyk/westack-go/v2/model") }}
 
@@ -45,7 +45,7 @@ func (m *{{ config.Name }}) GetModelName() string {
 
 `
 
-var RegisterFileTemplate = `package models
+var RegisterFileTemplate = `package {{ packageName }}
 
 {{ renderImports(false, "github.com/fredyk/westack-go/v2/model") }}
 

@@ -16,6 +16,7 @@ require (
 	github.com/mailru/easyjson v0.9.0
 	github.com/minio/minio-go/v7 v7.0.83
 	github.com/oliveagle/jsonpath v0.0.0-20180606110733-2e52cf6e6852
+	github.com/pquerna/otp v1.4.0
 	github.com/spf13/cast v1.6.0
 	github.com/spf13/viper v1.19.0
 	github.com/stretchr/testify v1.10.0
@@ -29,6 +30,7 @@ require (
 require (
 	cloud.google.com/go/compute/metadata v0.5.2 // indirect
 	github.com/bmatcuk/doublestar/v4 v4.6.1 // indirect
+	github.com/boombuler/barcode v1.0.1-0.20190219062509-6c824513bacc // indirect
 	github.com/casbin/govaluate v1.2.0 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect

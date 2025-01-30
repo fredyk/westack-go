@@ -86,34 +86,36 @@ func (loadedModel *StatefulModel) RemoteMethod(handler func(context *EventContex
 		description = fmt.Sprintf("%v %v.", operation, loadedModel.Config.Plural)
 	}
 
-	pathParams := regexp.MustCompile(`:(\w+)`).FindAllString(path, -1)
+	if !loadedModel.earlyDisabledMethods[options.Name] {
+		pathParams := regexp.MustCompile(`:(\w+)`).FindAllString(path, -1)
 
-	pathDef := createOpenAPIPathDef(loadedModel, description, pathParams)
+		pathDef := createOpenAPIPathDef(loadedModel, description, pathParams)
 
-	if verb == "post" || verb == "put" || verb == "patch" {
-		if options.Name == string(wst.OperationNameCreate) ||
-			options.Name == string(wst.OperationNameUpdateAttributes) {
-			assignOpenAPIRequestBody(pathDef, wst.M{
-				"$ref": fmt.Sprintf("#/components/schemas/models.%s", loadedModel.Name),
-			}, fiber.MIMEApplicationJSON)
+		if verb == "post" || verb == "put" || verb == "patch" {
+			if options.Name == string(wst.OperationNameCreate) ||
+				options.Name == string(wst.OperationNameUpdateAttributes) {
+				assignOpenAPIRequestBody(pathDef, wst.M{
+					"$ref": fmt.Sprintf("#/components/schemas/models.%s", loadedModel.Name),
+				}, fiber.MIMEApplicationJSON)
+			} else {
+				assignOpenAPIRequestBody(pathDef, wst.M{
+					"type": "object",
+				}, fiber.MIMEApplicationJSON)
+			}
 		} else {
-			assignOpenAPIRequestBody(pathDef, wst.M{
-				"type": "object",
-			}, fiber.MIMEApplicationJSON)
+			params := createOpenAPIAdditionalParams(loadedModel, options)
+			if len(params) > 0 {
+				pathDef["parameters"] = params
+			}
 		}
-	} else {
-		params := createOpenAPIAdditionalParams(loadedModel, options)
-		if len(params) > 0 {
-			pathDef["parameters"] = params
-		}
+
+		loadedModel.App.SwaggerHelper().AddPathSpec(fullPath, verb, pathDef, options.Name, "models."+loadedModel.Name)
+		// clean up memory
+		pathDef = nil
+		runtime.GC()
 	}
 
-	loadedModel.App.SwaggerHelper().AddPathSpec(fullPath, verb, pathDef, options.Name, "models."+loadedModel.Name)
-	// clean up memory
-	pathDef = nil
-	runtime.GC()
-
-	loadedModel.remoteMethodsMap[options.Name] = createRemoteMethodOperationItem(handler, options)
+	loadedModel.remoteMethodsMap[options.Name] = createRemoteMethodOperationItem(loadedModel, handler, options)
 
 	(*loadedModel.Router).Options(path, func(ctx *fiber.Ctx) error {
 		ctx.Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS, HEAD")
@@ -162,11 +164,15 @@ func createFiberHandler(options RemoteMethodOptions, loadedModel *StatefulModel,
 	}
 }
 
-func createRemoteMethodOperationItem(handler func(context *EventContext) error, options RemoteMethodOptions) *OperationItem {
-	return &OperationItem{
+func createRemoteMethodOperationItem(loadedModel *StatefulModel, handler func(context *EventContext) error, options RemoteMethodOptions) *OperationItem {
+	operationItem := &OperationItem{
 		Handler: handler,
 		Options: options,
 	}
+	if loadedModel.earlyDisabledMethods[options.Name] {
+		operationItem.disabled = true
+	}
+	return operationItem
 }
 
 func createOpenAPIAdditionalParams(loadedModel *StatefulModel, options RemoteMethodOptions) []wst.M {
@@ -206,6 +212,36 @@ func assignOpenAPIRequestBody(pathDef wst.M, schema wst.M, contentType string) {
 	}
 }
 
+func assignOpenAPIRequestQueryParams(pathDef wst.M, inputSchema wst.M, components wst.M) {
+	var component wst.M
+	if inputSchema["$ref"] != nil {
+		schemaName := strings.Split(inputSchema["$ref"].(string), "/")[3]
+		component = components["schemas"].(wst.M)[schemaName].(wst.M)
+	} else {
+		component = inputSchema
+	}
+	if component["properties"] != nil {
+		params := make([]wst.M, 0)
+		for key, value := range component["properties"].(wst.M) {
+			prop := value.(wst.M)
+			paramType := prop["type"].(string)
+			if paramType == "date" {
+				paramType = "string"
+			}
+			params = append(params, wst.M{
+				"name":        key,
+				"in":          "query",
+				"description": key,
+				"required":    prop["required"],
+				"schema": wst.M{
+					"type": paramType,
+				},
+			})
+		}
+		pathDef["parameters"] = params
+	}
+}
+
 func assignOpenAPIResponse(pathDef wst.M, schema wst.M) {
 	pathDef["overrideResponses"] = wst.M{
 		"200": wst.M{
@@ -236,6 +272,10 @@ func (loadedModel *StatefulModel) HandleRemoteMethod(name string, eventContext *
 
 	if operationItem == nil {
 		return errors.New(fmt.Sprintf("Method '%v' not found", name))
+	}
+
+	if operationItem.disabled {
+		return fiber.ErrNotFound
 	}
 
 	c := eventContext.Ctx
@@ -453,4 +493,22 @@ func (loadedModel *StatefulModel) HandleRemoteMethod(name string, eventContext *
 		return eventContext.Ctx.Status(fiber.StatusNoContent).SendString("")
 	}
 	return nil
+}
+
+func (loadedModel *StatefulModel) DisableRemoteOperation(operationName wst.OperationName) {
+	if existing, ok := loadedModel.remoteMethodsMap[string(operationName)]; ok {
+		verb := existing.Options.Http.Verb
+		path := existing.Options.Http.Path
+
+		existing.disabled = true
+
+		// unregister from swagger
+		app := loadedModel.App
+
+		path = strings.TrimPrefix(path, "/")
+
+		app.SwaggerHelper().RemovePathSpec(loadedModel.BaseUrl+"/"+path, strings.ToLower(verb))
+	} else {
+		loadedModel.earlyDisabledMethods[string(operationName)] = true
+	}
 }
