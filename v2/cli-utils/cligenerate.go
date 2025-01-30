@@ -196,11 +196,13 @@ func createGlobalStickContext(modelsPath string, configs []model.Config) *stick.
 	return stickEnv
 }
 
-func processNeededImports(config model.Config) []string {
+func processNeededImports(config model.Config, includeStructImports bool) []string {
 	neededAsMap := make(map[string]bool)
-	for _, prop := range config.Properties {
-		if prop.Type == "date" {
-			neededAsMap["time"] = true
+	if includeStructImports {
+		for _, prop := range config.Properties {
+			if prop.Type == "date" {
+				neededAsMap["time"] = true
+			}
 		}
 	}
 
