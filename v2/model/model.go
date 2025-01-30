@@ -146,9 +146,10 @@ type StatefulModel struct {
 	DisabledHandlers map[string]bool
 	NilInstance      *StatefulInstance
 
-	eventHandlers    map[string]func(eventContext *EventContext) error
-	modelRegistry    *map[string]*StatefulModel
-	remoteMethodsMap map[string]*OperationItem
+	eventHandlers        map[string]func(eventContext *EventContext) error
+	modelRegistry        *map[string]*StatefulModel
+	remoteMethodsMap     map[string]*OperationItem
+	earlyDisabledMethods map[string]bool
 
 	authCache           map[string]map[string]map[string]bool
 	hasHiddenProperties bool
@@ -183,11 +184,12 @@ func New(config *Config, modelRegistry *map[string]*StatefulModel) Model {
 		Config:           config,
 		DisabledHandlers: map[string]bool{},
 
-		modelRegistry:     modelRegistry,
-		eventHandlers:     map[string]func(eventContext *EventContext) error{},
-		remoteMethodsMap:  map[string]*OperationItem{},
-		authCache:         map[string]map[string]map[string]bool{},
-		pendingOperations: map[int64]map[string][]pendingOperationEntry{},
+		modelRegistry:        modelRegistry,
+		eventHandlers:        map[string]func(eventContext *EventContext) error{},
+		remoteMethodsMap:     map[string]*OperationItem{},
+		earlyDisabledMethods: map[string]bool{},
+		authCache:            map[string]map[string]map[string]bool{},
+		pendingOperations:    map[int64]map[string][]pendingOperationEntry{},
 	}
 	loadedModel.NilInstance = &StatefulInstance{
 		Model: loadedModel,
@@ -898,8 +900,9 @@ type RemoteOperationReq[T any] struct {
 }
 
 type OperationItem struct {
-	Handler func(context *EventContext) error
-	Options RemoteMethodOptions
+	Handler  func(context *EventContext) error
+	Options  RemoteMethodOptions
+	disabled bool
 }
 
 type BearerAccount struct {

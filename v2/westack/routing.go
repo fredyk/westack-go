@@ -28,7 +28,7 @@ func (app *WeStack) loadNotFoundRoutes() {
 		}
 		(*loadedModel.Router).Use(func(ctx *fiber.Ctx) error {
 			log.Println("[WARNING] Unresolved method in " + loadedModel.Name + ": " + ctx.Method() + " " + ctx.Path())
-			return ctx.Status(404).JSON(fiber.Map{"error": fiber.Map{"status": 404, "message": fmt.Sprintf("Shared class %#v has no method handling %v %v", loadedModel.Name, ctx.Method(), ctx.Path())}})
+			return ctx.Status(404).JSON(fiber.Map{"error": fiber.Map{"status": 404, "message": fmt.Sprintf("Unknown method %v %v", ctx.Method(), ctx.Path())}})
 		})
 	}
 }
