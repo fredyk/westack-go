@@ -91,11 +91,28 @@ func (loadedModel *StatefulModel) RemoteMethod(handler func(context *EventContex
 
 		pathDef := createOpenAPIPathDef(loadedModel, description, pathParams)
 
+		var schemaName string
+		components := loadedModel.App.SwaggerHelper().GetComponents()
+		if components["schemas"] != nil {
+			schemas := components["schemas"].(wst.M)
+			// find a schema by \w+\.ModelName
+			re := regexp.MustCompile(`^\w+\.` + loadedModel.Name + `$`)
+			for k := range schemas {
+				if re.MatchString(k) {
+					schemaName = k
+					break
+				}
+			}
+		}
+		if schemaName == "" {
+			schemaName = "models." + loadedModel.Name
+		}
+
 		if verb == "post" || verb == "put" || verb == "patch" {
 			if options.Name == string(wst.OperationNameCreate) ||
 				options.Name == string(wst.OperationNameUpdateAttributes) {
 				assignOpenAPIRequestBody(pathDef, wst.M{
-					"$ref": fmt.Sprintf("#/components/schemas/models.%s", loadedModel.Name),
+					"$ref": fmt.Sprintf("#/components/schemas/%s", schemaName),
 				}, fiber.MIMEApplicationJSON)
 			} else {
 				assignOpenAPIRequestBody(pathDef, wst.M{
@@ -109,7 +126,7 @@ func (loadedModel *StatefulModel) RemoteMethod(handler func(context *EventContex
 			}
 		}
 
-		loadedModel.App.SwaggerHelper().AddPathSpec(fullPath, verb, pathDef, options.Name, "models."+loadedModel.Name)
+		loadedModel.App.SwaggerHelper().AddPathSpec(fullPath, verb, pathDef, options.Name, schemaName)
 		// clean up memory
 		pathDef = nil
 		runtime.GC()
@@ -475,10 +492,23 @@ func (loadedModel *StatefulModel) HandleRemoteMethod(name string, eventContext *
 
 			} else {
 
-				// check struct
 				if eventContext.Result != nil {
+
+					// check struct
 					if reflect.TypeOf(eventContext.Result).Kind() == reflect.Struct {
 						return eventContext.Ctx.Status(eventContext.StatusCode).JSON(eventContext.Result)
+					}
+
+					// check slice of even struct or pointer to struct
+					if reflect.TypeOf(eventContext.Result).Kind() == reflect.Slice {
+						if reflect.TypeOf(eventContext.Result).Elem().Kind() == reflect.Struct {
+							return eventContext.Ctx.Status(eventContext.StatusCode).JSON(eventContext.Result)
+						}
+						if reflect.TypeOf(eventContext.Result).Elem().Kind() == reflect.Ptr {
+							if reflect.TypeOf(reflect.New(reflect.TypeOf(eventContext.Result).Elem().Elem()).Interface()).Kind() == reflect.Struct {
+								return eventContext.Ctx.Status(eventContext.StatusCode).JSON(eventContext.Result)
+							}
+						}
 					}
 				}
 
