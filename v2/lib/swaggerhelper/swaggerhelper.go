@@ -286,6 +286,8 @@ func analyzeWithReflection(rootTypeName string, t reflect.Type, components *wst.
 		tagged := getStructTag(field, "json")
 		if tagged == "" {
 			tagged = field.Name
+		} else if tagged == "-" {
+			continue
 		}
 		if field.Type.Kind() == reflect.Pointer {
 			field.Type = field.Type.Elem()
