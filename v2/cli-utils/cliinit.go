@@ -17,12 +17,10 @@ var DefaultAccount = model.Config{
 	Public: true,
 	Properties: map[string]model.Property{
 		"email": {
-			Type:     "string",
-			Required: true,
+			Type: "string",
 		},
 		"password": {
-			Type:     "string",
-			Required: true,
+			Type: "string",
 		},
 	},
 	Relations: &map[string]*model.Relation{
