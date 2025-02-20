@@ -71,9 +71,6 @@ func (chunkGenerator *InstanceAChunkGenerator) GenerateNextChunk() (err error) {
 		chunkGenerator.currentChunk.raw = append(chunkGenerator.currentChunk.raw, asBytes...)
 		chunkGenerator.currentChunk.length += len(asBytes)
 	}
-	if chunkGenerator.Debug {
-		fmt.Printf("Generated chunk %d/%d\n", chunkGenerator.currentChunkIndex, chunkGenerator.totalChunks)
-	}
 	return
 }
 

@@ -239,7 +239,7 @@ func (loadedModel *StatefulModel) ExtractLookupsFromFilter(filterMap *wst.Filter
 		})
 	}
 
-	if len(targetMatchAfterLookups) == 0 {
+	if len(targetMatchAfterLookups) == 0 && len(targetAggregationAfterLookups) == 0 {
 		// skip and limit before lookups, buf after first match
 		if targetSkip > 0 {
 			*lookups = append(*lookups, wst.M{
@@ -280,7 +280,7 @@ func (loadedModel *StatefulModel) ExtractLookupsFromFilter(filterMap *wst.Filter
 		})
 	}
 
-	if len(targetMatchAfterLookups) > 0 {
+	if len(targetMatchAfterLookups) > 0 || len(targetAggregationAfterLookups) > 0 {
 		*lookups = append(*lookups, targetMatchAfterLookups)
 		// skip and limit after lookups and match
 		if targetSkip > 0 {
