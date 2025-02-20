@@ -4,7 +4,6 @@ package models
 import (
 	_ "embed"
 	"github.com/fredyk/westack-go/v2/model"
-	"time"
 )
 
 //go:embed Store.json
@@ -20,8 +19,4 @@ func (m *Store) GetRawConfig() []byte {
 
 func (m *Store) GetModelName() string {
 	return "Store"
-}
-
-func (m *Store) GetCreated() time.Time {
-	return m.Created
 }

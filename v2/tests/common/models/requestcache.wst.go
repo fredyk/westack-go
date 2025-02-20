@@ -4,7 +4,6 @@ package models
 import (
 	_ "embed"
 	"github.com/fredyk/westack-go/v2/model"
-	"time"
 )
 
 //go:embed RequestCache.json
@@ -20,8 +19,4 @@ func (m *RequestCache) GetRawConfig() []byte {
 
 func (m *RequestCache) GetModelName() string {
 	return "RequestCache"
-}
-
-func (m *RequestCache) GetCreated() time.Time {
-	return m.Created
 }

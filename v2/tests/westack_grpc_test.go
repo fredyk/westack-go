@@ -47,6 +47,7 @@ var storeModel *model.StatefulModel
 var footerModel *model.StatefulModel
 var imageModel *model.StatefulModel
 var appModel *model.StatefulModel
+var headerModel *model.StatefulModel
 var systemContext *model.EventContext
 
 func Test_GRPCCalls(t *testing.T) {
@@ -834,6 +835,7 @@ func revertAllTests() error {
 		footerModel,
 		appModel,
 		imageModel,
+		headerModel,
 	} {
 		deleteManyResult, err := modelToPurge.DeleteMany(sharedDeleteManyWhere, systemContext)
 		if err != nil {

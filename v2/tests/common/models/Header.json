@@ -1,0 +1,27 @@
+{
+  "name": "Header",
+  "plural": "",
+  "base": "PersistedModel",
+  "public": true,
+  "properties": {},
+  "relations": {
+    "note": {
+      "type": "belongsTo",
+      "model": "Note"
+    }
+  },
+  "hidden": [],
+  "casbin": {
+    "policies": [
+      "$authenticated,*,create,allow",
+      "$authenticated,*,read,allow",
+      "$owner,*,write,allow",
+      "$owner,*,__get__note,allow"
+    ]
+  },
+  "cache": {
+    "datasource": "memorykv",
+    "keys": [["_id"]],
+    "ttl": 15
+  }
+}

@@ -11,6 +11,9 @@
   "Footer": {
     "dataSource": "db1"
   },
+  "Header": {
+    "dataSource": "db0"
+  },
   "Image": {
     "dataSource": "db1"
   },

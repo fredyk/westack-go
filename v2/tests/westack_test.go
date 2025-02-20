@@ -158,6 +158,10 @@ func init() {
 		if err != nil {
 			log.Fatalf("failed to find model: %v", err)
 		}
+		headerModel, err = app.FindModel("Header")
+		if err != nil {
+			log.Fatalf("failed to find model: %v", err)
+		}
 
 		noteModel.Observe("before load", func(ctx *model.EventContext) error {
 			if ctx.BaseContext.Remote != nil {

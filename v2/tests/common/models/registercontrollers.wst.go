@@ -13,6 +13,7 @@ func RegisterControllers(r model.ControllerRegistry) {
 	r.RegisterController(&Customer{})
 	r.RegisterController(&Empty{})
 	r.RegisterController(&Footer{})
+	r.RegisterController(&Header{})
 	r.RegisterController(&Image{})
 	r.RegisterController(&Note{})
 	r.RegisterController(&NoteEntry{})

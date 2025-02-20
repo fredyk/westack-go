@@ -40,7 +40,7 @@ func (loadedModel *StatefulModel) ExtractLookupsFromFilter(filterMap *wst.Filter
 	}
 
 	var targetWhere *wst.Where
-	if filterMap != nil && filterMap.Where != nil {
+	if filterMap.Where != nil {
 		whereCopy := *filterMap.Where
 		targetWhere = &whereCopy
 	} else {
@@ -48,7 +48,7 @@ func (loadedModel *StatefulModel) ExtractLookupsFromFilter(filterMap *wst.Filter
 	}
 
 	var targetFields *wst.Fields
-	if filterMap != nil && filterMap.Fields != nil {
+	if filterMap.Fields != nil {
 		fieldsCopy := *filterMap.Fields
 		targetFields = &fieldsCopy
 	} else {
@@ -58,11 +58,11 @@ func (loadedModel *StatefulModel) ExtractLookupsFromFilter(filterMap *wst.Filter
 	var targetAggregationBeforeLookups []wst.AggregationStage
 	var targetAggregationAfterLookups []wst.AggregationStage
 	var newFoundFields = make(map[string]bool)
-	if filterMap != nil && filterMap.Aggregation != nil {
+	if filterMap.Aggregation != nil {
 		for _, aggregationStage := range filterMap.Aggregation {
 			var validStageFound = false
 			var firstKeyFound = ""
-			for key, _ := range aggregationStage {
+			for key := range aggregationStage {
 				firstKeyFound = key
 				if !validStageFound {
 					for _, allowedStage := range AllowedStages {
@@ -145,7 +145,7 @@ func (loadedModel *StatefulModel) ExtractLookupsFromFilter(filterMap *wst.Filter
 	}
 
 	var targetOrder *wst.Order
-	if filterMap != nil && filterMap.Order != nil {
+	if filterMap.Order != nil {
 		orderValue := *filterMap.Order
 		targetOrder = &orderValue
 	} else {
@@ -201,24 +201,41 @@ func (loadedModel *StatefulModel) ExtractLookupsFromFilter(filterMap *wst.Filter
 		})
 	}
 
+	var targetOrderBeforeLookups bson.D
+	var targetOrderAfterLookups bson.D
 	if targetOrder != nil && len(*targetOrder) > 0 {
-		orderMap := bson.D{}
 		for _, orderPair := range *targetOrder {
 			splt := strings.Split(orderPair, " ")
 			key := splt[0]
 			directionSt := splt[1]
+
+			var orderEntry bson.E
 			if strings.ToLower(strings.TrimSpace(directionSt)) == "asc" {
 				//orderMap[key] = 1
-				orderMap = append(orderMap, bson.E{Key: key, Value: 1})
+				orderEntry = bson.E{Key: key, Value: 1}
 			} else if strings.ToLower(strings.TrimSpace(directionSt)) == "desc" {
 				//orderMap[key] = -1
-				orderMap = append(orderMap, bson.E{Key: key, Value: -1})
+				orderEntry = bson.E{Key: key, Value: -1}
 			} else {
 				return nil, fmt.Errorf("invalid direction %v while trying to sort by %v", directionSt, key)
 			}
+
+			// when the first complex order key was found, all the following keys will be added to the targetOrderAfterLookups
+			if !strings.Contains(key, ".") && targetOrderAfterLookups == nil {
+				targetOrderBeforeLookups = append(targetOrderBeforeLookups, orderEntry)
+			} else {
+				// if targetOrderAfterLookups == nil {
+				// 	targetOrderAfterLookups = bson.D{}
+				// }
+				targetOrderAfterLookups = append(targetOrderAfterLookups, orderEntry)
+			}
+
 		}
+	}
+
+	if len(targetOrderBeforeLookups) > 0 {
 		*lookups = append(*lookups, wst.M{
-			"$sort": orderMap,
+			"$sort": targetOrderBeforeLookups,
 		})
 	}
 
@@ -237,7 +254,7 @@ func (loadedModel *StatefulModel) ExtractLookupsFromFilter(filterMap *wst.Filter
 	}
 
 	var targetInclude *wst.Include
-	if filterMap != nil && filterMap.Include != nil {
+	if filterMap.Include != nil {
 		includeAsInterfaces := *filterMap.Include
 		targetInclude = &includeAsInterfaces
 	} else {
@@ -256,6 +273,13 @@ func (loadedModel *StatefulModel) ExtractLookupsFromFilter(filterMap *wst.Filter
 	for _, aggregationStage := range targetAggregationAfterLookups {
 		*lookups = append(*lookups, wst.CopyMap(wst.M(aggregationStage)))
 	}
+
+	if len(targetOrderAfterLookups) > 0 {
+		*lookups = append(*lookups, wst.M{
+			"$sort": targetOrderAfterLookups,
+		})
+	}
+
 	if len(targetMatchAfterLookups) > 0 {
 		*lookups = append(*lookups, targetMatchAfterLookups)
 		// skip and limit after lookups and match
@@ -353,9 +377,7 @@ func (loadedModel *StatefulModel) appendIncludeToLookups(includeItem wst.Include
 					return nil, err
 				}
 				if nestedLoopkups != nil {
-					for _, v := range *nestedLoopkups {
-						pipeline = append(pipeline, v)
-					}
+					pipeline = append(pipeline, *nestedLoopkups...)
 				}
 			}
 
