@@ -239,7 +239,7 @@ func (loadedModel *StatefulModel) ExtractLookupsFromFilter(filterMap *wst.Filter
 		})
 	}
 
-	if len(targetMatchAfterLookups) == 0 && len(targetAggregationAfterLookups) == 0 {
+	if len(targetMatchAfterLookups) == 0 && len(targetOrderAfterLookups) == 0 {
 		// skip and limit before lookups, buf after first match
 		if targetSkip > 0 {
 			*lookups = append(*lookups, wst.M{
@@ -274,14 +274,16 @@ func (loadedModel *StatefulModel) ExtractLookupsFromFilter(filterMap *wst.Filter
 		*lookups = append(*lookups, wst.CopyMap(wst.M(aggregationStage)))
 	}
 
-	if len(targetOrderAfterLookups) > 0 {
-		*lookups = append(*lookups, wst.M{
-			"$sort": targetOrderAfterLookups,
-		})
+	if len(targetMatchAfterLookups) > 0 {
+		*lookups = append(*lookups, targetMatchAfterLookups)
 	}
 
-	if len(targetMatchAfterLookups) > 0 || len(targetAggregationAfterLookups) > 0 {
-		*lookups = append(*lookups, targetMatchAfterLookups)
+	if len(targetMatchAfterLookups) > 0 || len(targetOrderAfterLookups) > 0 {
+		if len(targetOrderAfterLookups) > 0 {
+			*lookups = append(*lookups, wst.M{
+				"$sort": targetOrderAfterLookups,
+			})
+		}
 		// skip and limit after lookups and match
 		if targetSkip > 0 {
 			*lookups = append(*lookups, wst.M{
