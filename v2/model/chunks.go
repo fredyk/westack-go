@@ -31,13 +31,7 @@ type ChunkGeneratorReader struct {
 }
 
 func (reader *ChunkGeneratorReader) Read(p []byte) (n int, err error) {
-	if reader.debug {
-		fmt.Printf("[DEBUG] ChunkGeneratorReader.Read() called with len(p)=%d\n", len(p))
-	}
 	if reader.currentChunkReadIndex == reader.currentChunk.length {
-		if reader.debug {
-			fmt.Printf("[DEBUG] ChunkGeneratorReader.Read() reached end of chunk (%d, %d)\n", reader.currentChunkReadIndex, reader.currentChunk.length)
-		}
 		reader.currentChunk, err = reader.chunkGenerator.NextChunk()
 		if err != nil {
 			if err == io.EOF {
@@ -51,11 +45,6 @@ func (reader *ChunkGeneratorReader) Read(p []byte) (n int, err error) {
 	}
 	n = copy(p, reader.currentChunk.raw[reader.currentChunkReadIndex:])
 	reader.currentChunkReadIndex += n
-
-	if reader.debug {
-		fmt.Printf("[DEBUG] ChunkGeneratorReader.Read() returning %d bytes\n", n)
-	}
-
 	return
 }
 
