@@ -80,6 +80,10 @@
       "options": {
         "skipAuth": true
       }
+    },
+    "header": {
+      "type": "hasOne",
+      "model": "Header"
     }
   },
   "hidden": [],
@@ -94,7 +98,8 @@
       "$owner,*,__get__footer1,allow",
       "$owner,*,__get__footer2,allow",
       "$owner,*,__get__publicFooter,allow",
-      "$owner,*,__get__entries,allow"
+      "$owner,*,__get__entries,allow",
+      "$owner,*,__get__header,allow"
     ]
   },
   "cache": {

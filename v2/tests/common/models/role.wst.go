@@ -4,7 +4,6 @@ package models
 import (
 	_ "embed"
 	"github.com/fredyk/westack-go/v2/model"
-	"time"
 )
 
 //go:embed role.json
@@ -20,8 +19,4 @@ func (m *role) GetRawConfig() []byte {
 
 func (m *role) GetModelName() string {
 	return "role"
-}
-
-func (m *role) GetCreated() time.Time {
-	return m.Created
 }

@@ -4,7 +4,6 @@ package models
 import (
 	_ "embed"
 	"github.com/fredyk/westack-go/v2/model"
-	"time"
 )
 
 //go:embed Footer.json
@@ -20,8 +19,4 @@ func (m *Footer) GetRawConfig() []byte {
 
 func (m *Footer) GetModelName() string {
 	return "Footer"
-}
-
-func (m *Footer) GetCreated() time.Time {
-	return m.Created
 }

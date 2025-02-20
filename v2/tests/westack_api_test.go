@@ -605,6 +605,51 @@ func Test_FindWithNestedRelations(t *testing.T) {
 
 }
 
+func Test_FindWithMergedSorts(t *testing.T) {
+
+	// Create the second note with a header
+	noteB, err := invokeApiAsRandomAccount("POST", "/notes", wst.M{
+		"title":     "second Ordered Note",
+		"tag":       "note-with-header",
+		"accountId": randomAccount.GetString("id"),
+	}, wst.M{"Content-Type": "application/json", "Authorization": fmt.Sprintf("Bearer %v", randomAccountToken.GetString("id"))})
+	assert.NoError(t, err)
+
+	headerB, err := invokeApiAsRandomAccount("POST", "/headers", wst.M{
+		"title":  "Header B",
+		"noteId": noteB.GetString("id"),
+	}, wst.M{"Content-Type": "application/json"})
+	assert.NoError(t, err)
+
+	// Create the first note with a header
+	noteA, err := invokeApiAsRandomAccount("POST", "/notes", wst.M{
+		"title":     "first Ordered Note",
+		"tag":       "note-with-header",
+		"accountId": randomAccount.GetString("id"),
+	}, wst.M{"Content-Type": "application/json", "Authorization": fmt.Sprintf("Bearer %v", randomAccountToken.GetString("id"))})
+	assert.NoError(t, err)
+
+	headerA, err := invokeApiAsRandomAccount("POST", "/headers", wst.M{
+		"title":  "Header A",
+		"noteId": noteA.GetString("id"),
+	}, wst.M{"Content-Type": "application/json"})
+	assert.NoError(t, err)
+
+	// Query notes with the specified filter
+	res, err := wstfuncs.InvokeApiJsonA("GET",
+		`/notes?filter={"where":{"tag":"note-with-header"},"include":[{"relation":"header"}],"order":["header.title+ASC","created+ASC"]}`,
+		nil,
+		wst.M{"Authorization": fmt.Sprintf("Bearer %v", randomAccountToken.GetString("id"))},
+	)
+	assert.NoError(t, err)
+	assert.Len(t, res, 2)
+
+	// Verify the results meet the expected ordering
+	assert.Equal(t, headerA.GetString("title"), res[0].GetString("header.title"))
+	assert.Equal(t, headerB.GetString("title"), res[1].GetString("header.title"))
+
+}
+
 func Test_NoteWith2Footers(t *testing.T) {
 
 	// t.Parallel()
