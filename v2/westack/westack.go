@@ -140,6 +140,8 @@ type Options struct {
 	EnableCompression bool
 	CompressionConfig compress.Config
 	BodyLimit         int
+	ReadBufferSize    int
+	WriteBufferSize   int
 
 	debug             bool
 	adminUsername     string
@@ -153,12 +155,20 @@ func New(options ...Options) *WeStack {
 	var logger wst.ILogger
 
 	var bodyLimit int = 4 * 1024 * 1024
+	var readBufferSize int = 4 * 1024
+	var writeBufferSize int = 4 * 1024
 
 	var finalOptions Options
 	if len(options) > 0 {
 		finalOptions = options[0]
 		if finalOptions.BodyLimit > 0 {
 			bodyLimit = finalOptions.BodyLimit
+		}
+		if finalOptions.ReadBufferSize > 0 {
+			readBufferSize = finalOptions.ReadBufferSize
+		}
+		if finalOptions.WriteBufferSize > 0 {
+			writeBufferSize = finalOptions.WriteBufferSize
 		}
 	}
 
@@ -167,6 +177,8 @@ func New(options ...Options) *WeStack {
 		JSONDecoder:           json.Unmarshal,
 		DisableStartupMessage: true,
 		BodyLimit:             bodyLimit,
+		ReadBufferSize:        readBufferSize,
+		WriteBufferSize:       writeBufferSize,
 	})
 
 	modelRegistry := make(map[string]*model.StatefulModel)
