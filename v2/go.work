@@ -1,7 +1,0 @@
-go 1.22.9
-
-use (
-	.
-	lambdas
-  ../client/v2
-)
