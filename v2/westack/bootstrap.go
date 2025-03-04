@@ -531,9 +531,10 @@ func registerPersistedModelFixedHooks(loadedModel *model.StatefulModel, app *WeS
 					}
 					(*data)["password"] = string(hashed)
 				} else if strings.HasPrefix(provider, string(ProviderOAuth2Prefix)) {
-					if strings.TrimSpace(email) == "" {
+					// already passed email|username validation
+					/*if strings.TrimSpace(email) == "" {
 						return wst.CreateError(fiber.ErrBadRequest, "EMAIL_BLANK", fiber.Map{"message": "Invalid email"}, "ValidationError")
-					} else {
+					} else */{
 						accessToken := data.GetString("accessToken")
 						if strings.TrimSpace(accessToken) == "" {
 							return wst.CreateError(fiber.ErrBadRequest, "ACCESS_TOKEN_BLANK", fiber.Map{"message": "Invalid access token"}, "ValidationError")
