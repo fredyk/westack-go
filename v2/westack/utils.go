@@ -17,6 +17,8 @@ import (
 	wst "github.com/fredyk/westack-go/v2/common"
 )
 
+var emailRegex = regexp.MustCompile(`^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`)
+
 func gRPCCallWithQueryParams[InputT any, ClientT interface{}, OutputT proto.Message](serviceUrl string, clientConstructor func(cc grpc.ClientConnInterface) ClientT, clientMethod func(ClientT, context.Context, *InputT, ...grpc.CallOption) (OutputT, error), timeoutSeconds ...float32) func(ctx *fiber.Ctx) error {
 	return func(ctx *fiber.Ctx) error {
 		//fmt.Printf("%s %T \n", serviceUrl, clientMethod)
@@ -153,4 +155,8 @@ func replaceVarNames(definition string) string {
 	return regexp.MustCompile(`\$([\w:]+)`).ReplaceAllStringFunc(definition, func(match string) string {
 		return "_" + strings.ToUpper(match[1:]) + "_"
 	})
+}
+
+func isValidEmail(email string) bool {
+	return emailRegex.MatchString(email)
 }
