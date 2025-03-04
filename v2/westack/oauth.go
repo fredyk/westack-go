@@ -275,12 +275,6 @@ func mountOauthRoutes(app *WeStack, loadedModel *model.StatefulModel, systemCont
 			if v := userInfoData["email"]; v != nil {
 				login = v.(string)
 				isEmail = true
-			} else if v := userInfoData["login"]; v != nil {
-				login = v.(string)
-				// if it matches a valid email, mark as email
-				if isValidEmail(login) {
-					isEmail = true
-				}
 			} else if v := userInfoData["emails"]; v != nil {
 				emails := v.([]interface{})
 				if len(emails) > 0 {
@@ -288,6 +282,12 @@ func mountOauthRoutes(app *WeStack, loadedModel *model.StatefulModel, systemCont
 					isEmail = true
 				} else {
 					return verboseRedirect(eventContext, failureUrl, fmt.Errorf("missing email in user info %v", userInfoData))
+				}
+			} else if v := userInfoData["login"]; v != nil {
+				login = v.(string)
+				// if it matches a valid email, mark as email
+				if isValidEmail(login) {
+					isEmail = true
 				}
 			} else {
 				return verboseRedirect(eventContext, failureUrl, fmt.Errorf("missing email in user info %v", userInfoData))
