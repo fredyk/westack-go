@@ -3,7 +3,7 @@ module github.com/fredyk/westack-go/client/v2
 go 1.22.9
 
 require (
-	github.com/fredyk/westack-go/v2 v2.0.1-alpha-rc04.0.20250304075158-6333bbfbd58d
+	github.com/fredyk/westack-go/v2 v2.0.1-alpha-rc04.0.20250304103559-8cc8f7d76760
 	github.com/goccy/go-json v0.10.4
 	github.com/mailru/easyjson v0.9.0
 	golang.org/x/net v0.33.0
@@ -53,9 +53,9 @@ require (
 	go.uber.org/multierr v1.9.0 // indirect
 	golang.org/x/crypto v0.32.0 // indirect
 	golang.org/x/exp v0.0.0-20230905200255-921286631fa9 // indirect
-	golang.org/x/sync v0.10.0 // indirect
+	golang.org/x/sync v0.11.0 // indirect
 	golang.org/x/sys v0.29.0 // indirect
-	golang.org/x/text v0.21.0 // indirect
+	golang.org/x/text v0.22.0 // indirect
 	gopkg.in/ini.v1 v1.67.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
