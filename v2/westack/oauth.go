@@ -264,20 +264,43 @@ func mountOauthRoutes(app *WeStack, loadedModel *model.StatefulModel, systemCont
 
 			defer userInfo.Body.Close()
 
-			type userInfoResponse struct {
-				Email string `json:"email"`
-			}
-
-			var userInfoData userInfoResponse
+			var userInfoData wst.M
 			err = json.NewDecoder(userInfo.Body).Decode(&userInfoData)
 			if err != nil {
 				return verboseRedirect(eventContext, failureUrl, fmt.Errorf("failed to decode user info: %w", err))
 			}
 
+			isEmail := false
+			var login string
+			if v := userInfoData["email"]; v != nil {
+				login = v.(string)
+				isEmail = true
+			} else if v := userInfoData["login"]; v != nil {
+				login = v.(string)
+				// if it matches a valid email, mark as email
+				if isValidEmail(login) {
+					isEmail = true
+				}
+			} else if v := userInfoData["emails"]; v != nil {
+				emails := v.([]interface{})
+				if len(emails) > 0 {
+					login = emails[0].(string)
+					isEmail = true
+				} else {
+					return verboseRedirect(eventContext, failureUrl, fmt.Errorf("missing email in user info %v", userInfoData))
+				}
+			} else {
+				return verboseRedirect(eventContext, failureUrl, fmt.Errorf("missing email in user info %v", userInfoData))
+			}
+
 			// check if userCredentials exists
 			userCredentials, err := app.accountCredentialsModel.FindOne(&wst.Filter{
 				Where: &wst.Where{
-					"email":    userInfoData.Email,
+					// "email":    login,
+					"$or": []wst.M{
+						{"email": login},
+						{"username": login},
+					},
 					"provider": string(ProviderOAuth2Prefix) + providerName,
 				},
 				Include: &wst.Include{
@@ -299,10 +322,19 @@ func mountOauthRoutes(app *WeStack, loadedModel *model.StatefulModel, systemCont
 				// search by password
 				userCredentials, err = app.accountCredentialsModel.FindOne(&wst.Filter{
 					Where: &wst.Where{
-						"email": userInfoData.Email,
-						"$or": []wst.M{
-							{"provider": ProviderPassword},
-							{"password": wst.M{"$exists": true}},
+						"$and": []wst.M{
+							{
+								"$or": []wst.M{
+									{"email": login},
+									{"username": login},
+								},
+							},
+							{
+								"$or": []wst.M{
+									{"provider": ProviderPassword},
+									{"password": wst.M{"$exists": true}},
+								},
+							},
 						},
 					},
 					Include: &wst.Include{
@@ -320,12 +352,18 @@ func mountOauthRoutes(app *WeStack, loadedModel *model.StatefulModel, systemCont
 				if userCredentials == nil {
 
 					// create new account
-					fmt.Printf("[DEBUG] Creating new account for email: %v\n", userInfoData.Email)
-					createdAccount, err := loadedModel.Create(wst.M{
-						"email":         userInfoData.Email,
+					fmt.Printf("[DEBUG] Creating new account for email: %v\n", login)
+					plainAccount := wst.M{
+						// "email":         login,
 						"emailVerified": true,
 						"provider":      string(ProviderOAuth2Prefix) + providerName,
-					}, systemContext)
+					}
+					if isEmail {
+						plainAccount["email"] = login
+					} else {
+						plainAccount["username"] = login
+					}
+					createdAccount, err := loadedModel.Create(plainAccount, systemContext)
 
 					if err != nil {
 						fmt.Printf("[DEBUG] Error while creating account: %v\n", err)
@@ -344,17 +382,23 @@ func mountOauthRoutes(app *WeStack, loadedModel *model.StatefulModel, systemCont
 				}
 
 				// create new credentials
-				fmt.Printf("[DEBUG] Creating new credentials for email: %v\n", userInfoData.Email)
-				_, err = app.accountCredentialsModel.Create(wst.M{
-					"accountId":    accountId,
-					"email":        userInfoData.Email,
+				fmt.Printf("[DEBUG] Creating new credentials for email: %v\n", login)
+				plainCredentials := wst.M{
+					"accountId": accountId,
+					// "email":        login,
 					"provider":     string(ProviderOAuth2Prefix) + providerName,
 					"accessToken":  token.AccessToken,
 					"refreshToken": token.RefreshToken,
 					"expiry":       token.Expiry,
 					"tokenType":    token.TokenType,
 					"scope":        token.Extra("scope"),
-				}, systemContext)
+				}
+				if isEmail {
+					plainCredentials["email"] = login
+				} else {
+					plainCredentials["username"] = login
+				}
+				_, err = app.accountCredentialsModel.Create(plainCredentials, systemContext)
 
 				if err != nil {
 					fmt.Printf("[DEBUG] Error while creating credentials: %v\n", err)
@@ -366,7 +410,7 @@ func mountOauthRoutes(app *WeStack, loadedModel *model.StatefulModel, systemCont
 				accountId = account.GetString("id")
 
 				// update credentials
-				fmt.Printf("[DEBUG] Updating credentials for email: %v\n", userInfoData.Email)
+				fmt.Printf("[DEBUG] Updating credentials for email: %v\n", login)
 				_, err = userCredentials.UpdateAttributes(wst.M{
 					"accessToken": token.AccessToken,
 					"expiry":      token.Expiry,
