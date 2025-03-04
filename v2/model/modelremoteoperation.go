@@ -29,7 +29,7 @@ func BindRemoteOperationWithContext[T any, R any](loadedModel *StatefulModel, ha
 
 	path := options.Path
 	description := options.Description
-	verb := options.Verb
+	verb := strings.ToLower(options.Verb)
 
 	isVerbWithBody := verb == "post" || verb == "put" || verb == "patch"
 
