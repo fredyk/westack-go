@@ -58,8 +58,8 @@ func readFileBytes(fileLocation string) ([]byte, error) {
 }
 
 func SendStaticAsset(ctx *model.EventContext) error {
-	basePath := ctx.Data.GetString("__lmbd_path")
-	path := ctx.Data.GetString("__lmbd_base_path")
+	path := ctx.Data.GetString("__lmbd_path")
+	basePath := ctx.Data.GetString("__lmbd_base_path")
 	fmt.Printf("Path: %s\n", path)
 	fmt.Printf("Base path: %s\n", basePath)
 
