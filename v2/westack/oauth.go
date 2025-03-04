@@ -43,14 +43,15 @@ import (
 )
 
 var defaultScopes = map[string][]string{
-	"google":        {"https://www.googleapis.com/auth/userinfo.email"},
-	"amazon":        {"profile"},
-	"bitbucket":     {},
-	"cern":          {},
-	"facebook":      {"email"},
-	"fitbit":        {"profile"},
-	"foursquare":    {},
-	"github":        {"user:email"},
+	"google":     {"https://www.googleapis.com/auth/userinfo.email"},
+	"amazon":     {"profile"},
+	"bitbucket":  {},
+	"cern":       {},
+	"facebook":   {"email"},
+	"fitbit":     {"profile"},
+	"foursquare": {},
+	// include access to repos
+	"github":        {"user:email", "repo"},
 	"gitlab":        {"read_user"},
 	"heroku":        {},
 	"hipchat":       {},
