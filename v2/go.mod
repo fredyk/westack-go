@@ -7,7 +7,7 @@ go 1.22.9
 require (
 	github.com/andybalholm/brotli v1.1.0
 	github.com/casbin/casbin/v2 v2.102.0
-	github.com/fredyk/westack-go/client/v2 v2.0.0-20250119173214-d4de0aadbdf4
+	github.com/fredyk/westack-go/client/v2 v2.0.0-20250301133451-93b36def3e31
 	github.com/goccy/go-json v0.10.4
 	github.com/gofiber/fiber/v2 v2.52.6
 	github.com/golang-jwt/jwt v3.2.2+incompatible
