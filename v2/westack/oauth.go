@@ -468,6 +468,50 @@ func mountOauthRoutes(app *WeStack, loadedModel *model.StatefulModel, systemCont
 				Verb: "get",
 			},
 		})
+
+		// Get saved access token, only available for github and gitlab
+		if providerName == "github" || providerName == "gitlab" {
+			loadedModel.RemoteMethod(func(eventContext *model.EventContext) error {
+
+				accountId := eventContext.Bearer.Account.Id
+
+				// check if userCredentials exists
+				userCredentials, err := app.accountCredentialsModel.FindOne(&wst.Filter{
+					Where: &wst.Where{
+						"accountId": accountId,
+						"provider":  string(ProviderOAuth2Prefix) + providerName,
+					},
+				}, systemContext)
+
+				if err != nil {
+					fmt.Printf("[DEBUG] Error while fetching credentials by accountId-provider: %v\n", err)
+					return verboseRedirect(eventContext, failureUrl, fmt.Errorf("failed to fetch oauth credentials: %w", err))
+				}
+
+				if userCredentials == nil {
+					return verboseRedirect(eventContext, failureUrl, fmt.Errorf("missing credentials"))
+				}
+
+				eventContext.Result = wst.M{
+					"tokenType":    userCredentials.GetString("tokenType"),
+					"accessToken":  userCredentials.GetString("accessToken"),
+					"refreshToken": userCredentials.GetString("refreshToken"),
+					"expiry":       userCredentials.GetInt("expiry"),
+					"scope":        userCredentials.GetString("scope"),
+				}
+
+				return nil
+
+			}, model.RemoteMethodOptions{
+				Name:        fmt.Sprintf(string(wst.OperationNameOauthGetOauthCredentials), providerName),
+				Description: fmt.Sprintf("Get %s access token", providerName),
+				Http: model.RemoteMethodOptionsHttp{
+					Verb: "get",
+					Path: fmt.Sprintf("/oauth/%s/credentials", providerName),
+				},
+			})
+
+		}
 	}
 
 }
