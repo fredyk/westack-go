@@ -530,8 +530,9 @@ const (
 	OperationNameEnableMfa   OperationName = "user_enableMfa"
 
 	// oauth2
-	OperationNameOauthLogin         OperationName = "%sLogin"
-	OperationNameOauthLoginCallback OperationName = "%sLoginCallback"
+	OperationNameOauthLogin               OperationName = "%sLogin"
+	OperationNameOauthLoginCallback       OperationName = "%sLoginCallback"
+	OperationNameOauthGetOauthCredentials OperationName = "%sGetOauthCredentials"
 )
 
 var (
