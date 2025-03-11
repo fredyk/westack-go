@@ -51,7 +51,7 @@ var defaultScopes = map[string][]string{
 	"fitbit":     {"profile"},
 	"foursquare": {},
 	// include access to repos
-	"github":        {"user:email", "repo"},
+	"github":        {},
 	"gitlab":        {"read_user"},
 	"heroku":        {},
 	"hipchat":       {},
