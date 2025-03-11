@@ -160,7 +160,15 @@ func mountOauthRoutes(app *WeStack, loadedModel *model.StatefulModel, systemCont
 
 		scopes := defaultScopes[providerName]
 		if v := provider["scopes"]; v != nil {
-			scopes = append(scopes, v.([]string)...)
+			if castedScopes, ok := v.([]string); ok {
+				scopes = append(scopes, castedScopes...)
+			} else if castedScopes, ok := v.([]any); ok {
+				for _, scope := range castedScopes {
+					scopes = append(scopes, scope.(string))
+				}
+			} else {
+				fmt.Printf("[ERROR] Invalid scopes for provider %v: %T(%v)\n", providerName, v, v)
+			}
 		}
 		userInfoUrl := userInfoUrls[providerName]
 
