@@ -312,6 +312,7 @@ func mountOauthRoutes(app *WeStack, loadedModel *model.StatefulModel, systemCont
 			}
 
 			var additionalUserInfo wst.M
+			fmt.Printf("[DEBUG] User Info: %v\n", userInfoData)
 			if additionalUserInfoMapping != nil {
 				additionalUserInfo = wst.M{}
 				for key, value := range additionalUserInfoMapping {
@@ -322,6 +323,7 @@ func mountOauthRoutes(app *WeStack, loadedModel *model.StatefulModel, systemCont
 					}
 				}
 			}
+			fmt.Printf("[DEBUG] Mapped user Info: %v\n", additionalUserInfo)
 
 			// check if userCredentials exists
 			userCredentials, err := app.accountCredentialsModel.FindOne(&wst.Filter{
