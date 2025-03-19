@@ -317,6 +317,8 @@ func mountOauthRoutes(app *WeStack, loadedModel *model.StatefulModel, systemCont
 				for key, value := range additionalUserInfoMapping {
 					if v := userInfoData[value.(string)]; v != nil {
 						additionalUserInfo[key] = v
+					} else {
+						fmt.Printf("WARNING: Field '%v' was not found in user info %v\n", value, userInfoData)
 					}
 				}
 			}
