@@ -170,6 +170,12 @@ func mountOauthRoutes(app *WeStack, loadedModel *model.StatefulModel, systemCont
 				fmt.Printf("[ERROR] Invalid scopes for provider %v: %T(%v)\n", providerName, v, v)
 			}
 		}
+
+		var additionalUserInfoMapping map[string]interface{}
+		if v := provider["additionalUserInfo"]; v != nil {
+			additionalUserInfoMapping = v.(map[string]interface{})
+		}
+
 		userInfoUrl := userInfoUrls[providerName]
 
 		endpoint, ok := knownEndpoints[providerName]
@@ -305,6 +311,16 @@ func mountOauthRoutes(app *WeStack, loadedModel *model.StatefulModel, systemCont
 				isEmail = true
 			}
 
+			var additionalUserInfo wst.M
+			if additionalUserInfoMapping != nil {
+				additionalUserInfo = wst.M{}
+				for key, value := range additionalUserInfoMapping {
+					if v := userInfoData[value.(string)]; v != nil {
+						additionalUserInfo[key] = v
+					}
+				}
+			}
+
 			// check if userCredentials exists
 			userCredentials, err := app.accountCredentialsModel.FindOne(&wst.Filter{
 				Where: &wst.Where{
@@ -370,6 +386,9 @@ func mountOauthRoutes(app *WeStack, loadedModel *model.StatefulModel, systemCont
 						"emailVerified": true,
 						"provider":      string(ProviderOAuth2Prefix) + providerName,
 					}
+					for key, value := range additionalUserInfo {
+						plainAccount[key] = value
+					}
 					if isEmail {
 						plainAccount["email"] = login
 					} else {
@@ -394,7 +413,11 @@ func mountOauthRoutes(app *WeStack, loadedModel *model.StatefulModel, systemCont
 				}
 
 				// create new credentials
-				fmt.Printf("[DEBUG] Creating new credentials for email: %v\n", login)
+				if isEmail {
+					fmt.Printf("[DEBUG] Creating new credentials for email: %v\n", login)
+				} else {
+					fmt.Printf("[DEBUG] Creating new credentials for login: %v\n", login)
+				}
 				plainCredentials := wst.M{
 					"accountId": accountId,
 					// "email":        login,
