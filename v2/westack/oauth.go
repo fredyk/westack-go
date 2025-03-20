@@ -521,11 +521,11 @@ func mountOauthRoutes(app *WeStack, loadedModel *model.StatefulModel, systemCont
 
 				if err != nil {
 					fmt.Printf("[DEBUG] Error while fetching credentials by accountId-provider: %v\n", err)
-					return verboseRedirect(eventContext, failureUrl, fmt.Errorf("failed to fetch oauth credentials: %w", err))
+					return wst.CreateError(fiber.ErrInternalServerError, "ERR_INTERNAL_SERVER_ERROR", fiber.Map{"message": fmt.Sprintf("Failed to fetch oauth credentials: %v", err)}, "Error")
 				}
 
 				if userCredentials == nil {
-					return verboseRedirect(eventContext, failureUrl, fmt.Errorf("missing credentials"))
+					return wst.CreateError(fiber.ErrNotFound, "ERR_CREDENTIALS_NOT_FOUND", fiber.Map{"message": "Credentials not found"}, "Error")
 				}
 
 				eventContext.Result = wst.M{
