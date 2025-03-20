@@ -667,7 +667,12 @@ func registerPersistedModelFixedHooks(loadedModel *model.StatefulModel, app *WeS
 		}
 		isDifferentAccount := true
 		if eventContext.BaseContext.Bearer != nil && eventContext.BaseContext.Bearer.Account != nil {
-			foundAccountId := eventContext.ModelID.(primitive.ObjectID).Hex()
+			var foundAccountId string
+			if eventContext.Model.Config.Base == "Account" || eventContext.Model.Config.Base == "App" {
+				foundAccountId = eventContext.ModelID.(primitive.ObjectID).Hex()
+			} else {
+				foundAccountId = eventContext.Data.GetString("accountId")
+			}
 			requesterAccountId := eventContext.BaseContext.Bearer.Account.Id
 			if v, ok := requesterAccountId.(primitive.ObjectID); ok {
 				requesterAccountId = v.Hex()
