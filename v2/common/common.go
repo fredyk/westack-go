@@ -28,7 +28,7 @@ import (
 
 var NilBytes = []byte{'n', 'u', 'l', 'l'}
 
-type M map[string]interface{}
+type M map[string]any
 
 func (m *M) GetM(key string) *M {
 	if m == nil {
@@ -37,7 +37,7 @@ func (m *M) GetM(key string) *M {
 	if v, ok := (*m)[key]; ok {
 		if vv, ok := v.(M); ok {
 			return &vv
-		} else if vv, ok := v.(map[string]interface{}); ok {
+		} else if vv, ok := v.(map[string]any); ok {
 			var out = make(M, len(vv))
 			for k, v := range vv {
 				out[k] = v
@@ -69,7 +69,7 @@ func (m *M) GetString(path string) string {
 		source := obtainSourceFromM(m, segments[:len(segments)-1])
 		if v, ok := source.(M); ok {
 			return v.GetString(segments[len(segments)-1])
-		} else if v, ok := source.(map[string]interface{}); ok {
+		} else if v, ok := source.(map[string]any); ok {
 			vv := v[segments[len(segments)-1]]
 			return vv.(string)
 		}
@@ -88,8 +88,26 @@ func (m *M) GetInt(path string) int {
 		source := obtainSourceFromM(m, segments[:len(segments)-1])
 		if v, ok := source.(M); ok {
 			return v.GetInt(segments[len(segments)-1])
-		} else if v, ok := source.(map[string]interface{}); ok {
+		} else if v, ok := source.(map[string]any); ok {
 			return asInt(v[segments[len(segments)-1]])
+		}
+	}
+	return 0
+}
+
+func (m *M) GetInt64(path string) int64 {
+	if m == nil {
+		return 0
+	}
+	segments := strings.Split(path, ".")
+	if len(segments) == 1 {
+		return asInt64((*m)[segments[0]])
+	} else {
+		source := obtainSourceFromM(m, segments[:len(segments)-1])
+		if v, ok := source.(M); ok {
+			return v.GetInt64(segments[len(segments)-1])
+		} else if v, ok := source.(map[string]any); ok {
+			return asInt64(v[segments[len(segments)-1]])
 		}
 	}
 	return 0
@@ -106,14 +124,14 @@ func (m *M) GetFloat64(path string) float64 {
 		source := obtainSourceFromM(m, segments[:len(segments)-1])
 		if v, ok := source.(M); ok {
 			return v.GetFloat64(segments[len(segments)-1])
-		} else if v, ok := source.(map[string]interface{}); ok {
+		} else if v, ok := source.(map[string]any); ok {
 			return asFloat64(v[segments[len(segments)-1]])
 		}
 	}
 	return 0
 }
 
-func asFloat64(v interface{}) float64 {
+func asFloat64(v any) float64 {
 	if v1, ok := v.(float64); ok {
 		return v1
 	} else if v1, ok := v.(int64); ok {
@@ -220,7 +238,7 @@ func (m *M) UnmarshalEasyJSON(l *jlexer.Lexer) {
 			//}
 			(*m)[key] = subA
 		} else {
-			var v interface{}
+			var v any
 			//goland:noinspection GoUnhandledErrorResult
 			json.Unmarshal(rawValue, &v)
 			//if err != nil {
@@ -282,13 +300,28 @@ func (m *M) ClearProperties(properties []string) {
 	}
 }
 
-func asInt(v interface{}) int {
+func asInt(v any) int {
 	if v1, ok := v.(int64); ok {
 		return int(v1)
 	} else if v1, ok := v.(float64); ok {
 		return int(v1)
 	} else if v1, ok := v.(string); ok {
 		if i, err := strconv.Atoi(v1); err == nil {
+			return i
+		}
+	}
+	return 0
+}
+
+func asInt64(v any) int64 {
+	if v1, ok := v.(int); ok {
+		return int64(v1)
+	} else if v1, ok := v.(int64); ok {
+		return v1
+	} else if v1, ok := v.(float64); ok {
+		return int64(v1)
+	} else if v1, ok := v.(string); ok {
+		if i, err := strconv.ParseInt(v1, 10, 64); err == nil {
 			return i
 		}
 	}
@@ -339,7 +372,7 @@ func (a *A) UnmarshalEasyJSON(l *jlexer.Lexer) {
 			//}
 			*a = append(*a, subM)
 		} else {
-			var v interface{}
+			var v any
 			//goland:noinspection GoUnhandledErrorResult
 			json.Unmarshal(rawValue, &v)
 			//if err != nil {
@@ -392,7 +425,7 @@ func (a *A) GetString(path string) string {
 	}
 	segments := strings.Split(path, ".")
 	segmentIdx := 0
-	var source interface{}
+	var source any
 	for {
 		if source == nil {
 			if segmentIdx == 0 {
@@ -412,7 +445,7 @@ func (a *A) GetString(path string) string {
 	}
 }
 
-func obtainSourceFromA(a *A, segments []string) interface{} {
+func obtainSourceFromA(a *A, segments []string) any {
 	if len(segments) > 1 {
 		var prevSource = obtainSourceFromA(a, segments[:len(segments)-1])
 		if v, ok := prevSource.(M); ok {
@@ -431,7 +464,7 @@ func obtainSourceFromA(a *A, segments []string) interface{} {
 	return (*a)[obtainIdxFromSegment(segments[0])]
 }
 
-func obtainSourceFromM(m *M, segments []string) interface{} {
+func obtainSourceFromM(m *M, segments []string) any {
 	if len(segments) > 1 {
 		var prevSource = obtainSourceFromM(m, segments[:len(segments)-1])
 		if v, ok := prevSource.(M); ok {
@@ -543,7 +576,7 @@ var (
 // AFromGenericSlice converts a generic slice of M to a *A
 // This is used to convert the result of a query to a *A
 // Returns nil if in is nil
-func AFromGenericSlice(in *[]interface{}) *A {
+func AFromGenericSlice(in *[]any) *A {
 
 	if in == nil {
 		return nil
@@ -644,8 +677,8 @@ type BsonOptions struct {
 type IApp struct {
 	Debug                       bool
 	SwaggerHelper               func() SwaggerHelper
-	FindModel                   func(modelName string) (interface{}, error)
-	FindDatasource              func(datasource string) (interface{}, error)
+	FindModel                   func(modelName string) (any, error)
+	FindDatasource              func(datasource string) (any, error)
 	GetAccountCredentialsConfig func() M
 	Logger                      func() ILogger
 	CompletedSetup              func() bool
@@ -686,7 +719,7 @@ func (err *WeStackError) Error() string {
 	return fmt.Sprintf("%v %v: %v", err.FiberError.Code, err.FiberError.Error(), *err.detailsSt)
 }
 
-func LoadFile(filePath string, out interface{}) error {
+func LoadFile(filePath string, out any) error {
 	jsonFile, err := os.ReadFile(filePath)
 	if err != nil {
 		return err
@@ -714,7 +747,7 @@ func CopyMap(src M) M {
 }
 
 // Transform High-cost operation...
-func Transform(in interface{}, out interface{}) error {
+func Transform(in any, out any) error {
 	// TODO: move marshal and unmarshal to easyjson
 	bytes, err := bson.Marshal(in)
 	if err != nil {
