@@ -187,6 +187,12 @@ func setupAccountModel(loadedModel *model.StatefulModel, app *WeStack) {
 		username := data.GetString("username")
 		mfaVerificationCode := data.GetString("verificationCode")
 
+		var ttl int64 = 604800 * 2 * 1000
+		receivedTtl := data.GetInt64("ttl")
+		if receivedTtl > 0 {
+			ttl = receivedTtl
+		}
+
 		if email == "" && username == "" {
 			return wst.CreateError(fiber.ErrBadRequest, "USERNAME_EMAIL_REQUIRED", fiber.Map{"message": "username or email is required"}, "ValidationError")
 		}
@@ -306,7 +312,7 @@ func setupAccountModel(loadedModel *model.StatefulModel, app *WeStack) {
 		token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 			"accountId": userIdHex,
 			"created":   time.Now().UnixMilli(),
-			"ttl":       604800 * 2 * 1000,
+			"ttl":       ttl,
 			"roles":     roleNames,
 		})
 
