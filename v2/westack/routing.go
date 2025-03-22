@@ -323,6 +323,15 @@ func mountAccountModelFixedRoutes(loadedModel *model.StatefulModel, app *WeStack
 		},
 	})
 
+	model.BindRemoteOperationWithContext(loadedModel, func(req *model.RemoteOperationReq[struct{}]) ([]byte, error) {
+		// This is a dummy operation. It is validated previously with Casbin, so if the user gets here, the token is valid
+		req.Ctx.StatusCode = fiber.StatusNoContent
+		return nil, nil
+	}, model.RemoteOptions().
+		WithName(string(wst.OperationNameValidateToken)).
+		WithPath("/token/validate").
+		WithVerb("get"))
+
 	mountOauthRoutes(app, loadedModel, systemContext)
 
 }
