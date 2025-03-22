@@ -158,5 +158,5 @@ func replaceVarNames(definition string) string {
 }
 
 func isValidEmail(email string) bool {
-	return emailRegex.MatchString(email)
+	return email != "" && strings.TrimSpace(email) != "" && emailRegex.MatchString(email)
 }
