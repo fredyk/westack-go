@@ -291,7 +291,7 @@ func mountOauthRoutes(app *WeStack, loadedModel *model.StatefulModel, systemCont
 			}
 			if !isValidEmail(login) {
 				if v := userInfoData["emails"]; v != nil {
-					emails := v.([]interface{})
+					emails := v.([]any)
 					if len(emails) > 0 {
 						login = emails[0].(string)
 					}
