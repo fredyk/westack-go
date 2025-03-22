@@ -330,7 +330,7 @@ func mountAccountModelFixedRoutes(loadedModel *model.StatefulModel, app *WeStack
 	}, model.RemoteOptions().
 		WithName(string(wst.OperationNameValidateToken)).
 		WithPath("/token/validate").
-		WithVerb("get"))
+		WithVerb("head"))
 
 	mountOauthRoutes(app, loadedModel, systemContext)
 
