@@ -553,9 +553,10 @@ const (
 	OperationNameDeleteById OperationName = "instance_delete"
 	OperationNameDeleteMany OperationName = "deleteMany"
 
-	OperationNameFindSelf     OperationName = "findSelf"
-	OperationNameLogin        OperationName = "login"
-	OperationNameRefreshToken OperationName = "refreshToken"
+	OperationNameFindSelf      OperationName = "findSelf"
+	OperationNameLogin         OperationName = "login"
+	OperationNameRefreshToken  OperationName = "refreshToken"
+	OperationNameValidateToken OperationName = "validateToken"
 
 	OperationNameCreateToken OperationName = "createToken"
 
