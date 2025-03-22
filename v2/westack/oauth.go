@@ -83,7 +83,7 @@ var userInfoUrls = map[string]string{
 	"facebook":      "https://graph.facebook.com/me?fields=email",
 	"fitbit":        "https://api.fitbit.com/1/user/-/profile.json",
 	"foursquare":    "https://api.foursquare.com/v2/users/self",
-	"github":        "https://api.github.com/user",
+	"github":        "https://api.github.com/user/emails",
 	"gitlab":        "https://gitlab.com/api/v4/user",
 	"heroku":        "https://api.heroku.com/account",
 	"hipchat":       "https://api.hipchat.com/v2/oauth/token",
@@ -278,10 +278,26 @@ func mountOauthRoutes(app *WeStack, loadedModel *model.StatefulModel, systemCont
 
 			defer userInfo.Body.Close()
 
+			var infoDataA wst.A
 			var userInfoData wst.M
-			err = json.NewDecoder(userInfo.Body).Decode(&userInfoData)
-			if err != nil {
-				return verboseRedirect(eventContext, failureUrl, fmt.Errorf("failed to decode user info: %w", err))
+			// github returns an array
+			if providerName == "github" {
+				err = json.NewDecoder(userInfo.Body).Decode(&infoDataA)
+				if err != nil {
+					return verboseRedirect(eventContext, failureUrl, fmt.Errorf("failed to decode user info: %w", err))
+				}
+				if len(infoDataA) == 0 {
+					return verboseRedirect(eventContext, failureUrl, fmt.Errorf("empty user info"))
+				}
+				userInfoData = infoDataA[0]
+				if userInfoData == nil {
+					return verboseRedirect(eventContext, failureUrl, fmt.Errorf("empty user info"))
+				}
+			} else {
+				err = json.NewDecoder(userInfo.Body).Decode(&userInfoData)
+				if err != nil {
+					return verboseRedirect(eventContext, failureUrl, fmt.Errorf("failed to decode user info: %w", err))
+				}
 			}
 
 			isEmail := false
