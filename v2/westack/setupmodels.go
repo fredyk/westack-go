@@ -86,13 +86,14 @@ func createCasbinModel(loadedModel *model.StatefulModel, app *WeStack, config *m
 	if config.Base == "Account" {
 		addOAuthLoginPolicies(casbModel)
 		// TODO: any other oauth login providers
-		casbModel.AddPolicy("p", "p", []string{replaceVarNames("$everyone,*,create,allow")})
-		casbModel.AddPolicy("p", "p", []string{replaceVarNames("$everyone,*,login,allow")})
+		casbModel.AddPolicy("p", "p", []string{replaceVarNames(fmt.Sprintf("$everyone,*,%s,allow", wst.OperationNameCreate))})
+		casbModel.AddPolicy("p", "p", []string{replaceVarNames(fmt.Sprintf("$everyone,*,%s,allow", wst.OperationNameLogin))})
 		casbModel.AddPolicy("p", "p", []string{replaceVarNames("$everyone,*,resetPassword,allow")})
-		casbModel.AddPolicy("p", "p", []string{replaceVarNames("$authenticated,*,findSelf,allow")})
+		casbModel.AddPolicy("p", "p", []string{replaceVarNames(fmt.Sprintf("$authenticated,*,%s,allow", wst.OperationNameFindSelf))})
 		casbModel.AddPolicy("p", "p", []string{replaceVarNames("$authenticated,*,sendVerificationEmail,allow")})
 		casbModel.AddPolicy("p", "p", []string{replaceVarNames("$authenticated,*,performEmailVerification,allow")})
-		casbModel.AddPolicy("p", "p", []string{replaceVarNames("$authenticated,*,refreshToken,allow")})
+		casbModel.AddPolicy("p", "p", []string{replaceVarNames(fmt.Sprintf("$authenticated,*,%s,allow", wst.OperationNameRefreshToken))})
+		casbModel.AddPolicy("p", "p", []string{replaceVarNames(fmt.Sprintf("$authenticated,*,%s,allow", wst.OperationNameValidateToken))})
 		casbModel.AddPolicy("p", "p", []string{replaceVarNames("$owner,*,findById,allow")})
 		casbModel.AddPolicy("p", "p", []string{replaceVarNames("$owner,*,instance_updateAttributes,allow")})
 		// TODO: check https://github.com/fredyk/westack-go/issues/447
