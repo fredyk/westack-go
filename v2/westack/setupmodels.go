@@ -317,6 +317,9 @@ func setupAccountModel(loadedModel *model.StatefulModel, app *WeStack) {
 		})
 
 		tokenString, err := token.SignedString(loadedModel.App.JwtSecretKey)
+		if err != nil {
+			return wst.CreateError(fiber.ErrInternalServerError, "JWT_ERROR", fiber.Map{"message": fmt.Sprintf("jwt error: %v", err)}, "Error")
+		}
 
 		ctx.StatusCode = fiber.StatusOK
 		ctx.Result = wst.LoginResult{Id: tokenString, AccountId: userIdHex}
