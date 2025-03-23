@@ -142,7 +142,7 @@ func BindRemoteOperationWithContext[T any, R any](loadedModel *StatefulModel, ha
 			if err != nil {
 				return ctx.Ctx.Status(fiber.StatusBadRequest).SendString(err.Error())
 			}
-		} else {
+		} else if isVerbWithBody {
 			err := ctx.Ctx.BodyParser(pointerToInput)
 			if err != nil {
 				return ctx.Ctx.Status(fiber.StatusBadRequest).SendString(err.Error())
