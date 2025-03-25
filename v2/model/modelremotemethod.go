@@ -498,7 +498,7 @@ func (loadedModel *StatefulModel) HandleRemoteMethod(name string, eventContext *
 					// io.Reader
 					if r, ok := eventContext.Result.(io.Reader); ok {
 						eventContext.Ctx.Set("Content-Type", "application/octet-stream")
-						return eventContext.Ctx.SendStream(r, -1)
+						return eventContext.Ctx.Status(eventContext.StatusCode).SendStream(r, -1)
 					}
 
 					// check struct
