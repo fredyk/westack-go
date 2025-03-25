@@ -3,6 +3,7 @@ package model
 import (
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"reflect"
 	"regexp"
@@ -493,6 +494,12 @@ func (loadedModel *StatefulModel) HandleRemoteMethod(name string, eventContext *
 			} else {
 
 				if eventContext.Result != nil {
+
+					// io.Reader
+					if r, ok := eventContext.Result.(io.Reader); ok {
+						eventContext.Ctx.Set("Content-Type", "application/octet-stream")
+						return eventContext.Ctx.SendStream(r, -1)
+					}
 
 					// check struct
 					if reflect.TypeOf(eventContext.Result).Kind() == reflect.Struct {
