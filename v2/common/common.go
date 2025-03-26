@@ -721,14 +721,21 @@ func (err *WeStackError) Error() string {
 }
 
 func LoadFile(filePath string, out any) error {
+
+	// out must be a pointer
+	if reflect.TypeOf(out).Kind() != reflect.Ptr {
+		return fmt.Errorf("out must be a pointer")
+	}
+
 	jsonFile, err := os.ReadFile(filePath)
 	if err != nil {
 		return err
 	}
-	err2 := json.Unmarshal(jsonFile, &out)
+	err2 := json.Unmarshal(jsonFile, out)
 	if err2 != nil {
 		return err2
 	}
+	jsonFile = nil
 	return nil
 }
 
