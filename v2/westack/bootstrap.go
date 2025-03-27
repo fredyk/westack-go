@@ -237,6 +237,11 @@ func (app *WeStack) loadDataSources() error {
 	dsViper.AddConfigPath("./server") // call multiple times to add many search paths
 	dsViper.AddConfigPath(".")        // optionally look for config in the working directory
 
+	dsViper.SetEnvPrefix("wst")
+	replacer := strings.NewReplacer(".", "_")
+	dsViper.SetEnvKeyReplacer(replacer)
+	dsViper.AutomaticEnv()
+
 	err := dsViper.ReadInConfig() // Find and read the config file
 	if err != nil {               // Handle errors reading the config file
 		switch err.(type) {
