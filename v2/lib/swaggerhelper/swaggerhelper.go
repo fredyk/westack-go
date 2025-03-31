@@ -259,11 +259,8 @@ func analyzeWithReflection(rootTypeName string, t reflect.Type, components *wst.
 	schema := wst.M{}
 	//valueOf := reflect.ValueOf(sample)
 	var fields int
-	if t.Kind() == reflect.Map {
-		return wst.M{
-			"type":       "object",
-			"properties": wst.M{},
-		}
+	if t.Kind() == reflect.Map || t.Kind() == reflect.Interface {
+		return wst.M{}
 	} else if t.Kind() == reflect.Ptr || t.Kind() == reflect.Interface {
 		fields = t.Elem().NumField()
 	} else {
