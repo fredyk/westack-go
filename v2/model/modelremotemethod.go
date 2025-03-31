@@ -497,7 +497,7 @@ func (loadedModel *StatefulModel) HandleRemoteMethod(name string, eventContext *
 
 					// io.Reader
 					if r, ok := eventContext.Result.(io.Reader); ok {
-						eventContext.Ctx.Set("Content-Type", "application/octet-stream")
+						// eventContext.Ctx.Set("Content-Type", "application/octet-stream")
 						fmt.Printf("Sending stream %T\n", r)
 						return eventContext.Ctx.Status(eventContext.StatusCode).SendStream(r, -1)
 					}
