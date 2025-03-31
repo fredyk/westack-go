@@ -43,7 +43,6 @@ var nonAlphanumericRegex = regexp.MustCompile(`[^\p{L}\p{N} .]+`)
 
 // minioConnection func for opening minio connection.
 func minioConnection(client MinioClient) (*minio.Client, error) {
-	ctx := context.Background()
 	endpoint := client.Endpoint
 	accessKeyID := client.AccessKey
 	secretAccessKey := client.SecretKey
@@ -53,18 +52,7 @@ func minioConnection(client MinioClient) (*minio.Client, error) {
 		Secure: true,
 	})
 	if errInit != nil {
-		return minioClient, errInit
-	}
-
-	// Make a new Bucket.
-	bucketName := client.Bucket
-
-	// Check to see if bucket already exists.
-	exists, errBucketExists := minioClient.BucketExists(ctx, bucketName)
-	if errBucketExists != nil {
-		return minioClient, errBucketExists
-	} else if !exists {
-		return minioClient, fmt.Errorf("bucket %s does not exist", bucketName)
+		return nil, errInit
 	}
 
 	return minioClient, errInit
