@@ -16,6 +16,11 @@ type LambdaError struct {
 	Message string `json:"message"`
 }
 
+type LambdaRequest struct {
+	Path     string `json:"__lmbd_path"`
+	BasePath string `json:"__lmbd_base_path"`
+}
+
 type LambdaResult struct {
 	StatusCode  int          `json:"statusCode"`
 	ContentType string       `json:"contentType"`
