@@ -507,11 +507,12 @@ func (loadedModel *StatefulModel) HandleRemoteMethod(name string, eventContext *
 							defer w.Flush()
 
 							fmt.Printf("Writing stream %T\n", r)
-							if _, err := io.Copy(w, r); err != nil {
+							if n, err := io.Copy(w, r); err != nil {
 								fmt.Printf("Error copying stream: %v\n", err)
 								return
+							} else {
+								fmt.Printf("Wrote %d bytes to stream\n", n)
 							}
-							fmt.Printf("Wrote %d bytes to stream\n", w.Buffered())
 
 						})
 
