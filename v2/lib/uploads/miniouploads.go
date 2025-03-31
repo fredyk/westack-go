@@ -3,21 +3,27 @@ package uploads
 import (
 	"context"
 	"fmt"
-	wst "github.com/fredyk/westack-go/v2/common"
-	"github.com/minio/minio-go/v7"
-	"github.com/minio/minio-go/v7/pkg/credentials"
 	"io"
 	"mime/multipart"
 	"net/textproto"
 	"os"
 	"regexp"
 	"strings"
+
+	wst "github.com/fredyk/westack-go/v2/common"
+	"github.com/minio/minio-go/v7"
+	"github.com/minio/minio-go/v7/pkg/credentials"
 )
 
 type MinioUpload struct {
 	File      multipart.FileHeader `json:"file"`
 	Name      string               `json:"name"`
 	Directory string               `json:"directory"`
+}
+
+type MinioDownload struct {
+	FileName  string `json:"fileName"`
+	Directory string `json:"directory"`
 }
 
 type MinioUploadResponse struct {
@@ -119,6 +125,35 @@ func (client MinioClient) UploadFile(upload MinioUpload) (MinioUploadResponse, e
 	minioUploadResponse.Url = resInfo
 
 	return minioUploadResponse, nil
+}
+
+func (client MinioClient) DownloadFile(download MinioDownload) (io.Reader, error) {
+	ctx := context.Background()
+	bucketName := client.Bucket
+	fileName := download.FileName
+	directory := download.Directory
+
+	// Create minio connection.
+	minioClient, err := minioConnection(client)
+	if err != nil {
+		fmt.Printf("Error creating minio connection: %v\n", err)
+		return nil, err
+	}
+
+	// remove leading and trailing slashes from directory and filename
+	directory = strings.Trim(directory, "/")
+	fileName = strings.Trim(fileName, "/")
+
+	objectName := directory + "/" + fileName
+
+	// Get the object
+	object, err := minioClient.GetObject(ctx, bucketName, objectName, minio.GetObjectOptions{})
+	if err != nil {
+		fmt.Printf("Error getting object: %v\n", err)
+		return nil, err
+	}
+
+	return object, nil
 }
 
 func CreateRawMultipart(fileName string, directory string, f *os.File, mimeType string) ([]byte, string, error) {
