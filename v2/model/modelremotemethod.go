@@ -1,6 +1,7 @@
 package model
 
 import (
+	"bufio"
 	"errors"
 	"fmt"
 	"io"
@@ -499,7 +500,22 @@ func (loadedModel *StatefulModel) HandleRemoteMethod(name string, eventContext *
 					if r, ok := eventContext.Result.(io.Reader); ok {
 						// eventContext.Ctx.Set("Content-Type", "application/octet-stream")
 						fmt.Printf("Sending stream %T\n", r)
-						return eventContext.Ctx.Status(eventContext.StatusCode).SendStream(r, -1)
+						eventContext.Ctx.Status(eventContext.StatusCode)
+
+						eventContext.Ctx.Response().SetBodyStreamWriter(func(w *bufio.Writer) {
+
+							defer w.Flush()
+
+							fmt.Printf("Writing stream %T\n", r)
+							if _, err := io.Copy(w, r); err != nil {
+								fmt.Printf("Error copying stream: %v\n", err)
+								return
+							}
+							fmt.Printf("Wrote %d bytes to stream\n", w.Buffered())
+
+						})
+
+						return nil
 					}
 
 					// check struct
