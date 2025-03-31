@@ -1,13 +1,14 @@
 package lambdas
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"os"
 	"regexp"
 	"strings"
 
-	"github.com/fredyk/westack-go/v2/model"
+	"github.com/gofiber/fiber/v2"
 )
 
 func convertHttpPathToFileLocation(basePath string, path string) string {
@@ -40,40 +41,25 @@ func convertHttpPathToFileLocation(basePath string, path string) string {
 	return path
 }
 
-func readFileBytes(fileLocation string) ([]byte, error) {
-	var fileContent []byte
+func openFile(fileLocation string) (f io.ReadCloser, err error) {
 	if fileLocation == "./assets/dist/" {
 		fileLocation = "./assets/dist/index.html"
 	}
-	f, err := os.Open(fileLocation)
-	if err != nil {
-		return nil, err
-	}
-	defer f.Close()
-	fileContent, err = io.ReadAll(f)
-	if err != nil {
-		return nil, err
-	}
-	return fileContent, nil
+	f, err = os.Open(fileLocation)
+	return
 }
 
-func SendStaticAsset(ctx *model.EventContext) error {
-	path := ctx.Data.GetString("__lmbd_path")
-	basePath := ctx.Data.GetString("__lmbd_base_path")
-	fmt.Printf("Path: %s\n", path)
-	fmt.Printf("Base path: %s\n", basePath)
+func SendStaticAsset(req LambdaRequest) (f io.ReadCloser, err error) {
+
+	path := req.Path
+	basePath := req.BasePath
 
 	fileLocation := convertHttpPathToFileLocation(basePath, path)
-	fmt.Printf("File location: %s\n", fileLocation)
-	var fileContent []byte
-	var err error
 	if fileLocation != "" {
-
-		fileContent, err = readFileBytes(fileLocation)
+		f, err = openFile(fileLocation)
 	} else {
-		fileContent = []byte("<html><body>No file found</body></html>")
+		f = io.NopCloser(bytes.NewReader([]byte("<html><body>No file found</body></html>")))
+		err = fiber.ErrNotFound
 	}
-
-	ctx.Result = fileContent
-	return err
+	return
 }
