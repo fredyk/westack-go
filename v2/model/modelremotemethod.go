@@ -510,7 +510,6 @@ func (loadedModel *StatefulModel) HandleRemoteMethod(name string, eventContext *
 							if n, err := io.Copy(w, r); err != nil {
 								fmt.Printf("Error copying stream: %v\n", err)
 								w.Write([]byte(err.Error()))
-								w.Flush()
 								return
 							} else {
 								fmt.Printf("Wrote %d bytes to stream\n", n)
