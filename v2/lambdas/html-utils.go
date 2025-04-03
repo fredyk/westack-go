@@ -8,7 +8,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/gofiber/fiber/v2"
+	modelentities "github.com/fredyk/westack-go/v2/lambdas/entities/model-entities"
 )
 
 func convertHttpPathToFileLocation(basePath string, path string) string {
@@ -58,7 +58,7 @@ func SendStaticAsset(req LambdaRequest) (f io.ReadCloser, err error) {
 		f, err = openFile(fileLocation)
 	} else {
 		f = io.NopCloser(bytes.NewReader([]byte("<html><body>No file found</body></html>")))
-		err = fiber.ErrNotFound
+		err = modelentities.ErrNotFound
 	}
 	return
 }
