@@ -5,7 +5,6 @@ import (
 
 	"github.com/fredyk/westack-go/v2/lambdas/entities"
 	modelentities "github.com/fredyk/westack-go/v2/lambdas/entities/model-entities"
-	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 var (
@@ -56,8 +55,8 @@ func (rtInstance *lambdaRemoteInstance) GetBoolean(path string, defaultValue boo
 	return false
 }
 
-func (rtInstance *lambdaRemoteInstance) GetObjectId(path string) primitive.ObjectID {
-	return primitive.NilObjectID
+func (rtInstance *lambdaRemoteInstance) GetObjectId(path string) any {
+	return nil
 }
 
 func (rtInstance *lambdaRemoteInstance) GetOne(relation string) modelentities.Instance {
