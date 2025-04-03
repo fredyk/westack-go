@@ -2,48 +2,47 @@ package lambdas
 
 import (
 	"bytes"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
 	"regexp"
 	"strings"
 
-	wst "github.com/fredyk/westack-go/v2/common"
-	"github.com/fredyk/westack-go/v2/model"
-	"github.com/gofiber/fiber/v2"
-	"github.com/mailru/easyjson"
+	"github.com/goccy/go-json"
+
+	"github.com/fredyk/westack-go/v2/lambdas/entities"
+	modelentities "github.com/fredyk/westack-go/v2/lambdas/entities/model-entities"
 )
 
 var (
-	_ model.Model = New(model.Config{})
+	_ modelentities.Model = New(modelentities.Config{})
 )
 
 type lambdaRemoteModel struct {
 	apiUrl  string
 	baseUrl string
-	config  model.Config
+	config  modelentities.Config
 }
 
-func (rtModel *lambdaRemoteModel) FindMany(filterMap *wst.Filter, currentContext *model.EventContext) model.Cursor {
+func (rtModel *lambdaRemoteModel) FindMany(filterMap *entities.Filter, currentContext *modelentities.EventContext) modelentities.Cursor {
 
 	fullUrl := rtModel.baseUrl
 	if filterMap != nil {
 		filterSt, err := marshalFilter(filterMap)
 		if err != nil {
-			return model.NewErrorCursor(err)
+			return modelentities.NewErrorCursor(err)
 		}
 		fullUrl = fmt.Sprintf("%s?filter=%s", fullUrl, filterSt)
 	}
 
-	c := make(chan model.Instance)
-	result := model.NewChannelCursor(c)
+	c := make(chan modelentities.Instance)
+	result := modelentities.NewChannelCursor(c)
 
 	go func() {
 		defer close(c)
 		req, err := http.NewRequest("GET", fullUrl, nil)
 		if err != nil {
-			result.(*model.ChannelCursor).Err = err
+			result.(*modelentities.ChannelCursor).Err = err
 			return
 		}
 
@@ -51,19 +50,19 @@ func (rtModel *lambdaRemoteModel) FindMany(filterMap *wst.Filter, currentContext
 
 		resp, err := http.DefaultClient.Do(req)
 		if err != nil {
-			result.(*model.ChannelCursor).Err = err
+			result.(*modelentities.ChannelCursor).Err = err
 			return
 		}
 
 		if resp.StatusCode != http.StatusOK {
-			result.(*model.ChannelCursor).Err = wst.CreateError(fiber.NewError(resp.StatusCode, resp.Status), "ERR_HTTP_STATUS_CODE", fiber.Map{"message": fmt.Sprintf("HTTP status code %d", resp.StatusCode)}, "Error")
+			result.(*modelentities.ChannelCursor).Err = modelentities.CreateError(modelentities.NewError(resp.StatusCode, resp.Status), "ERR_HTTP_STATUS_CODE", entities.M{"message": fmt.Sprintf("HTTP status code %d", resp.StatusCode)}, "Error")
 			return
 		}
 
-		var instances []model.Instance
+		var instances []modelentities.Instance
 		err = json.NewDecoder(resp.Body).Decode(&instances)
 		if err != nil {
-			result.(*model.ChannelCursor).Err = err
+			result.(*modelentities.ChannelCursor).Err = err
 			return
 		}
 
@@ -77,13 +76,13 @@ func (rtModel *lambdaRemoteModel) FindMany(filterMap *wst.Filter, currentContext
 
 }
 
-func appendBearer(currentContext *model.EventContext, req *http.Request) {
+func appendBearer(currentContext *modelentities.EventContext, req *http.Request) {
 	if currentContext != nil && currentContext.Bearer != nil && currentContext.Bearer.Raw != "" {
 		req.Header.Set("Authorization", "Bearer "+currentContext.Bearer.Raw)
 	}
 }
 
-func marshalFilter(filterMap *wst.Filter) (string, error) {
+func marshalFilter(filterMap *entities.Filter) (string, error) {
 	filterBytes, err := json.Marshal(filterMap)
 	if err != nil {
 		return "", err
@@ -92,17 +91,17 @@ func marshalFilter(filterMap *wst.Filter) (string, error) {
 	return filterSt, nil
 }
 
-func (rtModel *lambdaRemoteModel) Create(data interface{}, currentContext *model.EventContext) (model.Instance, error) {
+func (rtModel *lambdaRemoteModel) Create(data interface{}, currentContext *modelentities.EventContext) (modelentities.Instance, error) {
 
 	fullUrl := rtModel.baseUrl
-	var finalData wst.M
+	var finalData entities.M
 
 	if data != nil {
-		if v, ok := data.(wst.M); ok {
+		if v, ok := data.(entities.M); ok {
 			finalData = v
 		} else if v, ok := data.(map[string]interface{}); ok {
-			finalData = wst.M(v)
-		} else if v, ok := data.(*wst.M); ok {
+			finalData = entities.M(v)
+		} else if v, ok := data.(*entities.M); ok {
 			finalData = *v
 		} else {
 			return nil, fmt.Errorf("unsupported data type: %T", data)
@@ -112,7 +111,7 @@ func (rtModel *lambdaRemoteModel) Create(data interface{}, currentContext *model
 	var dataBytes []byte
 	var err error
 	if finalData != nil {
-		dataBytes, err = easyjson.Marshal(&finalData)
+		dataBytes, err = json.Marshal(&finalData)
 		if err != nil {
 			return nil, err
 		}
@@ -131,10 +130,10 @@ func (rtModel *lambdaRemoteModel) Create(data interface{}, currentContext *model
 	}
 
 	if resp.StatusCode != http.StatusCreated {
-		return nil, wst.CreateError(fiber.NewError(resp.StatusCode, resp.Status), "ERR_HTTP_STATUS_CODE", fiber.Map{"message": fmt.Sprintf("HTTP status code %d", resp.StatusCode)}, "Error")
+		return nil, modelentities.CreateError(modelentities.NewError(resp.StatusCode, resp.Status), "ERR_HTTP_STATUS_CODE", entities.M{"message": fmt.Sprintf("HTTP status code %d", resp.StatusCode)}, "Error")
 	}
 
-	var plainDoc wst.M
+	var plainDoc entities.M
 	err = json.NewDecoder(resp.Body).Decode(&plainDoc)
 	if err != nil {
 		return nil, err
@@ -144,29 +143,29 @@ func (rtModel *lambdaRemoteModel) Create(data interface{}, currentContext *model
 
 }
 
-func buildInstance(plainDoc wst.M, config model.Config) model.Instance {
+func buildInstance(plainDoc entities.M, config modelentities.Config) modelentities.Instance {
 	return &lambdaRemoteInstance{
 		data: &plainDoc,
 	}
 }
 
-func (rtModel *lambdaRemoteModel) FindById(id interface{}, filterMap *wst.Filter, baseContext *model.EventContext) (model.Instance, error) {
+func (rtModel *lambdaRemoteModel) FindById(id interface{}, filterMap *entities.Filter, baseContext *modelentities.EventContext) (modelentities.Instance, error) {
 	return nil, fmt.Errorf("not implemented")
 }
 
-func (rtModel *lambdaRemoteModel) Count(filterMap *wst.Filter, currentContext *model.EventContext) (wst.CountResult, error) {
-	return wst.CountResult{}, fmt.Errorf("not implemented")
+func (rtModel *lambdaRemoteModel) Count(filterMap *entities.Filter, currentContext *modelentities.EventContext) (modelentities.CountResult, error) {
+	return modelentities.CountResult{}, fmt.Errorf("not implemented")
 }
 
-func (rtModel *lambdaRemoteModel) DeleteById(id interface{}, currentContext *model.EventContext) (wst.DeleteResult, error) {
-	return wst.DeleteResult{}, fmt.Errorf("not implemented")
+func (rtModel *lambdaRemoteModel) DeleteById(id interface{}, currentContext *modelentities.EventContext) (modelentities.DeleteResult, error) {
+	return modelentities.DeleteResult{}, fmt.Errorf("not implemented")
 }
 
-func (rtModel *lambdaRemoteModel) UpdateById(id interface{}, data interface{}, currentContext *model.EventContext) (model.Instance, error) {
+func (rtModel *lambdaRemoteModel) UpdateById(id interface{}, data interface{}, currentContext *modelentities.EventContext) (modelentities.Instance, error) {
 	return nil, fmt.Errorf("not implemented")
 }
 
-func (rtModel *lambdaRemoteModel) GetConfig() *model.Config {
+func (rtModel *lambdaRemoteModel) GetConfig() *modelentities.Config {
 	return &rtModel.config
 }
 
@@ -174,7 +173,7 @@ func (rtModel *lambdaRemoteModel) GetName() string {
 	return rtModel.config.Name
 }
 
-func New(config model.Config) model.Model {
+func New(config modelentities.Config) modelentities.Model {
 
 	apiUrl := os.Getenv("WST_API_URL")
 	var plural string
