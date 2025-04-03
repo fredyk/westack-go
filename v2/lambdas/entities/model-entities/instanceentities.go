@@ -2,7 +2,6 @@ package modelentities
 
 import (
 	"github.com/fredyk/westack-go/v2/lambdas/entities"
-	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 type Instance interface {
@@ -16,7 +15,7 @@ type Instance interface {
 	GetInt(path string) int64
 	GetFloat64(path string) float64
 	GetBoolean(path string, defaultValue bool) bool
-	GetObjectId(path string) primitive.ObjectID
+	GetObjectId(path string) any
 	GetOne(relation string) Instance
 	GetMany(relation string) []Instance
 	GetModel() Model

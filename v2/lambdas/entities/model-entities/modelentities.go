@@ -6,7 +6,6 @@ import (
 	"github.com/goccy/go-json"
 
 	"github.com/fredyk/westack-go/v2/lambdas/entities"
-	"github.com/golang-jwt/jwt"
 )
 
 type Config struct {
@@ -112,7 +111,7 @@ type BearerToken struct {
 	Account *BearerAccount
 	Roles   []BearerRole
 	Raw     string
-	Claims  jwt.MapClaims
+	Claims  entities.M
 }
 
 type RemoteMethodOptionsHttp struct {
@@ -201,7 +200,7 @@ var (
 	}
 )
 
-func (err *HttpError) Error() string {
+func (err HttpError) Error() string {
 	return fmt.Sprintf("%d: %s", err.Code, err.Message)
 }
 
