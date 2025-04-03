@@ -62,3 +62,7 @@ func SendStaticAsset(req LambdaRequest) (f io.ReadCloser, err error) {
 	}
 	return
 }
+
+func CleanContentType(contentType string) string {
+	return strings.TrimSpace(strings.Split(contentType, ";")[0])
+}

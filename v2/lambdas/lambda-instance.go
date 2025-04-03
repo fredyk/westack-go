@@ -3,28 +3,28 @@ package lambdas
 import (
 	"fmt"
 
-	wst "github.com/fredyk/westack-go/v2/common"
-	"github.com/fredyk/westack-go/v2/model"
+	"github.com/fredyk/westack-go/v2/lambdas/entities"
+	modelentities "github.com/fredyk/westack-go/v2/lambdas/entities/model-entities"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 var (
-	_ model.Instance = &lambdaRemoteInstance{}
+	_ modelentities.Instance = &lambdaRemoteInstance{}
 )
 
 type lambdaRemoteInstance struct {
-	data *wst.M
+	data *entities.M
 }
 
 func (rtInstance *lambdaRemoteInstance) GetID() interface{} {
 	return fmt.Errorf("not implemented")
 }
 
-func (rtInstance *lambdaRemoteInstance) UpdateAttributes(data interface{}, baseContext *model.EventContext) (model.Instance, error) {
+func (rtInstance *lambdaRemoteInstance) UpdateAttributes(data interface{}, baseContext *modelentities.EventContext) (modelentities.Instance, error) {
 	return nil, fmt.Errorf("not implemented")
 }
 
-func (rtInstance *lambdaRemoteInstance) ToJSON() wst.M {
+func (rtInstance *lambdaRemoteInstance) ToJSON() entities.M {
 	return *rtInstance.data
 }
 
@@ -32,11 +32,11 @@ func (rtInstance *lambdaRemoteInstance) Get(relationName string) interface{} {
 	return fmt.Errorf("not implemented")
 }
 
-func (rtInstance *lambdaRemoteInstance) GetM(path string) *wst.M {
+func (rtInstance *lambdaRemoteInstance) GetM(path string) *entities.M {
 	return nil
 }
 
-func (rtInstance *lambdaRemoteInstance) GetA(path string) *wst.A {
+func (rtInstance *lambdaRemoteInstance) GetA(path string) []entities.M {
 	return nil
 }
 
@@ -60,14 +60,14 @@ func (rtInstance *lambdaRemoteInstance) GetObjectId(path string) primitive.Objec
 	return primitive.NilObjectID
 }
 
-func (rtInstance *lambdaRemoteInstance) GetOne(relation string) model.Instance {
+func (rtInstance *lambdaRemoteInstance) GetOne(relation string) modelentities.Instance {
 	return nil
 }
 
-func (rtInstance *lambdaRemoteInstance) GetMany(relation string) model.InstanceA {
+func (rtInstance *lambdaRemoteInstance) GetMany(relation string) []modelentities.Instance {
 	return nil
 }
 
-func (rtInstance *lambdaRemoteInstance) GetModel() model.Model {
+func (rtInstance *lambdaRemoteInstance) GetModel() modelentities.Model {
 	return nil
 }
