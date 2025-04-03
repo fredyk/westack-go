@@ -8,8 +8,7 @@ import (
 	"net/http"
 	"os"
 
-	wst "github.com/fredyk/westack-go/v2/common"
-	"github.com/mailru/easyjson"
+	"github.com/goccy/go-json"
 )
 
 type LambdaError struct {
@@ -22,16 +21,16 @@ type LambdaRequest struct {
 }
 
 type LambdaResult struct {
-	StatusCode  int          `json:"statusCode"`
-	ContentType string       `json:"contentType"`
-	Headers     wst.M        `json:"headers"`
-	Body        wst.M        `json:"body"`
-	RawBody     []byte       `json:"rawBody"`
-	Error       *LambdaError `json:"error"`
-	Json        bool         `json:"json"`
+	StatusCode  int            `json:"statusCode"`
+	ContentType string         `json:"contentType"`
+	Headers     map[string]any `json:"headers"`
+	Body        map[string]any `json:"body"`
+	RawBody     []byte         `json:"rawBody"`
+	Error       *LambdaError   `json:"error"`
+	Json        bool           `json:"json"`
 }
 
-func invoke(name string, method string, path string, payload wst.M) (result *LambdaResult, err error) {
+func invoke(name string, method string, path string, payload map[string]any) (result *LambdaResult, err error) {
 
 	baseUrl := os.Getenv("WST_API_URL")
 
@@ -43,7 +42,7 @@ func invoke(name string, method string, path string, payload wst.M) (result *Lam
 
 	var reqBytes []byte
 	if payload != nil {
-		reqBytes, err = easyjson.Marshal(&payload)
+		reqBytes, err = json.Marshal(&payload)
 		if err != nil {
 			return nil, err
 		}
@@ -60,14 +59,14 @@ func invoke(name string, method string, path string, payload wst.M) (result *Lam
 	}
 	defer resp.Body.Close()
 
-	headers := wst.M{}
+	headers := map[string]any{}
 	for k, v := range resp.Header {
 		headers[k] = v[0]
 	}
 
 	result = &LambdaResult{
 		StatusCode:  resp.StatusCode,
-		ContentType: wst.CleanContentType(resp.Header.Get("Content-Type")),
+		ContentType: CleanContentType(resp.Header.Get("Content-Type")),
 		Headers:     headers,
 	}
 	if resp.ContentLength > 0 {
@@ -77,7 +76,7 @@ func invoke(name string, method string, path string, payload wst.M) (result *Lam
 		}
 		// for application/json, parse it and not deliver rawBody, else deliver rawBody
 		if result.ContentType == "application/json" {
-			err = easyjson.Unmarshal(rawResponseBody, &result.Body)
+			err = json.Unmarshal(rawResponseBody, &result.Body)
 			if err != nil {
 				return nil, err
 			}
