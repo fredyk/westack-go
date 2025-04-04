@@ -2,6 +2,7 @@ package client
 
 import (
 	"fmt"
+	"net/url"
 	"regexp"
 	"strings"
 
@@ -37,7 +38,10 @@ func (m *modelImpl) FindMany(filter *wst.Filter) ([]wst.M, error) {
 		if err != nil {
 			return nil, err
 		}
-		fullUrl = fmt.Sprintf("%v?filter=%v", fullUrl, string(b))
+		filterSt := string(b)
+		// url encode
+		filterSt = url.QueryEscape(filterSt)
+		fullUrl = fmt.Sprintf("%v?filter=%s", fullUrl, filterSt)
 	}
 	return wstfuncs.InvokeApiJsonA("GET", fullUrl, nil, wst.M{
 		"Authorization": fmt.Sprintf("Bearer %s", m.client.GetToken()),
@@ -55,7 +59,10 @@ func (m *modelImpl) FindById(id string, filter *wst.Filter) (wst.M, error) {
 		if err != nil {
 			return nil, err
 		}
-		fullUrl = fmt.Sprintf("%v?filter=%v", fullUrl, string(b))
+		filterSt := string(b)
+		// url encode
+		filterSt = url.QueryEscape(filterSt)
+		fullUrl = fmt.Sprintf("%v?filter=%s", fullUrl, filterSt)
 	}
 	return wstfuncs.InvokeApiJsonM("GET", fullUrl, nil, wst.M{
 		"Authorization": fmt.Sprintf("Bearer %s", m.client.GetToken()),
