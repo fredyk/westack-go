@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"net/http/cookiejar"
+	"strconv"
 	"strings"
 	"time"
 
@@ -107,7 +108,34 @@ func invokeApiBytes(method string, url string, body wst.M, headers wst.M) ([]byt
 		return nil, fmt.Errorf("nil or empty response")
 	}
 	defer resp.Body.Close()
-	return io.ReadAll(resp.Body)
+
+	var length int64
+	contentLength := resp.Header.Get("Content-Length")
+	if contentLength == "" {
+		length = -1
+	} else {
+		var err error
+		length, err = strconv.ParseInt(contentLength, 10, 64)
+		if err != nil {
+			return nil, fmt.Errorf("invalid Content-Length header: %v", err)
+		}
+	}
+	if length == -1 {
+		return io.ReadAll(resp.Body)
+	} else if length > 0 {
+		out := make([]byte, length)
+		n, err := io.ReadFull(resp.Body, out)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read full response (%d/%d): %v", n, length, err)
+		}
+		if int64(n) != length {
+			return nil, fmt.Errorf("read %d bytes, expected %d", n, length)
+		}
+		return out, nil
+	} else {
+		return nil, fmt.Errorf("empty response, use InvokeApiFullResponse() to get the full response")
+	}
+
 }
 
 func jsonToReader(m wst.M) (io.Reader, error) {
