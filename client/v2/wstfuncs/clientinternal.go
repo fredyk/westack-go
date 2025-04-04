@@ -109,6 +109,11 @@ func invokeApiBytes(method string, url string, body wst.M, headers wst.M) ([]byt
 	}
 	defer resp.Body.Close()
 
+	if resp.StatusCode/100 == 4 || resp.StatusCode/100 == 5 {
+		b, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("error response: %s %s %s <-- '%s'", method, url, resp.Status, string(b))
+	}
+
 	var length int64
 	contentLength := resp.Header.Get("Content-Length")
 	if contentLength == "" {
