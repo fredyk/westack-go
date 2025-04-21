@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"net/url"
 	"os"
 	"regexp"
 	"strings"
@@ -52,6 +53,13 @@ func SendStaticAsset(req LambdaRequest) (f io.ReadCloser, err error) {
 
 	path := req.Path
 	basePath := req.BasePath
+
+	if path != "" {
+		path, err = url.QueryUnescape(path)
+		if err != nil {
+			return nil, fmt.Errorf("failed to decode URL: %w", err)
+		}
+	}
 
 	fileLocation := convertHttpPathToFileLocation(basePath, path)
 	if fileLocation != "" {
