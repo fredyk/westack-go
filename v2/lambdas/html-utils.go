@@ -73,6 +73,7 @@ func SendStaticAsset(w http.ResponseWriter, r *http.Request, req LambdaRequest) 
 
 	exists, fileLocation := convertHttpPathToFileLocation(basePath, path)
 	if !exists {
+		w.Header().Set("Content-Type", "text/html")
 		w.WriteHeader(http.StatusNotFound)
 		err = modelentities.ErrNotFound
 	}
