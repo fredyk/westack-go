@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"net/http"
 	"net/url"
 	"os"
 	"regexp"
@@ -12,7 +13,15 @@ import (
 	modelentities "github.com/fredyk/westack-go/v2/lambdas/entities/model-entities"
 )
 
-func convertHttpPathToFileLocation(basePath string, path string) string {
+// ConvertHttpPathToFileLocation converts the HTTP path to a file location
+// It takes the base path and the HTTP path as input
+// and returns the file location
+// It also checks if the file exists and returns a boolean value indicating
+// whether the file exists or not
+// If the file does not exist, it returns the default index.html file
+// If the path is a directory, it returns the index.html file in that directory
+// If the path is empty, it returns the default index.html file
+func convertHttpPathToFileLocation(basePath string, path string) (bool, string) {
 	// Escape path
 	// Map path to static file
 	// Return file location
@@ -25,20 +34,21 @@ func convertHttpPathToFileLocation(basePath string, path string) string {
 	path = regexp.MustCompile(re).ReplaceAllString(path, "./assets/dist/")
 
 	if _, err := os.Stat(path); os.IsNotExist(err) {
-		return "./assets/dist/index.html"
+		return false, "./assets/dist/index.html"
 	} else {
 		// if it is a directory, return the index.html file
 		if info, err := os.Stat(path); err == nil && info.IsDir() {
 			path = fmt.Sprintf("%s/index.html", path)
 			if _, err := os.Stat(path); os.IsNotExist(err) {
-				return "./assets/dist/index.html"
+				return false, "./assets/dist/index.html"
 			} else {
-				return path
+				return true, path
 			}
+		} else {
+			return true, path
 		}
 	}
 
-	return path
 }
 
 func openFile(fileLocation string) (f io.ReadCloser, err error) {
@@ -49,7 +59,7 @@ func openFile(fileLocation string) (f io.ReadCloser, err error) {
 	return
 }
 
-func SendStaticAsset(req LambdaRequest) (f io.ReadCloser, err error) {
+func SendStaticAsset(w http.ResponseWriter, r *http.Request, req LambdaRequest) (f io.ReadCloser, err error) {
 
 	path := req.Path
 	basePath := req.BasePath
@@ -61,7 +71,11 @@ func SendStaticAsset(req LambdaRequest) (f io.ReadCloser, err error) {
 		}
 	}
 
-	fileLocation := convertHttpPathToFileLocation(basePath, path)
+	exists, fileLocation := convertHttpPathToFileLocation(basePath, path)
+	if !exists {
+		w.WriteHeader(http.StatusNotFound)
+		err = modelentities.ErrNotFound
+	}
 	if fileLocation != "" {
 		f, err = openFile(fileLocation)
 	} else {
