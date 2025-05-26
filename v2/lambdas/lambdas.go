@@ -16,8 +16,13 @@ type LambdaError struct {
 }
 
 type LambdaRequest struct {
-	Path     string `json:"__lmbd_path"`
-	BasePath string `json:"__lmbd_base_path"`
+	Path        string              `json:"__lmbd_path"`
+	BasePath    string              `json:"__lmbd_base_path"`
+	QueryString string              `json:"__lmbd_query_string"`
+	Method      string              `json:"__lmbd_method"`
+	Bearer      string              `json:"__lmbd_bearer"`
+	Headers     map[string][]string `json:"__lmbd_headers"`
+	ContentType string              `json:"__lmbd_payload_content_type"`
 }
 
 type LambdaResult struct {
