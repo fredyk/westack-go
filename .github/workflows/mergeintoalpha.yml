@@ -3,6 +3,9 @@ name: Accept PRs into alpha
 on:
   pull_request:
     types: [synchronize, reopened, labeled]
+  push:
+    branches:
+      - features/sort-by-relation
 concurrency:
   group: ${{ github.event.pull_request.number }}
   cancel-in-progress: false
