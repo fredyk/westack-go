@@ -5,7 +5,7 @@ on:
     types: [synchronize, reopened, labeled]
   push:
     branches:
-      - features/sort-by-relation
+      - feature/sort-by-relation
 concurrency:
   group: ${{ github.event.pull_request.number }}
   cancel-in-progress: false
