@@ -139,15 +139,30 @@ var knownEndpoints = map[string]oauth2.Endpoint{
 	"yandex":        yandex.Endpoint,
 }
 
-func mountOauthRoutes(app *WeStack, loadedModel *model.StatefulModel, systemContext *model.EventContext) {
+type ClientCallbackUrls struct {
+	SuccessUrl string `json:"successUrl"`
+	FailureUrl string `json:"failureUrl"`
+}
 
+/*
+*
+
+	{
+	  "<ssid>": {
+
+	  }
+	}
+*/
+var clientCallbackUrlsBySSID = map[string]ClientCallbackUrls{}
+
+func mountOauthRoutes(app *WeStack, loadedModel *model.StatefulModel, systemContext *model.EventContext) {
 	appPublicOrigin := app.Viper.GetString("publicOrigin")
 	finalTokenTtl := app.Viper.GetFloat64("ttl")
 	if finalTokenTtl <= 0.0 {
 		finalTokenTtl = 30 * 86400
 	}
-	successUrl := app.Viper.GetString("oauth2.successRedirect")
-	failureUrl := app.Viper.GetString("oauth2.failureRedirect")
+	globalSuccessUrl := app.Viper.GetString("oauth2.successRedirect")
+	globalFailureUrl := app.Viper.GetString("oauth2.failureRedirect")
 
 	userProviders := app.Viper.GetStringMap("oauth2.providers")
 	for providerName, providerConfig := range userProviders {
@@ -226,8 +241,15 @@ func mountOauthRoutes(app *WeStack, loadedModel *model.StatefulModel, systemCont
 					Value: cookie,
 				})
 			}
+			successUrl := eventContext.Query.GetString("success_url")
+			failureUrl := eventContext.Query.GetString("failure_url")
+			if successUrl != "" && failureUrl != "" {
+				clientCallbackUrlsBySSID[cookie] = ClientCallbackUrls{
+					SuccessUrl: successUrl,
+					FailureUrl: failureUrl,
+				}
+			}
 			oauthStateString := utils.CreateOauthStateString(cookie)
-
 			fmt.Printf("[DEBUG] Oauth state: %v\n", oauthStateString)
 
 			url := oauthConfig.AuthCodeURL(oauthStateString, oauth2.AccessTypeOffline)
@@ -247,6 +269,15 @@ func mountOauthRoutes(app *WeStack, loadedModel *model.StatefulModel, systemCont
 		loadedModel.RemoteMethod(func(eventContext *model.EventContext) error {
 
 			cookie := eventContext.Ctx.Cookies("SSID")
+
+			successUrl := globalSuccessUrl
+			failureUrl := globalFailureUrl
+
+			overridedCallbackUrls, ok := clientCallbackUrlsBySSID[cookie]
+			if ok {
+				successUrl = overridedCallbackUrls.SuccessUrl
+				failureUrl = overridedCallbackUrls.FailureUrl
+			}
 
 			if cookie == "" {
 				return verboseRedirect(eventContext, failureUrl, fmt.Errorf("missing session"))
