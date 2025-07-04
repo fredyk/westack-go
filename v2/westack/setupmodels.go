@@ -231,9 +231,12 @@ func setupAccountModel(loadedModel *model.StatefulModel, app *WeStack) {
 		//accountCredentialsData := firstAccountCredentials.ToJSON()
 		savedPassword := firstAccountCredentials.GetString("password")
 
-		fullAccount := firstAccountCredentials.GetOne("account").(*model.StatefulInstance)
+		linkedAccount := firstAccountCredentials.GetOne("account")
+		if linkedAccount == nil {
+			return wst.CreateError(fiber.ErrUnauthorized, "LOGIN_FAILED", fiber.Map{"message": "login failed"}, "Error")
+		}
+		fullAccount := linkedAccount.(*model.StatefulInstance)
 		ctx.Instance = fullAccount
-
 		saltedPassword := fmt.Sprintf("%s%s", string(loadedModel.App.JwtSecretKey), (*data)["password"].(string))
 		err = bcrypt.CompareHashAndPassword([]byte(savedPassword), []byte(saltedPassword))
 		if err != nil {
