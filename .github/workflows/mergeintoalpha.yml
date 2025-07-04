@@ -60,7 +60,7 @@ jobs:
     timeout-minutes: 5
     strategy:
       matrix:
-        go: ["1.21", "1.22", "1.23"]
+        go: ["1.22", "1.23", "1.24"]
     env:
       WST_ADMIN_USERNAME: admin
       WST_ADMIN_PWD: Abcd1234.
@@ -164,19 +164,19 @@ jobs:
       - name: Upload coverage.txt
         uses: actions/upload-artifact@v4
         with:
-          name: coverage.txt
+          name: coverage-${{ matrix.go }}.txt
           path: coverage.txt
 
       - name: Upload coverage.summary.txt
         uses: actions/upload-artifact@v4
         with:
-          name: coverage.summary.txt
+          name: coverage.summary-${{ matrix.go }}.txt
           path: coverage.summary.txt
 
       - name: Upload test_output.txt
         uses: actions/upload-artifact@v4
         with:
-          name: test_output.txt
+          name: test_output-${{ matrix.go }}.txt
           path: test_output.txt
 
       - name: Process tests output
