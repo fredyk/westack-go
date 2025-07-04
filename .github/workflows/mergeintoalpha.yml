@@ -210,6 +210,17 @@ jobs:
               exit 1
             fi
           done
+      
+      - name: Analyze files with low coverage
+        if: always()
+        run: |
+          echo "Analyzing files with lowest test coverage:"
+          # Convert coverage.txt to lcov format for easier analysis
+          go tool cover -func=coverage.txt | sort -k 3 -n | head -n 20
+          echo ""
+          echo "Top 20 files with most uncovered lines:"
+          # Find files with most uncovered lines
+          go tool cover -func=coverage.txt | awk '{if ($3 < 100.0) {uncovered=100.0-$3; print $3 "% covered,", uncovered "% uncovered,", $1}}' | sort -k 2 -n -r | head -n 20
 
   merge_pr:
     runs-on: ubuntu-latest
