@@ -60,7 +60,7 @@ jobs:
     timeout-minutes: 5
     strategy:
       matrix:
-        go: ["1.23", "1.24", "1.25"]
+        go: ["1.22", "1.23", "1.24"]
     env:
       WST_ADMIN_USERNAME: admin
       WST_ADMIN_PWD: Abcd1234.
@@ -72,7 +72,7 @@ jobs:
       MINIO_DOMAIN: ${{ secrets.MINIO_DOMAIN }}
       MINIO_ACCESS_KEY: ${{ secrets.MINIO_ACCESS_KEY }}
       MINIO_SECRET_KEY: ${{ secrets.MINIO_SECRET_KEY }}
-      MIN_COVERAGE_THRESHOLD: 79.8
+      MIN_COVERAGE_THRESHOLD: 81.3
       JWT_SECRET: abcD12345678.
       GO_ENV: TESTING
       DEBUG: true
@@ -170,7 +170,7 @@ jobs:
       - name: Upload coverage.summary.txt
         uses: actions/upload-artifact@v4
         with:
-          name: coverage-${{ matrix.go }}.summary.txt
+          name: coverage.summary-${{ matrix.go }}.txt
           path: coverage.summary.txt
 
       - name: Upload test_output.txt
