@@ -233,6 +233,7 @@ func setupAccountModel(loadedModel *model.StatefulModel, app *WeStack) {
 
 		linkedAccount := firstAccountCredentials.GetOne("account")
 		if linkedAccount == nil {
+			fmt.Printf("WARNING: orphan account credentials found for %v <-- %s\n", email, firstAccountCredentials.GetString("id"))
 			return wst.CreateError(fiber.ErrUnauthorized, "LOGIN_FAILED", fiber.Map{"message": "login failed"}, "Error")
 		}
 		fullAccount := linkedAccount.(*model.StatefulInstance)
