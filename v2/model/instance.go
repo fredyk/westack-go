@@ -289,12 +289,20 @@ func (modelInstance *StatefulInstance) Reload(eventContext *EventContext) error 
 }
 
 func (modelInstance *StatefulInstance) GetString(path string) string {
+	st := getInstanceString(modelInstance, path)
+	if st == "" && path == "id" {
+		return getInstanceString(modelInstance, "_id")
+	}
+	return st
+}
+
+func getInstanceString(modelInstance *StatefulInstance, path string) string {
 	if res, err := jsonpath.JsonPathLookup(modelInstance.data, fmt.Sprintf("$.%v", path)); err == nil {
-		switch res.(type) {
+		switch res := res.(type) {
 		case string:
-			return res.(string)
+			return res
 		case primitive.ObjectID:
-			return res.(primitive.ObjectID).Hex()
+			return res.Hex()
 		}
 	}
 	return ""
