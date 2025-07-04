@@ -1096,7 +1096,7 @@ func (loadedModel *StatefulModel) GetHandler(event string) func(eventContext *Ev
 				return err
 			}
 			if loadedModel.App.Debug {
-				fmt.Println("no handler found for ", loadedModel.Name, ".", event)
+				fmt.Println("[DEBUG] no handler found for ", loadedModel.Name, ".", event)
 			}
 			return nil
 		}
