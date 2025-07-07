@@ -1,12 +1,13 @@
 module github.com/fredyk/westack-go/examples/basic-auth-example
 
-go 1.21.10
+go 1.22
+
 toolchain go1.22.9
 
 require (
 	github.com/fredyk/westack-go v1.8.8
 	github.com/gofiber/fiber/v2 v2.52.6
-	go.mongodb.org/mongo-driver v1.17.2
+	go.mongodb.org/mongo-driver v1.17.4
 )
 
 require (
