@@ -1,11 +1,12 @@
 module westack-go-example
 
-go 1.21.10
+go 1.22
+
 toolchain go1.22.9
 
 require (
 	github.com/fredyk/westack-go v1.8.8
-	github.com/gofiber/fiber/v2 v2.52.6
+	github.com/gofiber/fiber/v2 v2.52.9
 )
 
 require (
