@@ -242,8 +242,8 @@ func mountOauthRoutes(app *WeStack, loadedModel *model.StatefulModel, systemCont
 					Value: cookie,
 				})
 			}
-			successUrl := eventContext.Query.GetString("success_url")
-			failureUrl := eventContext.Query.GetString("failure_url")
+			successUrl := eventContext.Ctx.Query("success_url", "")
+			failureUrl := eventContext.Ctx.Query("failure_url", "")
 			if successUrl != "" && failureUrl != "" {
 				clientCallbackUrlsBySSID[cookie] = ClientCallbackUrls{
 					SuccessUrl: successUrl,
