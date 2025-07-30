@@ -156,7 +156,7 @@ type ClientCallbackUrls struct {
 	  }
 	}
 */
-var clientCallbackUrlsBySSID = map[string]ClientCallbackUrls{}
+var clientCallbackUrlsBySSID = map[string]*ClientCallbackUrls{}
 var clientCallbackUrlsMutex = sync.RWMutex{}
 
 // Cleanup expired callback URLs (older than 1 hour) - assumes caller holds the lock
@@ -181,31 +181,31 @@ func cleanupExpiredCallbackUrls() {
 func storeCallbackUrls(ssid, successUrl, failureUrl string) {
 	clientCallbackUrlsMutex.Lock()
 	defer clientCallbackUrlsMutex.Unlock()
-	
+
 	// Clean up first - using unsafe version since we already hold the lock
 	cleanupExpiredCallbackUrlsUnsafe()
-	
+
 	// Validate and sanitize URLs
 	cleanSuccessUrl := validateAndSanitizeUrl(successUrl)
 	cleanFailureUrl := validateAndSanitizeUrl(failureUrl)
-	
+
 	if cleanSuccessUrl == "" || cleanFailureUrl == "" {
 		fmt.Printf("[ERROR] Invalid callback URLs provided - success: %q, failure: %q\n", successUrl, failureUrl)
 		return
 	}
-	
-	clientCallbackUrlsBySSID[ssid] = ClientCallbackUrls{
+
+	clientCallbackUrlsBySSID[ssid] = &ClientCallbackUrls{
 		SuccessUrl: cleanSuccessUrl,
 		FailureUrl: cleanFailureUrl,
 		Timestamp:  time.Now().Unix(),
 	}
 	fmt.Printf("[DEBUG] Stored callback URLs for SSID: %v\n", ssid)
-	fmt.Printf("[DEBUG] Success URL stored: %v\n", cleanSuccessUrl)
-	fmt.Printf("[DEBUG] Failure URL stored: %v\n", cleanFailureUrl)
+	fmt.Printf("[DEBUG] Success URL stored: %v (%s)\n", cleanSuccessUrl, clientCallbackUrlsBySSID[ssid].SuccessUrl)
+	fmt.Printf("[DEBUG] Failure URL stored: %v (%s)\n", cleanFailureUrl, clientCallbackUrlsBySSID[ssid].FailureUrl)
 }
 
 // Retrieve callback URLs safely with mutex protection
-func getCallbackUrls(ssid string) (ClientCallbackUrls, bool) {
+func getCallbackUrls(ssid string) (*ClientCallbackUrls, bool) {
 	clientCallbackUrlsMutex.RLock()
 	defer clientCallbackUrlsMutex.RUnlock()
 
@@ -225,16 +225,16 @@ func validateAndSanitizeUrl(url string) string {
 	if url == "" {
 		return ""
 	}
-	
+
 	// Remove any null bytes or control characters that could cause corruption
 	cleaned := strings.ReplaceAll(url, "\x00", "")
 	cleaned = strings.ReplaceAll(cleaned, "\n", "")
 	cleaned = strings.ReplaceAll(cleaned, "\r", "")
 	cleaned = strings.ReplaceAll(cleaned, "\t", "")
-	
+
 	// Trim whitespace
 	cleaned = strings.TrimSpace(cleaned)
-	
+
 	fmt.Printf("[DEBUG] URL validation - original: %q, cleaned: %q\n", url, cleaned)
 	return cleaned
 }
@@ -253,7 +253,7 @@ func startCallbackUrlCleanup() {
 func debugDumpCallbackUrls() {
 	clientCallbackUrlsMutex.RLock()
 	defer clientCallbackUrlsMutex.RUnlock()
-	
+
 	fmt.Printf("[DEBUG] === Current stored callback URLs ===\n")
 	for ssid, urls := range clientCallbackUrlsBySSID {
 		fmt.Printf("[DEBUG] SSID: %v\n", ssid)
@@ -267,7 +267,7 @@ func debugDumpCallbackUrls() {
 func mountOauthRoutes(app *WeStack, loadedModel *model.StatefulModel, systemContext *model.EventContext) {
 	// Start the background cleanup routine
 	startCallbackUrlCleanup()
-	
+
 	appPublicOrigin := app.Viper.GetString("publicOrigin")
 	finalTokenTtl := app.Viper.GetFloat64("ttl")
 	if finalTokenTtl <= 0.0 {
@@ -357,9 +357,9 @@ func mountOauthRoutes(app *WeStack, loadedModel *model.StatefulModel, systemCont
 			}
 			successUrl := eventContext.Ctx.Query("success_url", "")
 			failureUrl := eventContext.Ctx.Query("failure_url", "")
-			
+
 			fmt.Printf("[DEBUG] Received query params - success_url: %v, failure_url: %v\n", successUrl, failureUrl)
-			
+
 			if successUrl != "" && failureUrl != "" {
 				fmt.Printf("[DEBUG] About to store URLs - success: %q, failure: %q\n", successUrl, failureUrl)
 				storeCallbackUrls(cookie, successUrl, failureUrl)
@@ -396,19 +396,19 @@ func mountOauthRoutes(app *WeStack, loadedModel *model.StatefulModel, systemCont
 				fmt.Printf("[DEBUG] Found override callback URLs for SSID: %v\n", cookie)
 				fmt.Printf("[DEBUG] Override Success URL: %q\n", overridedCallbackUrls.SuccessUrl)
 				fmt.Printf("[DEBUG] Override Failure URL: %q\n", overridedCallbackUrls.FailureUrl)
-				
+
 				// Additional corruption detection
 				if strings.Contains(overridedCallbackUrls.SuccessUrl, "sometuncothervalueconandothervalue") ||
-				   strings.Contains(overridedCallbackUrls.FailureUrl, "sometuncothervalueconandothervalue") {
+					strings.Contains(overridedCallbackUrls.FailureUrl, "sometuncothervalueconandothervalue") {
 					fmt.Printf("[ERROR] DETECTED CORRUPTION in callback URLs!\n")
 					fmt.Printf("[ERROR] Success URL corrupted: %q\n", overridedCallbackUrls.SuccessUrl)
 					fmt.Printf("[ERROR] Failure URL corrupted: %q\n", overridedCallbackUrls.FailureUrl)
 				}
-				
+
 				// use the overrided URLs
 				successUrl = overridedCallbackUrls.SuccessUrl
 				failureUrl = overridedCallbackUrls.FailureUrl
-				
+
 				// Clean up the stored URLs after use
 				clientCallbackUrlsMutex.Lock()
 				delete(clientCallbackUrlsBySSID, cookie)
