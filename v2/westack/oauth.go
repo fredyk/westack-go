@@ -547,6 +547,7 @@ func mountOauthRoutes(app *WeStack, loadedModel *model.StatefulModel, systemCont
 				return verboseRedirect(eventContext, failureUrl, fmt.Errorf("failed to sign token: %w", err))
 			}
 
+			fmt.Printf("[DEBUG] Redirecting to success URL: %v\n", successUrl)
 			return eventContext.Ctx.Redirect(successUrl + "?access_token=" + tokenString)
 
 		}, model.RemoteMethodOptions{
