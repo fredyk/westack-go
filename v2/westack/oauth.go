@@ -3,6 +3,7 @@ package westack
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	wst "github.com/fredyk/westack-go/v2/common"
@@ -275,6 +276,10 @@ func mountOauthRoutes(app *WeStack, loadedModel *model.StatefulModel, systemCont
 
 			overridedCallbackUrls, ok := clientCallbackUrlsBySSID[cookie]
 			if ok {
+				fmt.Printf("[DEBUG] Overriding callback URLs for SSID: %v\n", cookie)
+				fmt.Printf("[DEBUG] Success URL: %v\n", overridedCallbackUrls.SuccessUrl)
+				fmt.Printf("[DEBUG] Failure URL: %v\n", overridedCallbackUrls.FailureUrl)
+				// use the overrided URLs
 				successUrl = overridedCallbackUrls.SuccessUrl
 				failureUrl = overridedCallbackUrls.FailureUrl
 			}
@@ -548,7 +553,12 @@ func mountOauthRoutes(app *WeStack, loadedModel *model.StatefulModel, systemCont
 			}
 
 			fmt.Printf("[DEBUG] Redirecting to success URL: %v\n", successUrl)
-			return eventContext.Ctx.Redirect(successUrl + "?access_token=" + tokenString)
+			if strings.Contains(successUrl, "?") {
+				successUrl += "&"
+			} else {
+				successUrl += "?"
+			}
+			return eventContext.Ctx.Redirect(successUrl + "access_token=" + tokenString)
 
 		}, model.RemoteMethodOptions{
 			Name:        fmt.Sprintf(string(wst.OperationNameOauthLoginCallback), providerName),
