@@ -235,7 +235,35 @@ func validateAndSanitizeUrl(url string) string {
 	return cleaned
 }
 
+// Start a background routine to periodically clean up expired entries
+func startCallbackUrlCleanup() {
+	go func() {
+		for {
+			time.Sleep(30 * time.Minute) // Clean up every 30 minutes
+			cleanupExpiredCallbackUrls()
+		}
+	}()
+}
+
+// Debug function to dump all stored callback URLs
+func debugDumpCallbackUrls() {
+	clientCallbackUrlsMutex.RLock()
+	defer clientCallbackUrlsMutex.RUnlock()
+	
+	fmt.Printf("[DEBUG] === Current stored callback URLs ===\n")
+	for ssid, urls := range clientCallbackUrlsBySSID {
+		fmt.Printf("[DEBUG] SSID: %v\n", ssid)
+		fmt.Printf("[DEBUG]   Success: %q\n", urls.SuccessUrl)
+		fmt.Printf("[DEBUG]   Failure: %q\n", urls.FailureUrl)
+		fmt.Printf("[DEBUG]   Timestamp: %v\n", urls.Timestamp)
+	}
+	fmt.Printf("[DEBUG] === End dump ===\n")
+}
+
 func mountOauthRoutes(app *WeStack, loadedModel *model.StatefulModel, systemContext *model.EventContext) {
+	// Start the background cleanup routine
+	startCallbackUrlCleanup()
+	
 	appPublicOrigin := app.Viper.GetString("publicOrigin")
 	finalTokenTtl := app.Viper.GetFloat64("ttl")
 	if finalTokenTtl <= 0.0 {
@@ -329,7 +357,10 @@ func mountOauthRoutes(app *WeStack, loadedModel *model.StatefulModel, systemCont
 			fmt.Printf("[DEBUG] Received query params - success_url: %v, failure_url: %v\n", successUrl, failureUrl)
 			
 			if successUrl != "" && failureUrl != "" {
+				fmt.Printf("[DEBUG] About to store URLs - success: %q, failure: %q\n", successUrl, failureUrl)
+				debugDumpCallbackUrls() // Debug: dump state before storing
 				storeCallbackUrls(cookie, successUrl, failureUrl)
+				debugDumpCallbackUrls() // Debug: dump state after storing
 			} else {
 				fmt.Printf("[DEBUG] No callback URLs provided in query params\n")
 			}
