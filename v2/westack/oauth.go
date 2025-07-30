@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	wst "github.com/fredyk/westack-go/v2/common"
@@ -143,6 +144,7 @@ var knownEndpoints = map[string]oauth2.Endpoint{
 type ClientCallbackUrls struct {
 	SuccessUrl string `json:"successUrl"`
 	FailureUrl string `json:"failureUrl"`
+	Timestamp  int64  `json:"timestamp"`
 }
 
 /*
@@ -155,6 +157,83 @@ type ClientCallbackUrls struct {
 	}
 */
 var clientCallbackUrlsBySSID = map[string]ClientCallbackUrls{}
+var clientCallbackUrlsMutex = sync.RWMutex{}
+
+// Cleanup expired callback URLs (older than 1 hour)
+func cleanupExpiredCallbackUrls() {
+	clientCallbackUrlsMutex.Lock()
+	defer clientCallbackUrlsMutex.Unlock()
+
+	now := time.Now().Unix()
+	for ssid, urls := range clientCallbackUrlsBySSID {
+		if now-urls.Timestamp > 3600 { // 1 hour
+			delete(clientCallbackUrlsBySSID, ssid)
+			fmt.Printf("[DEBUG] Cleaned up expired callback URLs for SSID: %v\n", ssid)
+		}
+	}
+}
+
+// Store callback URLs safely with mutex protection
+func storeCallbackUrls(ssid, successUrl, failureUrl string) {
+	clientCallbackUrlsMutex.Lock()
+	defer clientCallbackUrlsMutex.Unlock()
+	
+	// Clean up first
+	cleanupExpiredCallbackUrls()
+	
+	// Validate and sanitize URLs
+	cleanSuccessUrl := validateAndSanitizeUrl(successUrl)
+	cleanFailureUrl := validateAndSanitizeUrl(failureUrl)
+	
+	if cleanSuccessUrl == "" || cleanFailureUrl == "" {
+		fmt.Printf("[ERROR] Invalid callback URLs provided - success: %q, failure: %q\n", successUrl, failureUrl)
+		return
+	}
+	
+	clientCallbackUrlsBySSID[ssid] = ClientCallbackUrls{
+		SuccessUrl: cleanSuccessUrl,
+		FailureUrl: cleanFailureUrl,
+		Timestamp:  time.Now().Unix(),
+	}
+	fmt.Printf("[DEBUG] Stored callback URLs for SSID: %v\n", ssid)
+	fmt.Printf("[DEBUG] Success URL stored: %v\n", cleanSuccessUrl)
+	fmt.Printf("[DEBUG] Failure URL stored: %v\n", cleanFailureUrl)
+}
+
+// Retrieve callback URLs safely with mutex protection
+func getCallbackUrls(ssid string) (ClientCallbackUrls, bool) {
+	clientCallbackUrlsMutex.RLock()
+	defer clientCallbackUrlsMutex.RUnlock()
+
+	urls, ok := clientCallbackUrlsBySSID[ssid]
+	if ok {
+		fmt.Printf("[DEBUG] Retrieved callback URLs for SSID: %v\n", ssid)
+		fmt.Printf("[DEBUG] Success URL retrieved: %v\n", urls.SuccessUrl)
+		fmt.Printf("[DEBUG] Failure URL retrieved: %v\n", urls.FailureUrl)
+	} else {
+		fmt.Printf("[DEBUG] No callback URLs found for SSID: %v\n", ssid)
+	}
+	return urls, ok
+}
+
+// Validate and sanitize URL to prevent corruption
+func validateAndSanitizeUrl(url string) string {
+	if url == "" {
+		return ""
+	}
+	
+	// Remove any null bytes or control characters that could cause corruption
+	cleaned := strings.ReplaceAll(url, "\x00", "")
+	cleaned = strings.ReplaceAll(cleaned, "\n", "")
+	cleaned = strings.ReplaceAll(cleaned, "\r", "")
+	cleaned = strings.ReplaceAll(cleaned, "\t", "")
+	
+	// Trim whitespace
+	cleaned = strings.TrimSpace(cleaned)
+	
+	fmt.Printf("[DEBUG] URL validation - original: %q, cleaned: %q\n", url, cleaned)
+	return cleaned
+}
 
 func mountOauthRoutes(app *WeStack, loadedModel *model.StatefulModel, systemContext *model.EventContext) {
 	appPublicOrigin := app.Viper.GetString("publicOrigin")
@@ -235,20 +314,24 @@ func mountOauthRoutes(app *WeStack, loadedModel *model.StatefulModel, systemCont
 			cookie := ""
 			if v := eventContext.Ctx.Cookies("SSID"); v != "" {
 				cookie = v
+				fmt.Printf("[DEBUG] Using existing SSID cookie: %v\n", cookie)
 			} else {
 				cookie = wst.GenerateCookie()
 				eventContext.Ctx.Cookie(&fiber.Cookie{
 					Name:  "SSID",
 					Value: cookie,
 				})
+				fmt.Printf("[DEBUG] Generated new SSID cookie: %v\n", cookie)
 			}
 			successUrl := eventContext.Ctx.Query("success_url", "")
 			failureUrl := eventContext.Ctx.Query("failure_url", "")
+			
+			fmt.Printf("[DEBUG] Received query params - success_url: %v, failure_url: %v\n", successUrl, failureUrl)
+			
 			if successUrl != "" && failureUrl != "" {
-				clientCallbackUrlsBySSID[cookie] = ClientCallbackUrls{
-					SuccessUrl: successUrl,
-					FailureUrl: failureUrl,
-				}
+				storeCallbackUrls(cookie, successUrl, failureUrl)
+			} else {
+				fmt.Printf("[DEBUG] No callback URLs provided in query params\n")
 			}
 			oauthStateString := utils.CreateOauthStateString(cookie)
 			fmt.Printf("[DEBUG] Oauth state: %v\n", oauthStateString)
@@ -270,18 +353,29 @@ func mountOauthRoutes(app *WeStack, loadedModel *model.StatefulModel, systemCont
 		loadedModel.RemoteMethod(func(eventContext *model.EventContext) error {
 
 			cookie := eventContext.Ctx.Cookies("SSID")
+			fmt.Printf("[DEBUG] Processing callback for SSID cookie: %v\n", cookie)
 
 			successUrl := globalSuccessUrl
 			failureUrl := globalFailureUrl
 
-			overridedCallbackUrls, ok := clientCallbackUrlsBySSID[cookie]
+			overridedCallbackUrls, ok := getCallbackUrls(cookie)
 			if ok {
-				fmt.Printf("[DEBUG] Overriding callback URLs for SSID: %v\n", cookie)
-				fmt.Printf("[DEBUG] Success URL: %v\n", overridedCallbackUrls.SuccessUrl)
-				fmt.Printf("[DEBUG] Failure URL: %v\n", overridedCallbackUrls.FailureUrl)
+				fmt.Printf("[DEBUG] Found override callback URLs for SSID: %v\n", cookie)
+				fmt.Printf("[DEBUG] Override Success URL: %v\n", overridedCallbackUrls.SuccessUrl)
+				fmt.Printf("[DEBUG] Override Failure URL: %v\n", overridedCallbackUrls.FailureUrl)
 				// use the overrided URLs
 				successUrl = overridedCallbackUrls.SuccessUrl
 				failureUrl = overridedCallbackUrls.FailureUrl
+				
+				// Clean up the stored URLs after use
+				clientCallbackUrlsMutex.Lock()
+				delete(clientCallbackUrlsBySSID, cookie)
+				clientCallbackUrlsMutex.Unlock()
+				fmt.Printf("[DEBUG] Cleaned up callback URLs for SSID: %v\n", cookie)
+			} else {
+				fmt.Printf("[DEBUG] Using global callback URLs for SSID: %v\n", cookie)
+				fmt.Printf("[DEBUG] Global Success URL: %v\n", globalSuccessUrl)
+				fmt.Printf("[DEBUG] Global Failure URL: %v\n", globalFailureUrl)
 			}
 
 			if cookie == "" {
