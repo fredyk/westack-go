@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
-	"sync"
 	"time"
 
 	wst "github.com/fredyk/westack-go/v2/common"
@@ -141,83 +140,74 @@ var knownEndpoints = map[string]oauth2.Endpoint{
 	"yandex":        yandex.Endpoint,
 }
 
-type ClientCallbackUrls struct {
-	SuccessUrl string `json:"successUrl"`
-	FailureUrl string `json:"failureUrl"`
-	Timestamp  int64  `json:"timestamp"`
-}
-
-/*
-*
-
-	{
-	  "<ssid>": {
-
-	  }
-	}
-*/
-var clientCallbackUrlsBySSID = map[string]*ClientCallbackUrls{}
-var clientCallbackUrlsMutex = sync.RWMutex{}
-
-// Cleanup expired callback URLs (older than 1 hour) - assumes caller holds the lock
-func cleanupExpiredCallbackUrlsUnsafe() {
-	now := time.Now().Unix()
-	for ssid, urls := range clientCallbackUrlsBySSID {
-		if now-urls.Timestamp > 3600 { // 1 hour
-			delete(clientCallbackUrlsBySSID, ssid)
-			fmt.Printf("[DEBUG] Cleaned up expired callback URLs for SSID: %v\n", ssid)
-		}
-	}
-}
-
-// Cleanup expired callback URLs with proper locking for external calls
-func cleanupExpiredCallbackUrls() {
-	clientCallbackUrlsMutex.Lock()
-	defer clientCallbackUrlsMutex.Unlock()
-	cleanupExpiredCallbackUrlsUnsafe()
-}
-
-// Store callback URLs safely with mutex protection
-func storeCallbackUrls(ssid, successUrl, failureUrl string) {
-	clientCallbackUrlsMutex.Lock()
-	defer clientCallbackUrlsMutex.Unlock()
-
-	// Clean up first - using unsafe version since we already hold the lock
-	cleanupExpiredCallbackUrlsUnsafe()
-
+// Store callback URLs in cookies
+func storeCallbackUrlsInCookies(ctx *fiber.Ctx, successUrl, failureUrl string) {
 	// Validate and sanitize URLs
 	cleanSuccessUrl := validateAndSanitizeUrl(successUrl)
 	cleanFailureUrl := validateAndSanitizeUrl(failureUrl)
-
+	
 	if cleanSuccessUrl == "" || cleanFailureUrl == "" {
 		fmt.Printf("[ERROR] Invalid callback URLs provided - success: %q, failure: %q\n", successUrl, failureUrl)
 		return
 	}
-
-	clientCallbackUrlsBySSID[ssid] = &ClientCallbackUrls{
-		SuccessUrl: cleanSuccessUrl,
-		FailureUrl: cleanFailureUrl,
-		Timestamp:  time.Now().Unix(),
-	}
-	fmt.Printf("[DEBUG] Stored callback URLs for SSID: %v\n", ssid)
-	fmt.Printf("[DEBUG] Success URL stored: %v (%s)\n", cleanSuccessUrl, clientCallbackUrlsBySSID[ssid].SuccessUrl)
-	fmt.Printf("[DEBUG] Failure URL stored: %v (%s)\n", cleanFailureUrl, clientCallbackUrlsBySSID[ssid].FailureUrl)
+	
+	// Store in cookies with HttpOnly and secure settings
+	ctx.Cookie(&fiber.Cookie{
+		Name:     "OAuth_SuccessURL",
+		Value:    cleanSuccessUrl,
+		HTTPOnly: true,
+		Secure:   true,
+		SameSite: "Lax",
+		MaxAge:   3600, // 1 hour
+	})
+	
+	ctx.Cookie(&fiber.Cookie{
+		Name:     "OAuth_FailureURL", 
+		Value:    cleanFailureUrl,
+		HTTPOnly: true,
+		Secure:   true,
+		SameSite: "Lax",
+		MaxAge:   3600, // 1 hour
+	})
+	
+	fmt.Printf("[DEBUG] Stored callback URLs in cookies\n")
+	fmt.Printf("[DEBUG] Success URL stored: %v\n", cleanSuccessUrl)
+	fmt.Printf("[DEBUG] Failure URL stored: %v\n", cleanFailureUrl)
 }
 
-// Retrieve callback URLs safely with mutex protection
-func getCallbackUrls(ssid string) (*ClientCallbackUrls, bool) {
-	clientCallbackUrlsMutex.RLock()
-	defer clientCallbackUrlsMutex.RUnlock()
-
-	urls, ok := clientCallbackUrlsBySSID[ssid]
-	if ok {
-		fmt.Printf("[DEBUG] Retrieved callback URLs for SSID: %v\n", ssid)
-		fmt.Printf("[DEBUG] Success URL retrieved: %v\n", urls.SuccessUrl)
-		fmt.Printf("[DEBUG] Failure URL retrieved: %v\n", urls.FailureUrl)
+// Retrieve callback URLs from cookies
+func getCallbackUrlsFromCookies(ctx *fiber.Ctx) (string, string, bool) {
+	successUrl := ctx.Cookies("OAuth_SuccessURL", "")
+	failureUrl := ctx.Cookies("OAuth_FailureURL", "")
+	
+	if successUrl != "" && failureUrl != "" {
+		fmt.Printf("[DEBUG] Retrieved callback URLs from cookies\n")
+		fmt.Printf("[DEBUG] Success URL retrieved: %v\n", successUrl)
+		fmt.Printf("[DEBUG] Failure URL retrieved: %v\n", failureUrl)
+		return successUrl, failureUrl, true
 	} else {
-		fmt.Printf("[DEBUG] No callback URLs found for SSID: %v\n", ssid)
+		fmt.Printf("[DEBUG] No callback URLs found in cookies\n")
+		return "", "", false
 	}
-	return urls, ok
+}
+
+// Clear callback URL cookies after use
+func clearCallbackUrlCookies(ctx *fiber.Ctx) {
+	ctx.Cookie(&fiber.Cookie{
+		Name:     "OAuth_SuccessURL",
+		Value:    "",
+		HTTPOnly: true,
+		Expires:  time.Now().Add(-time.Hour),
+	})
+	
+	ctx.Cookie(&fiber.Cookie{
+		Name:     "OAuth_FailureURL",
+		Value:    "",
+		HTTPOnly: true,
+		Expires:  time.Now().Add(-time.Hour),
+	})
+	
+	fmt.Printf("[DEBUG] Cleared callback URL cookies\n")
 }
 
 // Validate and sanitize URL to prevent corruption
@@ -239,34 +229,7 @@ func validateAndSanitizeUrl(url string) string {
 	return cleaned
 }
 
-// Start a background routine to periodically clean up expired entries
-func startCallbackUrlCleanup() {
-	go func() {
-		for {
-			time.Sleep(30 * time.Minute) // Clean up every 30 minutes
-			cleanupExpiredCallbackUrls()
-		}
-	}()
-}
-
-// Debug function to dump all stored callback URLs
-func debugDumpCallbackUrls() {
-	clientCallbackUrlsMutex.RLock()
-	defer clientCallbackUrlsMutex.RUnlock()
-
-	fmt.Printf("[DEBUG] === Current stored callback URLs ===\n")
-	for ssid, urls := range clientCallbackUrlsBySSID {
-		fmt.Printf("[DEBUG] SSID: %v\n", ssid)
-		fmt.Printf("[DEBUG]   Success: %q\n", urls.SuccessUrl)
-		fmt.Printf("[DEBUG]   Failure: %q\n", urls.FailureUrl)
-		fmt.Printf("[DEBUG]   Timestamp: %v\n", urls.Timestamp)
-	}
-	fmt.Printf("[DEBUG] === End dump ===\n")
-}
-
 func mountOauthRoutes(app *WeStack, loadedModel *model.StatefulModel, systemContext *model.EventContext) {
-	// Start the background cleanup routine
-	startCallbackUrlCleanup()
 
 	appPublicOrigin := app.Viper.GetString("publicOrigin")
 	finalTokenTtl := app.Viper.GetFloat64("ttl")
@@ -362,7 +325,7 @@ func mountOauthRoutes(app *WeStack, loadedModel *model.StatefulModel, systemCont
 
 			if successUrl != "" && failureUrl != "" {
 				fmt.Printf("[DEBUG] About to store URLs - success: %q, failure: %q\n", successUrl, failureUrl)
-				storeCallbackUrls(cookie, successUrl, failureUrl)
+				storeCallbackUrlsInCookies(eventContext.Ctx, successUrl, failureUrl)
 			} else {
 				fmt.Printf("[DEBUG] No callback URLs provided in query params\n")
 			}
@@ -391,31 +354,28 @@ func mountOauthRoutes(app *WeStack, loadedModel *model.StatefulModel, systemCont
 			successUrl := globalSuccessUrl
 			failureUrl := globalFailureUrl
 
-			overridedCallbackUrls, ok := getCallbackUrls(cookie)
-			if ok {
-				fmt.Printf("[DEBUG] Found override callback URLs for SSID: %v\n", cookie)
-				fmt.Printf("[DEBUG] Override Success URL: %q\n", overridedCallbackUrls.SuccessUrl)
-				fmt.Printf("[DEBUG] Override Failure URL: %q\n", overridedCallbackUrls.FailureUrl)
+			overrideSuccessUrl, overrideFailureUrl, hasOverride := getCallbackUrlsFromCookies(eventContext.Ctx)
+			if hasOverride {
+				fmt.Printf("[DEBUG] Found override callback URLs in cookies\n")
+				fmt.Printf("[DEBUG] Override Success URL: %q\n", overrideSuccessUrl)
+				fmt.Printf("[DEBUG] Override Failure URL: %q\n", overrideFailureUrl)
 
 				// Additional corruption detection
-				if strings.Contains(overridedCallbackUrls.SuccessUrl, "sometuncothervalueconandothervalue") ||
-					strings.Contains(overridedCallbackUrls.FailureUrl, "sometuncothervalueconandothervalue") {
+				if strings.Contains(overrideSuccessUrl, "sometuncothervalueconandothervalue") ||
+					strings.Contains(overrideFailureUrl, "sometuncothervalueconandothervalue") {
 					fmt.Printf("[ERROR] DETECTED CORRUPTION in callback URLs!\n")
-					fmt.Printf("[ERROR] Success URL corrupted: %q\n", overridedCallbackUrls.SuccessUrl)
-					fmt.Printf("[ERROR] Failure URL corrupted: %q\n", overridedCallbackUrls.FailureUrl)
+					fmt.Printf("[ERROR] Success URL corrupted: %q\n", overrideSuccessUrl)
+					fmt.Printf("[ERROR] Failure URL corrupted: %q\n", overrideFailureUrl)
 				}
 
 				// use the overrided URLs
-				successUrl = overridedCallbackUrls.SuccessUrl
-				failureUrl = overridedCallbackUrls.FailureUrl
+				successUrl = overrideSuccessUrl
+				failureUrl = overrideFailureUrl
 
-				// Clean up the stored URLs after use
-				clientCallbackUrlsMutex.Lock()
-				delete(clientCallbackUrlsBySSID, cookie)
-				clientCallbackUrlsMutex.Unlock()
-				fmt.Printf("[DEBUG] Cleaned up callback URLs for SSID: %v\n", cookie)
+				// Clear the cookies after use
+				clearCallbackUrlCookies(eventContext.Ctx)
 			} else {
-				fmt.Printf("[DEBUG] Using global callback URLs for SSID: %v\n", cookie)
+				fmt.Printf("[DEBUG] Using global callback URLs\n")
 				fmt.Printf("[DEBUG] Global Success URL: %v\n", globalSuccessUrl)
 				fmt.Printf("[DEBUG] Global Failure URL: %v\n", globalFailureUrl)
 			}
