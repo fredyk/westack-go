@@ -159,11 +159,8 @@ type ClientCallbackUrls struct {
 var clientCallbackUrlsBySSID = map[string]ClientCallbackUrls{}
 var clientCallbackUrlsMutex = sync.RWMutex{}
 
-// Cleanup expired callback URLs (older than 1 hour)
-func cleanupExpiredCallbackUrls() {
-	clientCallbackUrlsMutex.Lock()
-	defer clientCallbackUrlsMutex.Unlock()
-
+// Cleanup expired callback URLs (older than 1 hour) - assumes caller holds the lock
+func cleanupExpiredCallbackUrlsUnsafe() {
 	now := time.Now().Unix()
 	for ssid, urls := range clientCallbackUrlsBySSID {
 		if now-urls.Timestamp > 3600 { // 1 hour
@@ -173,13 +170,20 @@ func cleanupExpiredCallbackUrls() {
 	}
 }
 
+// Cleanup expired callback URLs with proper locking for external calls
+func cleanupExpiredCallbackUrls() {
+	clientCallbackUrlsMutex.Lock()
+	defer clientCallbackUrlsMutex.Unlock()
+	cleanupExpiredCallbackUrlsUnsafe()
+}
+
 // Store callback URLs safely with mutex protection
 func storeCallbackUrls(ssid, successUrl, failureUrl string) {
 	clientCallbackUrlsMutex.Lock()
 	defer clientCallbackUrlsMutex.Unlock()
 	
-	// Clean up first
-	cleanupExpiredCallbackUrls()
+	// Clean up first - using unsafe version since we already hold the lock
+	cleanupExpiredCallbackUrlsUnsafe()
 	
 	// Validate and sanitize URLs
 	cleanSuccessUrl := validateAndSanitizeUrl(successUrl)
@@ -358,9 +362,7 @@ func mountOauthRoutes(app *WeStack, loadedModel *model.StatefulModel, systemCont
 			
 			if successUrl != "" && failureUrl != "" {
 				fmt.Printf("[DEBUG] About to store URLs - success: %q, failure: %q\n", successUrl, failureUrl)
-				debugDumpCallbackUrls() // Debug: dump state before storing
 				storeCallbackUrls(cookie, successUrl, failureUrl)
-				debugDumpCallbackUrls() // Debug: dump state after storing
 			} else {
 				fmt.Printf("[DEBUG] No callback URLs provided in query params\n")
 			}
@@ -392,8 +394,17 @@ func mountOauthRoutes(app *WeStack, loadedModel *model.StatefulModel, systemCont
 			overridedCallbackUrls, ok := getCallbackUrls(cookie)
 			if ok {
 				fmt.Printf("[DEBUG] Found override callback URLs for SSID: %v\n", cookie)
-				fmt.Printf("[DEBUG] Override Success URL: %v\n", overridedCallbackUrls.SuccessUrl)
-				fmt.Printf("[DEBUG] Override Failure URL: %v\n", overridedCallbackUrls.FailureUrl)
+				fmt.Printf("[DEBUG] Override Success URL: %q\n", overridedCallbackUrls.SuccessUrl)
+				fmt.Printf("[DEBUG] Override Failure URL: %q\n", overridedCallbackUrls.FailureUrl)
+				
+				// Additional corruption detection
+				if strings.Contains(overridedCallbackUrls.SuccessUrl, "sometuncothervalueconandothervalue") ||
+				   strings.Contains(overridedCallbackUrls.FailureUrl, "sometuncothervalueconandothervalue") {
+					fmt.Printf("[ERROR] DETECTED CORRUPTION in callback URLs!\n")
+					fmt.Printf("[ERROR] Success URL corrupted: %q\n", overridedCallbackUrls.SuccessUrl)
+					fmt.Printf("[ERROR] Failure URL corrupted: %q\n", overridedCallbackUrls.FailureUrl)
+				}
+				
 				// use the overrided URLs
 				successUrl = overridedCallbackUrls.SuccessUrl
 				failureUrl = overridedCallbackUrls.FailureUrl
