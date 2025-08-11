@@ -413,9 +413,15 @@ func analyzeWithReflection(rootTypeName string, t reflect.Type, components *wst.
 				}
 			}
 		case reflect.Interface:
-			log.Fatalf("Interfaces are not meant to be used in JSON serialization at %s->%s", rootTypeName, field.Name)
+			fmt.Printf("[ERROR] Interfaces are not meant to be used in JSON serialization at %s->%s\n", rootTypeName, field.Name)
+			schema[tagged] = wst.M{
+				"type": "string", // fallback to string
+			}
 		default:
-			panic("Unknown type " + field.Type.Kind().String())
+			fmt.Printf("[ERROR] Unknown type %T at %s->%s\n", field.Type, rootTypeName, field.Name)
+			schema[tagged] = wst.M{
+				"type": "string", // fallback to string
+			}
 		}
 	}
 	return schema
