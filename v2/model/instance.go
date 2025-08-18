@@ -273,17 +273,9 @@ func (modelInstance *StatefulInstance) Reload(eventContext *EventContext) error 
 	if err != nil {
 		return err
 	}
-	for k := range modelInstance.data {
-		if (*modelInstance.Model.Config.Relations)[k] == nil {
-			delete(modelInstance.data, k)
-		}
-	}
-	for k, v := range newInstance.(*StatefulInstance).data {
-		if (*modelInstance.Model.Config.Relations)[k] == nil {
-			modelInstance.data[k] = v
-		}
-	}
-	modelInstance.data = newInstance.(*StatefulInstance).data
+	// Replace with a COPY of the freshly loaded instance data to avoid
+	// concurrent iteration/write issues and shared map aliasing.
+	modelInstance.data = wst.CopyMap(newInstance.(*StatefulInstance).data)
 	modelInstance.bytes = nil
 	return nil
 }
