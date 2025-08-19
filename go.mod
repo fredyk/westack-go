@@ -6,7 +6,7 @@ toolchain go1.23.0
 
 require (
 	github.com/andybalholm/brotli v1.1.1
-	github.com/casbin/casbin/v2 v2.103.0
+	github.com/casbin/casbin/v2 v2.120.0
 	github.com/goccy/go-json v0.10.4
 	github.com/gofiber/fiber/v2 v2.52.6
 	github.com/golang-jwt/jwt v3.2.2+incompatible
