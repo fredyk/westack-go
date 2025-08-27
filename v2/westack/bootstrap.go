@@ -657,6 +657,51 @@ func registerPersistedModelFixedHooks(loadedModel *model.StatefulModel, app *WeS
 					if err != nil {
 						return err
 					}
+				} else if (*data)["password"] != nil && (*data)["password"] != "" {
+					// No password credentials exist, but user wants to set a password
+					// Create new password credentials for OAuth-only account
+					password := (*data)["password"].(string)
+					
+					// Apply same security validation as account creation
+					if strings.TrimSpace(password) == "" {
+						return wst.CreateError(fiber.ErrBadRequest, "PASSWORD_BLANK", fiber.Map{"message": "Invalid password"}, "ValidationError")
+					} else if !wst.IsSecurePassword(password) {
+						return wst.CreateError(fiber.ErrBadRequest, "PASSWORD_INSECURE", fiber.Map{"message": "Password length must be at least 8 characters and contain at least one uppercase letter, one lowercase letter, one number and one special character"}, "ValidationError")
+					}
+					
+					// Hash password with same method as existing flow
+					hashed, err := bcrypt.GenerateFromPassword([]byte(fmt.Sprintf("%s%s", string(loadedModel.App.JwtSecretKey), password)), 11)
+					if err != nil {
+						return err
+					}
+					
+					// Get account email/username for the new credentials
+					account, err := loadedModel.FindById(ctx.ModelID, &wst.Filter{}, ctx)
+					if err != nil {
+						return err
+					}
+					
+					// Create new password credentials
+					newCredentials := wst.M{
+						"accountId": ctx.ModelID,
+						"provider":  string(ProviderPassword),
+						"password":  string(hashed),
+					}
+					
+					// Add email or username from account
+					if email := account.GetString("email"); email != "" {
+						newCredentials["email"] = email
+					}
+					if username := account.GetString("username"); username != "" {
+						newCredentials["username"] = username
+					}
+					
+					_, err = app.accountCredentialsModel.Create(&newCredentials, ctx)
+					if err != nil {
+						return err
+					}
+					
+					data.ClearProperties([]string{"password"})
 				}
 			}
 		}
