@@ -662,11 +662,11 @@ func (loadedModel *StatefulModel) DeleteById(id interface{}, currentContext *Eve
 		finalId = id.(primitive.ObjectID)
 		break
 	case *primitive.ObjectID:
-		finalId = *id.(*primitive.ObjectID)
+		finalId = *(id.(*primitive.ObjectID))
 		break
 	default:
 		if loadedModel.App.Debug {
-			fmt.Println(fmt.Sprintf("[WARNING] Invalid input for Model.DeleteById() <- %s", id))
+			fmt.Printf("[WARNING] Invalid input for Model.DeleteById() <- %s\n", id)
 		}
 	}
 
