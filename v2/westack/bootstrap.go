@@ -630,7 +630,23 @@ func registerPersistedModelFixedHooks(loadedModel *model.StatefulModel, app *WeS
 					(*data)["password"] = string(hashed)
 				}
 			} else if config.Base == "Account" {
-				credentials, err := app.accountCredentialsModel.FindOne(&wst.Filter{Where: &wst.Where{"accountId": ctx.ModelID}}, ctx)
+				// Filter for password credentials specifically when password is being updated
+				var credentialsFilter *wst.Filter
+				if (*data)["password"] != nil && (*data)["password"] != "" {
+					// Target password credentials specifically
+					credentialsFilter = &wst.Filter{Where: &wst.Where{
+						"accountId": ctx.ModelID,
+						"$or": []wst.M{
+							{"provider": string(ProviderPassword)},
+							{"password": wst.M{"$exists": true}},
+						},
+					}}
+				} else {
+					// For non-password updates, find any credentials (maintain existing behavior)
+					credentialsFilter = &wst.Filter{Where: &wst.Where{"accountId": ctx.ModelID}}
+				}
+				
+				credentials, err := app.accountCredentialsModel.FindOne(credentialsFilter, ctx)
 				if err != nil {
 					return err
 				}
