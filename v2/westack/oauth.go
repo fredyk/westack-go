@@ -145,12 +145,12 @@ func storeCallbackUrlsInCookies(ctx *fiber.Ctx, successUrl, failureUrl string) {
 	// Validate and sanitize URLs
 	cleanSuccessUrl := validateAndSanitizeUrl(successUrl)
 	cleanFailureUrl := validateAndSanitizeUrl(failureUrl)
-	
+
 	if cleanSuccessUrl == "" || cleanFailureUrl == "" {
 		fmt.Printf("[ERROR] Invalid callback URLs provided - success: %q, failure: %q\n", successUrl, failureUrl)
 		return
 	}
-	
+
 	// Store in cookies with HttpOnly and secure settings
 	ctx.Cookie(&fiber.Cookie{
 		Name:     "OAuth_SuccessURL",
@@ -160,16 +160,16 @@ func storeCallbackUrlsInCookies(ctx *fiber.Ctx, successUrl, failureUrl string) {
 		SameSite: "Lax",
 		MaxAge:   3600, // 1 hour
 	})
-	
+
 	ctx.Cookie(&fiber.Cookie{
-		Name:     "OAuth_FailureURL", 
+		Name:     "OAuth_FailureURL",
 		Value:    cleanFailureUrl,
 		HTTPOnly: true,
 		Secure:   true,
 		SameSite: "Lax",
 		MaxAge:   3600, // 1 hour
 	})
-	
+
 	fmt.Printf("[DEBUG] Stored callback URLs in cookies\n")
 	fmt.Printf("[DEBUG] Success URL stored: %v\n", cleanSuccessUrl)
 	fmt.Printf("[DEBUG] Failure URL stored: %v\n", cleanFailureUrl)
@@ -179,7 +179,7 @@ func storeCallbackUrlsInCookies(ctx *fiber.Ctx, successUrl, failureUrl string) {
 func getCallbackUrlsFromCookies(ctx *fiber.Ctx) (string, string, bool) {
 	successUrl := ctx.Cookies("OAuth_SuccessURL", "")
 	failureUrl := ctx.Cookies("OAuth_FailureURL", "")
-	
+
 	if successUrl != "" && failureUrl != "" {
 		fmt.Printf("[DEBUG] Retrieved callback URLs from cookies\n")
 		fmt.Printf("[DEBUG] Success URL retrieved: %v\n", successUrl)
@@ -199,14 +199,14 @@ func clearCallbackUrlCookies(ctx *fiber.Ctx) {
 		HTTPOnly: true,
 		Expires:  time.Now().Add(-time.Hour),
 	})
-	
+
 	ctx.Cookie(&fiber.Cookie{
 		Name:     "OAuth_FailureURL",
 		Value:    "",
 		HTTPOnly: true,
 		Expires:  time.Now().Add(-time.Hour),
 	})
-	
+
 	fmt.Printf("[DEBUG] Cleared callback URL cookies\n")
 }
 
@@ -499,10 +499,21 @@ func mountOauthRoutes(app *WeStack, loadedModel *model.StatefulModel, systemCont
 				return verboseRedirect(eventContext, failureUrl, fmt.Errorf("failed to fetch oauth credentials: %w", err))
 			}
 
-			var account *model.StatefulInstance
+			var convertedAccount *model.StatefulInstance
 			var accountId string
+			var account model.Instance
+			needNewAccount := userCredentials == nil
 
-			if userCredentials == nil {
+			if userCredentials != nil {
+
+				account = userCredentials.GetOne("account")
+
+				if account == nil {
+					needNewAccount = true
+				}
+			}
+
+			if needNewAccount {
 				// search by password
 				userCredentials, err = app.accountCredentialsModel.FindOne(&wst.Filter{
 					Where: &wst.Where{
@@ -557,14 +568,14 @@ func mountOauthRoutes(app *WeStack, loadedModel *model.StatefulModel, systemCont
 						return verboseRedirect(eventContext, failureUrl, fmt.Errorf("failed to create account: %w", err))
 					}
 
-					account = createdAccount.(*model.StatefulInstance)
-					accountId = account.GetString("id")
+					convertedAccount = createdAccount.(*model.StatefulInstance)
+					accountId = convertedAccount.GetString("id")
 
 				} else {
 
 					accountId = userCredentials.GetString("accountId")
 
-					account = userCredentials.GetOne("account").(*model.StatefulInstance)
+					convertedAccount = userCredentials.GetOne("account").(*model.StatefulInstance)
 
 				}
 
@@ -597,8 +608,9 @@ func mountOauthRoutes(app *WeStack, loadedModel *model.StatefulModel, systemCont
 				}
 
 			} else {
-				account = userCredentials.GetOne("account").(*model.StatefulInstance)
-				accountId = account.GetString("id")
+
+				convertedAccount = account.(*model.StatefulInstance)
+				accountId = convertedAccount.GetString("id")
 
 				// update credentials
 				fmt.Printf("[DEBUG] Updating credentials for email: %v\n", login)
@@ -629,7 +641,7 @@ func mountOauthRoutes(app *WeStack, loadedModel *model.StatefulModel, systemCont
 						"principalId": accountId,
 					},
 					{
-						"principalId": account.Id,
+						"principalId": convertedAccount.Id,
 					},
 				},
 			}, Include: &wst.Include{{Relation: "role"}}}, roleContext).All()
