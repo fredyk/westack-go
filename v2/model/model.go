@@ -1172,10 +1172,8 @@ func (loadedModel *StatefulModel) dispatchFindManySingleDocument(dsCursor dataso
 				switch v.(type) {
 				case primitive.ObjectID:
 					v = v.(primitive.ObjectID).Hex()
-					break
 				case *primitive.ObjectID:
 					v = v.(*primitive.ObjectID).Hex()
-					break
 				default:
 					break
 				}
