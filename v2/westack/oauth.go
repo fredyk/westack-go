@@ -521,7 +521,13 @@ func mountOauthRoutes(app *WeStack, loadedModel *model.StatefulModel, systemCont
 						return verboseRedirect(eventContext, failureUrl, fmt.Errorf("orphan credentials %v not found", userCredentials.GetID()))
 					}
 
+					userCredentials = nil
+					accountId = ""
 					needNewAccount = true
+				} else {
+
+					convertedAccount = account.(*model.StatefulInstance)
+					accountId = convertedAccount.GetString("id")
 				}
 			}
 
@@ -556,6 +562,34 @@ func mountOauthRoutes(app *WeStack, loadedModel *model.StatefulModel, systemCont
 					return verboseRedirect(eventContext, failureUrl, fmt.Errorf("failed to fetch password credentials: %w", err))
 				}
 
+				if userCredentials != nil {
+
+					account = userCredentials.GetOne("account")
+
+					if account == nil {
+
+						// Orphan credentials, remove them
+						deleteResult, err := app.accountCredentialsModel.DeleteById(userCredentials.GetID(), systemContext)
+						if err != nil {
+							return verboseRedirect(eventContext, failureUrl, fmt.Errorf("failed to remove orphan credentials: %w", err))
+						}
+						if deleteResult.DeletedCount == 0 {
+							return verboseRedirect(eventContext, failureUrl, fmt.Errorf("orphan credentials %v not found", userCredentials.GetID()))
+						}
+
+						userCredentials = nil
+						accountId = ""
+						convertedAccount = nil
+						needNewAccount = true
+
+					} else {
+
+						convertedAccount = account.(*model.StatefulInstance)
+						accountId = convertedAccount.GetString("id")
+					}
+
+				}
+
 				if userCredentials == nil {
 
 					// create new account
@@ -582,12 +616,6 @@ func mountOauthRoutes(app *WeStack, loadedModel *model.StatefulModel, systemCont
 
 					convertedAccount = createdAccount.(*model.StatefulInstance)
 					accountId = convertedAccount.GetString("id")
-
-				} else {
-
-					accountId = userCredentials.GetString("accountId")
-
-					convertedAccount = userCredentials.GetOne("account").(*model.StatefulInstance)
 
 				}
 
@@ -620,9 +648,6 @@ func mountOauthRoutes(app *WeStack, loadedModel *model.StatefulModel, systemCont
 				}
 
 			} else {
-
-				convertedAccount = account.(*model.StatefulInstance)
-				accountId = convertedAccount.GetString("id")
 
 				// update credentials
 				fmt.Printf("[DEBUG] Updating credentials for email: %v\n", login)
