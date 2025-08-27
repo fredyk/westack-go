@@ -509,6 +509,18 @@ func mountOauthRoutes(app *WeStack, loadedModel *model.StatefulModel, systemCont
 				account = userCredentials.GetOne("account")
 
 				if account == nil {
+
+					// Orphan credentials, remove them
+					deleteResult, err := app.accountCredentialsModel.DeleteById(userCredentials.GetID(), systemContext)
+					if err != nil {
+						return verboseRedirect(eventContext, failureUrl, fmt.Errorf("failed to remove orphan credentials: %w", err))
+					}
+					if deleteResult.DeletedCount > 0 {
+						fmt.Printf("[DEBUG] Removed orphan credentials %v\n", userCredentials.GetID())
+					} else {
+						return verboseRedirect(eventContext, failureUrl, fmt.Errorf("orphan credentials %v not found", userCredentials.GetID()))
+					}
+
 					needNewAccount = true
 				}
 			}
