@@ -134,7 +134,27 @@ func (m *M) GetFloat64(path string) float64 {
 func asFloat64(v any) float64 {
 	if v1, ok := v.(float64); ok {
 		return v1
+	} else if v1, ok := v.(float32); ok {
+		return float64(v1)
 	} else if v1, ok := v.(int64); ok {
+		return float64(v1)
+	} else if v1, ok := v.(int32); ok {
+		return float64(v1)
+	} else if v1, ok := v.(int16); ok {
+		return float64(v1)
+	} else if v1, ok := v.(int8); ok {
+		return float64(v1)
+	} else if v1, ok := v.(int); ok {
+		return float64(v1)
+	} else if v1, ok := v.(uint64); ok {
+		return float64(v1)
+	} else if v1, ok := v.(uint32); ok {
+		return float64(v1)
+	} else if v1, ok := v.(uint16); ok {
+		return float64(v1)
+	} else if v1, ok := v.(uint8); ok {
+		return float64(v1)
+	} else if v1, ok := v.(uint); ok {
 		return float64(v1)
 	} else if v1, ok := v.(string); ok && regexp.MustCompile(`^-?\d+(\.\d+)?$`).MatchString(v1) {
 		if f, err := strconv.ParseFloat(v1, 64); err == nil {
