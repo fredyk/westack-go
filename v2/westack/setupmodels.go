@@ -202,11 +202,24 @@ func setupAccountModel(loadedModel *model.StatefulModel, app *WeStack) {
 			return wst.CreateError(fiber.ErrUnauthorized, "PASSWORD_REQUIRED", fiber.Map{"message": "password is required"}, "ValidationError")
 		}
 
+		// Password provider filter - reusable logic
+		passwordProviderFilter := []wst.M{
+			{"provider": string(ProviderPassword)},
+			{"provider": ""},
+			{"password": wst.M{"$exists": true}},
+		}
+		
 		var where wst.Where
 		if email != "" {
-			where = wst.Where{"email": email}
+			where = wst.Where{
+				"email": email,
+				"$or": passwordProviderFilter,
+			}
 		} else {
-			where = wst.Where{"username": username}
+			where = wst.Where{
+				"username": username,
+				"$or": passwordProviderFilter,
+			}
 		}
 		accountCredentialsCursor := app.accountCredentialsModel.FindMany(&wst.Filter{
 			Where: &where,
