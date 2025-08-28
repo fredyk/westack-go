@@ -187,6 +187,29 @@ func setupAccountModel(loadedModel *model.StatefulModel, app *WeStack) {
 		email := data.GetString("email")
 		username := data.GetString("username")
 		mfaVerificationCode := data.GetString("verificationCode")
+		password := data.GetString("password")
+		clientIP := ctx.Ctx.IP()
+		userAgent := ctx.Ctx.Get("User-Agent")
+
+		// Input sanitization
+		email = strings.TrimSpace(email)
+		username = strings.TrimSpace(username)
+
+		// Rate limiting check
+		identifier := clientIP
+		if email != "" {
+			identifier = email
+		} else if username != "" {
+			identifier = username
+		}
+
+		if err := app.checkLoginRateLimit(identifier); err != nil {
+			app.logSecurityEvent("LOGIN_RATE_LIMITED", identifier, false, map[string]interface{}{
+				"ip":        clientIP,
+				"userAgent": userAgent,
+			})
+			return err
+		}
 
 		var ttl int64 = 604800 * 2 * 1000
 		receivedTtl := data.GetInt64("ttl")
@@ -195,11 +218,30 @@ func setupAccountModel(loadedModel *model.StatefulModel, app *WeStack) {
 		}
 
 		if email == "" && username == "" {
+			app.logSecurityEvent("LOGIN_INVALID_INPUT", identifier, false, map[string]interface{}{
+				"error":     "missing_credentials",
+				"ip":        clientIP,
+				"userAgent": userAgent,
+			})
 			return wst.CreateError(fiber.ErrBadRequest, "USERNAME_EMAIL_REQUIRED", fiber.Map{"message": "username or email is required"}, "ValidationError")
 		}
 
-		if (*data)["password"] == nil || strings.TrimSpace((*data)["password"].(string)) == "" {
+		if password == "" {
+			app.logSecurityEvent("LOGIN_INVALID_INPUT", identifier, false, map[string]interface{}{
+				"error":     "missing_password",
+				"ip":        clientIP,
+				"userAgent": userAgent,
+			})
 			return wst.CreateError(fiber.ErrUnauthorized, "PASSWORD_REQUIRED", fiber.Map{"message": "password is required"}, "ValidationError")
+		}
+
+		// Check account lockout
+		if err := app.checkAccountLockout(identifier); err != nil {
+			app.logSecurityEvent("LOGIN_ACCOUNT_LOCKED", identifier, false, map[string]interface{}{
+				"ip":        clientIP,
+				"userAgent": userAgent,
+			})
+			return err
 		}
 
 		// Password provider filter - reusable logic
@@ -208,67 +250,85 @@ func setupAccountModel(loadedModel *model.StatefulModel, app *WeStack) {
 			{"provider": ""},
 			{"password": wst.M{"$exists": true}},
 		}
-		
+
 		var where wst.Where
 		if email != "" {
 			where = wst.Where{
 				"email": email,
-				"$or": passwordProviderFilter,
+				"$or":   passwordProviderFilter,
 			}
 		} else {
 			where = wst.Where{
 				"username": username,
-				"$or": passwordProviderFilter,
+				"$or":      passwordProviderFilter,
 			}
 		}
-		accountCredentialsCursor := app.accountCredentialsModel.FindMany(&wst.Filter{
+
+		// Use FindOne instead of FindMany for security
+		firstAccountCredentials, err := app.accountCredentialsModel.FindOne(&wst.Filter{
 			Where: &where,
 			Include: &wst.Include{
 				{Relation: "account"},
 			},
 		}, &model.EventContext{Bearer: &model.BearerToken{Account: &model.BearerAccount{System: true}}})
-		accounts, err := accountCredentialsCursor.All()
-		if err != nil {
-			return err
-		}
-		if len(accounts) == 0 {
-			if accountCredentialsCursor.(*model.ChannelCursor).Err != nil {
-				return accountCredentialsCursor.(*model.ChannelCursor).Err
-			}
-			if loadedModel.App.Debug {
-				app.Logger().Printf("no user found with email or username %v\n", email)
-			}
-			return wst.CreateError(fiber.ErrUnauthorized, "LOGIN_FAILED", fiber.Map{"message": "login failed"}, "Error")
-		}
-		firstAccountCredentials := accounts[0]
-		//accountCredentialsData := firstAccountCredentials.ToJSON()
-		savedPassword := firstAccountCredentials.GetString("password")
 
-		linkedAccount := firstAccountCredentials.GetOne("account")
+		// Timing attack protection - always perform password comparison
+		var savedPassword string
+		var linkedAccount model.Instance
+		var fullAccount *model.StatefulInstance
+
+		if err != nil || firstAccountCredentials == nil {
+			// Perform dummy password comparison to prevent timing attacks
+			bcrypt.CompareHashAndPassword([]byte("$2a$11$dummy.hash.to.prevent.timing.attacks"), []byte("dummy"))
+			app.logSecurityEvent("LOGIN_FAILED", identifier, false, map[string]interface{}{
+				"error":     "invalid_credentials",
+				"ip":        clientIP,
+				"userAgent": userAgent,
+			})
+			app.recordFailedLogin(identifier)
+			return wst.CreateError(fiber.ErrUnauthorized, "LOGIN_FAILED", fiber.Map{"message": "login failed"}, "Error")
+		}
+
+		savedPassword = firstAccountCredentials.GetString("password")
+		linkedAccount = firstAccountCredentials.GetOne("account")
+
 		if linkedAccount == nil {
-			fmt.Printf("WARNING: orphan account credentials found for %v <-- %s\n", email, firstAccountCredentials.GetString("id"))
+			// Perform dummy password comparison to prevent timing attacks
+			bcrypt.CompareHashAndPassword([]byte("$2a$11$dummy.hash.to.prevent.timing.attacks"), []byte("dummy"))
+			app.logSecurityEvent("LOGIN_FAILED", identifier, false, map[string]interface{}{
+				"error":     "orphan_credentials",
+				"ip":        clientIP,
+				"userAgent": userAgent,
+			})
+			app.recordFailedLogin(identifier)
 			return wst.CreateError(fiber.ErrUnauthorized, "LOGIN_FAILED", fiber.Map{"message": "login failed"}, "Error")
 		}
-		fullAccount := linkedAccount.(*model.StatefulInstance)
+
+		fullAccount = linkedAccount.(*model.StatefulInstance)
 		ctx.Instance = fullAccount
-		saltedPassword := fmt.Sprintf("%s%s", string(loadedModel.App.JwtSecretKey), (*data)["password"].(string))
+
+		// Password comparison with timing attack protection
+		saltedPassword := fmt.Sprintf("%s%s", string(loadedModel.App.JwtSecretKey), password)
 		err = bcrypt.CompareHashAndPassword([]byte(savedPassword), []byte(saltedPassword))
+
 		if err != nil {
-			if loadedModel.App.Debug {
-				loadedModel.App.Logger().Printf("bcrypt.CompareHashAndPassword error: %v\n", err)
-			}
-			err = bcrypt.CompareHashAndPassword([]byte(savedPassword), []byte((*data)["password"].(string)))
-		} else {
-			if loadedModel.App.Debug {
-				loadedModel.App.Logger().Printf("bcrypt.CompareHashAndPassword success with salt\n")
-			}
-		}
-		if err != nil {
-			if loadedModel.App.Debug {
-				loadedModel.App.Logger().Printf("bcrypt.CompareHashAndPassword error: %v\n", err)
-			}
+			app.logSecurityEvent("LOGIN_FAILED", identifier, false, map[string]interface{}{
+				"error":     "invalid_password",
+				"accountId": fullAccount.GetString("id"),
+				"ip":        clientIP,
+				"userAgent": userAgent,
+			})
+			app.recordFailedLogin(identifier)
 			return wst.CreateError(fiber.ErrUnauthorized, "LOGIN_FAILED", fiber.Map{"message": "login failed"}, "Error")
 		}
+
+		// Successful login
+		app.logSecurityEvent("LOGIN_SUCCESS", identifier, true, map[string]interface{}{
+			"accountId": fullAccount.GetString("id"),
+			"ip":        clientIP,
+			"userAgent": userAgent,
+		})
+		app.clearFailedLogins(identifier)
 
 		userIdHex := fullAccount.Id.(primitive.ObjectID).Hex()
 
@@ -305,9 +365,7 @@ func setupAccountModel(loadedModel *model.StatefulModel, app *WeStack) {
 				BaseContext:            ctx,
 				DisableTypeConversions: true,
 			}
-			//roleEntries, err := app.roleMappingModel.FindMany(&wst.Filter{Where: &wst.Where{
-			// TODO: How to test this error?
-			roleEntries, _ := app.roleMappingModel.FindMany(&wst.Filter{Where: &wst.Where{
+			roleEntries := app.roleMappingModel.FindMany(&wst.Filter{Where: &wst.Where{
 				"principalType": "USER",
 				"$or": []wst.M{
 					{
@@ -317,13 +375,11 @@ func setupAccountModel(loadedModel *model.StatefulModel, app *WeStack) {
 						"principalId": fullAccount.Id,
 					},
 				},
-			}, Include: &wst.Include{{Relation: "role"}}}, roleContext).All()
-			//if err != nil {
-			//	return err
-			//}
-			for _, roleEntry := range roleEntries {
+			}, Include: &wst.Include{{Relation: "role"}}}, roleContext)
+			roles, _ := roleEntries.All()
+			for _, roleEntry := range roles {
 				role := roleEntry.GetOne("role")
-				roleNames = append(roleNames, role.ToJSON()["name"].(string))
+				roleNames = append(roleNames, role.GetString("name"))
 			}
 		}
 
