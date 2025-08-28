@@ -54,6 +54,10 @@ type WeStack struct {
 	logger                         wst.ILogger
 	completedSetup                 bool
 	registerControllers            func(r model.ControllerRegistry)
+	
+	// Security tracking
+	loginAttempts                  map[string][]time.Time
+	lockedAccounts                 map[string]time.Time
 }
 
 type BootOptions struct {
@@ -122,6 +126,111 @@ func (app *WeStack) Stop() error {
 
 func (app *WeStack) Logger() wst.ILogger {
 	return app.logger
+}
+
+// Security methods for login protection
+func (app *WeStack) checkLoginRateLimit(identifier string) error {
+	if app.loginAttempts == nil {
+		app.loginAttempts = make(map[string][]time.Time)
+	}
+	
+	now := time.Now()
+	attempts := app.loginAttempts[identifier]
+	
+	// Remove attempts older than 15 minutes
+	var recentAttempts []time.Time
+	for _, attempt := range attempts {
+		if now.Sub(attempt) < 15*time.Minute {
+			recentAttempts = append(recentAttempts, attempt)
+		}
+	}
+	
+	// Check if too many attempts
+	if len(recentAttempts) >= 5 {
+		return wst.CreateError(fiber.ErrTooManyRequests, "RATE_LIMITED", fiber.Map{
+			"message": "Too many login attempts. Please try again later.",
+		}, "RateLimitError")
+	}
+	
+	// Add current attempt
+	recentAttempts = append(recentAttempts, now)
+	app.loginAttempts[identifier] = recentAttempts
+	
+	return nil
+}
+
+func (app *WeStack) checkAccountLockout(identifier string) error {
+	if app.lockedAccounts == nil {
+		app.lockedAccounts = make(map[string]time.Time)
+	}
+	
+	lockTime, isLocked := app.lockedAccounts[identifier]
+	if isLocked {
+		// Check if lockout period has expired (30 minutes)
+		if time.Since(lockTime) < 30*time.Minute {
+			return wst.CreateError(fiber.ErrLocked, "ACCOUNT_LOCKED", fiber.Map{
+				"message": "Account is temporarily locked due to too many failed login attempts.",
+			}, "AccountLockError")
+		}
+		// Lockout expired, remove from locked accounts
+		delete(app.lockedAccounts, identifier)
+	}
+	
+	return nil
+}
+
+func (app *WeStack) recordFailedLogin(identifier string) {
+	if app.loginAttempts == nil {
+		app.loginAttempts = make(map[string][]time.Time)
+	}
+	if app.lockedAccounts == nil {
+		app.lockedAccounts = make(map[string]time.Time)
+	}
+	
+	attempts := app.loginAttempts[identifier]
+	now := time.Now()
+	
+	// Count recent failed attempts (last 15 minutes)
+	var recentFailures int
+	for _, attempt := range attempts {
+		if now.Sub(attempt) < 15*time.Minute {
+			recentFailures++
+		}
+	}
+	
+	// Lock account after 5 failed attempts
+	if recentFailures >= 5 {
+		app.lockedAccounts[identifier] = now
+	}
+}
+
+func (app *WeStack) clearFailedLogins(identifier string) {
+	if app.loginAttempts != nil {
+		delete(app.loginAttempts, identifier)
+	}
+	if app.lockedAccounts != nil {
+		delete(app.lockedAccounts, identifier)
+	}
+}
+
+func (app *WeStack) logSecurityEvent(eventType, identifier string, success bool, metadata map[string]interface{}) {
+	logData := map[string]interface{}{
+		"timestamp":  time.Now().UTC(),
+		"event_type": eventType,
+		"identifier": identifier,
+		"success":    success,
+		"metadata":   metadata,
+	}
+	
+	if app.debug {
+		app.logger.Printf("[SECURITY] %s - %s: %v", eventType, identifier, logData)
+	}
+	
+	// In production, this should write to a security audit log
+	// For now, we'll use the standard logger
+	if !success {
+		app.logger.Printf("[SECURITY ALERT] %s failed for %s: %v", eventType, identifier, metadata)
+	}
 }
 
 func GRPCCallWithQueryParams[InputT any, ClientT interface{}, OutputT proto.Message](serviceUrl string, clientConstructor func(cc grpc.ClientConnInterface) ClientT, clientMethod func(ClientT, context.Context, *InputT, ...grpc.CallOption) (OutputT, error), timeoutSeconds ...float32) func(ctx *fiber.Ctx) error {
@@ -301,6 +410,10 @@ func New(options ...Options) *WeStack {
 		dataSourceOptions:              finalOptions.DatasourceOptions,
 		init:                           time.Now(),
 		logger:                         logger,
+		
+		// Initialize security tracking maps
+		loginAttempts:                  make(map[string][]time.Time),
+		lockedAccounts:                 make(map[string]time.Time),
 	}
 
 	return &app
