@@ -90,7 +90,12 @@ func (modelInstance *StatefulInstance) ToJSON() wst.M {
 
 func (modelInstance *StatefulInstance) Get(relationName string) interface{} {
 	result := modelInstance.data[relationName]
-	switch (*modelInstance.Model.Config.Relations)[relationName].Type {
+	relation, existsRelation := (*modelInstance.Model.Config.Relations)[relationName]
+	if !existsRelation {
+		fmt.Printf("[ERROR] Relation %s does not exist\n", relationName)
+		return nil
+	}
+	switch relation.Type {
 	case "hasMany", "hasAndBelongsToMany":
 		if result == nil {
 			result = make(InstanceA, 0)
