@@ -23,6 +23,7 @@ type LambdaRequest struct {
 	Bearer      string              `json:"__lmbd_bearer"`
 	Headers     map[string][]string `json:"__lmbd_headers"`
 	ContentType string              `json:"__lmbd_payload_content_type"`
+	Payload     map[string]any      `json:"__lmbd_payload"`
 }
 
 type LambdaResult struct {
