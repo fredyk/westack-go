@@ -1,6 +1,6 @@
 package modelentities
 
-import "github.com/fredyk/westack-go/v2/lambdas/entities"
+import "github.com/fredyk/westack-go/lambdas/entities"
 
 type ChannelCursor struct {
 	channel      chan Instance

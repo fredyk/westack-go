@@ -1,4 +1,4 @@
-module github.com/fredyk/westack-go/v2/lambdas
+module github.com/fredyk/westack-go/lambdas
 
 go 1.22.9
 

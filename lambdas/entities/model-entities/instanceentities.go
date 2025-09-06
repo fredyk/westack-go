@@ -1,7 +1,7 @@
 package modelentities
 
 import (
-	"github.com/fredyk/westack-go/v2/lambdas/entities"
+	"github.com/fredyk/westack-go/lambdas/entities"
 )
 
 type Instance interface {
