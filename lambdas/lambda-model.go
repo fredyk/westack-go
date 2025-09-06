@@ -10,8 +10,8 @@ import (
 
 	"github.com/goccy/go-json"
 
-	"github.com/fredyk/westack-go/v2/lambdas/entities"
-	modelentities "github.com/fredyk/westack-go/v2/lambdas/entities/model-entities"
+	"github.com/fredyk/westack-go/lambdas/entities"
+	modelentities "github.com/fredyk/westack-go/lambdas/entities/model-entities"
 )
 
 var (
