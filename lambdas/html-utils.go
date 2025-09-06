@@ -10,7 +10,7 @@ import (
 	"regexp"
 	"strings"
 
-	modelentities "github.com/fredyk/westack-go/v2/lambdas/entities/model-entities"
+	modelentities "github.com/fredyk/westack-go/lambdas/entities/model-entities"
 )
 
 // ConvertHttpPathToFileLocation converts the HTTP path to a file location
