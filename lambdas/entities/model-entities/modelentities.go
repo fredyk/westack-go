@@ -5,7 +5,7 @@ import (
 
 	"github.com/goccy/go-json"
 
-	"github.com/fredyk/westack-go/v2/lambdas/entities"
+	"github.com/fredyk/westack-go/lambdas/entities"
 )
 
 type Config struct {
