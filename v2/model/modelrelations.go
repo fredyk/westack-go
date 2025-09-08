@@ -194,36 +194,98 @@ func (loadedModel *StatefulModel) ExtractLookupsFromFilter(filterMap *wst.Filter
 	}
 
 	const ProjectModeInclude = 1
-	const ProjectModeExclude = -1
 
-	opMode := ProjectModeInclude // Include
-	var projectFields wst.Fields = targetProjectIncludeFields
+	// Build projection/unset stages
+	var projectFields wst.Fields
+	useExclude := false
 	if len(targetProjectExcludeFields) > 0 {
-		opMode = ProjectModeExclude // Exclude
+		useExclude = true
 		projectFields = targetProjectExcludeFields
 	} else {
 		projectFields = targetProjectIncludeFields
 	}
 
-	if len(projectFields) > 0 {
-		fieldsStage := wst.M{}
-		idFound := false
+	if useExclude && len(projectFields) > 0 {
+		// Prefer $unset for excludes. Handle _id separately with $project: {_id: 0}.
+		unsetFields := make([]string, 0, len(projectFields))
+		excludeId := false
 		for _, fieldName := range projectFields {
 			switch fieldName {
 			case "id":
 				fieldName = "_id"
-				idFound = true
+				excludeId = true
 			case "_id":
-				idFound = true
+				excludeId = true
+			}
+			if fieldName == "_id" {
+				continue
+			}
+			unsetFields = append(unsetFields, fieldName)
+		}
+		if excludeId {
+			*lookups = append(*lookups, wst.M{
+				"$project": wst.M{"_id": 0},
+			})
+		}
+		if len(unsetFields) > 0 {
+			*lookups = append(*lookups, wst.M{
+				"$unset": unsetFields,
+			})
+		}
+	} else if len(projectFields) > 0 {
+		fieldsStage := wst.M{}
+
+		// Helper to add nested field projection using path expressions
+		var addNested func(target wst.M, segments []string, fullPath string)
+		addNested = func(target wst.M, segments []string, fullPath string) {
+			if len(segments) == 0 {
+				return
+			}
+			head := segments[0]
+			if len(segments) == 1 {
+				// If parent already fully included, nothing to do
+				if existing, ok := target[head]; ok && existing == ProjectModeInclude {
+					return
+				}
+				target[head] = "$" + fullPath
+				return
+			}
+			if existing, ok := target[head]; ok {
+				if existing == ProjectModeInclude {
+					// parent fully included; nothing else to do
+					return
+				}
+				if m, ok := existing.(wst.M); ok {
+					addNested(m, segments[1:], fullPath)
+					return
+				}
+			}
+			child := wst.M{}
+			target[head] = child
+			addNested(child, segments[1:], fullPath)
+		}
+
+		for _, fieldName := range projectFields {
+			switch fieldName {
+			case "id":
+				continue
+			case "_id":
+				continue
 			}
 			if strings.Contains(fieldName, ".") {
-				fieldName = strings.ReplaceAll(fieldName, ".", "_")
+				segments := strings.Split(fieldName, ".")
+				// If top-level already fully included, skip nested projection
+				if v, ok := fieldsStage[segments[0]]; ok && v == ProjectModeInclude {
+					continue
+				}
+				addNested(fieldsStage, segments, fieldName)
+			} else {
+				fieldsStage[fieldName] = ProjectModeInclude
 			}
-			fieldsStage[fieldName] = opMode
 		}
-		if opMode == ProjectModeInclude && !idFound {
-			fieldsStage["_id"] = 1
-		}
+		// Always include _id for include projections (to keep Model.Build() behavior mapping _id -> id)
+		fieldsStage["_id"] = 1
+
 		*lookups = append(*lookups, wst.M{
 			"$project": fieldsStage,
 		})
