@@ -47,12 +47,27 @@ func (loadedModel *StatefulModel) ExtractLookupsFromFilter(filterMap *wst.Filter
 		targetWhere = nil
 	}
 
-	var targetFields *wst.Fields
-	if filterMap.Fields != nil {
+	// Fields and ExcludeFields are exclusive
+	if filterMap.Fields != nil && filterMap.ExcludeFields != nil {
+		if len(*filterMap.Fields) > 0 && len(*filterMap.ExcludeFields) > 0 {
+			return nil, wst.CreateError(fiber.ErrBadRequest, "FIELDS_EXCLUDE_FIELDS_CONFLICT", nil, "ValidationError")
+		}
+	}
+
+	var targetProjectIncludeFields wst.Fields
+	if filterMap.Fields != nil && len(*filterMap.Fields) > 0 {
 		fieldsCopy := *filterMap.Fields
-		targetFields = &fieldsCopy
+		targetProjectIncludeFields = fieldsCopy
 	} else {
-		targetFields = nil
+		targetProjectIncludeFields = nil
+	}
+
+	var targetProjectExcludeFields wst.Fields
+	if filterMap.ExcludeFields != nil && len(*filterMap.ExcludeFields) > 0 {
+		excludeFieldsCopy := *filterMap.ExcludeFields
+		targetProjectExcludeFields = excludeFieldsCopy
+	} else {
+		targetProjectExcludeFields = nil
 	}
 
 	var targetAggregationBeforeLookups []wst.AggregationStage
@@ -178,22 +193,35 @@ func (loadedModel *StatefulModel) ExtractLookupsFromFilter(filterMap *wst.Filter
 		}
 	}
 
-	if targetFields != nil {
+	const ProjectModeInclude = 1
+	const ProjectModeExclude = -1
+
+	opMode := ProjectModeInclude // Include
+	var projectFields wst.Fields = targetProjectIncludeFields
+	if len(targetProjectExcludeFields) > 0 {
+		opMode = ProjectModeExclude // Exclude
+		projectFields = targetProjectExcludeFields
+	} else {
+		projectFields = targetProjectIncludeFields
+	}
+
+	if len(projectFields) > 0 {
 		fieldsStage := wst.M{}
 		idFound := false
-		for _, fieldName := range *targetFields {
-			if fieldName == "id" {
+		for _, fieldName := range projectFields {
+			switch fieldName {
+			case "id":
 				fieldName = "_id"
 				idFound = true
-			} else if fieldName == "_id" {
+			case "_id":
 				idFound = true
 			}
 			if strings.Contains(fieldName, ".") {
 				fieldName = strings.ReplaceAll(fieldName, ".", "_")
 			}
-			fieldsStage[fieldName] = 1
+			fieldsStage[fieldName] = opMode
 		}
-		if !idFound {
+		if opMode == ProjectModeInclude && !idFound {
 			fieldsStage["_id"] = 1
 		}
 		*lookups = append(*lookups, wst.M{
