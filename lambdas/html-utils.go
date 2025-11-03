@@ -25,7 +25,7 @@ func convertHttpPathToFileLocation(basePath string, path string) (bool, string) 
 	// Escape path
 	// Map path to static file
 	// Return file location
-	path = strings.ReplaceAll(path, "..", "")
+	path = sanitizePath(path)
 
 	re := regexp.MustCompile(`\:([a-zA-Z0-9_-]+)`).ReplaceAllString(basePath, "([^/]+)")
 	re = strings.ReplaceAll(re, "/*", "")
@@ -88,4 +88,21 @@ func SendStaticAsset(w http.ResponseWriter, r *http.Request, req LambdaRequest) 
 
 func CleanContentType(contentType string) string {
 	return strings.TrimSpace(strings.Split(contentType, ";")[0])
+}
+
+func sanitizePath(path string) string {
+	// Prevenir path traversal pero permitir .. en nombres de archivos/directorios
+	// Detectar: ../ (al inicio o medio) y /.. (al final o medio)
+
+	// Si el path empieza con ../ → path traversal
+	if strings.HasPrefix(path, "../") {
+		path = strings.ReplaceAll(path, "../", "")
+	}
+
+	// Si el path contiene /.. seguido de / o al final → path traversal
+	// Regex: /\.\./  o  /\.\.$
+	path = regexp.MustCompile(`/\.\./`).ReplaceAllString(path, "/")
+	path = regexp.MustCompile(`/\.\.$`).ReplaceAllString(path, "")
+
+	return path
 }
