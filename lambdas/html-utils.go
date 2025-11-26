@@ -77,7 +77,16 @@ func SendStaticAsset(w http.ResponseWriter, r *http.Request, req LambdaRequest) 
 		w.WriteHeader(http.StatusNotFound)
 		err = modelentities.ErrNotFound
 		// Send fileLocation
-		w.Write([]byte(fileLocation))
+		f, err = openFile(fileLocation)
+		if err != nil {
+			return nil, fmt.Errorf("failed to open file: %w", err)
+		}
+		var b []byte
+		b, err = io.ReadAll(f)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read file: %w", err)
+		}
+		w.Write(b)
 		return
 	}
 	if fileLocation != "" {
