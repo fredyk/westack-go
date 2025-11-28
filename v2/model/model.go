@@ -9,6 +9,7 @@ import (
 	"reflect"
 	"runtime"
 	"runtime/debug"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -963,13 +964,15 @@ func wrapEventHandler(model *StatefulModel, eventKey string, handler func(eventC
 				// Use atomic operation for thread-safe ID generation
 				baseContext.OperationId = atomic.AddInt64(&operationCounter, 1)
 			}
-			
-			// ALWAYS generate a new ExecutionId for EVERY operation invocation
-			// This ensures complete isolation:
-			// 1. Between parallel goroutines (different goroutine IDs)
-			// 2. Between sequential operations in same goroutine (different UUIDs)
-			// 3. Even when contexts are shared across goroutines
-			baseContext.ExecutionId = generateExecutionId()
+
+			// Generate ExecutionId using ONLY goroutineID (converted to string)
+			// This allows contexts in the same goroutine to share pending operations
+			// while different goroutines have isolated spaces
+			// This solves the AccountCredentials creation issue where a child context
+			// queues an operation that needs to be executed in the parent context's "after save"
+			if baseContext.ExecutionId == "" {
+				baseContext.ExecutionId = strconv.FormatUint(getGoroutineID(), 10)
+			}
 
 			// First, process new callbacks and remove them
 			err := dispatchPendingOperations(eventContext, model, eventKey, baseContext)
