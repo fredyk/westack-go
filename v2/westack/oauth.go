@@ -291,7 +291,7 @@ func mountOauthRoutes(app *WeStack, loadedModel *model.StatefulModel, systemCont
 				return verboseRedirect(eventContext, failureUrl, fmt.Errorf("missing oauth state"))
 			}
 
-			ok := utils.VerifyOauthState(cookie, receivedState)
+			ok = utils.VerifyOauthState(cookie, receivedState)
 			if !ok {
 				return verboseRedirect(eventContext, failureUrl, fmt.Errorf("invalid oauth state"))
 			}
