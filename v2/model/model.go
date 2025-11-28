@@ -10,6 +10,7 @@ import (
 	"runtime/debug"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/casbin/casbin/v2"
@@ -18,6 +19,7 @@ import (
 	"github.com/fredyk/westack-go/v2/memorykv"
 	"github.com/gofiber/fiber/v2"
 	"github.com/golang-jwt/jwt"
+	"github.com/google/uuid"
 	"github.com/spf13/cast"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -151,9 +153,10 @@ type StatefulModel struct {
 	remoteMethodsMap     map[string]*OperationItem
 	earlyDisabledMethods map[string]bool
 
-	authCache           map[string]map[string]map[string]bool
-	hasHiddenProperties bool
-	pendingOperations   map[int64]map[string][]pendingOperationEntry
+	authCache              map[string]map[string]map[string]bool
+	hasHiddenProperties    bool
+	pendingOperations      map[string]map[string][]pendingOperationEntry // Indexed by ExecutionId for parallel flow isolation
+	pendingOperationsMutex sync.RWMutex
 }
 
 type pendingOperationEntry struct {
@@ -189,7 +192,7 @@ func New(config *Config, modelRegistry *map[string]*StatefulModel) Model {
 		remoteMethodsMap:     map[string]*OperationItem{},
 		earlyDisabledMethods: map[string]bool{},
 		authCache:            map[string]map[string]map[string]bool{},
-		pendingOperations:    map[int64]map[string][]pendingOperationEntry{},
+		pendingOperations:    map[string]map[string][]pendingOperationEntry{},
 	}
 	loadedModel.NilInstance = &StatefulInstance{
 		Model: loadedModel,
@@ -241,6 +244,7 @@ func (loadedModel *StatefulModel) Build(data wst.M, currentContext *EventContext
 		ModelID:       modelInstance.Id,
 		OperationName: currentContext.OperationName,
 	}
+	propagateExecutionId(beforeBuildEventContext)
 
 	if !loadedModel.DisabledHandlers["__operation__before_build"] {
 		err := loadedModel.GetHandler("__operation__before_build")(beforeBuildEventContext)
@@ -293,6 +297,7 @@ func (loadedModel *StatefulModel) Build(data wst.M, currentContext *EventContext
 	eventContext := &EventContext{
 		BaseContext: targetBaseContext,
 	}
+	propagateExecutionId(eventContext)
 	eventContext.Data = &data
 	eventContext.Instance = &modelInstance
 
@@ -331,6 +336,7 @@ func (loadedModel *StatefulModel) FindMany(filterMap *wst.Filter, currentContext
 	currentOperationContext := &EventContext{
 		BaseContext: targetBaseContext,
 	}
+	propagateExecutionId(currentOperationContext)
 	currentOperationContext.Model = loadedModel
 	if currentContext.OperationName != "" {
 		currentOperationContext.OperationName = currentContext.OperationName
@@ -480,6 +486,7 @@ func (loadedModel *StatefulModel) Count(filterMap *wst.Filter, currentContext *E
 	eventContext := &EventContext{
 		BaseContext: targetBaseContext,
 	}
+	propagateExecutionId(eventContext)
 	eventContext.Model = loadedModel
 	if currentContext.OperationName != "" {
 		eventContext.OperationName = currentContext.OperationName
@@ -593,6 +600,7 @@ func (loadedModel *StatefulModel) Create(data interface{}, currentContext *Event
 	eventContext := &EventContext{
 		BaseContext: targetBaseContext,
 	}
+	propagateExecutionId(eventContext)
 	eventContext.Data = &finalData
 	eventContext.Model = loadedModel
 	eventContext.IsNewInstance = true
@@ -677,6 +685,8 @@ func (loadedModel *StatefulModel) DeleteById(id interface{}, currentContext *Eve
 		ModelID:       finalId,
 		OperationName: wst.OperationNameDeleteById,
 	}
+	propagateExecutionId(eventContext)
+	eventContext.Model = loadedModel
 	if loadedModel.DisabledHandlers["__operation__before_delete"] != true {
 		err := loadedModel.GetHandler("__operation__before_delete")(eventContext)
 		if err != nil {
@@ -718,6 +728,7 @@ func (loadedModel *StatefulModel) DeleteMany(where *wst.Where, currentContext *E
 	eventContext := &EventContext{
 		BaseContext: targetBaseContext,
 	}
+	propagateExecutionId(eventContext)
 	//eventContext.Data = &finalData
 	eventContext.Model = loadedModel
 	eventContext.IsNewInstance = false
@@ -806,6 +817,7 @@ func (loadedModel *StatefulModel) UpdateById(id interface{}, data interface{}, c
 	eventContext := &EventContext{
 		BaseContext: targetBaseContext,
 	}
+	propagateExecutionId(eventContext)
 	eventContext.Data = &finalData
 	eventContext.Model = loadedModel
 	eventContext.IsNewInstance = false
@@ -947,8 +959,10 @@ func wrapEventHandler(model *StatefulModel, eventKey string, handler func(eventC
 		baseContext := FindBaseContext(eventContext)
 		if baseContext != nil {
 			if baseContext.OperationId == 0 {
-				baseContext.OperationId = operationCounter
-				operationCounter++
+				// Use atomic operation for thread-safe ID generation
+				baseContext.OperationId = atomic.AddInt64(&operationCounter, 1)
+				// Generate unique ExecutionId for this execution flow
+				baseContext.ExecutionId = generateExecutionId()
 			}
 
 			// First, process new callbacks and remove them
@@ -964,7 +978,12 @@ func wrapEventHandler(model *StatefulModel, eventKey string, handler func(eventC
 }
 
 func dispatchPendingOperations(eventContext *EventContext, model *StatefulModel, eventKey string, baseContext *EventContext) error {
-	if v, ok := model.pendingOperations[baseContext.OperationId]; ok {
+	// Protect concurrent access to pendingOperations map
+	model.pendingOperationsMutex.Lock()
+	defer model.pendingOperationsMutex.Unlock()
+
+	// Use ExecutionId for isolation between parallel flows
+	if v, ok := model.pendingOperations[baseContext.ExecutionId]; ok {
 		if v2, ok := v[eventKey]; ok {
 			for _, pendingOperation := range v2 {
 				err := pendingOperation.handler(eventContext)
@@ -975,7 +994,7 @@ func dispatchPendingOperations(eventContext *EventContext, model *StatefulModel,
 			delete(v, eventKey)
 		}
 		if len(v) == 0 {
-			delete(model.pendingOperations, baseContext.OperationId)
+			delete(model.pendingOperations, baseContext.ExecutionId)
 		}
 	}
 	return nil
@@ -984,14 +1003,20 @@ func dispatchPendingOperations(eventContext *EventContext, model *StatefulModel,
 func (loadedModel *StatefulModel) QueueOperation(operation string, eventContext *EventContext, fn func(nextCtx *EventContext) error) {
 	eventKey := mapOperationName(operation)
 	loadedModel.DisabledHandlers[eventKey] = false
-	operationId := FindBaseContext(eventContext).OperationId
-	if _, ok := loadedModel.pendingOperations[operationId]; !ok {
-		loadedModel.pendingOperations[operationId] = map[string][]pendingOperationEntry{}
+
+	// Protect concurrent access to pendingOperations map
+	loadedModel.pendingOperationsMutex.Lock()
+	defer loadedModel.pendingOperationsMutex.Unlock()
+
+	// Use ExecutionId for isolation between parallel flows
+	executionId := FindBaseContext(eventContext).ExecutionId
+	if _, ok := loadedModel.pendingOperations[executionId]; !ok {
+		loadedModel.pendingOperations[executionId] = map[string][]pendingOperationEntry{}
 	}
-	if _, ok := loadedModel.pendingOperations[operationId][eventKey]; !ok {
-		loadedModel.pendingOperations[operationId][eventKey] = []pendingOperationEntry{}
+	if _, ok := loadedModel.pendingOperations[executionId][eventKey]; !ok {
+		loadedModel.pendingOperations[executionId][eventKey] = []pendingOperationEntry{}
 	}
-	loadedModel.pendingOperations[operationId][eventKey] = append(loadedModel.pendingOperations[operationId][eventKey], pendingOperationEntry{
+	loadedModel.pendingOperations[executionId][eventKey] = append(loadedModel.pendingOperations[executionId][eventKey], pendingOperationEntry{
 		handler: fn,
 	})
 }
@@ -1006,6 +1031,24 @@ func (loadedModel *StatefulModel) Observe(operation string, handler func(eventCo
 
 func mapOperationName(operation string) string {
 	return "__operation__" + strings.ReplaceAll(strings.TrimSpace(operation), " ", "_")
+}
+
+// generateExecutionId creates a unique identifier for each execution flow
+// This ensures that queued operations are isolated between parallel flows
+func generateExecutionId() string {
+	return uuid.New().String()
+}
+
+// propagateExecutionId ensures ExecutionId is properly set and propagated through context chain
+// If the context doesn't have an ExecutionId but has a BaseContext, it copies from there
+// This maintains execution flow isolation while allowing context derivation
+func propagateExecutionId(ctx *EventContext) {
+	if ctx == nil {
+		return
+	}
+	if ctx.ExecutionId == "" && ctx.BaseContext != nil {
+		ctx.ExecutionId = ctx.BaseContext.ExecutionId
+	}
 }
 
 var handlerMutex = sync.Mutex{}
