@@ -135,6 +135,11 @@ func connectGRPCService(url string, timeout time.Duration) (*grpc.ClientConn, er
 	return grpc.DialContext(ctx, url, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock(), grpc.WithBlock())
 }
 
+// TODO: 04-error-handling/01-information-disclosure.md Information Disclosure Risk
+// SendInternalError exposes full error details (err.Error()) to the client, which may include:
+// - Stack traces, file paths, database errors, implementation details
+// RECOMMENDATION: In production (DEBUG=false), return generic message.
+// In development (DEBUG=true), return detailed error for debugging.
 func SendInternalError(ctx *fiber.Ctx, err error) error {
 	newErr := wst.CreateError(fiber.ErrInternalServerError, "ERR_INTERNAL", fiber.Map{"message": err.Error()}, "Error")
 	ctx.Response().Header.SetStatusCode(newErr.FiberError.Code)
