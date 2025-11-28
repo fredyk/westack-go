@@ -135,7 +135,7 @@ func connectGRPCService(url string, timeout time.Duration) (*grpc.ClientConn, er
 	return grpc.DialContext(ctx, url, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock(), grpc.WithBlock())
 }
 
-// TODO: 04-error-handling/01-information-disclosure.md Information Disclosure Risk
+// TODO: 01-security/04-error-handling/01-information-disclosure.md Information Disclosure Risk
 // SendInternalError exposes full error details (err.Error()) to the client, which may include:
 // - Stack traces, file paths, database errors, implementation details
 // RECOMMENDATION: In production (DEBUG=false), return generic message.
