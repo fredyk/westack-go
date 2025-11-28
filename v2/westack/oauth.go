@@ -312,9 +312,15 @@ func mountOauthRoutes(app *WeStack, loadedModel *model.StatefulModel, systemCont
 				fmt.Printf("[DEBUG] Using existing SSID cookie: %v\n", cookie)
 			} else {
 				cookie = wst.GenerateCookie()
+				// Set Secure flag only for HTTPS connections
+				isSecure := eventContext.Ctx.Protocol() == "https"
 				eventContext.Ctx.Cookie(&fiber.Cookie{
-					Name:  "SSID",
-					Value: cookie,
+					Name:     "SSID",
+					Value:    cookie,
+					HTTPOnly: true,
+					Secure:   isSecure,
+					SameSite: "Lax",
+					MaxAge:   3600, // 1 hour
 				})
 				fmt.Printf("[DEBUG] Generated new SSID cookie: %v\n", cookie)
 			}

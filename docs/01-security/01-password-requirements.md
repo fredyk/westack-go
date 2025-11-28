@@ -16,40 +16,17 @@ All passwords MUST meet the following criteria:
 
 ## Implementation
 
-### Validation Function
+Password validation is automatically enforced by the framework at:
 
-Located in: `v2/common/common.go`
-
-```go
-func IsSecurePassword(password string) bool {
-    if len(password) < 8 {
-        return false
-    }
-    var hasUpper, hasLower, hasNumber, hasSpecial bool
-    for _, ch := range password {
-        if ch >= 'A' && ch <= 'Z' {
-            hasUpper = true
-        } else if ch >= 'a' && ch <= 'z' {
-            hasLower = true
-        } else if ch >= '0' && ch <= '9' {
-            hasNumber = true
-        } else {
-            hasSpecial = true  // ANY non-alphanumeric character
-        }
-    }
-    return hasUpper && hasLower && hasNumber && hasSpecial
-}
-```
-
-### Enforcement Points
-
-Password validation is enforced at:
-
-1. **Account Creation** (`v2/westack/bootstrap.go` lines 527-532)
-   - Validates when creating AccountCredentials with password provider
+1. **Account Creation**
+   - When creating an account with password provider
+   - Validation occurs before saving credentials
    
-2. **Password Update** (`v2/westack/bootstrap.go` lines 629-633)
-   - Validates when updating existing AccountCredentials password
+2. **Password Update**
+   - When updating an existing account's password
+   - Validation occurs before updating credentials
+
+The framework uses a built-in secure password validator that checks all requirements.
 
 ## Error Responses
 
