@@ -2,9 +2,7 @@
   "db0": {
     "url": "mongodb://localhost:27017",
     "database": "example_db_00",
-    "password": "",
     "name": "db0",
-    "username": "",
     "connector": "mongodb",
     "useNewUrlParser": true,
     "allowExtendedOperators": true,
@@ -14,9 +12,7 @@
   "db1": {
     "url": "mongodb://localhost:27017",
     "database": "example_db_01",
-    "password": "",
     "name": "db1",
-    "username": "",
     "connector": "mongodb",
     "useNewUrlParser": true,
     "allowExtendedOperators": true,
@@ -26,9 +22,7 @@
   "db2": {
     "url": "mongodb://localhost:27017",
     "database": "example_db_02",
-    "password": "",
     "name": "db2",
-    "username": "",
     "connector": "mongodb",
     "useNewUrlParser": true,
     "allowExtendedOperators": true,
@@ -38,9 +32,7 @@
   "db_expected_to_fail": {
     "url": "mongodb://localhost:27017",
     "database": "example_db_expected_to_fail",
-    "password": "",
     "name": "db_expected_to_fail",
-    "username": "",
     "connector": "mongodb",
     "useNewUrlParser": true,
     "allowExtendedOperators": true,
@@ -51,9 +43,7 @@
   "db_expected_to_be_closed": {
     "url": "mongodb://localhost:27017",
     "database": "example_db_expected_to_be_closed",
-    "password": "",
     "name": "db_expected_to_be_closed",
-    "username": "",
     "connector": "mongodb",
     "useNewUrlParser": true,
     "allowExtendedOperators": true,
@@ -66,8 +56,6 @@
     "url": "localhost:0",
     "database": "example_db",
     "databaseIndex": 0,
-    "password": "",
-    "username": "",
     "connector": "memorykv"
   }
 
