@@ -189,6 +189,100 @@ func TestQueueOperationExecutionIdUniqueness(t *testing.T) {
 		"Should have collected unique ExecutionIds for all operations")
 }
 
+// TestQueueOperationWithSharedContext tests the critical scenario where
+// multiple parallel goroutines share the same global context but each
+// must have isolated queued operations (the user's production scenario)
+func TestQueueOperationWithSharedContext(t *testing.T) {
+	if noteModel == nil {
+		t.Skip("noteModel not initialized")
+		return
+	}
+
+	var hookId = fmt.Sprintf("test-shared-ctx-%d", time.Now().UnixNano())
+	var queuedOps sync.Map     // executionId -> title
+	var executedOps sync.Map   // executionId -> title
+	var mismatchCount int32
+
+	noteModel.Observe("before save", func(ctx *model.EventContext) error {
+		if !ctx.IsNewInstance && ctx.Data.GetString("__testHookId") == hookId {
+			title := ctx.Data.GetString("title")
+			executionId := model.FindBaseContext(ctx).ExecutionId
+			
+			// Capture the title (simulates capturing dbId in production)
+			capturedTitle := title
+			queuedOps.Store(executionId, capturedTitle)
+
+			ctx.QueueOperation("after save", func(nextCtx *model.EventContext) error {
+				instanceTitle := nextCtx.Instance.GetString("title")
+				executedOps.Store(executionId, instanceTitle)
+				
+				// This is the critical check: even with shared context,
+				// the instance should match the captured variable
+				if instanceTitle != capturedTitle {
+					atomic.AddInt32(&mismatchCount, 1)
+					return fmt.Errorf("MISMATCH with shared context: expected '%s' but got '%s'", 
+						capturedTitle, instanceTitle)
+				}
+				return nil
+			})
+		}
+		return nil
+	})
+
+	systemContext := &model.EventContext{}
+
+	// First create notes that we'll update
+	concurrentOps := 30
+	notes := make([]model.Instance, concurrentOps)
+	for i := 0; i < concurrentOps; i++ {
+		note, _ := noteModel.Create(wst.M{
+			"title": fmt.Sprintf("shared-ctx-note-%d", i),
+			"body":  "initial",
+		}, systemContext)
+		notes[i] = note
+	}
+
+	// Now update all notes in parallel, ALL using the SAME shared context
+	// This simulates the user's scenario where a global context is shared
+	sharedGlobalContext := systemContext
+
+	var wg sync.WaitGroup
+	wg.Add(concurrentOps)
+
+	for i := 0; i < concurrentOps; i++ {
+		go func(idx int) {
+			defer wg.Done()
+
+			newTitle := fmt.Sprintf("updated-title-%d-%d", idx, time.Now().UnixNano())
+			_, _ = noteModel.UpdateById(notes[idx].GetID(), wst.M{
+				"title":        newTitle,
+				"__testHookId": hookId,
+			}, sharedGlobalContext) // ← ALL goroutines use SAME context!
+		}(i)
+	}
+
+	wg.Wait()
+	time.Sleep(500 * time.Millisecond)
+
+	// THE CRITICAL ASSERTION: Even with shared context, NO mismatches
+	mismatchCnt := atomic.LoadInt32(&mismatchCount)
+	assert.Equal(t, int32(0), mismatchCnt, 
+		"Even with shared global context, ExecutionId (with goroutine ID) should prevent mismatches")
+
+	// Verify each queued operation matched its execution
+	queuedOps.Range(func(key, value interface{}) bool {
+		executionId := key.(string)
+		queuedTitle := value.(string)
+		
+		executedTitle, ok := executedOps.Load(executionId)
+		assert.True(t, ok, "Operation should have executed for ExecutionId: %s", executionId)
+		assert.Equal(t, queuedTitle, executedTitle, 
+			"Executed title should match queued title for ExecutionId: %s", executionId)
+		
+		return true
+	})
+}
+
 // TestQueueOperationThreadSafety tests that concurrent access to pendingOperations
 // doesn't cause panics (tests the mutex protection)
 func TestQueueOperationThreadSafety(t *testing.T) {
