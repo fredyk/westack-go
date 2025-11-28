@@ -25,6 +25,7 @@ lugar adecuado en la documentación bajo docs/<mm-some-category>/<nn-some-subcat
 - Cuando en una auditoría encuentres un fallo extremadamente grave que tenga que ver con seguridad o permisos (RBAC, tokens, etc.), en esos casos aplicarás directamente los fixes en el código, pero siempre tendrás que estar muy muy seguro de que el fix es correcto.
 - Todo fix irá acompañado siempre de invocar el script `cd v2 && ./run_tests.sh` (quizás tengas que levantar un Mongo con docker primero) y deben pasar TODOS los tests sin hacer trampa.
 - La documentación nunca contendrá código interno de implementación, como mucho ejemplos de uso de interfaces.
+- La documentación siempre debe quedar bien estructurada obligatoriamente en `docs/<mm-some-category>/<nn-some-subcategory>/<pp-some-file.md>` ya que es demasiado grande y debe ser sencillo para los devs moverse entre diferentes secciones. También debe haber suficientes enlaces internos entre los .md
 - JAMÁS JAMÁS JAMÁS puedes eliminar tests anteriores, e incluso tienes prácticamente prohibido modificarlos. Si están ahí es porque un día fueron útiles para hacer el código robusto.
 
 ### NOTAS
