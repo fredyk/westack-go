@@ -29,6 +29,7 @@ type EventContext struct {
 	SkipFieldProtection    bool
 	OperationName          wst.OperationName
 	OperationId            int64
+	ExecutionId            string // Unique ID per execution flow to isolate queued operations
 	Handled                bool
 }
 
