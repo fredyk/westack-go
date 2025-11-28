@@ -17,8 +17,13 @@ COPY go.mod ./
 COPY go.sum ./
 RUN go mod download
 
-COPY cli ./cli
 COPY cli-utils ./cli-utils
+COPY common ./common
+COPY datasource ./datasource
+COPY lib ./lib
+COPY memorykv ./memorykv
+COPY model ./model
+COPY utils ./utils
 COPY westack ./westack
 COPY *.go ./
 
