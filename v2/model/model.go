@@ -321,7 +321,7 @@ func ParseFilter(filter string) *wst.Filter {
 	var filterMap *wst.Filter
 	if filter != "" {
 		_ = json.Unmarshal([]byte(filter), &filterMap)
-		// TODO: 03-injection-prevention/01-nosql-injection.md Sanitize MongoDB query operators
+		// TODO: 01-security/03-injection-prevention/01-nosql-injection.md Sanitize MongoDB query operators
 		if filterMap != nil && filterMap.Where != nil {
 			if err := wst.SanitizeMongoQuery(filterMap.Where); err != nil {
 				// Return nil filter to prevent injection

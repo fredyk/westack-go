@@ -616,7 +616,7 @@ func (loadedModel *StatefulModel) mergeRelated(relationDeepLevel byte, documents
 			log.Printf("[DEBUG] SkipAuth %v.%v\n", loadedModel.Name, relationName)
 		}
 	} else {
-		// TODO: 02-permissions/01-permission-propagation.md Defensive programming: verify BaseContext is not nil
+		// TODO: 01-security/02-authorization/01-permission-propagation.md Defensive programming: verify BaseContext is not nil
 		// before dereferencing to prevent potential panic in edge cases
 		if currentContext.BaseContext == nil {
 			return fmt.Errorf("invalid context: missing base context for permission check on relation %v", relationName)
