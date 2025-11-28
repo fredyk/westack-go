@@ -621,6 +621,9 @@ func Test_FindWithMergedSorts(t *testing.T) {
 	}, wst.M{"Content-Type": "application/json"})
 	assert.NoError(t, err)
 
+	// Small delay to ensure different created timestamps (fix for flaky test)
+	time.Sleep(10 * time.Millisecond)
+
 	// Create the first note with a header
 	noteA, err := invokeApiAsRandomAccount("POST", "/notes", wst.M{
 		"title":     "first Ordered Note",
