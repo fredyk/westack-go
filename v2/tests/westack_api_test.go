@@ -510,7 +510,7 @@ func Test_UpdateAccountPassword(t *testing.T) {
 	assert.Contains(t, token, "id")
 
 	user2, err := wstfuncs.InvokeApiJsonM("PATCH", "/accounts/"+user.GetString("id"), wst.M{
-		"password": "efgh5678,",
+		"password": "Efgh5678,",
 	}, wst.M{
 		"Content-Type":  "application/json",
 		"Authorization": fmt.Sprintf("Bearer %v", token.GetString("id")),
@@ -519,7 +519,7 @@ func Test_UpdateAccountPassword(t *testing.T) {
 	assert.NotNil(t, user2)
 	assert.Equal(t, user.GetString("id"), user2.GetString("id"))
 
-	token2, err := loginAccount(user.GetString("username"), "efgh5678,")
+	token2, err := loginAccount(user.GetString("username"), "Efgh5678,")
 	assert.NoError(t, err)
 	assert.Contains(t, token2, "id")
 
