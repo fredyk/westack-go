@@ -89,4 +89,4 @@ These requirements help protect against:
 
 - Password hashing: Uses bcrypt with cost factor 11
 - Hash format: `bcrypt(jwtSecret + password)`
-- See: `v2/westack/bootstrap.go` lines 533, 635
+- Implementation: Password validation and hashing is handled automatically by the framework's account management system

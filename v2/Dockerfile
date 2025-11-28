@@ -1,7 +1,7 @@
-ARG GO_VERSION=1.16
+ARG GO_VERSION=1.22
 ARG USER
 
-FROM golang:1.22-alpine AS builder
+FROM golang:${GO_VERSION}-alpine AS builder
 
 ARG USER=westack
 
@@ -28,9 +28,12 @@ RUN CGO_ENABLED=0 go build -o /go/bin/westack
 RUN adduser -D ${USER}
 RUN chmod +x /go/bin/westack
 
-FROM alpine:3.17
+FROM alpine:3.19
 
 ARG USER=westack
+
+# Install wget for healthcheck
+RUN apk add --no-cache wget
 
 COPY --from=builder /go/bin/westack /usr/local/bin/westack
 
