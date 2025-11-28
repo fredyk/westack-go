@@ -47,7 +47,7 @@ jobs:
 
       - name: Always upload pull_request.json
         if: always()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: pull_request.json
           path: pull_request.json
@@ -159,19 +159,19 @@ jobs:
           echo "Go is at $(which go)"
 
       - name: Upload coverage.txt
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: coverage.txt
           path: coverage.txt
 
       - name: Upload coverage.summary.txt
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: coverage.summary.txt
           path: coverage.summary.txt
 
       - name: Upload test_output.txt
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: test_output.txt
           path: test_output.txt
@@ -316,7 +316,7 @@ jobs:
   #
   #        - name: Always upload milestones.json
   #          if: always()
-  #          uses: actions/upload-artifact@v3
+  #          uses: actions/upload-artifact@v4
   #          with:
   #              name: milestones.json
   #              path: milestones.json

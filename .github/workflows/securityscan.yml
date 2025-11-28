@@ -103,7 +103,7 @@ jobs:
           exit 0
 
       - name: Upload results.json
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: results.json
           path: results.json
