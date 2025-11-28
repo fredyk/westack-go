@@ -567,13 +567,20 @@ func registerPersistedModelFixedHooks(loadedModel *model.StatefulModel, app *WeS
 						return err
 					}
 
+					if app.debug {
+						fmt.Printf("[DEBUG] Queueing accountId update operation. ExecutionId will be: %v\n", model.FindBaseContext(ctx).ExecutionId)
+					}
 					ctx.QueueOperation("after save", func(nextCtx *model.EventContext) error {
+						if app.debug {
+							fmt.Printf("[DEBUG] EXECUTING queued accountId update. Account ID: %v, ExecutionId: %v\n", nextCtx.Instance.Id, model.FindBaseContext(nextCtx).ExecutionId)
+						}
 						updated, err := accountCredentials.UpdateAttributes(wst.M{"accountId": nextCtx.Instance.Id}, nextCtx)
 						if err != nil {
+							fmt.Printf("[ERROR] Failed to update accountId: %v\n", err)
 							return err
 						}
 						if app.debug {
-							fmt.Printf("Update AccountCredentials: ('%v', '%v')\n", updated.GetString("username"), updated.GetString("email"))
+							fmt.Printf("Update AccountCredentials: ('%v', '%v') with accountId=%v\n", updated.GetString("username"), updated.GetString("email"), updated.GetString("accountId"))
 						}
 						return nil
 					})
