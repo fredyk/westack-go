@@ -39,7 +39,7 @@ jobs:
               run: |
                 # use matrix as tag
                 # enable buildkit
-                # cd westack-go
+                cd v2
                 export DOCKER_BUILDKIT=1
                 docker buildx create --use
                 docker login -u ${{ env.DOCKER_USERNAME }} -p ${{ env.DOCKER_PASSWORD }}
