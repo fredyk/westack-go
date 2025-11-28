@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"reflect"
+	"runtime"
 	"runtime/debug"
 	"strings"
 	"sync"
@@ -961,9 +962,14 @@ func wrapEventHandler(model *StatefulModel, eventKey string, handler func(eventC
 			if baseContext.OperationId == 0 {
 				// Use atomic operation for thread-safe ID generation
 				baseContext.OperationId = atomic.AddInt64(&operationCounter, 1)
-				// Generate unique ExecutionId for this execution flow
-				baseContext.ExecutionId = generateExecutionId()
 			}
+			
+			// ALWAYS generate a new ExecutionId for EVERY operation invocation
+			// This ensures complete isolation:
+			// 1. Between parallel goroutines (different goroutine IDs)
+			// 2. Between sequential operations in same goroutine (different UUIDs)
+			// 3. Even when contexts are shared across goroutines
+			baseContext.ExecutionId = generateExecutionId()
 
 			// First, process new callbacks and remove them
 			err := dispatchPendingOperations(eventContext, model, eventKey, baseContext)
@@ -1033,10 +1039,31 @@ func mapOperationName(operation string) string {
 	return "__operation__" + strings.ReplaceAll(strings.TrimSpace(operation), " ", "_")
 }
 
+// getGoroutineID returns the current goroutine ID by parsing the runtime stack
+// This is used to ensure ExecutionId uniqueness even when contexts are shared across goroutines
+func getGoroutineID() uint64 {
+	b := make([]byte, 64)
+	b = b[:runtime.Stack(b, false)]
+	// Stack format: "goroutine 123 [running]:"
+	// Extract the number after "goroutine "
+	var id uint64
+	for i := 10; i < len(b); i++ {
+		if b[i] >= '0' && b[i] <= '9' {
+			id = id*10 + uint64(b[i]-'0')
+		} else {
+			break
+		}
+	}
+	return id
+}
+
 // generateExecutionId creates a unique identifier for each execution flow
-// This ensures that queued operations are isolated between parallel flows
+// It combines a UUID with the goroutine ID to ensure isolation even when
+// multiple goroutines share the same BaseContext (e.g., in nested parallel operations)
 func generateExecutionId() string {
-	return uuid.New().String()
+	goroutineId := getGoroutineID()
+	uuidPart := uuid.New().String()
+	return fmt.Sprintf("%d-%s", goroutineId, uuidPart)
 }
 
 // propagateExecutionId ensures ExecutionId is properly set and propagated through context chain
