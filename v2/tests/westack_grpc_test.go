@@ -755,7 +755,7 @@ func TestMain(m *testing.M) {
 	if err != nil {
 		log.Fatalf("failed to create app instance: %v", err)
 	}
-	appBearer = model.CreateBearer(appInstance.Id, float64(time.Now().Unix()), float64(600), []string{"APP"})
+	appBearer = model.CreateBearer(appInstance.Id, float64(time.Now().Unix()), float64(600), []string{"APP"}, nil)
 	// sign the bearer
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, appBearer.Claims)
 	tokenString, err := token.SignedString(appInstance.Model.App.JwtSecretKey)
