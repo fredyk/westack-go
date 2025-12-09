@@ -443,8 +443,14 @@ func mountAppDynamicRoutes(loadedModel *model.StatefulModel, app *WeStack) {
 		}
 		roles := []string{"APP"}
 		roles = append(roles, additionalRoles...)
+
+		baseContext := eventContext
+		for baseContext.BaseContext != nil {
+			baseContext = baseContext.BaseContext
+		}
+
 		bearer := model.CreateBearer(eventContext.ModelID, float64(time.Now().Unix()), ttl, roles, map[string]any{
-			"createdBy": eventContext.BaseContext.Bearer.Account.Id,
+			"createdBy": baseContext.Bearer.Account.Id,
 		})
 		// sign the bearer
 		token := jwt.NewWithClaims(jwt.SigningMethodHS256, bearer.Claims)
