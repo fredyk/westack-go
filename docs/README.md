@@ -27,12 +27,20 @@ Deployment guides and production best practices.
 
 - [Docker Deployment](./02-deployment/01-docker-deployment.md) - Containerization and Docker best practices
 
+### 🔌 [API](./03-api/)
+
+REST API endpoints and behaviors.
+
+#### Relations
+- [Relation Endpoints](./03-api/01-relations/01-relation-endpoints.md) - Access related data through REST endpoints (`/:id/{relationName}` and `/:id/{relationName}/count`)
+
 ## 🔍 Quick Navigation
 
 **By Topic**:
 - **Authentication & Login**: [Passwords](./01-security/01-authentication/01-password-requirements.md), [Cookies](./01-security/01-authentication/02-cookie-security.md)
 - **Authorization & Permissions**: [RBAC](./01-security/02-authorization/01-permission-propagation.md)
 - **Security Vulnerabilities**: [NoSQL Injection](./01-security/03-injection-prevention/01-nosql-injection.md), [Info Disclosure](./01-security/04-error-handling/01-information-disclosure.md)
+- **API & Relations**: [Relation Endpoints](./03-api/01-relations/01-relation-endpoints.md)
 - **Production**: [Docker](./02-deployment/01-docker-deployment.md)
 
 ## 📖 Documentation Standards
