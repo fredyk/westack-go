@@ -941,6 +941,107 @@ func mountRelationCountRoutes(app *WeStack, loadedModel *model.StatefulModel) {
 			},
 		})
 
+		// --- Mount GET /:id/{relationName}/:fk endpoint (get specific related item) ---
+		fkOperationName := fmt.Sprintf("__get__%v__item", rn)
+
+		// Add role inheritance: __get__{relationName}__item inherits from __get__{relationName}
+		_, err := loadedModel.Enforcer.AddRoleForUser(fkOperationName, getPermission)
+		if err != nil {
+			if app.debug {
+				log.Printf("[WARNING] Could not add role %v for user %v: %v\n", fkOperationName, getPermission, err)
+			}
+		}
+
+		fkPath := "/:id/" + rn + "/:fk"
+
+		if app.debug {
+			log.Println("Mount GET " + loadedModel.BaseUrl + fkPath)
+		}
+
+		loadedModel.RemoteMethod(func(eventContext *model.EventContext) error {
+			// Extract parent ID
+			id, err := primitive.ObjectIDFromHex(eventContext.Ctx.Params("id"))
+			if err != nil {
+				return err
+			}
+			eventContext.ModelID = &id
+
+			// Extract related item ID
+			fk, err := primitive.ObjectIDFromHex(eventContext.Ctx.Params("fk"))
+			if err != nil {
+				return err
+			}
+
+			// Get related model
+			relatedModelI, err := loadedModel.App.FindModel(rel.Model)
+			if err != nil {
+				return err
+			}
+			relatedModel := relatedModelI.(*model.StatefulModel)
+
+			// Build filter to find specific related item
+			filter := eventContext.Filter
+			if filter == nil {
+				filter = &wst.Filter{}
+			}
+			if filter.Where == nil {
+				filter.Where = &wst.Where{}
+			}
+
+			// Filter by both: belongs to parent AND has the specific ID
+			if rel.Type == "belongsTo" {
+				// For belongsTo: verify parent has this foreign key, then find by primary key
+				parentInstance, err := loadedModel.FindById(id, nil, eventContext)
+				if err != nil {
+					return err
+				}
+				if parentInstance == nil {
+					return fiber.ErrNotFound
+				}
+				fkValue := parentInstance.ToJSON()[*rel.ForeignKey]
+				if fkValue == nil {
+					return fiber.ErrNotFound
+				}
+				// Verify the requested fk matches the parent's foreign key
+				fkValueObjId, ok := fkValue.(primitive.ObjectID)
+				if !ok || fkValueObjId != fk {
+					return fiber.ErrNotFound
+				}
+				(*filter.Where)["_id"] = fk
+			} else {
+				// For hasOne/hasMany: filter by foreign key = parent id AND _id = fk
+				(*filter.Where)[*rel.ForeignKey] = id
+				(*filter.Where)["_id"] = fk
+			}
+
+			// Find the specific related item
+			instance, err := relatedModel.FindOne(filter, eventContext)
+			if err != nil {
+				return err
+			}
+			if instance == nil {
+				return fiber.ErrNotFound
+			}
+
+			eventContext.Result = instance.ToJSON()
+			return nil
+		}, model.RemoteMethodOptions{
+			Name: fkOperationName,
+			Accepts: model.RemoteMethodOptionsHttpArgs{
+				{
+					Arg:         "filter",
+					Type:        "string",
+					Description: "",
+					Http:        model.ArgHttp{Source: "query"},
+					Required:    false,
+				},
+			},
+			Http: model.RemoteMethodOptionsHttp{
+				Path: fkPath,
+				Verb: "get",
+			},
+		})
+
 		// --- Mount GET /:id/{relationName}/count endpoint (only for hasMany types) ---
 		if isManyRelation {
 			countOperationName := fmt.Sprintf("__count__%v", rn)
