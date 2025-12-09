@@ -531,6 +531,9 @@ func (app *WeStack) loadModelsDynamicRoutes() {
 }
 
 func registerPersistedModelDynamicHooks(app *WeStack, loadedModel *model.StatefulModel) {
+	// Mount relation count routes for hasMany relations (dynamic routes with :id)
+	mountRelationCountRoutes(app, loadedModel)
+
 	if app.debug {
 		log.Println("Mount GET " + loadedModel.BaseUrl + "/:id")
 	}
@@ -804,6 +807,101 @@ func obtainSortedRelationKeys(loadedModel *model.StatefulModel, modelConfigsByNa
 		}
 	}
 	return allRelatedKeys
+}
+
+// mountRelationCountRoutes mounts count endpoints for hasMany relations
+// Format: GET /:id/{relationName}/count
+// Example: GET /api/notes/123/entries/count
+// Permission: Requires __get__{relationName} permission on the parent instance
+func mountRelationCountRoutes(app *WeStack, loadedModel *model.StatefulModel) {
+	if loadedModel.Config.Relations == nil {
+		return
+	}
+
+	for relationName, relation := range *loadedModel.Config.Relations {
+		// Only mount for hasMany, hasManyThrough, and hasAndBelongsToMany relations
+		if relation.Type != "hasMany" && relation.Type != "hasManyThrough" && relation.Type != "hasAndBelongsToMany" {
+			continue
+		}
+
+		// Capture values for closure
+		rn := relationName
+		rel := relation
+
+		// Create operation name: __count__{relationName}
+		operationName := fmt.Sprintf("__count__%v", rn)
+		getPermission := fmt.Sprintf("__get__%v", rn)
+
+		// Add role inheritance: __count__{relationName} inherits from __get__{relationName}
+		// This means anyone with __get__ permission also has __count__ permission
+		_, err := loadedModel.Enforcer.AddRoleForUser(operationName, getPermission)
+		if err != nil {
+			if app.debug {
+				log.Printf("[WARNING] Could not add role %v for user %v: %v\n", operationName, getPermission, err)
+			}
+		}
+
+		path := "/:id/" + rn + "/count"
+
+		if app.debug {
+			log.Println("Mount GET " + loadedModel.BaseUrl + path)
+		}
+
+		loadedModel.RemoteMethod(func(eventContext *model.EventContext) error {
+			// Extract and set ModelID (same pattern as other /:id routes)
+			id, err := primitive.ObjectIDFromHex(eventContext.Ctx.Params("id"))
+			if err != nil {
+				return err
+			}
+			eventContext.ModelID = &id
+
+			// Get related model
+			relatedModelI, err := loadedModel.App.FindModel(rel.Model)
+			if err != nil {
+				return err
+			}
+			relatedModel := relatedModelI.(*model.StatefulModel)
+
+			// Determine the foreign key for the relation
+			// Note: ForeignKey is initialized by bootstrap.go
+			foreignKey := *rel.ForeignKey
+
+			// Build filter with parent ID constraint
+			filter := eventContext.Filter
+			if filter == nil {
+				filter = &wst.Filter{}
+			}
+			if filter.Where == nil {
+				filter.Where = &wst.Where{}
+			}
+			// Add the foreign key filter to scope the count to this parent instance
+			(*filter.Where)[foreignKey] = id
+
+			// Count items in the related model filtered by parent ID
+			count, err := relatedModel.Count(filter, eventContext)
+			if err != nil {
+				return err
+			}
+
+			eventContext.Result = count
+			return nil
+		}, model.RemoteMethodOptions{
+			Name: operationName,
+			Accepts: model.RemoteMethodOptionsHttpArgs{
+				{
+					Arg:         "filter",
+					Type:        "string",
+					Description: "",
+					Http:        model.ArgHttp{Source: "query"},
+					Required:    false,
+				},
+			},
+			Http: model.RemoteMethodOptionsHttp{
+				Path: path,
+				Verb: "get",
+			},
+		})
+	}
 }
 
 func findOwnerRecursiveInRelation(loadedModel *model.StatefulModel, modelConfigsByName map[string]*model.Config, relationKey string, objId interface{}, roleKey string, ownersForRole *[]string) error {
