@@ -99,7 +99,8 @@
       "$owner,*,__get__footer2,allow",
       "$owner,*,__get__publicFooter,allow",
       "$owner,*,__get__entries,allow",
-      "$owner,*,__get__header,allow"
+      "$owner,*,__get__header,allow",
+      "$owner,*,__get__account,allow"
     ]
   },
   "cache": {
