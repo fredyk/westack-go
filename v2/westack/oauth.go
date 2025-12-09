@@ -695,7 +695,7 @@ func mountOauthRoutes(app *WeStack, loadedModel *model.StatefulModel, systemCont
 			}
 
 			ttl := 30 * 86400.0
-			bearer := model.CreateBearer(accountId, float64(time.Now().Unix()), ttl, roleNames)
+			bearer := model.CreateBearer(accountId, float64(time.Now().Unix()), ttl, roleNames, nil)
 			// sign the bearer
 			jwtToken := jwt.NewWithClaims(jwt.SigningMethodHS256, bearer.Claims)
 			tokenString, err := jwtToken.SignedString(loadedModel.App.JwtSecretKey)
