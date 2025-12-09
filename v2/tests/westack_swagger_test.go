@@ -2,13 +2,14 @@ package tests
 
 import (
 	"fmt"
-	"github.com/mailru/easyjson"
-	"github.com/stretchr/testify/assert"
 	"io"
 	"net/http"
 	"os"
 	"testing"
 	"time"
+
+	"github.com/mailru/easyjson"
+	"github.com/stretchr/testify/assert"
 
 	"github.com/andybalholm/brotli"
 
@@ -83,9 +84,24 @@ func Test_GetCorruptSwagger(t *testing.T) {
 	// Wait 5 seconds, that way we don't break the other tests
 	time.Sleep(5 * time.Second)
 
+	// Save original swagger.json content to restore later
+	originalContent, err := os.ReadFile("data/swagger.json")
+	if err != nil {
+		// If file doesn't exist, we'll create an empty one at the end
+		originalContent = []byte("{}")
+	}
+
 	// write <invalid json> to data/swagger.json
-	err := os.WriteFile("data/swagger.json", []byte("<invalid json>"), 0600)
+	err = os.WriteFile("data/swagger.json", []byte("<invalid json>"), 0600)
 	assert.NoError(t, err)
+
+	// Ensure we restore the original content when done
+	defer func() {
+		err := os.WriteFile("data/swagger.json", originalContent, 0600)
+		if err != nil {
+			t.Logf("Warning: failed to restore swagger.json: %v", err)
+		}
+	}()
 
 	// start client
 	client := http.Client{}

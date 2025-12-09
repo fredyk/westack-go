@@ -39,8 +39,10 @@ if ! docker ps | grep -q mongodb; then
 fi
 
 # Ejecutar los tests
-echo "🧪 Ejecutando tests..."
-go test -v -timeout 600s "$@" ./tests/
+# NOTA: -parallel=1 es necesario porque los tests comparten variables globales
+# (randomAccount, randomAccountToken) y pueden causar race conditions
+echo "🧪 Ejecutando tests (modo secuencial para evitar race conditions)..."
+go test -v -timeout 600s -parallel=1 "$@" ./tests/
 
 # Capturar el código de salida
 TEST_EXIT_CODE=$?
