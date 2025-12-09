@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/fredyk/westack-go/client/v2/wstfuncs"
 	"github.com/fredyk/westack-go/v2/model"
 	"github.com/mailru/easyjson"
 	"go.mongodb.org/mongo-driver/bson"
@@ -596,7 +597,11 @@ func Test_RelationEndpoints(t *testing.T) {
 	t.Parallel()
 
 	// Create a note as the owner (using randomAccountToken set in init)
-	note, err := invokeApiAsRandomAccount("POST", "/notes", wst.M{"title": "Note for relation endpoints test"}, wst.M{"Content-Type": "application/json"})
+	// Must include accountId for ownership verification
+	note, err := invokeApiAsRandomAccount("POST", "/notes", wst.M{
+		"title":     "Note for relation endpoints test",
+		"accountId": randomAccount.GetString("id"),
+	}, wst.M{"Content-Type": "application/json"})
 	assert.NoError(t, err)
 	assert.Contains(t, note, "id")
 	noteId := note.GetString("id")
@@ -615,11 +620,13 @@ func Test_RelationEndpoints(t *testing.T) {
 	}
 
 	// --- Test GET /:id/{relationName} for hasMany ---
-	entriesResult, err := invokeApiAsRandomAccount("GET", fmt.Sprintf("/notes/%s/entries", noteId), nil, nil)
+	// Use InvokeApiJsonA for array results
+	entriesResult, err := wstfuncs.InvokeApiJsonA("GET", fmt.Sprintf("/notes/%s/entries", noteId), nil, wst.M{
+		"Authorization": fmt.Sprintf("Bearer %v", randomAccountToken.GetString("id")),
+	})
 	assert.NoError(t, err)
 	// Result should be an array with 3 entries
-	// The result comes as wst.M with the array, need to check if it's actually an array
-	// invokeApiAsRandomAccount returns wst.M, but for arrays we need different handling
+	assert.Len(t, entriesResult, 3)
 
 	// --- Test GET /:id/{relationName}/count ---
 	countResult, err := invokeApiAsRandomAccount("GET", fmt.Sprintf("/notes/%s/entries/count", noteId), nil, nil)
@@ -640,8 +647,6 @@ func Test_RelationEndpoints(t *testing.T) {
 	// Should return the account object (not an array)
 	assert.Contains(t, accountResult, "id")
 	assert.Contains(t, accountResult, "username")
-
-	_ = entriesResult // Used above but result format varies
 }
 
 func Test_RelationWithoutAuth(t *testing.T) {

@@ -906,7 +906,7 @@ func mountRelatedRoutes(app *WeStack, loadedModel *model.StatefulModel) {
 				if err != nil {
 					return err
 				}
-				result := make([]wst.M, len(instances))
+				result := make(wst.A, len(instances))
 				for i, inst := range instances {
 					result[i] = inst.ToJSON()
 				}
@@ -941,6 +941,76 @@ func mountRelatedRoutes(app *WeStack, loadedModel *model.StatefulModel) {
 				Verb: "get",
 			},
 		})
+
+		// --- Mount GET /:id/{relationName}/count endpoint (only for hasMany types) ---
+		// IMPORTANT: Must be registered BEFORE /:fk to prevent "count" being matched as an ObjectID
+		if isManyRelation {
+			countOperationName := fmt.Sprintf("__count__%v", rn)
+
+			// Add role inheritance: __count__{relationName} inherits from __get__{relationName}
+			_, err := loadedModel.Enforcer.AddRoleForUser(countOperationName, getPermission)
+			if err != nil {
+				if app.debug {
+					log.Printf("[WARNING] Could not add role %v for user %v: %v\n", countOperationName, getPermission, err)
+				}
+			}
+
+			countPath := "/:id/" + rn + "/count"
+
+			if app.debug {
+				log.Println("Mount GET " + loadedModel.BaseUrl + countPath)
+			}
+
+			loadedModel.RemoteMethod(func(eventContext *model.EventContext) error {
+				// Extract and set ModelID (same pattern as other /:id routes)
+				id, err := primitive.ObjectIDFromHex(eventContext.Ctx.Params("id"))
+				if err != nil {
+					return err
+				}
+				eventContext.ModelID = &id
+
+				// Get related model
+				relatedModelI, err := loadedModel.App.FindModel(rel.Model)
+				if err != nil {
+					return err
+				}
+				relatedModel := relatedModelI.(*model.StatefulModel)
+
+				// Build filter with parent ID constraint
+				filter := eventContext.Filter
+				if filter == nil {
+					filter = &wst.Filter{}
+				}
+				if filter.Where == nil {
+					filter.Where = &wst.Where{}
+				}
+				(*filter.Where)[*rel.ForeignKey] = id
+
+				// Count items in the related model filtered by parent ID
+				count, err := relatedModel.Count(filter, eventContext)
+				if err != nil {
+					return err
+				}
+
+				eventContext.Result = count
+				return nil
+			}, model.RemoteMethodOptions{
+				Name: countOperationName,
+				Accepts: model.RemoteMethodOptionsHttpArgs{
+					{
+						Arg:         "filter",
+						Type:        "string",
+						Description: "",
+						Http:        model.ArgHttp{Source: "query"},
+						Required:    false,
+					},
+				},
+				Http: model.RemoteMethodOptionsHttp{
+					Path: countPath,
+					Verb: "get",
+				},
+			})
+		}
 
 		// --- Mount GET /:id/{relationName}/:fk endpoint (get specific related item) ---
 		fkOperationName := fmt.Sprintf("__get__%v__item", rn)
@@ -1050,75 +1120,6 @@ func mountRelatedRoutes(app *WeStack, loadedModel *model.StatefulModel) {
 				Verb: "get",
 			},
 		})
-
-		// --- Mount GET /:id/{relationName}/count endpoint (only for hasMany types) ---
-		if isManyRelation {
-			countOperationName := fmt.Sprintf("__count__%v", rn)
-
-			// Add role inheritance: __count__{relationName} inherits from __get__{relationName}
-			_, err := loadedModel.Enforcer.AddRoleForUser(countOperationName, getPermission)
-			if err != nil {
-				if app.debug {
-					log.Printf("[WARNING] Could not add role %v for user %v: %v\n", countOperationName, getPermission, err)
-				}
-			}
-
-			countPath := "/:id/" + rn + "/count"
-
-			if app.debug {
-				log.Println("Mount GET " + loadedModel.BaseUrl + countPath)
-			}
-
-			loadedModel.RemoteMethod(func(eventContext *model.EventContext) error {
-				// Extract and set ModelID (same pattern as other /:id routes)
-				id, err := primitive.ObjectIDFromHex(eventContext.Ctx.Params("id"))
-				if err != nil {
-					return err
-				}
-				eventContext.ModelID = &id
-
-				// Get related model
-				relatedModelI, err := loadedModel.App.FindModel(rel.Model)
-				if err != nil {
-					return err
-				}
-				relatedModel := relatedModelI.(*model.StatefulModel)
-
-				// Build filter with parent ID constraint
-				filter := eventContext.Filter
-				if filter == nil {
-					filter = &wst.Filter{}
-				}
-				if filter.Where == nil {
-					filter.Where = &wst.Where{}
-				}
-				(*filter.Where)[*rel.ForeignKey] = id
-
-				// Count items in the related model filtered by parent ID
-				count, err := relatedModel.Count(filter, eventContext)
-				if err != nil {
-					return err
-				}
-
-				eventContext.Result = count
-				return nil
-			}, model.RemoteMethodOptions{
-				Name: countOperationName,
-				Accepts: model.RemoteMethodOptionsHttpArgs{
-					{
-						Arg:         "filter",
-						Type:        "string",
-						Description: "",
-						Http:        model.ArgHttp{Source: "query"},
-						Required:    false,
-					},
-				},
-				Http: model.RemoteMethodOptionsHttp{
-					Path: countPath,
-					Verb: "get",
-				},
-			})
-		}
 	}
 }
 
