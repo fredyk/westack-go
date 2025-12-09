@@ -30,7 +30,8 @@ For models with relations, additional endpoints are automatically mounted:
 
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | `/{modelPlural}/:id/{relationName}` | Get related items |
+| GET | `/{modelPlural}/:id/{relationName}` | Get related items (array or object) |
+| GET | `/{modelPlural}/:id/{relationName}/:fk` | Get specific related item by ID |
 | GET | `/{modelPlural}/:id/{relationName}/count` | Count related items (hasMany only) |
 
 See [Relation Endpoints](./01-relations/01-relation-endpoints.md) for detailed documentation.
