@@ -533,7 +533,7 @@ func (app *WeStack) loadModelsDynamicRoutes() {
 
 func registerPersistedModelDynamicHooks(app *WeStack, loadedModel *model.StatefulModel) {
 	// Mount relation count routes for hasMany relations (dynamic routes with :id)
-	mountRelationCountRoutes(app, loadedModel)
+	mountRelatedRoutes(app, loadedModel)
 
 	if app.debug {
 		log.Println("Mount GET " + loadedModel.BaseUrl + "/:id")
@@ -821,7 +821,7 @@ var mountedRelationRoutesMutex = sync.Mutex{}
 //   - GET /:id/{relationName}/count - Count related items (only for hasMany types)
 //
 // Permission: Requires __get__{relationName} permission on the parent instance
-func mountRelationCountRoutes(app *WeStack, loadedModel *model.StatefulModel) {
+func mountRelatedRoutes(app *WeStack, loadedModel *model.StatefulModel) {
 	if loadedModel.Config.Relations == nil {
 		return
 	}
