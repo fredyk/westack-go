@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/casbin/casbin/v2"
@@ -809,9 +810,16 @@ func obtainSortedRelationKeys(loadedModel *model.StatefulModel, modelConfigsByNa
 	return allRelatedKeys
 }
 
-// mountRelationCountRoutes mounts count endpoints for hasMany relations
-// Format: GET /:id/{relationName}/count
-// Example: GET /api/notes/123/entries/count
+// mountedRelationRoutes tracks which relation routes have been mounted to prevent infinite recursion
+// Key format: "ModelName.relationName"
+var mountedRelationRoutes = make(map[string]struct{})
+var mountedRelationRoutesMutex = sync.Mutex{}
+
+// mountRelationRoutes mounts relation endpoints for all relation types
+// Endpoints mounted:
+//   - GET /:id/{relationName} - Get related items (array for hasMany, object for hasOne/belongsTo)
+//   - GET /:id/{relationName}/count - Count related items (only for hasMany types)
+//
 // Permission: Requires __get__{relationName} permission on the parent instance
 func mountRelationCountRoutes(app *WeStack, loadedModel *model.StatefulModel) {
 	if loadedModel.Config.Relations == nil {
@@ -819,32 +827,29 @@ func mountRelationCountRoutes(app *WeStack, loadedModel *model.StatefulModel) {
 	}
 
 	for relationName, relation := range *loadedModel.Config.Relations {
-		// Only mount for hasMany, hasManyThrough, and hasAndBelongsToMany relations
-		if relation.Type != "hasMany" && relation.Type != "hasManyThrough" && relation.Type != "hasAndBelongsToMany" {
+		// Check if this relation route was already mounted (prevent infinite recursion)
+		routeKey := fmt.Sprintf("%s.%s", loadedModel.Name, relationName)
+		mountedRelationRoutesMutex.Lock()
+		if _, exists := mountedRelationRoutes[routeKey]; exists {
+			mountedRelationRoutesMutex.Unlock()
 			continue
 		}
-
+		mountedRelationRoutes[routeKey] = struct{}{}
+		mountedRelationRoutesMutex.Unlock()
 		// Capture values for closure
 		rn := relationName
 		rel := relation
 
-		// Create operation name: __count__{relationName}
-		operationName := fmt.Sprintf("__count__%v", rn)
 		getPermission := fmt.Sprintf("__get__%v", rn)
+		isManyRelation := rel.Type == "hasMany" || rel.Type == "hasManyThrough" || rel.Type == "hasAndBelongsToMany"
+		isSingleRelation := rel.Type == "hasOne" || rel.Type == "belongsTo"
 
-		// Add role inheritance: __count__{relationName} inherits from __get__{relationName}
-		// This means anyone with __get__ permission also has __count__ permission
-		_, err := loadedModel.Enforcer.AddRoleForUser(operationName, getPermission)
-		if err != nil {
-			if app.debug {
-				log.Printf("[WARNING] Could not add role %v for user %v: %v\n", operationName, getPermission, err)
-			}
-		}
-
-		path := "/:id/" + rn + "/count"
+		// --- Mount GET /:id/{relationName} endpoint ---
+		getOperationName := fmt.Sprintf("__get__%v", rn)
+		getPath := "/:id/" + rn
 
 		if app.debug {
-			log.Println("Mount GET " + loadedModel.BaseUrl + path)
+			log.Println("Mount GET " + loadedModel.BaseUrl + getPath)
 		}
 
 		loadedModel.RemoteMethod(func(eventContext *model.EventContext) error {
@@ -862,11 +867,7 @@ func mountRelationCountRoutes(app *WeStack, loadedModel *model.StatefulModel) {
 			}
 			relatedModel := relatedModelI.(*model.StatefulModel)
 
-			// Determine the foreign key for the relation
-			// Note: ForeignKey is initialized by bootstrap.go
-			foreignKey := *rel.ForeignKey
-
-			// Build filter with parent ID constraint
+			// Build filter based on relation type
 			filter := eventContext.Filter
 			if filter == nil {
 				filter = &wst.Filter{}
@@ -874,19 +875,57 @@ func mountRelationCountRoutes(app *WeStack, loadedModel *model.StatefulModel) {
 			if filter.Where == nil {
 				filter.Where = &wst.Where{}
 			}
-			// Add the foreign key filter to scope the count to this parent instance
-			(*filter.Where)[foreignKey] = id
 
-			// Count items in the related model filtered by parent ID
-			count, err := relatedModel.Count(filter, eventContext)
-			if err != nil {
-				return err
+			// Determine the key to filter by based on relation type
+			if rel.Type == "belongsTo" {
+				// For belongsTo: we need to get the parent instance first to get the foreign key value
+				parentInstance, err := loadedModel.FindById(id, nil, eventContext)
+				if err != nil {
+					return err
+				}
+				if parentInstance == nil {
+					return fiber.ErrNotFound
+				}
+				// Get the foreign key value from parent and find by primary key in related model
+				fkValue := parentInstance.ToJSON()[*rel.ForeignKey]
+				if fkValue == nil {
+					eventContext.Result = wst.NilMap
+					return nil
+				}
+				(*filter.Where)[*rel.PrimaryKey] = fkValue
+			} else {
+				// For hasOne/hasMany: filter related model by foreign key = parent id
+				(*filter.Where)[*rel.ForeignKey] = id
 			}
 
-			eventContext.Result = count
+			// Query based on relation type
+			if isManyRelation {
+				// Return array
+				instances, err := relatedModel.FindMany(filter, eventContext).All()
+				if err != nil {
+					return err
+				}
+				result := make([]wst.M, len(instances))
+				for i, inst := range instances {
+					result[i] = inst.ToJSON()
+				}
+				eventContext.Result = result
+			} else if isSingleRelation {
+				// Return single object or null
+				instance, err := relatedModel.FindOne(filter, eventContext)
+				if err != nil {
+					return err
+				}
+				if instance == nil {
+					eventContext.Result = wst.NilMap
+				} else {
+					eventContext.Result = instance.ToJSON()
+				}
+			}
+
 			return nil
 		}, model.RemoteMethodOptions{
-			Name: operationName,
+			Name: getOperationName,
 			Accepts: model.RemoteMethodOptionsHttpArgs{
 				{
 					Arg:         "filter",
@@ -897,10 +936,79 @@ func mountRelationCountRoutes(app *WeStack, loadedModel *model.StatefulModel) {
 				},
 			},
 			Http: model.RemoteMethodOptionsHttp{
-				Path: path,
+				Path: getPath,
 				Verb: "get",
 			},
 		})
+
+		// --- Mount GET /:id/{relationName}/count endpoint (only for hasMany types) ---
+		if isManyRelation {
+			countOperationName := fmt.Sprintf("__count__%v", rn)
+
+			// Add role inheritance: __count__{relationName} inherits from __get__{relationName}
+			_, err := loadedModel.Enforcer.AddRoleForUser(countOperationName, getPermission)
+			if err != nil {
+				if app.debug {
+					log.Printf("[WARNING] Could not add role %v for user %v: %v\n", countOperationName, getPermission, err)
+				}
+			}
+
+			countPath := "/:id/" + rn + "/count"
+
+			if app.debug {
+				log.Println("Mount GET " + loadedModel.BaseUrl + countPath)
+			}
+
+			loadedModel.RemoteMethod(func(eventContext *model.EventContext) error {
+				// Extract and set ModelID (same pattern as other /:id routes)
+				id, err := primitive.ObjectIDFromHex(eventContext.Ctx.Params("id"))
+				if err != nil {
+					return err
+				}
+				eventContext.ModelID = &id
+
+				// Get related model
+				relatedModelI, err := loadedModel.App.FindModel(rel.Model)
+				if err != nil {
+					return err
+				}
+				relatedModel := relatedModelI.(*model.StatefulModel)
+
+				// Build filter with parent ID constraint
+				filter := eventContext.Filter
+				if filter == nil {
+					filter = &wst.Filter{}
+				}
+				if filter.Where == nil {
+					filter.Where = &wst.Where{}
+				}
+				(*filter.Where)[*rel.ForeignKey] = id
+
+				// Count items in the related model filtered by parent ID
+				count, err := relatedModel.Count(filter, eventContext)
+				if err != nil {
+					return err
+				}
+
+				eventContext.Result = count
+				return nil
+			}, model.RemoteMethodOptions{
+				Name: countOperationName,
+				Accepts: model.RemoteMethodOptionsHttpArgs{
+					{
+						Arg:         "filter",
+						Type:        "string",
+						Description: "",
+						Http:        model.ArgHttp{Source: "query"},
+						Required:    false,
+					},
+				},
+				Http: model.RemoteMethodOptionsHttp{
+					Path: countPath,
+					Verb: "get",
+				},
+			})
+		}
 	}
 }
 

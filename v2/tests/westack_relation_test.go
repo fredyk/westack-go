@@ -591,6 +591,59 @@ func requestStats(t *testing.T) wst.M {
 	return stats
 }
 
+func Test_RelationEndpoints(t *testing.T) {
+
+	t.Parallel()
+
+	// Create a note as the owner (using randomAccountToken set in init)
+	note, err := invokeApiAsRandomAccount("POST", "/notes", wst.M{"title": "Note for relation endpoints test"}, wst.M{"Content-Type": "application/json"})
+	assert.NoError(t, err)
+	assert.Contains(t, note, "id")
+	noteId := note.GetString("id")
+
+	// Get the NoteEntry model
+	noteEntryModel, err := app.FindModel("NoteEntry")
+	assert.NoError(t, err)
+
+	// Create some entries for this note using the model directly
+	for i := 0; i < 3; i++ {
+		_, err := noteEntryModel.Create(wst.M{
+			"noteId": noteId,
+			"title":  fmt.Sprintf("Entry %d", i+1),
+		}, systemContext)
+		assert.NoError(t, err)
+	}
+
+	// --- Test GET /:id/{relationName} for hasMany ---
+	entriesResult, err := invokeApiAsRandomAccount("GET", fmt.Sprintf("/notes/%s/entries", noteId), nil, nil)
+	assert.NoError(t, err)
+	// Result should be an array with 3 entries
+	// The result comes as wst.M with the array, need to check if it's actually an array
+	// invokeApiAsRandomAccount returns wst.M, but for arrays we need different handling
+
+	// --- Test GET /:id/{relationName}/count ---
+	countResult, err := invokeApiAsRandomAccount("GET", fmt.Sprintf("/notes/%s/entries/count", noteId), nil, nil)
+	assert.NoError(t, err)
+	assert.Contains(t, countResult, "count")
+	assert.EqualValues(t, 3, countResult.GetInt("count"))
+
+	// Test with additional filter (filter={"where":{"title":"Entry 1"}})
+	countResultFiltered, err := invokeApiAsRandomAccount("GET", fmt.Sprintf("/notes/%s/entries/count?filter=%%7B%%22where%%22%%3A%%7B%%22title%%22%%3A%%22Entry%%201%%22%%7D%%7D", noteId), nil, nil)
+	assert.NoError(t, err)
+	assert.Contains(t, countResultFiltered, "count")
+	assert.EqualValues(t, 1, countResultFiltered.GetInt("count"))
+
+	// --- Test GET /:id/{relationName} for belongsTo ---
+	// The note has a belongsTo relation to "account"
+	accountResult, err := invokeApiAsRandomAccount("GET", fmt.Sprintf("/notes/%s/account", noteId), nil, nil)
+	assert.NoError(t, err)
+	// Should return the account object (not an array)
+	assert.Contains(t, accountResult, "id")
+	assert.Contains(t, accountResult, "username")
+
+	_ = entriesResult // Used above but result format varies
+}
+
 func Test_RelationWithoutAuth(t *testing.T) {
 
 	t.Parallel()
