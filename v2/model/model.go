@@ -1302,14 +1302,22 @@ func GetIDAsString(idToConvert interface{}) string {
 	return foundObjAccountId
 }
 
-func CreateBearer(subjectId interface{}, createdAtSeconds float64, ttlSeconds float64, roles []string) *BearerToken {
+func CreateBearer(subjectId interface{}, createdAtSeconds float64, ttlSeconds float64, roles []string, additionalClaims map[string]interface{}) *BearerToken {
+	claims := jwt.MapClaims{
+		"created":   createdAtSeconds,
+		"ttl":       ttlSeconds,
+		"roles":     roles,
+		"accountId": GetIDAsString(subjectId),
+	}
+	for k, v := range additionalClaims {
+		if _, ok := claims[k]; !ok {
+			fmt.Printf("[WARNING] Skiping existing claim key %v while creating this token\n", k)
+			continue
+		}
+		claims[k] = v
+	}
 	return &BearerToken{
 		Account: &BearerAccount{Id: subjectId},
-		Claims: jwt.MapClaims{
-			"created":   createdAtSeconds,
-			"ttl":       ttlSeconds,
-			"roles":     roles,
-			"accountId": GetIDAsString(subjectId),
-		},
+		Claims:  claims,
 	}
 }
