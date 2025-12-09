@@ -10,9 +10,11 @@ westack-go automatically mounts REST endpoints for accessing related data direct
 
 Retrieves related items for a specific model instance.
 
-### GET /:id/{relationName}/:fk
+### GET /:id/{relationName}/:fk (hasMany only)
 
-Retrieves a specific related item by its ID.
+Retrieves a specific related item by its ID from a hasMany relation.
+
+> ⚠️ **Only available for `hasMany` relations**. Not available for `hasOne`, `belongsTo`, or other relation types.
 
 **URL Pattern**: `{baseUrl}/{modelPlural}/{id}/{relationName}/{relatedId}`
 
@@ -24,9 +26,9 @@ GET /api/customers/507f1f77bcf86cd799439011/orders/507f1f77bcf86cd799439012
 
 **Response**: Single object `{...}` or 404 if not found
 
-**Behavior by relation type**:
-- **hasMany/hasOne**: Finds item where `foreignKey = parentId` AND `_id = fk`
-- **belongsTo**: Verifies parent's foreignKey matches fk, then returns the related item
+**Behavior**:
+- Finds item where `foreignKey = parentId` AND `_id = fk`
+- Returns 404 if the item doesn't exist or doesn't belong to the parent
 
 ---
 

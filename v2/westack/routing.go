@@ -1050,6 +1050,7 @@ func mountRelatedRoutes(app *WeStack, loadedModel *model.StatefulModel) {
 				relatedModel := relatedModelI.(*model.StatefulModel)
 
 				// Build filter to find specific related item
+				// Only for hasMany relations - filter by foreign key = parent id AND _id = fk
 				filter := eventContext.Filter
 				if filter == nil {
 					filter = &wst.Filter{}
@@ -1057,32 +1058,8 @@ func mountRelatedRoutes(app *WeStack, loadedModel *model.StatefulModel) {
 				if filter.Where == nil {
 					filter.Where = &wst.Where{}
 				}
-
-				// Filter by both: belongs to parent AND has the specific ID
-				if rel.Type == "belongsTo" {
-					// For belongsTo: verify parent has this foreign key, then find by primary key
-					parentInstance, err := loadedModel.FindById(id, nil, eventContext)
-					if err != nil {
-						return err
-					}
-					if parentInstance == nil {
-						return fiber.ErrNotFound
-					}
-					fkValue := parentInstance.ToJSON()[*rel.ForeignKey]
-					if fkValue == nil {
-						return fiber.ErrNotFound
-					}
-					// Verify the requested fk matches the parent's foreign key
-					fkValueObjId, ok := fkValue.(primitive.ObjectID)
-					if !ok || fkValueObjId != fk {
-						return fiber.ErrNotFound
-					}
-					(*filter.Where)["_id"] = fk
-				} else {
-					// For hasOne/hasMany: filter by foreign key = parent id AND _id = fk
-					(*filter.Where)[*rel.ForeignKey] = id
-					(*filter.Where)["_id"] = fk
-				}
+				(*filter.Where)[*rel.ForeignKey] = id
+				(*filter.Where)["_id"] = fk
 
 				debugFilterBytes, err := json.Marshal(filter)
 				if err != nil {
