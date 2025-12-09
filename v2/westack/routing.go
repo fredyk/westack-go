@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/casbin/casbin/v2"
+	"github.com/goccy/go-json"
 	"github.com/gofiber/fiber/v2"
 	"github.com/golang-jwt/jwt"
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -1012,6 +1013,14 @@ func mountRelatedRoutes(app *WeStack, loadedModel *model.StatefulModel) {
 				// For hasOne/hasMany: filter by foreign key = parent id AND _id = fk
 				(*filter.Where)[*rel.ForeignKey] = id
 				(*filter.Where)["_id"] = fk
+			}
+
+			debugFilterBytes, err := json.Marshal(filter)
+			if err != nil {
+				return err
+			}
+			if app.debug {
+				log.Printf("[DEBUG] Nested GET /%s/%v/%s/%v Filter: '%s'\n", loadedModel.BaseUrl, id, rn, fk, string(debugFilterBytes))
 			}
 
 			// Find the specific related item
