@@ -835,7 +835,7 @@ func findOwnerRecursiveInRelation(loadedModel *model.StatefulModel, modelConfigs
 		}
 		relatedModel := relatedInstance.GetModel()
 
-		if relatedModel.GetConfig().Base == "Account" && *r.ForeignKey == "accountId" || relatedModel.GetConfig().Base == "App" && *r.ForeignKey == "appId" {
+		if relatedModel.GetConfig().Base == "Account" && *r.ForeignKey == "accountId" || relatedModel.GetConfig().Base == "App" && *r.ForeignKey == relatedModel.GetAppOwnerForeignKey() {
 			user := relatedInstance
 
 			// if user != nil && user.GetID() != nil {

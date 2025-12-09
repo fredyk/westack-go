@@ -38,6 +38,7 @@ type Model interface {
 	DeleteById(id interface{}, currentContext *EventContext) (wst.DeleteResult, error)
 	UpdateById(id interface{}, data interface{}, currentContext *EventContext) (Instance, error)
 	GetConfig() *Config
+	GetAppOwnerForeignKey() string
 	GetName() string
 }
 
@@ -73,6 +74,7 @@ type CasbinConfig struct {
 	PolicyEffect       string   `json:"policyEffect"`
 	MatchersDefinition string   `json:"matchersDefinition"`
 	Policies           []string `json:"policies"`
+	AppOwnerForeignKey *string  `json:"appOwnerForeignKey"`
 }
 
 type CacheConfig struct {
@@ -167,6 +169,13 @@ type pendingOperationEntry struct {
 
 func (loadedModel *StatefulModel) GetConfig() *Config {
 	return loadedModel.Config
+}
+
+func (loadedModel *StatefulModel) GetAppOwnerForeignKey() string {
+	if loadedModel.Config.Casbin.AppOwnerForeignKey == nil {
+		return "appId"
+	}
+	return *loadedModel.Config.Casbin.AppOwnerForeignKey
 }
 
 func (loadedModel *StatefulModel) GetName() string {
