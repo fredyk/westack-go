@@ -222,7 +222,7 @@ func Test_BearerTokenWithObjectId(t *testing.T) {
 	assert.NoError(t, err)
 	subjId, err := primitive.ObjectIDFromHex(randomAccountToken.GetString("accountId"))
 	assert.NoError(t, err)
-	userBearer := model.CreateBearer(subjId, float64(time.Now().Unix()), float64(60), []string{"USER"})
+	userBearer := model.CreateBearer(subjId, float64(time.Now().Unix()), float64(60), []string{"USER"}, nil)
 	// sign the bearer
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, userBearer.Claims)
 	tokenString, err := token.SignedString(appInstance.Model.App.JwtSecretKey)
