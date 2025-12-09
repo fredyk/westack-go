@@ -842,7 +842,7 @@ func mountRelatedRoutes(app *WeStack, loadedModel *model.StatefulModel) {
 		rel := relation
 
 		getPermission := fmt.Sprintf("__get__%v", rn)
-		isManyRelation := rel.Type == "hasMany" || rel.Type == "hasManyThrough" || rel.Type == "hasAndBelongsToMany"
+		isManyRelation := rel.Type == "hasMany" || rel.Type == "hasAndBelongsToMany"
 		isSingleRelation := rel.Type == "hasOne" || rel.Type == "belongsTo"
 
 		// --- Mount GET /:id/{relationName} endpoint ---
