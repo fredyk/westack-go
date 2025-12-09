@@ -647,6 +647,87 @@ func Test_RelationEndpoints(t *testing.T) {
 	// Should return the account object (not an array)
 	assert.Contains(t, accountResult, "id")
 	assert.Contains(t, accountResult, "username")
+
+	// --- Test GET /:id/{relationName}/:fk for hasMany ---
+	// Get the first entry's ID
+	firstEntryId := entriesResult[0].GetString("id")
+	specificEntry, err := invokeApiAsRandomAccount("GET", fmt.Sprintf("/notes/%s/entries/%s", noteId, firstEntryId), nil, nil)
+	assert.NoError(t, err)
+	assert.Contains(t, specificEntry, "id")
+	assert.Equal(t, firstEntryId, specificEntry.GetString("id"))
+
+	// --- Test GET /:id/{relationName}/:fk for belongsTo ---
+	accountId := accountResult.GetString("id")
+	specificAccount, err := invokeApiAsRandomAccount("GET", fmt.Sprintf("/notes/%s/account/%s", noteId, accountId), nil, nil)
+	assert.NoError(t, err)
+	assert.Equal(t, accountId, specificAccount.GetString("id"))
+}
+
+func Test_RelationEndpoints_EdgeCases(t *testing.T) {
+	t.Parallel()
+
+	// Create a note with accountId
+	note, err := invokeApiAsRandomAccount("POST", "/notes", wst.M{
+		"title":     "Note for edge cases",
+		"accountId": randomAccount.GetString("id"),
+	}, wst.M{"Content-Type": "application/json"})
+	assert.NoError(t, err)
+	noteId := note.GetString("id")
+
+	// --- Edge Case 1: Empty hasMany relation (count = 0) ---
+	emptyCount, err := invokeApiAsRandomAccount("GET", fmt.Sprintf("/notes/%s/entries/count", noteId), nil, nil)
+	assert.NoError(t, err)
+	assert.EqualValues(t, 0, emptyCount.GetInt("count"))
+
+	// --- Edge Case 2: Empty hasMany relation returns empty array ---
+	emptyEntries, err := wstfuncs.InvokeApiJsonA("GET", fmt.Sprintf("/notes/%s/entries", noteId), nil, wst.M{
+		"Authorization": fmt.Sprintf("Bearer %v", randomAccountToken.GetString("id")),
+	})
+	assert.NoError(t, err)
+	assert.Len(t, emptyEntries, 0)
+
+	// --- Edge Case 3: Non-existent parent ID ---
+	fakeParentId := "000000000000000000000000"
+	notFoundResult, err := invokeApiAsRandomAccount("GET", fmt.Sprintf("/notes/%s/entries", fakeParentId), nil, nil)
+	// Should return error or empty (depending on implementation)
+	// Currently returns empty array since parent doesn't exist = no foreign keys match
+	_ = notFoundResult
+
+	// --- Edge Case 4: Non-existent related item ID ---
+	fakeEntryId := "000000000000000000000000"
+	notFoundEntry, err := invokeApiAsRandomAccount("GET", fmt.Sprintf("/notes/%s/entries/%s", noteId, fakeEntryId), nil, nil)
+	assert.NoError(t, err)
+	// Should return 404 or null
+	assert.Contains(t, notFoundEntry, "error")
+	assert.Equal(t, 404, notFoundEntry.GetInt("error.statusCode"))
+
+	// --- Edge Case 5: Invalid ObjectID format ---
+	invalidEntry, err := invokeApiAsRandomAccount("GET", fmt.Sprintf("/notes/%s/entries/invalid-id", noteId), nil, nil)
+	assert.NoError(t, err)
+	assert.Contains(t, invalidEntry, "error")
+
+	// --- Edge Case 6: /:fk with ID that doesn't belong to parent ---
+	// Create an entry for a different note
+	otherNote, err := invokeApiAsRandomAccount("POST", "/notes", wst.M{
+		"title":     "Other note",
+		"accountId": randomAccount.GetString("id"),
+	}, wst.M{"Content-Type": "application/json"})
+	assert.NoError(t, err)
+	otherNoteId := otherNote.GetString("id")
+
+	noteEntryModel, _ := app.FindModel("NoteEntry")
+	otherEntry, err := noteEntryModel.Create(wst.M{
+		"noteId": otherNoteId,
+		"title":  "Entry for other note",
+	}, systemContext)
+	assert.NoError(t, err)
+	otherEntryId := model.GetIDAsString(otherEntry.GetID())
+
+	// Try to access other note's entry through first note - should fail
+	wrongParentEntry, err := invokeApiAsRandomAccount("GET", fmt.Sprintf("/notes/%s/entries/%s", noteId, otherEntryId), nil, nil)
+	assert.NoError(t, err)
+	assert.Contains(t, wrongParentEntry, "error")
+	assert.Equal(t, 404, wrongParentEntry.GetInt("error.statusCode"))
 }
 
 func Test_RelationWithoutAuth(t *testing.T) {
