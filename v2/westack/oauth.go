@@ -602,9 +602,9 @@ func mountOauthRoutes(app *WeStack, loadedModel *model.StatefulModel, systemCont
 					fmt.Printf("[DEBUG] Creating new account for email: %v\n", login)
 					plainAccount := wst.M{
 						// "email":         login,
-						"emailVerified":                      true,
-						"provider":                           string(ProviderOAuth2Prefix) + providerName,
-						"has" + providerName + "Credentials": true,
+						"emailVerified": true,
+						"provider":      string(ProviderOAuth2Prefix) + providerName,
+						"has" + firstCharUppercase(providerName) + "Credentials": true,
 					}
 					for key, value := range additionalUserInfo {
 						plainAccount[key] = value
@@ -672,7 +672,7 @@ func mountOauthRoutes(app *WeStack, loadedModel *model.StatefulModel, systemCont
 				// update the account with credentials flag
 				if account != nil {
 					_, err = account.UpdateAttributes(wst.M{
-						"has" + providerName + "Credentials": true,
+						"has" + firstCharUppercase(providerName) + "Credentials": true,
 					}, systemContext)
 					if err != nil {
 						fmt.Printf("[ERROR] Could not set user credentials flag: %v\n", err)
@@ -776,4 +776,11 @@ func mountOauthRoutes(app *WeStack, loadedModel *model.StatefulModel, systemCont
 		}
 	}
 
+}
+
+func firstCharUppercase(s string) string {
+	if len(s) == 0 {
+		return ""
+	}
+	return strings.ToUpper(s[:1]) + s[1:]
 }
