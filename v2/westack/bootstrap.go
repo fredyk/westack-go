@@ -737,6 +737,10 @@ func registerPersistedModelFixedHooks(loadedModel *model.StatefulModel, app *WeS
 			baseContext = baseContext.BaseContext
 		}
 
+		if baseContext == nil || baseContext.Bearer == nil || baseContext.Bearer.Account == nil {
+			return nil
+		}
+
 		if protectedFieldsCount <= 0 || baseContext.Bearer.Account.System || skipOperationForBeforeBuild(eventContext.OperationName) {
 			return nil
 		}
