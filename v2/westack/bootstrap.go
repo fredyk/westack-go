@@ -624,14 +624,14 @@ func registerPersistedModelFixedHooks(loadedModel *model.StatefulModel, app *WeS
 				if (*data)["password"] != nil && (*data)["password"] != "" {
 					log.Println("Update Account password")
 					password := (*data)["password"].(string)
-					
+
 					// Apply password validation
 					if strings.TrimSpace(password) == "" {
 						return wst.CreateError(fiber.ErrBadRequest, "PASSWORD_BLANK", fiber.Map{"message": "Invalid password"}, "ValidationError")
 					} else if !wst.IsSecurePassword(password) {
 						return wst.CreateError(fiber.ErrBadRequest, "PASSWORD_INSECURE", fiber.Map{"message": "Password length must be at least 8 characters and contain at least one uppercase letter, one lowercase letter, one number and one special character"}, "ValidationError")
 					}
-					
+
 					hashed, err := bcrypt.GenerateFromPassword([]byte(fmt.Sprintf("%s%s", string(loadedModel.App.JwtSecretKey), password)), 11)
 					if err != nil {
 						return err
@@ -654,7 +654,7 @@ func registerPersistedModelFixedHooks(loadedModel *model.StatefulModel, app *WeS
 					// For non-password updates, find any credentials (maintain existing behavior)
 					credentialsFilter = &wst.Filter{Where: &wst.Where{"accountId": ctx.ModelID}}
 				}
-				
+
 				credentials, err := app.accountCredentialsModel.FindOne(credentialsFilter, ctx)
 				if err != nil {
 					return err
@@ -669,13 +669,13 @@ func registerPersistedModelFixedHooks(loadedModel *model.StatefulModel, app *WeS
 				} else if (*data)["password"] != nil && (*data)["password"] != "" {
 					// No password credentials exist, but user wants to set a password
 					// Create new password credentials for OAuth-only account
-					
+
 					// Get account email/username for the new credentials
 					account, err := loadedModel.FindById(ctx.ModelID, &wst.Filter{}, ctx)
 					if err != nil {
 						return err
 					}
-					
+
 					// Create new password credentials with raw password
 					// Password will be validated and hashed by existing AccountCredentials flow
 					newCredentials := wst.M{
@@ -683,7 +683,7 @@ func registerPersistedModelFixedHooks(loadedModel *model.StatefulModel, app *WeS
 						"provider":  string(ProviderPassword),
 						"password":  (*data)["password"],
 					}
-					
+
 					// Add email or username from account
 					if email := account.GetString("email"); email != "" {
 						newCredentials["email"] = email
@@ -691,12 +691,12 @@ func registerPersistedModelFixedHooks(loadedModel *model.StatefulModel, app *WeS
 					if username := account.GetString("username"); username != "" {
 						newCredentials["username"] = username
 					}
-					
+
 					_, err = app.accountCredentialsModel.Create(&newCredentials, ctx)
 					if err != nil {
 						return err
 					}
-					
+
 					data.ClearProperties([]string{"password"})
 				}
 			}
@@ -731,24 +731,30 @@ func registerPersistedModelFixedHooks(loadedModel *model.StatefulModel, app *WeS
 
 	protectedFieldsCount := len(loadedModel.Config.Protected)
 	loadedModel.Observe("before build", func(eventContext *model.EventContext) error {
-		if protectedFieldsCount <= 0 || eventContext.BaseContext.Bearer.Account.System || skipOperationForBeforeBuild(eventContext.OperationName) {
+
+		baseContext := eventContext.BaseContext
+		for baseContext.BaseContext != nil {
+			baseContext = baseContext.BaseContext
+		}
+
+		if protectedFieldsCount <= 0 || baseContext.Bearer.Account.System || skipOperationForBeforeBuild(eventContext.OperationName) {
 			return nil
 		}
 		isDifferentAccount := true
-		if eventContext.BaseContext.Bearer != nil && eventContext.BaseContext.Bearer.Account != nil {
+		if baseContext.Bearer != nil && baseContext.Bearer.Account != nil {
 			var foundAccountId string
 			if eventContext.Model.Config.Base == "Account" || eventContext.Model.Config.Base == "App" {
 				foundAccountId = eventContext.ModelID.(primitive.ObjectID).Hex()
 			} else {
 				foundAccountId = eventContext.Data.GetString("accountId")
 			}
-			requesterAccountId := eventContext.BaseContext.Bearer.Account.Id
+			requesterAccountId := baseContext.Bearer.Account.Id
 			if v, ok := requesterAccountId.(primitive.ObjectID); ok {
 				requesterAccountId = v.Hex()
 			}
 			isDifferentAccount = foundAccountId != requesterAccountId.(string)
 		}
-		if isDifferentAccount && !isAllowedForProtectedFields(eventContext.BaseContext.Bearer) {
+		if isDifferentAccount && !isAllowedForProtectedFields(baseContext.Bearer) {
 			for _, hiddenProperty := range loadedModel.Config.Protected {
 				delete(*eventContext.Data, hiddenProperty)
 			}
