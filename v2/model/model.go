@@ -678,6 +678,11 @@ func (loadedModel *StatefulModel) CreateMany(data interface{}, currentContext *E
 	// Validate and convert input to []wst.M
 	var finalDataArray []wst.M
 
+	// Check for nil data first
+	if data == nil {
+		return nil, fmt.Errorf("no data provided for createMany")
+	}
+
 	switch v := data.(type) {
 	case []wst.M:
 		finalDataArray = v
@@ -715,7 +720,7 @@ func (loadedModel *StatefulModel) CreateMany(data interface{}, currentContext *E
 			}
 		}
 	default:
-		return nil, fmt.Errorf("invalid input for Model.CreateMany(), expected array but got %T", data)
+		return nil, fmt.Errorf("data must be an array, got %T", data)
 	}
 
 	if len(finalDataArray) == 0 {
