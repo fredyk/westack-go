@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
+
 	wst "github.com/fredyk/westack-go/v2/common"
 	"github.com/fredyk/westack-go/v2/memorykv"
 	"github.com/google/uuid"
@@ -11,7 +13,6 @@ import (
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/bsoncodec"
 	"go.mongodb.org/mongo-driver/bson/primitive"
-	"time"
 )
 
 // MemoryKVConnector implements the PersistedConnector interface
@@ -149,6 +150,19 @@ func (connector *MemoryKVConnector) Create(collectionName string, data *wst.M) (
 
 	err := db.GetBucket(collectionName).SetEx(idAsStr, allBytes, 365*86400*time.Second)
 	return data, err
+}
+
+func (connector *MemoryKVConnector) CreateMany(collectionName string, data []wst.M) ([]wst.M, error) {
+	// Simple implementation: create each document individually
+	results := make([]wst.M, len(data))
+	for i, doc := range data {
+		created, err := connector.Create(collectionName, &doc)
+		if err != nil {
+			return nil, err
+		}
+		results[i] = *created
+	}
+	return results, nil
 }
 
 func (connector *MemoryKVConnector) UpdateById(collectionName string, id interface{}, data *wst.M) (*wst.M, error) {

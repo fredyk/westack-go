@@ -141,6 +141,10 @@ func (ds *Datasource) Create(collectionName string, data *wst.M) (*wst.M, error)
 	return ds.connectorInstance.Create(collectionName, data)
 }
 
+func (ds *Datasource) CreateMany(collectionName string, data []wst.M) ([]wst.M, error) {
+	return ds.connectorInstance.CreateMany(collectionName, data)
+}
+
 func (ds *Datasource) UpdateById(collectionName string, id interface{}, data *wst.M) (*wst.M, error) {
 	return ds.connectorInstance.UpdateById(collectionName, id, data)
 }

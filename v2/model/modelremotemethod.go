@@ -116,6 +116,13 @@ func (loadedModel *StatefulModel) RemoteMethod(handler func(context *EventContex
 				assignOpenAPIRequestBody(pathDef, wst.M{
 					"$ref": fmt.Sprintf("#/components/schemas/%s", schemaName),
 				}, fiber.MIMEApplicationJSON)
+			} else if options.Name == string(wst.OperationNameCreateMany) {
+				assignOpenAPIRequestBody(pathDef, wst.M{
+					"type": "array",
+					"items": wst.M{
+						"$ref": fmt.Sprintf("#/components/schemas/%s", schemaName),
+					},
+				}, fiber.MIMEApplicationJSON)
 			} else {
 				assignOpenAPIRequestBody(pathDef, wst.M{
 					"type": "object",

@@ -413,6 +413,28 @@ func mountBaseModelFixedRoutes(app *WeStack, loadedModel *model.StatefulModel) {
 			Verb: "post",
 		},
 	})
+
+	if app.debug {
+		log.Println("Mount POST " + loadedModel.BaseUrl + "/bulk")
+	}
+	loadedModel.RemoteMethod(func(eventContext *model.EventContext) error {
+		return handleEvent(eventContext, loadedModel, string(wst.OperationNameCreateMany))
+	}, model.RemoteMethodOptions{
+		Name: string(wst.OperationNameCreateMany),
+		Accepts: model.RemoteMethodOptionsHttpArgs{
+			{
+				Arg:         "body",
+				Type:        "array",
+				Description: "Array of objects to create",
+				Http:        model.ArgHttp{Source: "body"},
+				Required:    true,
+			},
+		},
+		Http: model.RemoteMethodOptionsHttp{
+			Path: "/bulk",
+			Verb: "post",
+		},
+	})
 }
 
 func mountAppDynamicRoutes(loadedModel *model.StatefulModel, app *WeStack) {

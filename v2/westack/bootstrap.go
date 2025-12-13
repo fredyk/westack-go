@@ -714,6 +714,38 @@ func registerPersistedModelFixedHooks(loadedModel *model.StatefulModel, app *WeS
 		return nil
 	})
 
+	loadedModel.On(string(wst.OperationNameCreateMany), func(ctx *model.EventContext) error {
+		// ctx.Data should contain an array
+		var dataArray interface{}
+		if ctx.Data != nil {
+			if items, ok := (*ctx.Data)["items"]; ok {
+				dataArray = items
+			} else {
+				// Try to use Data directly as array
+				dataArray = *ctx.Data
+			}
+		}
+
+		if dataArray == nil {
+			return fmt.Errorf("no data provided for createMany")
+		}
+
+		created, err := loadedModel.CreateMany(dataArray, ctx)
+		if err != nil {
+			return err
+		}
+
+		// Convert []Instance to []wst.M for JSON response
+		result := make([]wst.M, len(created))
+		for i, inst := range created {
+			result[i] = inst.ToJSON()
+		}
+
+		ctx.StatusCode = fiber.StatusOK
+		ctx.Result = result
+		return nil
+	})
+
 	loadedModel.On(string(wst.OperationNameUpdateAttributes), func(ctx *model.EventContext) error {
 		inst, err := loadedModel.FindById(ctx.ModelID, nil, ctx)
 		if err != nil {
