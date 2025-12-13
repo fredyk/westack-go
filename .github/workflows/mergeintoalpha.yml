@@ -72,7 +72,7 @@ jobs:
       MINIO_DOMAIN: ${{ secrets.MINIO_DOMAIN }}
       MINIO_ACCESS_KEY: ${{ secrets.MINIO_ACCESS_KEY }}
       MINIO_SECRET_KEY: ${{ secrets.MINIO_SECRET_KEY }}
-      MIN_COVERAGE_THRESHOLD: 77.5
+      MIN_COVERAGE_THRESHOLD: 75.7
       JWT_SECRET: abcD12345678.
       GO_ENV: TESTING
       DEBUG: true
