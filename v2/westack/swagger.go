@@ -2,10 +2,11 @@ package westack
 
 import (
 	"fmt"
-	"github.com/goccy/go-json"
 	"reflect"
 	"runtime"
 	"strings"
+
+	"github.com/goccy/go-json"
 
 	"github.com/gofiber/fiber/v2"
 
@@ -75,7 +76,8 @@ func swaggerDocsHandler(app *WeStack) func(ctx *fiber.Ctx) error {
 						resultSchema = wst.M{
 							"$ref": fmt.Sprintf("#/components/schemas/%v", operation.(wst.M)["x-modelName"]),
 						}
-					case operationName == string(wst.OperationNameFindMany):
+					case operationName == string(wst.OperationNameFindMany) ||
+						operationName == string(wst.OperationNameCreateMany):
 						resultSchema = wst.M{
 							"type": "array",
 							"items": wst.M{

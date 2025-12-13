@@ -564,6 +564,7 @@ const (
 	OperationNameFindMany         OperationName = "findMany"
 	OperationNameCount            OperationName = "count"
 	OperationNameCreate           OperationName = "create"
+	OperationNameCreateMany       OperationName = "createMany"
 	OperationNameUpdateAttributes OperationName = "instance_updateAttributes"
 
 	// OperationNameUpdateById TODO: Check, this model method is not used

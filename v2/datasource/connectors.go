@@ -2,6 +2,7 @@ package datasource
 
 import (
 	"context"
+
 	wst "github.com/fredyk/westack-go/v2/common"
 	"github.com/spf13/viper"
 )
@@ -21,6 +22,8 @@ type PersistedConnector interface {
 	Count(collectionName string, lookups *wst.A) (wst.CountResult, error)
 	// Create Creates a document in the datasource
 	Create(collectionName string, data *wst.M) (*wst.M, error)
+	// CreateMany Creates multiple documents in the datasource
+	CreateMany(collectionName string, data []wst.M) ([]wst.M, error)
 	// UpdateById Updates a document in the datasource
 	UpdateById(collectionName string, id interface{}, data *wst.M) (*wst.M, error)
 	// DeleteById Deletes a document in the datasource

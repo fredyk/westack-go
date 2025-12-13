@@ -674,6 +674,190 @@ func (loadedModel *StatefulModel) Create(data interface{}, currentContext *Event
 
 }
 
+func (loadedModel *StatefulModel) CreateMany(data interface{}, currentContext *EventContext) ([]Instance, error) {
+	// Validate and convert input to []wst.M
+	var finalDataArray []wst.M
+
+	switch v := data.(type) {
+	case []wst.M:
+		finalDataArray = v
+	case []map[string]interface{}:
+		finalDataArray = make([]wst.M, len(v))
+		for i, m := range v {
+			finalDataArray[i] = wst.M(m)
+		}
+	case *[]wst.M:
+		finalDataArray = *v
+	case *[]map[string]interface{}:
+		finalDataArray = make([]wst.M, len(*v))
+		for i, m := range *v {
+			finalDataArray[i] = wst.M(m)
+		}
+	case wst.A:
+		finalDataArray = v
+	case *wst.A:
+		finalDataArray = *v
+	case primitive.A:
+		finalDataArray = make([]wst.M, len(v))
+		for i, item := range v {
+			if m, ok := item.(wst.M); ok {
+				finalDataArray[i] = m
+			} else if m, ok := item.(map[string]interface{}); ok {
+				finalDataArray[i] = wst.M(m)
+			} else if m, ok := item.(primitive.M); ok {
+				converted := make(wst.M)
+				for k, val := range m {
+					converted[k] = val
+				}
+				finalDataArray[i] = converted
+			} else {
+				return nil, fmt.Errorf("invalid item type in array at index %d: %T", i, item)
+			}
+		}
+	default:
+		return nil, fmt.Errorf("invalid input for Model.CreateMany(), expected array but got %T", data)
+	}
+
+	if len(finalDataArray) == 0 {
+		return []Instance{}, nil
+	}
+
+	currentContext = existingOrEmpty(currentContext)
+	var targetBaseContext = FindBaseContext(currentContext)
+
+	// Process each document: replace ObjectIds and remove relations
+	for i := range finalDataArray {
+		if !currentContext.DisableTypeConversions {
+			_, err := datasource.ReplaceObjectIds(finalDataArray[i])
+			if err != nil {
+				return nil, fmt.Errorf("error processing document at index %d: %w", i, err)
+			}
+		}
+		// Remove relation fields
+		for key := range *loadedModel.Config.Relations {
+			delete(finalDataArray[i], key)
+		}
+	}
+
+	eventContext := &EventContext{
+		BaseContext: targetBaseContext,
+	}
+	propagateExecutionId(eventContext)
+	eventContext.Model = loadedModel
+	eventContext.IsNewInstance = true
+	eventContext.OperationName = wst.OperationNameCreateMany
+
+	// Optional hook: before_save_many (executed once for entire array)
+	if loadedModel.DisabledHandlers["__operation__before_save_many"] != true {
+		// Check if handler exists
+		if handler := loadedModel.GetHandler("__operation__before_save_many"); handler != nil {
+			// Pass array as Data
+			arrayAsAny := make([]interface{}, len(finalDataArray))
+			for i, doc := range finalDataArray {
+				arrayAsAny[i] = doc
+			}
+			eventContext.Data = &wst.M{"__items": arrayAsAny}
+
+			err := handler(eventContext)
+			if err != nil {
+				return nil, err
+			}
+
+			// Check if hook modified the data
+			if eventContext.Result != nil {
+				// Hook returned early with result
+				if resultArray, ok := eventContext.Result.([]Instance); ok {
+					return resultArray, nil
+				}
+			}
+		}
+	}
+
+	// Execute before_save for each document individually (before insert)
+	if loadedModel.DisabledHandlers["__operation__before_save"] != true {
+		for i := range finalDataArray {
+			docEventContext := &EventContext{
+				BaseContext: targetBaseContext,
+			}
+			propagateExecutionId(docEventContext)
+			docEventContext.Data = &finalDataArray[i]
+			docEventContext.Model = loadedModel
+			docEventContext.IsNewInstance = true
+			docEventContext.OperationName = wst.OperationNameCreate // Use Create for individual hooks
+
+			err := loadedModel.GetHandler("__operation__before_save")(docEventContext)
+			if err != nil {
+				return nil, fmt.Errorf("before_save failed for document at index %d: %w", i, err)
+			}
+
+			// If hook modified the document, update finalDataArray
+			if docEventContext.Result != nil {
+				switch result := docEventContext.Result.(type) {
+				case wst.M:
+					finalDataArray[i] = result
+				case *wst.M:
+					finalDataArray[i] = *result
+				}
+			}
+		}
+	}
+
+	// Create all documents in datasource (batch insert)
+	documents, err := loadedModel.Datasource.CreateMany(loadedModel.CollectionName, finalDataArray)
+	if err != nil {
+		return nil, err
+	}
+
+	// Build instances from documents
+	results := make([]Instance, len(documents))
+	for i, doc := range documents {
+		instance, err := loadedModel.Build(doc, eventContext)
+		if err != nil {
+			return nil, fmt.Errorf("error building instance at index %d: %w", i, err)
+		}
+		instance.(*StatefulInstance).HideProperties()
+		results[i] = instance
+	}
+
+	// Execute after_save for each document individually (after insert, with IDs)
+	if loadedModel.DisabledHandlers["__operation__after_save"] != true {
+		for i, instance := range results {
+			docEventContext := &EventContext{
+				BaseContext:   targetBaseContext,
+				Instance:      instance.(*StatefulInstance),
+				Model:         loadedModel,
+				IsNewInstance: true,
+				OperationName: wst.OperationNameCreate, // Use Create for individual hooks
+			}
+			propagateExecutionId(docEventContext)
+
+			err := loadedModel.GetHandler("__operation__after_save")(docEventContext)
+			if err != nil {
+				// Log warning but don't fail (documents already created)
+				if loadedModel.App.Debug {
+					log.Printf("[WARNING] after_save failed for document at index %d: %v\n", i, err)
+				}
+			}
+		}
+	}
+
+	// Optional hook: after_save_many
+	if loadedModel.DisabledHandlers["__operation__after_save_many"] != true {
+		if handler := loadedModel.GetHandler("__operation__after_save_many"); handler != nil {
+			eventContext.Result = results
+			err := handler(eventContext)
+			if err != nil {
+				// Log warning but don't fail (documents already created)
+				if loadedModel.App.Debug {
+					log.Printf("[WARNING] after_save_many hook failed: %v\n", err)
+				}
+			}
+		}
+	}
+
+	return results, nil
+}
+
 func (loadedModel *StatefulModel) DeleteById(id interface{}, currentContext *EventContext) (wst.DeleteResult, error) {
 
 	var finalId interface{}

@@ -211,6 +211,41 @@ func (connector *MongoDBConnector) Create(collectionName string, data *wst.M) (*
 	return connector.findByObjectId(collectionName, insertOneResult.InsertedID, nil)
 }
 
+func (connector *MongoDBConnector) CreateMany(collectionName string, data []wst.M) ([]wst.M, error) {
+	var db = connector.db
+
+	database := db.Database(connector.dsViper.GetString("database"))
+	collection := database.Collection(collectionName)
+
+	// Prepare documents for insertion
+	documents := make([]interface{}, len(data))
+	for i, doc := range data {
+		// Handle id/_id conversion
+		if doc["_id"] == nil && doc["id"] != nil {
+			doc["_id"] = doc["id"]
+		}
+		documents[i] = doc
+	}
+
+	// Insert all documents
+	insertManyResult, err := collection.InsertMany(connector.context, documents)
+	if err != nil {
+		return nil, err
+	}
+
+	// Fetch all inserted documents
+	results := make([]wst.M, len(insertManyResult.InsertedIDs))
+	for i, insertedID := range insertManyResult.InsertedIDs {
+		doc, err := connector.findByObjectId(collectionName, insertedID, nil)
+		if err != nil {
+			return nil, err
+		}
+		results[i] = *doc
+	}
+
+	return results, nil
+}
+
 func (connector *MongoDBConnector) UpdateById(collectionName string, id interface{}, data *wst.M) (*wst.M, error) {
 	var db = connector.db
 
