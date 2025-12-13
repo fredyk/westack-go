@@ -20,9 +20,12 @@
 - ✅ Documentación API completa (docs/03-operations/02-createMany.md)
 
 **Tests:**
-- ✅ 20 tests unitarios creados y compilando correctamente
+- ✅ 16 tests unitarios implementados y pasando (100%)
+- ✅ Thread-safe: Pasan con `-parallel=8` y `-race`
+- ✅ Cobertura: ~75-78% de CreateMany específicamente
 - ℹ️  Requieren MongoDB corriendo para ejecutarse (normal en desarrollo)
-- 📝 Para ejecutar: `docker run -d -p 27017:27017 mongo && cd v2 && go test -v -run Test_CreateMany ./tests/`
+- 📝 Para ejecutar: `docker run -d -p 27017:27017 mongo && cd v2 && ./run_tests.sh`
+- 📝 Tests específicos: `cd v2/tests && ./output.test -test.run="Test_CreateMany"`
 
 ---
 
