@@ -753,9 +753,9 @@ func (loadedModel *StatefulModel) CreateMany(data interface{}, currentContext *E
 	eventContext.OperationName = wst.OperationNameCreateMany
 
 	// Optional hook: before_save_many (executed once for entire array)
-	if loadedModel.DisabledHandlers["__operation__before_save_many"] != true {
-		// Check if handler exists
-		if handler := loadedModel.GetHandler("__operation__before_save_many"); handler != nil {
+	// Check if handler exists first, before checking disabled status
+	if beforeSaveManyHandler := loadedModel.eventHandlers["__operation__before_save_many"]; beforeSaveManyHandler != nil {
+		if loadedModel.DisabledHandlers["__operation__before_save_many"] != true {
 			// Pass array as Data
 			arrayAsAny := make([]interface{}, len(finalDataArray))
 			for i, doc := range finalDataArray {
@@ -763,7 +763,7 @@ func (loadedModel *StatefulModel) CreateMany(data interface{}, currentContext *E
 			}
 			eventContext.Data = &wst.M{"__items": arrayAsAny}
 
-			err := handler(eventContext)
+			err := beforeSaveManyHandler(eventContext)
 			if err != nil {
 				return nil, err
 			}
@@ -773,6 +773,17 @@ func (loadedModel *StatefulModel) CreateMany(data interface{}, currentContext *E
 				// Hook returned early with result
 				if resultArray, ok := eventContext.Result.([]Instance); ok {
 					return resultArray, nil
+				}
+			}
+
+			// Copy modifications back to finalDataArray
+			if items, ok := (*eventContext.Data)["__items"].([]interface{}); ok {
+				for i, item := range items {
+					if i < len(finalDataArray) {
+						if m, ok := item.(wst.M); ok {
+							finalDataArray[i] = m
+						}
+					}
 				}
 			}
 		}
@@ -848,10 +859,11 @@ func (loadedModel *StatefulModel) CreateMany(data interface{}, currentContext *E
 	}
 
 	// Optional hook: after_save_many
-	if loadedModel.DisabledHandlers["__operation__after_save_many"] != true {
-		if handler := loadedModel.GetHandler("__operation__after_save_many"); handler != nil {
+	// Check if handler exists first, before checking disabled status
+	if afterSaveManyHandler := loadedModel.eventHandlers["__operation__after_save_many"]; afterSaveManyHandler != nil {
+		if loadedModel.DisabledHandlers["__operation__after_save_many"] != true {
 			eventContext.Result = results
-			err := handler(eventContext)
+			err := afterSaveManyHandler(eventContext)
 			if err != nil {
 				// Log warning but don't fail (documents already created)
 				if loadedModel.App.Debug {

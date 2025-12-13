@@ -16,16 +16,17 @@
 - ✅ Remote method registration (routing.go) - POST /bulk
 - ✅ Políticas RBAC (setupmodels.go)
 - ✅ OpenAPI generation (swagger.go + modelremotemethod.go)
-- ✅ **Tests completos** (20 tests unitarios en westack_createmany_test.go)
+- ✅ **Tests completos** (16/16 tests unitarios pasando)
 - ✅ Documentación API completa (docs/03-operations/02-createMany.md)
+- ✅ **Bug fixes en hooks** (before_save_many y after_save_many funcionando)
 
 **Tests:**
-- ✅ 16 tests unitarios implementados y pasando (100%)
+- ✅ 16/16 tests unitarios pasando (100%)
 - ✅ Thread-safe: Pasan con `-parallel=8` y `-race`
 - ✅ Cobertura: ~75-78% de CreateMany específicamente
+- ✅ Hooks híbridos validados (before_save_many + before_save + after_save + after_save_many)
 - ℹ️  Requieren MongoDB corriendo para ejecutarse (normal en desarrollo)
-- 📝 Para ejecutar: `docker run -d -p 27017:27017 mongo && cd v2 && ./run_tests.sh`
-- 📝 Tests específicos: `cd v2/tests && ./output.test -test.run="Test_CreateMany"`
+- 📝 Para ejecutar: `docker run -d -p 27017:27017 mongo && cd v2 && go test -v -run="Test_CreateMany" ./tests/`
 
 ---
 
