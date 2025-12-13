@@ -7,6 +7,7 @@ import (
 	wst "github.com/fredyk/westack-go/v2/common"
 	"github.com/fredyk/westack-go/v2/model"
 	"github.com/stretchr/testify/assert"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 // Test_CreateManyWithArrayOfMaps tests creating multiple documents using []map[string]interface{}
@@ -299,4 +300,57 @@ func Test_CreateManyPerformanceComparison(t *testing.T) {
 
 	// CreateMany should complete successfully
 	// (In real benchmarks, CreateMany is ~3x faster than Create loop)
+}
+
+// Test_CreateManyWithInvalidItemInArray tests array with invalid item types
+func Test_CreateManyWithInvalidItemInArray(t *testing.T) {
+	t.Parallel()
+
+	// Array with mixed valid and invalid types (using primitive.A which is []interface{})
+	data := primitive.A{
+		wst.M{"title": "Valid1"},
+		"invalid_string", // This should fail
+		wst.M{"title": "Valid2"},
+	}
+
+	_, err := noteModel.CreateMany(data, systemContext)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid item type in array")
+}
+
+// Test_CreateManyWithDisabledTypeConversions tests with DisableTypeConversions flag
+func Test_CreateManyWithDisabledTypeConversions(t *testing.T) {
+	t.Parallel()
+
+	// Create context with DisableTypeConversions
+	ctx := &model.EventContext{
+		Bearer:                 systemContext.Bearer,
+		DisableTypeConversions: true,
+	}
+
+	data := []wst.M{
+		{"title": "NoConversion1"},
+		{"title": "NoConversion2"},
+	}
+
+	created, err := noteModel.CreateMany(data, ctx)
+	assert.NoError(t, err)
+	assert.Equal(t, 2, len(created))
+	assert.Equal(t, "NoConversion1", created[0].GetString("title"))
+}
+
+// Test_CreateManyWithPrimitiveM tests with primitive.A ([]interface{}) containing primitive.M
+func Test_CreateManyWithPrimitiveM(t *testing.T) {
+	t.Parallel()
+
+	// primitive.A is an alias for []interface{}
+	data := primitive.A{
+		primitive.M{"title": "PrimitiveM1"},
+		primitive.M{"title": "PrimitiveM2"},
+	}
+
+	created, err := noteModel.CreateMany(data, systemContext)
+	assert.NoError(t, err)
+	assert.Equal(t, 2, len(created))
+	assert.Equal(t, "PrimitiveM1", created[0].GetString("title"))
 }
