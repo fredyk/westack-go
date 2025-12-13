@@ -354,3 +354,84 @@ func Test_CreateManyWithPrimitiveM(t *testing.T) {
 	assert.Equal(t, 2, len(created))
 	assert.Equal(t, "PrimitiveM1", created[0].GetString("title"))
 }
+
+// Test_CreateManyWithBeforeSaveMany tests before_save_many hook execution
+func Test_CreateManyWithBeforeSaveMany(t *testing.T) {
+	// Cannot use t.Parallel() because we register hooks
+
+	marker := "test_before_save_many_hook"
+	beforeSaveManyExecuted := false
+
+	// Register before_save_many hook
+	noteModel.On("__operation__before_save_many", func(ctx *model.EventContext) error {
+		if items, ok := (*ctx.Data)["__items"].([]interface{}); ok {
+			if len(items) > 0 {
+				if firstItem, ok := items[0].(wst.M); ok {
+					if firstItem["test_marker"] == marker {
+						beforeSaveManyExecuted = true
+						// Modify all items in the batch
+						for _, item := range items {
+							if m, ok := item.(wst.M); ok {
+								m["batch_processed"] = true
+							}
+						}
+					}
+				}
+			}
+		}
+		return nil
+	})
+
+	data := []wst.M{
+		{"title": "Batch1", "test_marker": marker},
+		{"title": "Batch2", "test_marker": marker},
+		{"title": "Batch3", "test_marker": marker},
+	}
+
+	created, err := noteModel.CreateMany(data, systemContext)
+	assert.NoError(t, err)
+	assert.Equal(t, 3, len(created))
+	assert.True(t, beforeSaveManyExecuted, "before_save_many should have been executed")
+
+	// Verify batch modification was applied
+	assert.Equal(t, true, created[0].Get("batch_processed"))
+	assert.Equal(t, true, created[1].Get("batch_processed"))
+	assert.Equal(t, true, created[2].Get("batch_processed"))
+}
+
+// Test_CreateManyWithAfterSaveMany tests after_save_many hook execution
+func Test_CreateManyWithAfterSaveMany(t *testing.T) {
+	// Cannot use t.Parallel() because we register hooks
+
+	marker := "test_after_save_many_hook"
+	afterSaveManyExecuted := false
+	var capturedResults []model.Instance
+
+	// Register after_save_many hook
+	noteModel.On("__operation__after_save_many", func(ctx *model.EventContext) error {
+		if results, ok := ctx.Result.([]model.Instance); ok {
+			if len(results) > 0 {
+				if results[0].Get("test_marker") == marker {
+					afterSaveManyExecuted = true
+					capturedResults = results
+				}
+			}
+		}
+		return nil
+	})
+
+	data := []wst.M{
+		{"title": "AfterBatch1", "test_marker": marker},
+		{"title": "AfterBatch2", "test_marker": marker},
+	}
+
+	created, err := noteModel.CreateMany(data, systemContext)
+	assert.NoError(t, err)
+	assert.Equal(t, 2, len(created))
+	assert.True(t, afterSaveManyExecuted, "after_save_many should have been executed")
+
+	// Verify results were passed to hook
+	assert.Equal(t, 2, len(capturedResults))
+	assert.Equal(t, "AfterBatch1", capturedResults[0].GetString("title"))
+	assert.Equal(t, "AfterBatch2", capturedResults[1].GetString("title"))
+}
