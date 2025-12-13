@@ -719,7 +719,7 @@ func (loadedModel *StatefulModel) CreateMany(data interface{}, currentContext *E
 	}
 
 	if len(finalDataArray) == 0 {
-		return []Instance{}, nil
+		return nil, fmt.Errorf("no data provided for createMany")
 	}
 
 	currentContext = existingOrEmpty(currentContext)
@@ -824,6 +824,7 @@ func (loadedModel *StatefulModel) CreateMany(data interface{}, currentContext *E
 		for i, instance := range results {
 			docEventContext := &EventContext{
 				BaseContext:   targetBaseContext,
+				Data:          &finalDataArray[i], // Pass the document data
 				Instance:      instance.(*StatefulInstance),
 				Model:         loadedModel,
 				IsNewInstance: true,
