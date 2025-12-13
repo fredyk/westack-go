@@ -394,9 +394,9 @@ func Test_CreateManyWithBeforeSaveMany(t *testing.T) {
 	assert.True(t, beforeSaveManyExecuted, "before_save_many should have been executed")
 
 	// Verify batch modification was applied
-	assert.Equal(t, true, created[0].Get("batch_processed"))
-	assert.Equal(t, true, created[1].Get("batch_processed"))
-	assert.Equal(t, true, created[2].Get("batch_processed"))
+	assert.Equal(t, true, created[0].ToJSON()["batch_processed"])
+	assert.Equal(t, true, created[1].ToJSON()["batch_processed"])
+	assert.Equal(t, true, created[2].ToJSON()["batch_processed"])
 }
 
 // Test_CreateManyWithAfterSaveMany tests after_save_many hook execution
@@ -411,7 +411,7 @@ func Test_CreateManyWithAfterSaveMany(t *testing.T) {
 	noteModel.On("__operation__after_save_many", func(ctx *model.EventContext) error {
 		if results, ok := ctx.Result.([]model.Instance); ok {
 			if len(results) > 0 {
-				if results[0].Get("test_marker") == marker {
+				if results[0].ToJSON()["test_marker"] == marker {
 					afterSaveManyExecuted = true
 					capturedResults = results
 				}
