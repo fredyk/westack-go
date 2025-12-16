@@ -410,7 +410,7 @@ func registerPersistedModelFixedHooks(loadedModel *model.StatefulModel, app *WeS
 		// If it is not a new instance, we need to merge the data with the existing instance
 		allErrorsCodes := wst.M{}
 		mergedData := data
-		if !ctx.IsNewInstance {
+		if !ctx.IsNewInstance && ctx.Instance != nil {
 			plainInstance := ctx.Instance.ToJSON()
 			mergedData = &plainInstance
 			for k, v := range *data {
