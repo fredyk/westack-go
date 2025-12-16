@@ -1045,7 +1045,16 @@ func (loadedModel *StatefulModel) UpdateById(id interface{}, data interface{}, c
 	eventContext.OperationName = wst.OperationNameUpdateById
 
 	if loadedModel.DisabledHandlers["__operation__before_save"] != true {
-		err := loadedModel.GetHandler("__operation__before_save")(eventContext)
+
+		prevInstance, err := loadedModel.FindById(finalId, nil, eventContext)
+		if err != nil {
+			return nil, err
+		}
+		if prevInstance == nil {
+			return nil, errors.New("instance not found")
+		}
+		eventContext.Instance = prevInstance.(*StatefulInstance)
+		err = loadedModel.GetHandler("__operation__before_save")(eventContext)
 		if err != nil {
 			return nil, err
 		}
