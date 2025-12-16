@@ -702,7 +702,26 @@ Verificar y copiar componentes faltantes de v2/model
 - westack/routing.go: ~20 errores
 - westack/westack.go: ~3 errores
 
-#### Decisión Necesaria (BLOQUEANTE):
+#### ✅ Decisión Tomada: NO CASTEOS - Solo Model Interface
+
+**Estrategia**: Usar SOLO la interfaz Model, sin casteos `.(*StatefulModel)`.
+
+**Progreso** (16 Dic 20:10):
+1. ✅ GetCollectionName() agregado a Model interface  
+2. ✅ RemoteMethod return type: `interface{}` en interfaz
+3. ✅ modelrelations.go: Usando `.GetDatasource()`, `.GetConfig()`, `.GetCollectionName()`
+4. ✅ model/ package: ✅ COMPILA
+
+**Pendiente** (~1-2 horas):
+- Cambiar firmas de funciones en westack/ que esperan `*StatefulModel` a `Model`
+- ~20-30 funciones afectadas:
+  - `setupAccountModel(Model, *WeStack)`
+  - `createCasbinModel(Model, *WeStack, *Config)`
+  - `handleEvent(..., Model, string)`
+  - `mount*()` funciones
+  - Etc.
+
+**Bloqueador Actual**:
 
 **OPCIÓN A** (Rápida): Migrar client v2→v3
 - Crear `client/v3` compatible con `v3/common`
@@ -1806,6 +1825,570 @@ git push origin main
 1. **Inmediato**: Commit el fix de double unlock
 2. **Corto plazo** (1-2 días): Implementar rate limiting en CreateMany
 3. **Medio plazo** (1 semana): Tests específicos de concurrencia
-4. **Largo plazo**: Continuar v3 refactor (21% completado)
+4. **Largo plazo**: Continuar v3 refactor con arquitectura hexagonal (21% completado)
+
+---
+
+## 🏗️ V3 REFACTOR: HEXAGONAL ARCHITECTURE + PLUGIN SYSTEM (16 Dic 2025)
+
+### 📊 Investigación Arquitectónica Completada
+
+**Análisis realizado**: 26 pasos de sequential thinking + búsquedas exhaustivas sobre patrones Go idiomáticos.
+
+**Documento generado**: [`ARCHITECTURE_VISION_V4.md`](./ARCHITECTURE_VISION_V4.md)
+
+### 🎯 Decisión Arquitectónica: v3 será Hexagonal
+
+**CAMBIO DE ESTRATEGIA**: 
+- ❌ NO seguir agregando métodos a interface Model
+- ❌ NO prohibir casteos ciegamente (son síntoma, no causa)
+- ✅ SÍ adoptar Hexagonal Architecture (Ports & Adapters)
+- ✅ SÍ crear sistema de PLUGINS intercambiables
+
+### 🔌 Filosofía: "Everything is Pluggable"
+
+En lugar de una obsesión por **interfaces gigantes**, v3 tendrá una obsesión por **plugins intercambiables**.
+
+**TODO debe ser pluggable**:
+- 🔧 **Data Access** (MongoDB, PostgreSQL, Memory, Custom)
+- 🌐 **Frontend/Transport** (HTTP/Fiber, gRPC, GraphQL, WebSocket, AMQP)
+- 🔐 **Authorization** (Casbin, OPA, Custom)
+- 🎣 **Hooks System** (Before/After, Async, Priority-based)
+- 💾 **Caching** (Redis, Memory, Custom)
+- 📊 **Telemetry** (Prometheus, OpenTelemetry, Custom)
+- 🔍 **Validation** (go-validator, Custom)
+- 📝 **Logging** (zap, logrus, Custom)
+
+### 🏛️ Arquitectura Hexagonal
+
+```
+westack-go/v3/
+├── internal/
+│   ├── core/
+│   │   ├── domain/          # Entities puras (sin deps)
+│   │   │   ├── entity.go    # User, Note, etc.
+│   │   │   └── errors.go    # Domain errors
+│   │   │
+│   │   ├── ports/           # Interfaces pequeñas (1-3 métodos)
+│   │   │   ├── repository.go    # type Repository interface
+│   │   │   ├── transport.go     # type Transport interface
+│   │   │   ├── authz.go         # type Authorization interface
+│   │   │   ├── hooks.go         # type HookEngine interface
+│   │   │   └── cache.go         # type Cache interface
+│   │   │
+│   │   └── service/         # Business logic
+│   │       ├── crud_service.go
+│   │       └── relation_service.go
+│   │
+│   └── adapters/            # Implementaciones intercambiables
+│       ├── transport/
+│       │   ├── fiber/       # HTTP con Fiber
+│       │   ├── grpc/        # gRPC adapter
+│       │   └── graphql/     # GraphQL adapter
+│       │
+│       ├── repository/
+│       │   ├── mongo/       # MongoDB
+│       │   ├── postgres/    # PostgreSQL
+│       │   └── memory/      # In-memory (tests)
+│       │
+│       ├── authz/
+│       │   ├── casbin/      # Casbin RBAC
+│       │   └── opa/         # Open Policy Agent
+│       │
+│       └── hooks/
+│           ├── sync/        # Synchronous hooks
+│           └── async/       # Async with goroutines
+│
+└── cmd/
+    └── server/
+        └── main.go          # DI explícita, registro plugins
+```
+
+### 🔌 Sistema de Plugins - Interfaces
+
+#### 1. Repository Plugin (Data Access)
+
+```go
+// internal/core/ports/repository.go
+package ports
+
+type Repository interface {
+    FindByID(ctx context.Context, id string) (*domain.Entity, error)
+    FindMany(ctx context.Context, filter Filter) ([]*domain.Entity, error)
+    Save(ctx context.Context, entity *domain.Entity) error
+    Delete(ctx context.Context, id string) error
+}
+
+// Uso:
+// - adapters/repository/mongo/     → MongoDB
+// - adapters/repository/postgres/  → PostgreSQL
+// - adapters/repository/memory/    → In-memory
+// - user_custom/                   → Custom plugin
+```
+
+#### 2. Transport Plugin (Frontend)
+
+```go
+// internal/core/ports/transport.go
+package ports
+
+type Transport interface {
+    RegisterRoutes(service Service) error
+    Start(addr string) error
+    Stop() error
+}
+
+// Uso:
+// - adapters/transport/fiber/    → HTTP REST
+// - adapters/transport/grpc/     → gRPC
+// - adapters/transport/graphql/  → GraphQL
+// - adapters/transport/amqp/     → RabbitMQ
+```
+
+#### 3. Authorization Plugin
+
+```go
+// internal/core/ports/authz.go
+package ports
+
+type Authorization interface {
+    Can(ctx context.Context, resource, action string) error
+    CanAccessField(ctx context.Context, resource, field string) error
+}
+
+// Uso:
+// - adapters/authz/casbin/  → Casbin RBAC
+// - adapters/authz/opa/     → Open Policy Agent
+// - adapters/authz/custom/  → Custom rules
+```
+
+#### 4. Hook Engine Plugin
+
+```go
+// internal/core/ports/hooks.go
+package ports
+
+type HookEngine interface {
+    Register(name string, priority int, handler HookHandler) error
+    Execute(ctx context.Context, name string, data interface{}) error
+}
+
+type HookHandler func(ctx context.Context, data interface{}) error
+
+// Uso:
+// - adapters/hooks/sync/   → Synchronous execution
+// - adapters/hooks/async/  → Goroutine-based async
+// - adapters/hooks/queue/  → Queue-based (Redis, RabbitMQ)
+```
+
+#### 5. Cache Plugin
+
+```go
+// internal/core/ports/cache.go
+package ports
+
+type Cache interface {
+    Get(ctx context.Context, key string) (interface{}, error)
+    Set(ctx context.Context, key string, value interface{}, ttl time.Duration) error
+    Delete(ctx context.Context, key string) error
+}
+
+// Uso:
+// - adapters/cache/redis/   → Redis
+// - adapters/cache/memory/  → In-memory LRU
+// - adapters/cache/none/    → No-op (disable)
+```
+
+### 🎛️ Configuración con Plugins - main.go
+
+```go
+// cmd/server/main.go
+package main
+
+import (
+    "github.com/fredyk/westack-go/v3/pkg/westack"
+    "github.com/fredyk/westack-go/v3/internal/adapters/repository/mongo"
+    "github.com/fredyk/westack-go/v3/internal/adapters/transport/fiber"
+    "github.com/fredyk/westack-go/v3/internal/adapters/authz/casbin"
+    "github.com/fredyk/westack-go/v3/internal/adapters/hooks/sync"
+    "github.com/fredyk/westack-go/v3/internal/adapters/cache/redis"
+)
+
+func main() {
+    // 1. Create plugins
+    db := mongo.Connect("mongodb://localhost:27017/myapp")
+    repo := mongo.NewRepository(db)
+    
+    transport := fiber.NewTransport(&fiber.Config{
+        Port: 8080,
+    })
+    
+    enforcer := casbin.LoadEnforcer("model.conf", "policy.csv")
+    authz := casbin.NewAuthz(enforcer)
+    
+    hookEngine := sync.NewHookEngine()
+    cache := redis.NewCache("localhost:6379")
+    
+    // 2. Configure westack with plugins
+    app := westack.New(&westack.Config{
+        Repository:    repo,
+        Transport:     transport,
+        Authorization: authz,
+        HookEngine:    hookEngine,
+        Cache:         cache,
+    })
+    
+    // 3. Register models (schema-driven)
+    noteModel := westack.DefineModel("Note", &westack.ModelConfig{
+        Properties: map[string]westack.Property{
+            "title":   {Type: "string", Required: true},
+            "content": {Type: "string"},
+        },
+        Relations: map[string]westack.Relation{
+            "user": {Type: "belongsTo", Model: "User"},
+        },
+    })
+    
+    app.RegisterModel(noteModel)
+    
+    // 4. Start
+    app.Start()
+}
+```
+
+### 🔄 Intercambio de Plugins - Ejemplos
+
+#### Ejemplo 1: Cambiar de MongoDB a PostgreSQL
+
+```go
+// ANTES: MongoDB
+import "github.com/fredyk/westack-go/v3/internal/adapters/repository/mongo"
+repo := mongo.NewRepository(db)
+
+// DESPUÉS: PostgreSQL
+import "github.com/fredyk/westack-go/v3/internal/adapters/repository/postgres"
+repo := postgres.NewRepository(db)
+
+// ✅ El resto del código NO cambia (ports interface)
+```
+
+#### Ejemplo 2: Cambiar de HTTP a gRPC
+
+```go
+// ANTES: HTTP REST
+import "github.com/fredyk/westack-go/v3/internal/adapters/transport/fiber"
+transport := fiber.NewTransport(&fiber.Config{Port: 8080})
+
+// DESPUÉS: gRPC
+import "github.com/fredyk/westack-go/v3/internal/adapters/transport/grpc"
+transport := grpc.NewTransport(&grpc.Config{Port: 50051})
+
+// ✅ El resto del código NO cambia
+```
+
+#### Ejemplo 3: Cambiar de Casbin a OPA
+
+```go
+// ANTES: Casbin
+import "github.com/fredyk/westack-go/v3/internal/adapters/authz/casbin"
+authz := casbin.NewAuthz(enforcer)
+
+// DESPUÉS: Open Policy Agent
+import "github.com/fredyk/westack-go/v3/internal/adapters/authz/opa"
+authz := opa.NewAuthz("http://opa-server:8181")
+
+// ✅ El resto del código NO cambia
+```
+
+### 🎣 Hooks Pluggables - Sistema Mejorado
+
+```go
+// internal/core/ports/hooks.go
+package ports
+
+type HookEngine interface {
+    // Register hook with priority (lower = first)
+    Register(name string, priority int, handler HookHandler) error
+    
+    // Execute hooks in priority order
+    Execute(ctx context.Context, name string, data interface{}) error
+    
+    // Async execution (fire and forget)
+    ExecuteAsync(ctx context.Context, name string, data interface{})
+}
+
+// Ejemplo de uso
+func main() {
+    hookEngine := sync.NewHookEngine()
+    
+    // Register multiple hooks with priority
+    hookEngine.Register("before_save", 10, validateData)
+    hookEngine.Register("before_save", 20, sanitizeHTML)
+    hookEngine.Register("before_save", 30, checkPermissions)
+    
+    // Execute in order: validate → sanitize → check
+    err := hookEngine.Execute(ctx, "before_save", data)
+}
+```
+
+### 📦 Plugin Externos - Soporte para Custom Plugins
+
+```go
+// user_project/plugins/custom_cache.go
+package plugins
+
+import "github.com/fredyk/westack-go/v3/internal/core/ports"
+
+type CustomCache struct {
+    // tu implementación
+}
+
+func (c *CustomCache) Get(ctx context.Context, key string) (interface{}, error) {
+    // tu código
+}
+
+func (c *CustomCache) Set(ctx context.Context, key string, value interface{}, ttl time.Duration) error {
+    // tu código
+}
+
+func (c *CustomCache) Delete(ctx context.Context, key string) error {
+    // tu código
+}
+
+// main.go
+import "your-project/plugins"
+
+func main() {
+    cache := &plugins.CustomCache{}
+    
+    app := westack.New(&westack.Config{
+        Cache: cache,  // ✅ Tu plugin custom
+    })
+}
+```
+
+### 🔍 Ventajas de Arquitectura Pluggable
+
+| Aspecto | v3 Actual | v3 Hexagonal + Plugins |
+|---------|-----------|------------------------|
+| **Acoplamiento** | Alto (todo mezclado) | Bajo (ports/adapters) |
+| **Testing** | Difícil (stack completo) | Fácil (mock plugins) |
+| **Extensibilidad** | Limitada | Ilimitada (plugins externos) |
+| **Cambiar DB** | Refactor grande | Cambiar 1 línea |
+| **Cambiar Transport** | Imposible (Fiber hardcoded) | Cambiar 1 línea |
+| **Múltiples frontends** | No soportado | HTTP + gRPC + GraphQL simultáneos |
+| **Go idiomático** | ❌ | ✅ |
+
+### 📋 Plan de Migración v3 Hexagonal
+
+#### ⚠️ ESTRATEGIA CRÍTICA: Tests como Contrato
+
+**PRIMER PASO antes de cualquier refactor**:
+
+```bash
+# Copiar tests de v2 a v3 EXACTAMENTE iguales
+cp -r v2/tests/* v3/tests/
+```
+
+**Regla de oro**:
+- ✅ Los tests de v3 deben ser IDÉNTICOS a v2
+- ✅ Solo cambiar imports (`v2/` → `v3/`)
+- ✅ Solo cambiar cosas OBLIGATORIAS (paths, etc.)
+- ❌ NO cambiar asserts
+- ❌ NO cambiar estructuras de datos
+- ❌ NO cambiar comportamiento esperado
+- ❌ NO cambiar nombres de tests
+
+**Razón**:
+Los tests son el **CONTRATO** de comportamiento.
+Si refactorizamos la arquitectura interna (Active Record → Hexagonal),
+los tests deben garantizar que el comportamiento externo NO cambia.
+
+**Ejemplo**:
+
+```go
+// v2/tests/westack_test.go
+func Test_CreateNote(t *testing.T) {
+    note, err := noteModel.Create(wst.M{
+        "title": "Test",
+        "content": "Hello",
+    }, ctx)
+    
+    assert.NoError(t, err)
+    assert.Equal(t, "Test", note.GetString("title"))
+}
+
+// v3/tests/westack_test.go - IDÉNTICO excepto import
+import "github.com/fredyk/westack-go/v3/model"  // cambio mínimo
+
+func Test_CreateNote(t *testing.T) {
+    note, err := noteModel.Create(wst.M{
+        "title": "Test",
+        "content": "Hello",
+    }, ctx)
+    
+    assert.NoError(t, err)
+    assert.Equal(t, "Test", note.GetString("title"))  // mismo assert
+}
+```
+
+**Verificación**:
+```bash
+# Los tests de v3 deben pasar ANTES de iniciar refactor
+cd v3
+go test ./tests/... -v
+
+# ✅ Si pasan: seguro refactorizar
+# ❌ Si fallan: arreglar PRIMERO, DESPUÉS refactor
+```
+
+**Beneficios**:
+1. **Seguridad**: Sabemos que el comportamiento no rompe
+2. **Confianza**: Tests prueban comportamiento real de v2
+3. **Regresión**: Cualquier cambio que rompa tests = bug
+4. **Documentación**: Tests documentan cómo debe funcionar
+5. **TDD inverso**: Tests existen, implementación se adapta
+
+---
+
+#### Fase 0: Tests como Contrato (ANTES de todo) ⚠️
+- [x] Copiar `v2/tests/` → `v3/tests/` exactamente igual
+- [/] Cambiar solo imports necesarios (`v2/` → `v3/`)
+- [ ] Ejecutar tests: `cd v3 && go test ./tests/... -v`
+- [ ] **BLOQUEANTE**: Todos deben pasar antes de continuar
+- [ ] Documentar cualquier test que necesite cambio (y por qué)
+- [ ] Commit: "test: copy v2 tests as contract for v3 refactor"
+
+##### 📊 Progreso Fase 0 - Ejecución en Curso (16 Dic 2025 - 21:15)
+
+**Paso 1: Copiar tests** ✅
+```bash
+$ rsync -avzh --delete v2/tests/ v3/tests/
+sent 20,40M bytes  received 2,06K bytes  40,81M bytes/sec
+total size is 39,46M  speedup is 1,93
+```
+
+**Archivos copiados**:
+- Tests principales: 18 archivos `*_test.go`
+- Helpers: `testfunctions.go`
+- Fixtures: `common/models/`, `data/`, `proto/`, `server/`
+- Total: ~39.46 MB
+
+**Paso 2: Ajustar imports v2 → v3** 🔄
+
+**Estado inicial** (compilación):
+```bash
+$ cd v3 && go build ./...
+tests/testfunctions.go:10:2: no required module provides package github.com/fredyk/westack-go/client/v2/wstfuncs
+tests/testfunctions.go:11:2: no required module provides package github.com/fredyk/westack-go/v2/common
+tests/testfunctions.go:12:2: no required module provides package github.com/fredyk/westack-go/v2/model
+tests/testfunctions.go:13:2: no required module provides package github.com/fredyk/westack-go/v2/westack
+```
+
+**Cambios detectados**:
+Usuario ajustó manualmente imports en algunos archivos:
+- ✅ `westack_datasource_test.go`: v3 → v2 (revertir)
+- ✅ `westack_grpc_test.go`: v3 → v2 (revertir)
+- ✅ `westack_model_instance_test.go`: v3 → v2 (revertir)
+
+**Cambios adicionales manuales**:
+```go
+// westack_grpc_test.go - variables globales restauradas
+var userId primitive.ObjectID
+var noteId primitive.ObjectID
+var noteModel *model.StatefulModel      // v2 style
+var accountModel *model.StatefulModel   // v2 style
+// ... etc
+```
+
+**Observación crítica**:
+Tests fueron copiados de v2 pero mantienen estructura v2:
+- Usan `*model.StatefulModel` directamente (no `model.Model` interface)
+- Acceden a campos públicos: `.Name`, `.Config`, `.Datasource`, `.App.Debug`
+- Esto es CORRECTO: tests deben probar comportamiento v2 sin cambios
+
+**Próximo paso**: 
+1. Cambiar TODOS los imports `v2/` → `v3/` automáticamente
+2. Compilar y ver errores de tipo (esperados)
+3. Resolver casteos mínimos necesarios
+
+#### Fase 1: Preparación (Semana 1-2)
+- [x] Investigación arquitectónica (completada)
+- [ ] Crear estructura `internal/core/domain/`
+- [ ] Crear estructura `internal/core/ports/`
+- [ ] Crear estructura `internal/adapters/`
+- [ ] Diseñar interfaces de plugins
+
+#### Fase 2: Ports (Semana 3-4)
+- [ ] Implementar `ports/repository.go`
+- [ ] Implementar `ports/transport.go`
+- [ ] Implementar `ports/authz.go`
+- [ ] Implementar `ports/hooks.go`
+- [ ] Implementar `ports/cache.go`
+
+#### Fase 3: Adapters Core (Semana 5-8)
+- [ ] Adapter MongoDB repository
+- [ ] Adapter Fiber transport
+- [ ] Adapter Casbin authz
+- [ ] Adapter Sync hooks
+- [ ] Adapter Memory cache
+
+#### Fase 4: Service Layer (Semana 9-10)
+- [ ] CRUD service usando ports
+- [ ] Relations service usando ports
+- [ ] Validation service
+- [ ] Hooks integration
+
+#### Fase 5: Migration & Testing (Semana 11-12)
+- [ ] Migrar código existente
+- [ ] Tests con mock plugins
+- [ ] Integration tests
+- [ ] Performance benchmarks
+
+#### Fase 6: Additional Adapters (Semana 13-14)
+- [ ] PostgreSQL adapter
+- [ ] gRPC transport adapter
+- [ ] GraphQL transport adapter
+- [ ] Redis cache adapter
+- [ ] Documentación de plugins
+
+### 🎯 Problema Actual: Casteos en v3
+
+**SOLUCIÓN TEMPORAL** hasta completar Hexagonal:
+
+```go
+// En westack/ - funciones reciben *StatefulModel directamente
+func setupAccountModel(m *model.StatefulModel, app *WeStack)
+func createCasbinModel(m *model.StatefulModel, datasource *Datasource)
+
+// 1 casteo controlado en entry point
+for _, modelInterface := range *app.modelRegistry {
+    m := modelInterface.(*model.StatefulModel)  // 1 casteo
+    setupAccountModel(m, app)                    // función recibe concreto
+}
+```
+
+**Justificación**:
+- Minimiza casteos (1 por loop vs 30+ scattered)
+- No contamina interface Model con getters de implementación
+- Temporal hasta refactor hexagonal completo
+- Permite compilar v3 mientras migramos
+
+### 📊 Métricas Objetivo v3 Hexagonal
+
+- **Cobertura de tests**: >80%
+- **Interfaces pequeñas**: <5 métodos cada una
+- **Plugins soportados**: 6+ (Repository, Transport, Authz, Hooks, Cache, Logging)
+- **Tiempo migración**: 3-4 meses
+- **Breaking changes**: Sí, pero con compatibility layer
+- **Performance**: Sin overhead vs v2 (benchmark)
+
+### 📚 Referencias
+
+- **Documento completo**: [`ARCHITECTURE_VISION_V4.md`](./ARCHITECTURE_VISION_V4.md)
+- **Go Proverbs**: Rob Pike
+- **Hexagonal Architecture**: Ports & Adapters pattern
+- **Repository Pattern**: vs Active Record en Go
+- **Plugin Systems**: Go best practices
 
 ---
