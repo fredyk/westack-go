@@ -17,12 +17,12 @@ type EventContext struct {
 	Filter                 *wst.Filter
 	Data                   *wst.M
 	Query                  *wst.M
-	Instance               *StatefulInstance
+	Instance               Instance // v3: Changed from *StatefulInstance to Instance interface (BREAKING CHANGE)
 	Ctx                    *fiber.Ctx
 	Ephemeral              *EphemeralData
 	IsNewInstance          bool
 	Result                 interface{}
-	Model                  *StatefulModel
+	Model                  Model // v3: Changed from *StatefulModel to Model interface for mockability (BREAKING CHANGE)
 	ModelID                interface{}
 	StatusCode             int
 	DisableTypeConversions bool

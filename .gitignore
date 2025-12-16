@@ -23,3 +23,5 @@ westack/tests/server/datasources.TESTING_PUBLIC.json
 /v2/go.work
 /v2/go.work.sum
 v2/test_output.log
+v3/test_output.txt
+v3/coverage.out

@@ -28,6 +28,7 @@ type Instance interface {
 	GetOne(relation string) Instance
 	GetMany(relation string) InstanceA
 	GetModel() Model
+	HideProperties() // v3: Added to interface to eliminate castings
 }
 
 type StatefulInstance struct {
@@ -72,7 +73,7 @@ func (modelInstance *StatefulInstance) ToJSON() wst.M {
 			if relatedModel != nil {
 				switch {
 				case isSingleRelation(relationConfig.Type):
-					relatedInstance := rawRelatedData.(*StatefulInstance).ToJSON()
+					relatedInstance := rawRelatedData.(Instance).ToJSON()
 					result[relationName] = relatedInstance
 				case isManyRelation(relationConfig.Type):
 					aux := make(wst.A, len(rawRelatedData.(InstanceA)))
@@ -109,7 +110,7 @@ func (modelInstance *StatefulInstance) GetOne(relationName string) Instance {
 	if result == nil {
 		return nil
 	}
-	return result.(*StatefulInstance)
+	return result.(Instance)
 }
 
 func (modelInstance *StatefulInstance) GetMany(relationName string) InstanceA {
@@ -124,11 +125,13 @@ func (modelInstance *StatefulInstance) HideProperties() {
 	for relationKey, relationConfig := range *modelInstance.Model.Config.Relations {
 		if relationConfig.Type == "hasMany" || relationConfig.Type == "hasAndBelongsToMany" {
 			for _, instance := range modelInstance.GetMany(relationKey) {
-				instance.(*StatefulInstance).HideProperties()
+				// v3: No casting needed - HideProperties() is now in Instance interface
+				instance.HideProperties()
 			}
 		} else if relationConfig.Type == "hasOne" || relationConfig.Type == "belongsTo" {
 			if instance := modelInstance.GetOne(relationKey); instance != nil {
-				instance.(*StatefulInstance).HideProperties()
+				// v3: No casting needed - HideProperties() is now in Instance interface
+				instance.HideProperties()
 			}
 		}
 	}
@@ -174,8 +177,8 @@ func (modelInstance *StatefulInstance) UpdateAttributes(data interface{}, baseCo
 	case StatefulInstance:
 		value := data.(StatefulInstance)
 		finalData = (&value).ToJSON()
-	case *StatefulInstance:
-		finalData = data.(*StatefulInstance).ToJSON()
+	case Instance:
+		finalData = data.(Instance).ToJSON()
 	default:
 		// check if data is a struct
 		if reflect.TypeOf(data).Kind() == reflect.Struct {
@@ -228,21 +231,12 @@ func (modelInstance *StatefulInstance) UpdateAttributes(data interface{}, baseCo
 		}
 		if eventContext.Result != nil {
 			switch eventContext.Result.(type) {
-			case *StatefulInstance, Instance:
-				return eventContext.Result.(*StatefulInstance), nil
-			case *Instance:
-				return (*eventContext.Result.(*Instance)).(*StatefulInstance), nil
-			case StatefulInstance:
-				v := eventContext.Result.(StatefulInstance)
-				return &v, nil
+			case Instance:
+				return eventContext.Result.(Instance), nil
 			case wst.M:
-				v, err := modelInstance.Model.Build(eventContext.Result.(wst.M), targetBaseContext)
-				if err != nil {
-					return nil, err
-				}
-				return v, nil
+				return modelInstance.Model.Build(eventContext.Result.(wst.M), targetBaseContext)
 			default:
-				return nil, fmt.Errorf("invalid eventContext.Result type, expected Instance, Instance or wst.M; found %T", eventContext.Result)
+				return nil, fmt.Errorf("invalid eventContext.Result type, expected Instance or wst.M; found %T", eventContext.Result)
 			}
 		}
 	}

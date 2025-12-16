@@ -1,0 +1,1500 @@
+package model
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"log"
+	"reflect"
+	"runtime"
+	"runtime/debug"
+	"strconv"
+	"strings"
+	"sync"
+	"sync/atomic"
+	"time"
+
+	"github.com/casbin/casbin/v2"
+	casbinmodel "github.com/casbin/casbin/v2/model"
+	fileadapter "github.com/casbin/casbin/v2/persist/file-adapter"
+	"github.com/fredyk/westack-go/v3/memorykv"
+	"github.com/gofiber/fiber/v2"
+	"github.com/golang-jwt/jwt"
+	"github.com/google/uuid"
+	"github.com/spf13/cast"
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
+
+	wst "github.com/fredyk/westack-go/v3/common"
+	"github.com/fredyk/westack-go/v3/datasource"
+)
+
+type Model interface {
+	FindMany(filterMap *wst.Filter, currentContext *EventContext) Cursor
+	FindById(id interface{}, filterMap *wst.Filter, baseContext *EventContext) (Instance, error)
+	Create(data interface{}, currentContext *EventContext) (Instance, error)
+	Count(filterMap *wst.Filter, currentContext *EventContext) (wst.CountResult, error)
+	DeleteById(id interface{}, currentContext *EventContext) (wst.DeleteResult, error)
+	UpdateById(id interface{}, data interface{}, currentContext *EventContext) (Instance, error)
+	Build(data wst.M, currentContext *EventContext) (Instance, error)
+	QueueOperation(operation string, eventContext *EventContext, fn func(nextCtx *EventContext) error)
+	GetConfig() *Config
+	GetAppOwnerForeignKey() string
+	GetName() string
+}
+
+type Property struct {
+	Type     interface{} `json:"type"`
+	Required bool        `json:"required"`
+	Default  interface{} `json:"default"`
+}
+
+type Relation struct {
+	Type       string  `json:"type"`
+	Model      string  `json:"model"`
+	PrimaryKey *string `json:"primaryKey"`
+	ForeignKey *string `json:"foreignKey"`
+	Options    struct {
+		//Inverse bool `json:"inverse"`
+		SkipAuth bool `json:"skipAuth"`
+	} `json:"options"`
+}
+
+type ACL struct {
+	AccessType    string `json:"accessType"`
+	PrincipalType string `json:"principalType"`
+	PrincipalId   string `json:"principalId"`
+	Permission    string `json:"permission"`
+	Property      string `json:"property"`
+}
+
+type CasbinConfig struct {
+	RequestDefinition  string   `json:"requestDefinition"`
+	PolicyDefinition   string   `json:"policyDefinition"`
+	RoleDefinition     string   `json:"roleDefinition"`
+	PolicyEffect       string   `json:"policyEffect"`
+	MatchersDefinition string   `json:"matchersDefinition"`
+	Policies           []string `json:"policies"`
+	AppOwnerForeignKey *string  `json:"appOwnerForeignKey"`
+}
+
+type CacheConfig struct {
+	Datasource    string     `json:"datasource"`
+	Ttl           int        `json:"ttl"`
+	Keys          [][]string `json:"keys"`
+	ExcludeFields []string   `json:"excludeFields"`
+}
+
+type MongoConfig struct {
+	//Database string `json:"database"`
+	Collection string `json:"collection"`
+}
+
+type Config struct {
+	Name        string                `json:"name"`
+	Plural      string                `json:"plural"`
+	Base        string                `json:"base"`
+	Public      bool                  `json:"public"`
+	Properties  map[string]Property   `json:"properties"`
+	Relations   *map[string]*Relation `json:"relations"`
+	Hidden      []string              `json:"hidden"`
+	Protected   []string              `json:"protected"`
+	Validations []Validation          `json:"validations"`
+	Casbin      CasbinConfig          `json:"casbin"`
+	Cache       CacheConfig           `json:"cache"`
+	Mongo       MongoConfig           `json:"mongo"`
+}
+
+type Validation struct {
+	If         map[string]Condition  `json:"if"`
+	Then       *Validation           `json:"then"`
+	AllOf      []Validation          `json:"allOf"`
+	OneOf      []Validation          `json:"oneOf"`
+	Properties map[string]Validation `json:"properties"`
+	NotEmpty   bool                  `json:"notEmpty"`
+}
+
+type Condition struct {
+	Equals      interface{}   `json:"equals"`
+	NotEquals   interface{}   `json:"notEquals"`
+	Contains    []interface{} `json:"contains"`
+	NotContains []interface{} `json:"notContains"`
+	Exists      bool          `json:"exists"`
+	NotExists   bool          `json:"notExists"`
+	Empty       bool          `json:"empty"`
+	NotEmpty    bool          `json:"notEmpty"`
+}
+
+type SimplifiedConfig struct {
+	Datasource string `json:"dataSource"`
+}
+
+type DataSourceConfig struct {
+	Name      string `json:"name"`
+	Connector string `json:"connector"`
+	Host      string `json:"host"`
+	Port      int    `json:"port"`
+	Database  string `json:"database"`
+	Username  string `json:"username"`
+	Password  string `json:"password"`
+}
+
+type StatefulModel struct {
+	Name             string                 `json:"name"`
+	CollectionName   string                 `json:"-"`
+	Config           *Config                `json:"-"`
+	Datasource       *datasource.Datasource `json:"-"`
+	Router           *fiber.Router          `json:"-"`
+	App              *wst.IApp              `json:"-"`
+	BaseUrl          string                 `json:"-"`
+	CasbinModel      *casbinmodel.Model
+	CasbinAdapter    **fileadapter.Adapter
+	Enforcer         *casbin.Enforcer
+	DisabledHandlers map[string]bool
+	NilInstance      *StatefulInstance
+
+	eventHandlers        map[string]func(eventContext *EventContext) error
+	modelRegistry        *map[string]*StatefulModel
+	remoteMethodsMap     map[string]*OperationItem
+	earlyDisabledMethods map[string]bool
+
+	authCache              map[string]map[string]map[string]bool
+	hasHiddenProperties    bool
+	pendingOperations      map[string]map[string][]pendingOperationEntry // Indexed by ExecutionId for parallel flow isolation
+	pendingOperationsMutex sync.RWMutex
+}
+
+type pendingOperationEntry struct {
+	handler func(eventContext *EventContext) error
+}
+
+func (loadedModel *StatefulModel) GetConfig() *Config {
+	return loadedModel.Config
+}
+
+func (loadedModel *StatefulModel) GetAppOwnerForeignKey() string {
+	if loadedModel.Config.Casbin.AppOwnerForeignKey == nil {
+		return "appId"
+	}
+	return *loadedModel.Config.Casbin.AppOwnerForeignKey
+}
+
+func (loadedModel *StatefulModel) GetName() string {
+	return loadedModel.Name
+}
+
+func (loadedModel *StatefulModel) GetModelRegistry() *map[string]*StatefulModel {
+	return loadedModel.modelRegistry
+}
+
+func New(config *Config, modelRegistry *map[string]*StatefulModel) Model {
+	name := config.Name
+	collectionName := config.Mongo.Collection
+	if collectionName == "" {
+		collectionName = name
+	}
+	loadedModel := &StatefulModel{
+		Name:             name,
+		CollectionName:   collectionName,
+		Config:           config,
+		DisabledHandlers: map[string]bool{},
+
+		modelRegistry:        modelRegistry,
+		eventHandlers:        map[string]func(eventContext *EventContext) error{},
+		remoteMethodsMap:     map[string]*OperationItem{},
+		earlyDisabledMethods: map[string]bool{},
+		authCache:            map[string]map[string]map[string]bool{},
+		pendingOperations:    map[string]map[string][]pendingOperationEntry{},
+	}
+	loadedModel.NilInstance = &StatefulInstance{
+		Model: loadedModel,
+		Id:    primitive.NilObjectID,
+		data:  wst.NilMap,
+		bytes: nil,
+	}
+
+	(*modelRegistry)[name] = loadedModel
+
+	return loadedModel
+}
+
+type RegistryEntry struct {
+	Name  string
+	Model *StatefulModel
+}
+
+func (loadedModel *StatefulModel) Build(data wst.M, currentContext *EventContext) (Instance, error) {
+
+	//if loadedModel.App.Stats.BuildsByModel[loadedModel.Name] == nil {
+	//	loadedModel.App.Stats.BuildsByModel[loadedModel.Name] = map[string]float64{
+	//		"count": 0,
+	//		"time":  0,
+	//	}
+	//}
+	//init := time.Now().UnixMilli()
+
+	if data["id"] == nil {
+		data["id"] = data["_id"]
+		if data["id"] != nil {
+			delete(data, "_id")
+		}
+	}
+
+	var targetBaseContext = FindBaseContext(currentContext)
+
+	modelInstance := StatefulInstance{
+		Id:    data["id"],
+		bytes: nil,
+		data:  data,
+		Model: loadedModel,
+	}
+
+	beforeBuildEventContext := &EventContext{
+		BaseContext:   targetBaseContext,
+		Data:          &data,
+		Model:         loadedModel,
+		ModelID:       modelInstance.Id,
+		OperationName: currentContext.OperationName,
+	}
+	propagateExecutionId(beforeBuildEventContext)
+
+	if !loadedModel.DisabledHandlers["__operation__before_build"] {
+		err := loadedModel.GetHandler("__operation__before_build")(beforeBuildEventContext)
+		if err != nil {
+			return nil, fmt.Errorf("error in __operation__before_build: %v", err)
+		}
+	}
+
+	for relationName, relationConfig := range *loadedModel.Config.Relations {
+		if data[relationName] != nil && relationConfig.Type != "" {
+			rawRelatedData := data[relationName]
+			var err error
+			relatedModel, _ := loadedModel.App.FindModel(relationConfig.Model)
+			if relatedModel != nil {
+				switch relationConfig.Type {
+				case "belongsTo", "hasOne":
+					var relatedInstance Instance
+					if asInstance, asInstanceOk := rawRelatedData.(Instance); asInstanceOk {
+						relatedInstance = asInstance
+					} else {
+						relatedInstance, err = relatedModel.(Model).Build(rawRelatedData.(wst.M), targetBaseContext)
+						if err != nil {
+							fmt.Printf("[ERROR] Model.Build() --> %v\n", err)
+							return nil, err
+						}
+					}
+					data[relationName] = relatedInstance
+				case "hasMany", "hasAndBelongsToMany":
+
+					var result InstanceA
+					if asInstanceList, asInstanceListOk := rawRelatedData.(InstanceA); asInstanceListOk {
+						result = asInstanceList
+					} else {
+						result = make(InstanceA, len(rawRelatedData.(primitive.A)))
+						for idx, v := range rawRelatedData.(primitive.A) {
+							result[idx], err = relatedModel.(Model).Build(v.(wst.M), targetBaseContext)
+							if err != nil {
+								fmt.Printf("[ERROR] Model.Build() --> %v\n", err)
+								return nil, err
+							}
+						}
+					}
+
+					data[relationName] = result
+				}
+			}
+		}
+	}
+
+	eventContext := &EventContext{
+		BaseContext: targetBaseContext,
+	}
+	propagateExecutionId(eventContext)
+	eventContext.Data = &data
+	eventContext.Instance = &modelInstance
+
+	/* trunk-ignore(golangci-lint/gosimple) */
+	if loadedModel.DisabledHandlers["__operation__after_load"] != true {
+		err := loadedModel.GetHandler("__operation__after_load")(eventContext)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	//loadedModel.App.Stats.BuildsByModel[loadedModel.Name]["count"]++
+	//loadedModel.App.Stats.BuildsByModel[loadedModel.Name]["time"] += float64(time.Now().UnixMilli() - init)
+
+	return &modelInstance, nil
+}
+
+func ParseFilter(filter string) *wst.Filter {
+	var filterMap *wst.Filter
+	if filter != "" {
+		_ = json.Unmarshal([]byte(filter), &filterMap)
+		// TODO: 01-security/03-injection-prevention/01-nosql-injection.md Sanitize MongoDB query operators
+		if filterMap != nil && filterMap.Where != nil {
+			if err := wst.SanitizeMongoQuery(filterMap.Where); err != nil {
+				// Return nil filter to prevent injection
+				log.Printf("[SECURITY] Blocked potentially dangerous query: %v", err)
+				return nil
+			}
+		}
+	}
+	return filterMap
+}
+
+func (loadedModel *StatefulModel) FindMany(filterMap *wst.Filter, currentContext *EventContext) Cursor {
+
+	currentContext = existingOrEmpty(currentContext)
+	targetBaseContext := FindBaseContext(currentContext)
+
+	lookups, err := loadedModel.ExtractLookupsFromFilter(filterMap, currentContext.DisableTypeConversions)
+	if err != nil {
+		return NewErrorCursor(err)
+	}
+
+	currentOperationContext := &EventContext{
+		BaseContext: targetBaseContext,
+	}
+	propagateExecutionId(currentOperationContext)
+	currentOperationContext.Model = loadedModel
+	if currentContext.OperationName != "" {
+		currentOperationContext.OperationName = currentContext.OperationName
+	} else {
+		currentOperationContext.OperationName = wst.OperationNameFindMany
+	}
+	if loadedModel.DisabledHandlers["__operation__before_load"] != true {
+		err := loadedModel.GetHandler("__operation__before_load")(currentOperationContext)
+		if err != nil {
+			return NewErrorCursor(err)
+		}
+		if currentOperationContext.Result != nil {
+			switch currentOperationContext.Result.(type) {
+			case *InstanceA:
+				return newFixedLengthCursor(*currentOperationContext.Result.(*InstanceA))
+			case InstanceA:
+				return newFixedLengthCursor(currentOperationContext.Result.(InstanceA))
+			case wst.A:
+				var result InstanceA
+				result, err = loadedModel.buildInstanceAFromA(currentOperationContext.Result.(wst.A), currentOperationContext)
+				if err != nil {
+					return NewErrorCursor(err)
+				}
+				return newFixedLengthCursor(result)
+			default:
+				return NewErrorCursor(fmt.Errorf("invalid eventContext.Result type, expected InstanceA or []wst.M; found %T", currentOperationContext.Result))
+			}
+		}
+	}
+	//for key := range *loadedModel.Config.Relations {
+	//	delete(finalData, key)
+	//}
+
+	dsCursor, err := loadedModel.Datasource.FindMany(loadedModel.CollectionName, lookups)
+	if err != nil {
+		return NewErrorCursor(err)
+	}
+	if dsCursor == nil {
+		return NewErrorCursor(fmt.Errorf("invalid query result"))
+	}
+
+	var targetInclude *wst.Include
+	if filterMap != nil && filterMap.Include != nil {
+		includeAsInterfaces := *filterMap.Include
+		targetInclude = &includeAsInterfaces
+	} else {
+		targetInclude = nil
+	}
+
+	var results = make(chan Instance)
+	var cursor = NewChannelCursor(results).(*ChannelCursor)
+	cursor.UsedPipeline = lookups
+	//var cursor = newMongoCursor(context.Background(), dsCursor).(*MongoCursor)
+
+	go loadedModel.dispatchFindManyResults(cursor, dsCursor, targetInclude, currentOperationContext, results, filterMap)
+
+	return cursor
+}
+
+func FindBaseContext(currentContext *EventContext) *EventContext {
+	var targetBaseContext = currentContext
+	for {
+		if targetBaseContext.BaseContext != nil {
+			targetBaseContext = targetBaseContext.BaseContext
+		} else {
+			break
+		}
+	}
+	return targetBaseContext
+}
+
+func (loadedModel *StatefulModel) buildInstanceAFromA(v wst.A, targetBaseContext *EventContext) (result InstanceA, err error) {
+	result = make(InstanceA, len(v))
+	for idx, v := range v {
+		result[idx], err = loadedModel.Build(v, targetBaseContext)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return result, nil
+}
+
+func insertCacheEntries(safeCacheDs *datasource.Datasource, loadedModel *StatefulModel, toCache wst.M) error {
+	cached, err := safeCacheDs.Create(loadedModel.CollectionName, &toCache)
+	if err != nil {
+		return err
+	}
+	if loadedModel.App.Debug {
+		fmt.Printf("[DEBUG] cached %v(len=%v) in memorykv\n", toCache["_redId"], len(toCache["_entries"].(wst.A)))
+		fmt.Printf("[DEBUG] cached doc %v in memorykv\n", cached)
+	}
+	return nil
+}
+
+func doExpireCacheKey(safeCacheDs *datasource.Datasource, loadedModel *StatefulModel, canonicalId string) (err error) {
+	connectorName := safeCacheDs.SubViper.GetString("connector")
+	switch connectorName {
+	case "memorykv":
+		db := safeCacheDs.Db.(memorykv.MemoryKvDb)
+		bucket := db.GetBucket(loadedModel.CollectionName)
+		if loadedModel.App.Debug {
+			log.Println("CACHING", loadedModel.Name)
+		}
+		if loadedModel.App.Debug {
+			log.Println("CACHING CANONICAL ID", canonicalId)
+		}
+		ttl := time.Duration(loadedModel.Config.Cache.Ttl) * time.Second
+		if loadedModel.App.Debug {
+			fmt.Printf("[DEBUG] trying to expire %v in %v seconds\n", canonicalId, ttl)
+		}
+		err = bucket.Expire(canonicalId, ttl)
+		if loadedModel.App.Debug {
+			fmt.Printf("[DEBUG] expiring %v in %v seconds, err=%v\n", canonicalId, ttl, err)
+		}
+	default:
+		return errors.New(fmt.Sprintf("Unsupported cache connector %v", connectorName))
+	}
+	return err
+}
+
+func existingOrEmpty[T any](existing *T) *T {
+	if existing != nil {
+		return existing
+	}
+	return new(T)
+}
+
+func (loadedModel *StatefulModel) Count(filterMap *wst.Filter, currentContext *EventContext) (wst.CountResult, error) {
+	currentContext = existingOrEmpty(currentContext)
+	var targetBaseContext = FindBaseContext(currentContext)
+
+	lookups, err := loadedModel.ExtractLookupsFromFilter(filterMap, currentContext.DisableTypeConversions)
+	if err != nil {
+		return wst.CountResult{}, err
+	}
+
+	eventContext := &EventContext{
+		BaseContext: targetBaseContext,
+	}
+	propagateExecutionId(eventContext)
+	eventContext.Model = loadedModel
+	if currentContext.OperationName != "" {
+		eventContext.OperationName = currentContext.OperationName
+	} else {
+		eventContext.OperationName = wst.OperationNameCount
+	}
+
+	eventContext.DisableTypeConversions = currentContext.DisableTypeConversions
+
+	eventContext.Filter = filterMap
+
+	return loadedModel.Datasource.Count(loadedModel.CollectionName, lookups)
+}
+
+func (loadedModel *StatefulModel) FindOne(filterMap *wst.Filter, baseContext *EventContext) (Instance, error) {
+
+	if filterMap == nil {
+		filterMap = &wst.Filter{}
+	}
+	filterMap.Limit = 1
+
+	return loadedModel.FindMany(filterMap, baseContext).Next()
+}
+
+func (loadedModel *StatefulModel) FindById(id interface{}, filterMap *wst.Filter, baseContext *EventContext) (Instance, error) {
+	var _id interface{}
+	switch id.(type) {
+	case string:
+		var err error
+		_id, err = primitive.ObjectIDFromHex(id.(string))
+		if err != nil {
+			_id = id
+		}
+	default:
+		_id = id
+	}
+
+	if filterMap == nil {
+		filterMap = &wst.Filter{}
+	}
+	if filterMap.Where == nil {
+		filterMap.Where = &wst.Where{}
+	}
+
+	(*filterMap.Where)["_id"] = _id
+	filterMap.Limit = 1
+
+	baseContext.OperationName = wst.OperationNameFindById
+	instances, err := loadedModel.FindMany(filterMap, baseContext).All()
+	if err != nil {
+		return nil, err
+	}
+
+	if len(instances) > 0 {
+		return instances[0], nil
+	}
+
+	return nil, nil
+}
+
+func (loadedModel *StatefulModel) Create(data interface{}, currentContext *EventContext) (Instance, error) {
+
+	var finalData wst.M
+
+	if m, ok := data.(map[string]interface{}); ok {
+		finalData = wst.M{}
+		for key, value := range m {
+			finalData[key] = value
+		}
+	} else if m, ok := data.(*map[string]interface{}); ok {
+		finalData = wst.M{}
+		for key, value := range *m {
+			finalData[key] = value
+		}
+	} else if m, ok := data.(wst.M); ok {
+		finalData = m
+	} else if m, ok := data.(*wst.M); ok {
+		finalData = *m
+	} else if value, ok := data.(Instance); ok {
+		finalData = value.ToJSON()
+	} else {
+		// check if data is a struct
+		if reflect.TypeOf(data).Kind() == reflect.Struct {
+			bytes, err := bson.MarshalWithRegistry(loadedModel.App.Bson.Registry, data)
+			if err != nil {
+				return nil, err
+			}
+			err = bson.UnmarshalWithRegistry(loadedModel.App.Bson.Registry, bytes, &finalData)
+			if err != nil {
+				// how to test this???
+				return nil, err
+			}
+		} else {
+			return nil, fmt.Errorf("invalid input for Model.Create() <- %s", cast.ToString(data))
+		}
+	}
+
+	currentContext = existingOrEmpty(currentContext)
+	var targetBaseContext = FindBaseContext(currentContext)
+	if !currentContext.DisableTypeConversions {
+		_, err := datasource.ReplaceObjectIds(finalData)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	eventContext := &EventContext{
+		BaseContext: targetBaseContext,
+	}
+	propagateExecutionId(eventContext)
+	eventContext.Data = &finalData
+	eventContext.Model = loadedModel
+	eventContext.IsNewInstance = true
+	eventContext.OperationName = wst.OperationNameCreate
+	if loadedModel.DisabledHandlers["__operation__before_save"] != true {
+		err := loadedModel.GetHandler("__operation__before_save")(eventContext)
+		if err != nil {
+			return nil, err
+		}
+		if eventContext.Result != nil {
+			switch eventContext.Result.(type) {
+			case Instance:
+				return eventContext.Result.(Instance), nil
+			case wst.M:
+				return loadedModel.Build(eventContext.Result.(wst.M), targetBaseContext)
+			default:
+				return nil, fmt.Errorf("invalid eventContext.Result type, expected Instance or wst.M; found %T", eventContext.Result)
+			}
+		}
+	}
+	for key := range *loadedModel.Config.Relations {
+		delete(finalData, key)
+	}
+	document, err := loadedModel.Datasource.Create(loadedModel.CollectionName, &finalData)
+
+	if err != nil {
+		return nil, err
+	} else {
+		result, err := loadedModel.Build(*document, eventContext)
+		if err != nil {
+			return nil, err
+		}
+		result.HideProperties()
+		eventContext.Instance = result
+		if loadedModel.DisabledHandlers["__operation__after_save"] != true {
+			err := loadedModel.GetHandler("__operation__after_save")(eventContext)
+			if err != nil {
+				return nil, err
+			}
+		}
+		return result, nil
+	}
+
+}
+
+func (loadedModel *StatefulModel) CreateMany(data interface{}, currentContext *EventContext) ([]Instance, error) {
+	// Validate and convert input to []wst.M
+	var finalDataArray []wst.M
+
+	// Check for nil data first
+	if data == nil {
+		return nil, fmt.Errorf("no data provided for createMany")
+	}
+
+	switch v := data.(type) {
+	case []wst.M:
+		finalDataArray = v
+	case []map[string]interface{}:
+		finalDataArray = make([]wst.M, len(v))
+		for i, m := range v {
+			finalDataArray[i] = wst.M(m)
+		}
+	case *[]wst.M:
+		finalDataArray = *v
+	case *[]map[string]interface{}:
+		finalDataArray = make([]wst.M, len(*v))
+		for i, m := range *v {
+			finalDataArray[i] = wst.M(m)
+		}
+	case wst.A:
+		finalDataArray = v
+	case *wst.A:
+		finalDataArray = *v
+	case primitive.A:
+		finalDataArray = make([]wst.M, len(v))
+		for i, item := range v {
+			if m, ok := item.(wst.M); ok {
+				finalDataArray[i] = m
+			} else if m, ok := item.(map[string]interface{}); ok {
+				finalDataArray[i] = wst.M(m)
+			} else if m, ok := item.(primitive.M); ok {
+				converted := make(wst.M)
+				for k, val := range m {
+					converted[k] = val
+				}
+				finalDataArray[i] = converted
+			} else {
+				return nil, fmt.Errorf("invalid item type in array at index %d: %T", i, item)
+			}
+		}
+	default:
+		return nil, fmt.Errorf("data must be an array, got %T", data)
+	}
+
+	if len(finalDataArray) == 0 {
+		return nil, fmt.Errorf("no data provided for createMany")
+	}
+
+	currentContext = existingOrEmpty(currentContext)
+	var targetBaseContext = FindBaseContext(currentContext)
+
+	// Process each document: replace ObjectIds and remove relations
+	for i := range finalDataArray {
+		if !currentContext.DisableTypeConversions {
+			_, err := datasource.ReplaceObjectIds(finalDataArray[i])
+			if err != nil {
+				return nil, fmt.Errorf("error processing document at index %d: %w", i, err)
+			}
+		}
+		// Remove relation fields
+		for key := range *loadedModel.Config.Relations {
+			delete(finalDataArray[i], key)
+		}
+	}
+
+	eventContext := &EventContext{
+		BaseContext: targetBaseContext,
+	}
+	propagateExecutionId(eventContext)
+	eventContext.Model = loadedModel
+	eventContext.IsNewInstance = true
+	eventContext.OperationName = wst.OperationNameCreateMany
+
+	// Optional hook: before_save_many (executed once for entire array)
+	// Check if handler exists first, before checking disabled status
+	if beforeSaveManyHandler := loadedModel.eventHandlers["__operation__before_save_many"]; beforeSaveManyHandler != nil {
+		if loadedModel.DisabledHandlers["__operation__before_save_many"] != true {
+			// Pass array as Data
+			arrayAsAny := make([]interface{}, len(finalDataArray))
+			for i, doc := range finalDataArray {
+				arrayAsAny[i] = doc
+			}
+			eventContext.Data = &wst.M{"__items": arrayAsAny}
+
+			err := beforeSaveManyHandler(eventContext)
+			if err != nil {
+				return nil, err
+			}
+
+			// Check if hook modified the data
+			if eventContext.Result != nil {
+				// Hook returned early with result
+				if resultArray, ok := eventContext.Result.([]Instance); ok {
+					return resultArray, nil
+				}
+			}
+
+			// Copy modifications back to finalDataArray
+			if items, ok := (*eventContext.Data)["__items"].([]interface{}); ok {
+				for i, item := range items {
+					if i < len(finalDataArray) {
+						if m, ok := item.(wst.M); ok {
+							finalDataArray[i] = m
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// Execute before_save for each document individually (before insert)
+	if loadedModel.DisabledHandlers["__operation__before_save"] != true {
+		for i := range finalDataArray {
+			docEventContext := &EventContext{
+				BaseContext: targetBaseContext,
+			}
+			propagateExecutionId(docEventContext)
+			docEventContext.Data = &finalDataArray[i]
+			docEventContext.Model = loadedModel
+			docEventContext.IsNewInstance = true
+			docEventContext.OperationName = wst.OperationNameCreate // Use Create for individual hooks
+
+			err := loadedModel.GetHandler("__operation__before_save")(docEventContext)
+			if err != nil {
+				return nil, fmt.Errorf("before_save failed for document at index %d: %w", i, err)
+			}
+
+			// If hook modified the document, update finalDataArray
+			if docEventContext.Result != nil {
+				switch result := docEventContext.Result.(type) {
+				case wst.M:
+					finalDataArray[i] = result
+				case *wst.M:
+					finalDataArray[i] = *result
+				}
+			}
+		}
+	}
+
+	// Create all documents in datasource (batch insert)
+	documents, err := loadedModel.Datasource.CreateMany(loadedModel.CollectionName, finalDataArray)
+	if err != nil {
+		return nil, err
+	}
+
+	// Build instances from documents
+	results := make([]Instance, len(documents))
+	for i, doc := range documents {
+		instance, err := loadedModel.Build(doc, eventContext)
+		if err != nil {
+			return nil, fmt.Errorf("error building instance at index %d: %w", i, err)
+		}
+		instance.HideProperties()
+		results[i] = instance
+	}
+
+	// Execute after_save for each document individually (after insert, with IDs)
+	if loadedModel.DisabledHandlers["__operation__after_save"] != true {
+		for i, instance := range results {
+			docEventContext := &EventContext{
+				BaseContext:   targetBaseContext,
+				Data:          &finalDataArray[i], // Pass the document data
+				Instance:      instance,
+				Model:         loadedModel,
+				IsNewInstance: true,
+				OperationName: wst.OperationNameCreate, // Use Create for individual hooks
+			}
+			propagateExecutionId(docEventContext)
+
+			err := loadedModel.GetHandler("__operation__after_save")(docEventContext)
+			if err != nil {
+				// Log warning but don't fail (documents already created)
+				if loadedModel.App.Debug {
+					log.Printf("[WARNING] after_save failed for document at index %d: %v\n", i, err)
+				}
+			}
+		}
+	}
+
+	// Optional hook: after_save_many
+	// Check if handler exists first, before checking disabled status
+	if afterSaveManyHandler := loadedModel.eventHandlers["__operation__after_save_many"]; afterSaveManyHandler != nil {
+		if loadedModel.DisabledHandlers["__operation__after_save_many"] != true {
+			eventContext.Result = results
+			err := afterSaveManyHandler(eventContext)
+			if err != nil {
+				// Log warning but don't fail (documents already created)
+				if loadedModel.App.Debug {
+					log.Printf("[WARNING] after_save_many hook failed: %v\n", err)
+				}
+			}
+		}
+	}
+
+	return results, nil
+}
+
+func (loadedModel *StatefulModel) DeleteById(id interface{}, currentContext *EventContext) (wst.DeleteResult, error) {
+
+	var finalId interface{}
+	switch id.(type) {
+	case string:
+		if aux, err := primitive.ObjectIDFromHex(id.(string)); err != nil {
+			finalId = aux
+		} else {
+			finalId = aux
+		}
+		break
+	case primitive.ObjectID:
+		finalId = id.(primitive.ObjectID)
+		break
+	case *primitive.ObjectID:
+		finalId = *(id.(*primitive.ObjectID))
+		break
+	default:
+		if loadedModel.App.Debug {
+			fmt.Printf("[WARNING] Invalid input for Model.DeleteById() <- %s\n", id)
+		}
+	}
+
+	currentContext = existingOrEmpty(currentContext)
+	var targetBaseContext = FindBaseContext(currentContext)
+	eventContext := &EventContext{
+		BaseContext:   targetBaseContext,
+		ModelID:       finalId,
+		OperationName: wst.OperationNameDeleteById,
+	}
+	propagateExecutionId(eventContext)
+	eventContext.Model = loadedModel
+	if loadedModel.DisabledHandlers["__operation__before_delete"] != true {
+		err := loadedModel.GetHandler("__operation__before_delete")(eventContext)
+		if err != nil {
+			return wst.DeleteResult{}, err
+		}
+	}
+
+	deleteResult, err := loadedModel.Datasource.DeleteById(loadedModel.CollectionName, finalId)
+	if err != nil {
+		return deleteResult, err
+	}
+	if loadedModel.DisabledHandlers["__operation__after_delete"] != true {
+		err = loadedModel.GetHandler("__operation__after_delete")(eventContext)
+	}
+	return deleteResult, err
+}
+
+func (loadedModel *StatefulModel) DeleteMany(where *wst.Where, currentContext *EventContext) (result wst.DeleteResult, err error) {
+	if where == nil {
+		return result, errors.New("where cannot be nil")
+	}
+	if len(*where) == 0 {
+		return result, errors.New("where cannot be empty")
+	}
+	whereLookups := &wst.A{
+		{
+			"$match": wst.M(*where),
+		},
+	}
+	currentContext = existingOrEmpty(currentContext)
+	var targetBaseContext = FindBaseContext(currentContext)
+	if !currentContext.DisableTypeConversions {
+		_, err := datasource.ReplaceObjectIds(&(*whereLookups)[0])
+		if err != nil {
+			return result, err
+		}
+	}
+
+	eventContext := &EventContext{
+		BaseContext: targetBaseContext,
+	}
+	propagateExecutionId(eventContext)
+	//eventContext.Data = &finalData
+	eventContext.Model = loadedModel
+	eventContext.IsNewInstance = false
+	eventContext.OperationName = wst.OperationNameDeleteMany
+
+	return loadedModel.Datasource.DeleteMany(loadedModel.CollectionName, whereLookups)
+}
+
+func (loadedModel *StatefulModel) UpdateById(id interface{}, data interface{}, currentContext *EventContext) (Instance, error) {
+
+	var finalId interface{}
+	/* trunk-ignore(golangci-lint/gosimple) */
+	switch id.(type) {
+	case string:
+		if aux, err := primitive.ObjectIDFromHex(id.(string)); err != nil {
+			finalId = aux
+		} else {
+			finalId = aux
+		}
+		break
+	case primitive.ObjectID:
+		finalId = id.(primitive.ObjectID)
+		break
+	case *primitive.ObjectID:
+		finalId = *id.(*primitive.ObjectID)
+		break
+	default:
+		if loadedModel.App.Debug {
+			fmt.Println(fmt.Sprintf("[WARNING] Invalid input for Model.UpdateById() <- %s", id))
+		}
+	}
+
+	var finalData wst.M
+	switch data.(type) {
+	case map[string]interface{}:
+		finalData = wst.M{}
+		for key, value := range data.(map[string]interface{}) {
+			finalData[key] = value
+		}
+		break
+	case *map[string]interface{}:
+		finalData = wst.M{}
+		for key, value := range *data.(*map[string]interface{}) {
+			finalData[key] = value
+		}
+		break
+	case wst.M:
+		finalData = data.(wst.M)
+		break
+	case *wst.M:
+		finalData = *data.(*wst.M)
+		break
+	case Instance:
+		finalData = data.(Instance).ToJSON()
+		break
+	default:
+		// check if data is a struct
+		if reflect.TypeOf(data).Kind() == reflect.Struct {
+			bytes, err := bson.MarshalWithRegistry(loadedModel.App.Bson.Registry, data)
+			if err != nil {
+				return nil, err
+			}
+			err = bson.UnmarshalWithRegistry(loadedModel.App.Bson.Registry, bytes, &finalData)
+			if err != nil {
+				// how to test this???
+				return nil, err
+			}
+		} else {
+			return nil, errors.New(fmt.Sprintf("Invalid input for Model.UpdateById() <- %s", data))
+		}
+	}
+
+	currentContext = existingOrEmpty(currentContext)
+	var targetBaseContext = FindBaseContext(currentContext)
+	if !currentContext.DisableTypeConversions {
+		_, err := datasource.ReplaceObjectIds(finalData)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	eventContext := &EventContext{
+		BaseContext: targetBaseContext,
+	}
+	propagateExecutionId(eventContext)
+	eventContext.Data = &finalData
+	eventContext.Model = loadedModel
+	eventContext.IsNewInstance = false
+	eventContext.OperationName = wst.OperationNameUpdateById
+
+	if loadedModel.DisabledHandlers["__operation__before_save"] != true {
+
+		prevInstance, err := loadedModel.FindById(finalId, nil, eventContext)
+		if err != nil {
+			return nil, err
+		}
+		if prevInstance == nil {
+			return nil, errors.New("instance not found")
+		}
+		eventContext.Instance = prevInstance
+		err = loadedModel.GetHandler("__operation__before_save")(eventContext)
+		if err != nil {
+			return nil, err
+		}
+		if eventContext.Result != nil {
+			switch eventContext.Result.(type) {
+			case Instance:
+				return eventContext.Result.(Instance), nil
+			case wst.M:
+				return loadedModel.Build(eventContext.Result.(wst.M), targetBaseContext)
+			default:
+				return nil, fmt.Errorf("invalid eventContext.Result type, expected Instance or wst.M; found %T", eventContext.Result)
+			}
+		}
+	}
+
+	document, err := loadedModel.Datasource.UpdateById(loadedModel.CollectionName, finalId, &finalData)
+	if err != nil {
+		return nil, err
+	} else {
+		result, err := loadedModel.Build(*document, eventContext)
+		if err != nil {
+			return nil, err
+		}
+		result.HideProperties()
+		eventContext.Instance = result
+		if !loadedModel.DisabledHandlers["__operation__after_save"] {
+			err := loadedModel.GetHandler("__operation__after_save")(eventContext)
+			if err != nil {
+				return nil, err
+			}
+		}
+		return result, nil
+	}
+
+}
+
+type RemoteMethodOptionsHttp struct {
+	Path string
+	Verb string
+}
+
+type ArgHttp struct {
+	Source string
+}
+
+type RemoteMethodOptionsHttpArg struct {
+	Arg         string
+	Type        string
+	Description string
+	Http        ArgHttp
+	Required    bool
+}
+
+type RemoteMethodOptionsHttpArgs []RemoteMethodOptionsHttpArg
+
+type RemoteMethodOptions struct {
+	Name        string
+	Description string
+	Accepts     RemoteMethodOptionsHttpArgs
+	Http        RemoteMethodOptionsHttp
+}
+
+type RemoteOperationOptions struct {
+	Name              string
+	Description       string
+	Path              string
+	Verb              string
+	RateLimits        []*RateLimit
+	ContentType       string
+	StrictContentType bool
+}
+
+type RemoteOperationReq[T any] struct {
+	Ctx   *EventContext
+	Input T
+}
+
+type OperationItem struct {
+	Handler  func(context *EventContext) error
+	Options  RemoteMethodOptions
+	disabled bool
+}
+
+type BearerAccount struct {
+	Id     interface{}
+	Data   interface{}
+	System bool
+}
+
+type BearerRole struct {
+	Name string
+}
+
+type BearerToken struct {
+	Account *BearerAccount
+	Roles   []BearerRole
+	Raw     string
+	Claims  jwt.MapClaims
+}
+
+type EphemeralData wst.M
+
+var operationCounter int64 = 1
+
+func wrapEventHandler(model *StatefulModel, eventKey string, handler func(eventContext *EventContext) error) func(eventContext *EventContext) error {
+	currentHandler := model.eventHandlers[eventKey]
+	if currentHandler != nil {
+		newHandler := handler
+		handler = func(eventContext *EventContext) error {
+			currentHandlerError := currentHandler(eventContext)
+			if currentHandlerError != nil {
+				if model.App.Debug {
+					fmt.Println("[WARNING] Stop handling on error", currentHandlerError)
+					debug.PrintStack()
+				}
+				return currentHandlerError
+			} else {
+				return newHandler(eventContext)
+			}
+		}
+	}
+	wrappedHandler := func(eventContext *EventContext) error {
+		baseContext := FindBaseContext(eventContext)
+		if baseContext != nil {
+			if baseContext.OperationId == 0 {
+				// Use atomic operation for thread-safe ID generation
+				baseContext.OperationId = atomic.AddInt64(&operationCounter, 1)
+			}
+
+			// Generate ExecutionId using ONLY goroutineID (converted to string)
+			// This allows contexts in the same goroutine to share pending operations
+			// while different goroutines have isolated spaces
+			// This solves the AccountCredentials creation issue where a child context
+			// queues an operation that needs to be executed in the parent context's "after save"
+			if baseContext.ExecutionId == "" {
+				baseContext.ExecutionId = strconv.FormatUint(getGoroutineID(), 10)
+			}
+
+			// First, process new callbacks and remove them
+			err := dispatchPendingOperations(eventContext, model, eventKey, baseContext)
+			if err != nil {
+				return err
+			}
+		}
+
+		return handler(eventContext)
+	}
+	return wrappedHandler
+}
+
+func dispatchPendingOperations(eventContext *EventContext, model *StatefulModel, eventKey string, baseContext *EventContext) error {
+	// Protect concurrent access to pendingOperations map
+	model.pendingOperationsMutex.Lock()
+	defer model.pendingOperationsMutex.Unlock()
+
+	// Use ExecutionId for isolation between parallel flows
+	if v, ok := model.pendingOperations[baseContext.ExecutionId]; ok {
+		if v2, ok := v[eventKey]; ok {
+			for _, pendingOperation := range v2 {
+				err := pendingOperation.handler(eventContext)
+				if err != nil {
+					return err
+				}
+			}
+			delete(v, eventKey)
+		}
+		if len(v) == 0 {
+			delete(model.pendingOperations, baseContext.ExecutionId)
+		}
+	}
+	return nil
+}
+
+func (loadedModel *StatefulModel) QueueOperation(operation string, eventContext *EventContext, fn func(nextCtx *EventContext) error) {
+	eventKey := mapOperationName(operation)
+	loadedModel.DisabledHandlers[eventKey] = false
+
+	// Protect concurrent access to pendingOperations map
+	loadedModel.pendingOperationsMutex.Lock()
+	defer loadedModel.pendingOperationsMutex.Unlock()
+
+	// Use ExecutionId for isolation between parallel flows
+	executionId := FindBaseContext(eventContext).ExecutionId
+	if _, ok := loadedModel.pendingOperations[executionId]; !ok {
+		loadedModel.pendingOperations[executionId] = map[string][]pendingOperationEntry{}
+	}
+	if _, ok := loadedModel.pendingOperations[executionId][eventKey]; !ok {
+		loadedModel.pendingOperations[executionId][eventKey] = []pendingOperationEntry{}
+	}
+	loadedModel.pendingOperations[executionId][eventKey] = append(loadedModel.pendingOperations[executionId][eventKey], pendingOperationEntry{
+		handler: fn,
+	})
+}
+
+func (loadedModel *StatefulModel) On(event string, handler func(eventContext *EventContext) error) {
+	loadedModel.eventHandlers[event] = wrapEventHandler(loadedModel, event, handler)
+}
+
+func (loadedModel *StatefulModel) Observe(operation string, handler func(eventContext *EventContext) error) {
+	loadedModel.On(mapOperationName(operation), handler)
+}
+
+func mapOperationName(operation string) string {
+	return "__operation__" + strings.ReplaceAll(strings.TrimSpace(operation), " ", "_")
+}
+
+// getGoroutineID returns the current goroutine ID by parsing the runtime stack
+// This is used to ensure ExecutionId uniqueness even when contexts are shared across goroutines
+func getGoroutineID() uint64 {
+	b := make([]byte, 64)
+	b = b[:runtime.Stack(b, false)]
+	// Stack format: "goroutine 123 [running]:"
+	// Extract the number after "goroutine "
+	var id uint64
+	for i := 10; i < len(b); i++ {
+		if b[i] >= '0' && b[i] <= '9' {
+			id = id*10 + uint64(b[i]-'0')
+		} else {
+			break
+		}
+	}
+	return id
+}
+
+// generateExecutionId creates a unique identifier for each execution flow
+// It combines a UUID with the goroutine ID to ensure isolation even when
+// multiple goroutines share the same BaseContext (e.g., in nested parallel operations)
+func generateExecutionId() string {
+	goroutineId := getGoroutineID()
+	uuidPart := uuid.New().String()
+	return fmt.Sprintf("%d-%s", goroutineId, uuidPart)
+}
+
+// propagateExecutionId ensures ExecutionId is properly set and propagated through context chain
+// If the context doesn't have an ExecutionId but has a BaseContext, it copies from there
+// This maintains execution flow isolation while allowing context derivation
+func propagateExecutionId(ctx *EventContext) {
+	if ctx == nil {
+		return
+	}
+	if ctx.ExecutionId == "" && ctx.BaseContext != nil {
+		ctx.ExecutionId = ctx.BaseContext.ExecutionId
+	}
+}
+
+var handlerMutex = sync.Mutex{}
+
+func (loadedModel *StatefulModel) GetHandler(event string) func(eventContext *EventContext) error {
+	res := loadedModel.eventHandlers[event]
+	if res == nil {
+		handlerMutex.Lock()
+		loadedModel.DisabledHandlers[event] = true
+		handlerMutex.Unlock()
+		res = func(eventContext *EventContext) error {
+			// First, process new callbacks and remove them
+			err := dispatchPendingOperations(eventContext, loadedModel, event, FindBaseContext(eventContext))
+			if err != nil {
+				return err
+			}
+			if loadedModel.App.Debug {
+				fmt.Println("[DEBUG] no handler found for ", loadedModel.Name, ".", event)
+			}
+			return nil
+		}
+	}
+	return res
+}
+
+func (loadedModel *StatefulModel) Initialize() {
+	if len(loadedModel.Config.Hidden) > 0 {
+		loadedModel.hasHiddenProperties = true
+	}
+}
+
+func (loadedModel *StatefulModel) dispatchFindManyResults(cursor *ChannelCursor, dsCursor datasource.MongoCursorI, targetInclude *wst.Include, currentContext *EventContext, results chan Instance, filterMap *wst.Filter) {
+	err := func() error {
+		defer func(cursor Cursor) {
+			//// wait 16ms for error
+			//time.Sleep(1600 * time.Millisecond)
+			err := cursor.Close()
+			if err != nil {
+				fmt.Printf("[ERROR] Could not close cursor: %v\n", err)
+			}
+		}(cursor)
+		defer func(dsCursor datasource.MongoCursorI, ctx context.Context) {
+			err := dsCursor.Close(ctx)
+			if err != nil {
+				fmt.Printf("[ERROR] Could not close cursor: %v\n", err)
+			}
+		}(dsCursor, context.Background())
+		disabledCache := loadedModel.App.Viper.GetBool("disableCache")
+		var safeCacheDs *datasource.Datasource
+		if loadedModel.Config.Cache.Datasource != "" && !disabledCache {
+
+			// Dont cache if include is set
+			cacheDs, err := loadedModel.App.FindDatasource(loadedModel.Config.Cache.Datasource)
+			if err != nil {
+				return err
+			}
+
+			safeCacheDs = cacheDs.(*datasource.Datasource)
+		}
+
+		documentsToCacheByKey := make(map[string]wst.A)
+		for dsCursor.Next(loadedModel.Datasource.Context) {
+			inst, err := loadedModel.dispatchFindManySingleDocument(dsCursor, targetInclude, currentContext, filterMap, disabledCache, safeCacheDs, documentsToCacheByKey)
+			if err != nil {
+				cursor.Error(err)
+				return err
+			} else if inst != nil {
+				results <- inst
+			}
+		}
+
+		for key, documents := range documentsToCacheByKey {
+			err := insertCacheEntries(safeCacheDs, loadedModel, wst.M{"_entries": documents, "_redId": key})
+			if err != nil {
+				return err
+			}
+			err = doExpireCacheKey(safeCacheDs, loadedModel, key)
+			if err != nil {
+				return err
+			}
+		}
+
+		return nil
+	}()
+	if err != nil {
+		if loadedModel.App.Debug {
+			log.Println("CACHE ERROR:", err)
+		}
+		cursor.Error(err)
+	}
+}
+
+func (loadedModel *StatefulModel) dispatchFindManySingleDocument(dsCursor datasource.MongoCursorI, targetInclude *wst.Include, currentContext *EventContext, filterMap *wst.Filter, disabledCache bool, safeCacheDs *datasource.Datasource, documentsToCacheByKey map[string]wst.A) (Instance, error) {
+	var document wst.M
+	err := dsCursor.Decode(&document)
+	if err != nil {
+		return nil, err
+	}
+
+	if targetInclude != nil {
+		for _, includeItem := range *targetInclude {
+			relationName := includeItem.Relation
+			relation := (*loadedModel.Config.Relations)[relationName]
+			relatedModelName := relation.Model
+			relatedLoadedModel := (*loadedModel.modelRegistry)[relatedModelName]
+			if relatedLoadedModel == nil {
+				return nil, fmt.Errorf("could not find related model %v", relatedModelName)
+			}
+
+			err := loadedModel.mergeRelated(1, &wst.A{document}, includeItem, currentContext)
+			if err != nil {
+				return nil, err
+			}
+
+		}
+	}
+
+	inst, err := loadedModel.Build(document, currentContext)
+	if err != nil {
+		return nil, err
+	}
+	var includePrefix = ""
+	if targetInclude != nil {
+		marshalledTargetInclude, err := json.Marshal(targetInclude)
+		if err != nil {
+			return nil, err
+		}
+		includePrefix = fmt.Sprintf("_inc_%s_", marshalledTargetInclude)
+	}
+	if filterMap != nil && filterMap.Where != nil {
+		marshalledWhere, err := json.Marshal(filterMap.Where)
+		if err != nil {
+			return nil, err
+		}
+		includePrefix += fmt.Sprintf("_whr_%s_", marshalledWhere)
+	}
+	if safeCacheDs != nil && !disabledCache {
+
+		for _, keyGroup := range loadedModel.Config.Cache.Keys {
+			toCache := wst.CopyMap(document)
+
+			// Remove fields that are not cacheable
+			if loadedModel.Config.Cache.ExcludeFields != nil {
+				for _, field := range loadedModel.Config.Cache.ExcludeFields {
+					if _, ok := toCache[field]; ok {
+						delete(toCache, field)
+					}
+				}
+			}
+
+			isUniqueId := false
+			if len(keyGroup) == 1 && keyGroup[0] == "_id" {
+				isUniqueId = true
+			}
+			canonicalId := includePrefix
+			for idx, key := range keyGroup {
+				if idx > 0 {
+					canonicalId = fmt.Sprintf("%v:", canonicalId)
+				}
+				v := (document)[key]
+				if key == "_id" && v == nil && document["id"] != nil {
+					v = document["id"]
+				}
+				switch v.(type) {
+				case primitive.ObjectID:
+					v = v.(primitive.ObjectID).Hex()
+				case *primitive.ObjectID:
+					v = v.(*primitive.ObjectID).Hex()
+				default:
+					break
+				}
+				canonicalId = fmt.Sprintf("%v%v:%v", canonicalId, key, v)
+			}
+
+			if isUniqueId {
+				err3 := insertCacheEntries(safeCacheDs, loadedModel, wst.M{"_entries": wst.A{toCache}, "_redId": canonicalId})
+				if err3 != nil {
+					return nil, err3
+				}
+				err2 := doExpireCacheKey(safeCacheDs, loadedModel, canonicalId)
+				if err2 != nil {
+					return nil, err2
+				}
+			} else {
+				documentsToCacheByKey[canonicalId] = append(documentsToCacheByKey[canonicalId], toCache)
+			}
+		}
+
+	}
+	return inst, err
+}
+
+func GetIDAsString(idToConvert interface{}) string {
+	var foundObjAccountId string
+	if v, ok := idToConvert.(primitive.ObjectID); ok {
+		foundObjAccountId = v.Hex()
+	} else if v, ok := idToConvert.(*primitive.ObjectID); ok {
+		foundObjAccountId = v.Hex()
+	} else if v, ok := idToConvert.(string); ok {
+		foundObjAccountId = v
+	} else {
+		foundObjAccountId = fmt.Sprintf("%v", idToConvert)
+	}
+	return foundObjAccountId
+}
+
+func CreateBearer(subjectId interface{}, createdAtSeconds float64, ttlSeconds float64, roles []string, additionalClaims map[string]interface{}) *BearerToken {
+	claims := jwt.MapClaims{
+		"created":   createdAtSeconds,
+		"ttl":       ttlSeconds,
+		"roles":     roles,
+		"accountId": GetIDAsString(subjectId),
+	}
+	for k, v := range additionalClaims {
+		if _, ok := claims[k]; !ok {
+			fmt.Printf("[WARNING] Skiping existing claim key %v while creating this token\n", k)
+			continue
+		}
+		claims[k] = v
+	}
+	return &BearerToken{
+		Account: &BearerAccount{Id: subjectId},
+		Claims:  claims,
+	}
+}
