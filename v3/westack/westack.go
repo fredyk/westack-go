@@ -40,7 +40,7 @@ type WeStack struct {
 
 	port                           int
 	datasources                    *map[string]*datasource.Datasource
-	modelRegistry                  *map[string]*model.StatefulModel
+	modelRegistry                  *map[string]model.Model
 	restrictModelUniquenessByField map[string]map[string]UniqueNessRestriction
 	debug                          bool
 	restApiRoot                    string
@@ -54,10 +54,10 @@ type WeStack struct {
 	logger                         wst.ILogger
 	completedSetup                 bool
 	registerControllers            func(r model.ControllerRegistry)
-	
+
 	// Security tracking
-	loginAttempts                  map[string][]time.Time
-	lockedAccounts                 map[string]time.Time
+	loginAttempts  map[string][]time.Time
+	lockedAccounts map[string]time.Time
 }
 
 type BootOptions struct {
@@ -133,10 +133,10 @@ func (app *WeStack) checkLoginRateLimit(identifier string) error {
 	if app.loginAttempts == nil {
 		app.loginAttempts = make(map[string][]time.Time)
 	}
-	
+
 	now := time.Now()
 	attempts := app.loginAttempts[identifier]
-	
+
 	// Remove attempts older than 15 minutes
 	var recentAttempts []time.Time
 	for _, attempt := range attempts {
@@ -144,18 +144,18 @@ func (app *WeStack) checkLoginRateLimit(identifier string) error {
 			recentAttempts = append(recentAttempts, attempt)
 		}
 	}
-	
+
 	// Check if too many attempts
 	if len(recentAttempts) >= 5 {
 		return wst.CreateError(fiber.ErrTooManyRequests, "RATE_LIMITED", fiber.Map{
 			"message": "Too many login attempts. Please try again later.",
 		}, "RateLimitError")
 	}
-	
+
 	// Add current attempt
 	recentAttempts = append(recentAttempts, now)
 	app.loginAttempts[identifier] = recentAttempts
-	
+
 	return nil
 }
 
@@ -163,7 +163,7 @@ func (app *WeStack) checkAccountLockout(identifier string) error {
 	if app.lockedAccounts == nil {
 		app.lockedAccounts = make(map[string]time.Time)
 	}
-	
+
 	lockTime, isLocked := app.lockedAccounts[identifier]
 	if isLocked {
 		// Check if lockout period has expired (30 minutes)
@@ -175,7 +175,7 @@ func (app *WeStack) checkAccountLockout(identifier string) error {
 		// Lockout expired, remove from locked accounts
 		delete(app.lockedAccounts, identifier)
 	}
-	
+
 	return nil
 }
 
@@ -186,10 +186,10 @@ func (app *WeStack) recordFailedLogin(identifier string) {
 	if app.lockedAccounts == nil {
 		app.lockedAccounts = make(map[string]time.Time)
 	}
-	
+
 	attempts := app.loginAttempts[identifier]
 	now := time.Now()
-	
+
 	// Count recent failed attempts (last 15 minutes)
 	var recentFailures int
 	for _, attempt := range attempts {
@@ -197,7 +197,7 @@ func (app *WeStack) recordFailedLogin(identifier string) {
 			recentFailures++
 		}
 	}
-	
+
 	// Lock account after 5 failed attempts
 	if recentFailures >= 5 {
 		app.lockedAccounts[identifier] = now
@@ -221,11 +221,11 @@ func (app *WeStack) logSecurityEvent(eventType, identifier string, success bool,
 		"success":    success,
 		"metadata":   metadata,
 	}
-	
+
 	if app.debug {
 		app.logger.Printf("[SECURITY] %s - %s: %v", eventType, identifier, logData)
 	}
-	
+
 	// In production, this should write to a security audit log
 	// For now, we'll use the standard logger
 	if !success {
@@ -290,7 +290,7 @@ func New(options ...Options) *WeStack {
 		WriteBufferSize:       writeBufferSize,
 	})
 
-	modelRegistry := make(map[string]*model.StatefulModel)
+	modelRegistry := make(map[string]model.Model)
 	datasources := make(map[string]*datasource.Datasource)
 
 	if finalOptions.Logger != nil {
@@ -410,10 +410,10 @@ func New(options ...Options) *WeStack {
 		dataSourceOptions:              finalOptions.DatasourceOptions,
 		init:                           time.Now(),
 		logger:                         logger,
-		
+
 		// Initialize security tracking maps
-		loginAttempts:                  make(map[string][]time.Time),
-		lockedAccounts:                 make(map[string]time.Time),
+		loginAttempts:  make(map[string][]time.Time),
+		lockedAccounts: make(map[string]time.Time),
 	}
 
 	return &app
