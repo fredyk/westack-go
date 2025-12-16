@@ -2,11 +2,12 @@ package model
 
 import (
 	"fmt"
-	"github.com/gofiber/fiber/v2"
-	"go.mongodb.org/mongo-driver/bson/primitive"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/gofiber/fiber/v2"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 var WhiteListedUsers = map[string]bool{}
@@ -112,12 +113,11 @@ func isWhiteListed(userId string, rateLimit *RateLimit) bool {
 	}
 	isWhiteListed := false
 	whileListedUsersMutex.RLock()
+	defer whileListedUsersMutex.RUnlock()
 	if WhiteListedUsers[userId] {
-		whileListedUsersMutex.RUnlock()
 		fmt.Printf("[%s] White listed user allowed\n", rateLimit.Name)
 		isWhiteListed = true
 	}
-	whileListedUsersMutex.RUnlock()
 	return isWhiteListed
 }
 
