@@ -113,10 +113,10 @@ func (loadedModel *StatefulModel) ExtractLookupsFromFilter(filterMap *wst.Filter
 
 									relatedModel, _ := loadedModel.App.FindModel(relation.Model)
 
-									if relatedModel.(*StatefulModel).Datasource.Name != loadedModel.Datasource.Name {
+									if relatedModel.Datasource.Name != loadedModel.Datasource.Name {
 										return nil, wst.CreateError(fiber.ErrBadRequest,
 											"BAD_RELATION",
-											fiber.Map{"message": fmt.Sprintf("related model %v at relation %v belongs to another datasource", relatedModel.(*StatefulModel).Name, relationName)},
+											fiber.Map{"message": fmt.Sprintf("related model %v at relation %v belongs to another datasource", relatedModel.Name, relationName)},
 											"ValidationError",
 										)
 									}
@@ -420,7 +420,8 @@ func (loadedModel *StatefulModel) appendIncludeToLookups(includeItem wst.Include
 		return nil, fmt.Errorf("warning: related model %v not found for relation %v.%v", relatedModelName, loadedModel.Name, relationName)
 	}
 
-	if relatedLoadedModel.Datasource.Name == loadedModel.Datasource.Name {
+	relatedModel := relatedLoadedModel
+	if relatedModel.Datasource.Name == loadedModel.Datasource.Name {
 		switch relation.Type {
 		case "belongsTo", "hasOne", "hasMany":
 			var matching wst.M
@@ -455,7 +456,7 @@ func (loadedModel *StatefulModel) appendIncludeToLookups(includeItem wst.Include
 				},
 			}
 			project := wst.M{}
-			for _, propertyName := range relatedLoadedModel.Config.Hidden {
+			for _, propertyName := range relatedModel.Config.Hidden {
 				project[propertyName] = false
 			}
 			if len(project) > 0 {
@@ -482,7 +483,7 @@ func (loadedModel *StatefulModel) appendIncludeToLookups(includeItem wst.Include
 
 			*lookups = append(*lookups, wst.M{
 				"$lookup": wst.M{
-					"from":     relatedLoadedModel.CollectionName,
+					"from":     relatedModel.CollectionName,
 					"let":      lookupLet,
 					"pipeline": pipeline,
 					"as":       relationName,
@@ -607,6 +608,7 @@ func (loadedModel *StatefulModel) mergeRelated(relationDeepLevel byte, documents
 	relation := (*loadedModel.Config.Relations)[relationName]
 	relatedModelName := relation.Model
 	relatedLoadedModel := (*loadedModel.modelRegistry)[relatedModelName]
+	relatedModel := relatedLoadedModel
 
 	parentModel := loadedModel
 	parentRelationName := relationName
@@ -621,7 +623,7 @@ func (loadedModel *StatefulModel) mergeRelated(relationDeepLevel byte, documents
 		if currentContext.BaseContext == nil {
 			return fmt.Errorf("invalid context: missing base context for permission check on relation %v", relationName)
 		}
-		
+
 		objId := "*"
 		if len(*documents) == 1 {
 			objId = (*documents)[0]["_id"].(primitive.ObjectID).Hex()
@@ -642,7 +644,7 @@ func (loadedModel *StatefulModel) mergeRelated(relationDeepLevel byte, documents
 		}
 	}
 
-	if relatedLoadedModel.Datasource.Name != loadedModel.Datasource.Name {
+	if relatedModel.Datasource.Name != loadedModel.Datasource.Name {
 		switch relation.Type {
 		case "belongsTo", "hasOne", "hasMany":
 			keyFrom := ""
@@ -678,9 +680,9 @@ func (loadedModel *StatefulModel) mergeRelated(relationDeepLevel byte, documents
 			disabledCache := loadedModel.App.Viper.GetBool("disableCache")
 			for documentIdx, document := range *documents {
 
-				if !disabledCache && wasEmptyWhere && relatedLoadedModel.Config.Cache.Datasource != "" /* && keyFrom == relatedLoadedModel.Config.Cache.Keys*/ {
+				if !disabledCache && wasEmptyWhere && relatedModel.Config.Cache.Datasource != "" /* && keyFrom == relatedModel.Config.Cache.Keys*/ {
 
-					err := loadedModel.findCachedRelatedDocuments(relatedLoadedModel, keyFrom, document, keyTo, targetScope, localCache, cachedRelatedDocs, documentIdx, currentContext)
+					err := loadedModel.findCachedRelatedDocuments(relatedModel, keyFrom, document, keyTo, targetScope, localCache, cachedRelatedDocs, documentIdx, currentContext)
 					if err != nil {
 						return err
 					}
