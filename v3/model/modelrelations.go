@@ -785,7 +785,7 @@ func (loadedModel *StatefulModel) mergeRelated(relationDeepLevel byte, documents
 						}
 
 					}
-					loadedModel := relatedLoadedModel
+					loadedModel := relatedModel
 					if loadedModel.App.Debug {
 						log.Printf("Dispatch nested relation %v.%v.%v (n=%v, m=%v)\n", parentModel.Name, parentRelationName, relationName, len(*parentDocs), len(nestedDocuments))
 					}
