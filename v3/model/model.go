@@ -33,6 +33,7 @@ import (
 type Model interface {
 	FindMany(filterMap *wst.Filter, currentContext *EventContext) Cursor
 	FindById(id interface{}, filterMap *wst.Filter, baseContext *EventContext) (Instance, error)
+	FindOne(filterMap *wst.Filter, currentContext *EventContext) (Instance, error)
 	Create(data interface{}, currentContext *EventContext) (Instance, error)
 	CreateMany(data interface{}, currentContext *EventContext) ([]Instance, error)
 	Count(filterMap *wst.Filter, currentContext *EventContext) (wst.CountResult, error)
@@ -43,8 +44,11 @@ type Model interface {
 	On(event string, handler func(eventContext *EventContext) error)
 	Observe(operation string, handler func(eventContext *EventContext) error)
 	QueueOperation(operation string, eventContext *EventContext, fn func(nextCtx *EventContext) error)
+	RemoteMethod(handler func(*EventContext) error, options RemoteMethodOptions) interface{}
 	EnforceEx(token *BearerToken, objId string, action string, eventContext *EventContext) (error, bool)
 	ExtractLookupsFromFilter(filterMap *wst.Filter, disableTypeConversions bool) (*wst.A, error)
+	SetDebug(debug bool)
+	GetDatasource() *datasource.Datasource
 	GetConfig() *Config
 	GetAppOwnerForeignKey() string
 	GetName() string
@@ -1236,6 +1240,14 @@ func (loadedModel *StatefulModel) On(event string, handler func(eventContext *Ev
 
 func (loadedModel *StatefulModel) Observe(operation string, handler func(eventContext *EventContext) error) {
 	loadedModel.On(mapOperationName(operation), handler)
+}
+
+func (loadedModel *StatefulModel) SetDebug(debug bool) {
+	loadedModel.App.Debug = debug
+}
+
+func (loadedModel *StatefulModel) GetDatasource() *datasource.Datasource {
+	return loadedModel.Datasource
 }
 
 func mapOperationName(operation string) string {
