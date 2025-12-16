@@ -150,6 +150,10 @@ type DataSourceConfig struct {
 	Password  string `json:"password"`
 }
 
+var (
+	_ Model = &StatefulModel{}
+)
+
 type StatefulModel struct {
 	Name             string                 `json:"name"`
 	CollectionName   string                 `json:"-"`
@@ -165,7 +169,7 @@ type StatefulModel struct {
 	NilInstance      *StatefulInstance
 
 	eventHandlers        map[string]func(eventContext *EventContext) error
-	modelRegistry        *map[string]*StatefulModel
+	modelRegistry        *map[string]Model
 	remoteMethodsMap     map[string]*OperationItem
 	earlyDisabledMethods map[string]bool
 
@@ -194,11 +198,11 @@ func (loadedModel *StatefulModel) GetName() string {
 	return loadedModel.Name
 }
 
-func (loadedModel *StatefulModel) GetModelRegistry() *map[string]*StatefulModel {
+func (loadedModel *StatefulModel) GetModelRegistry() *map[string]Model {
 	return loadedModel.modelRegistry
 }
 
-func New(config *Config, modelRegistry *map[string]*StatefulModel) Model {
+func New(config *Config, modelRegistry *map[string]Model) Model {
 	name := config.Name
 	collectionName := config.Mongo.Collection
 	if collectionName == "" {
