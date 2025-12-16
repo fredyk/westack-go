@@ -631,23 +631,31 @@ Verificar y copiar componentes faltantes de v2/model
   - Model.Config → Model.GetConfig() (automático)
 - `go build ./westack/` ✅ ÉXITO
 
-**Paso 6**: ⚠️ TESTS BLOQUEADOS - Incompatibilidad de cliente
+**Paso 6**: ✅ Cliente v3 migrado
+- `cp -r client/v2 client/v3`
+- Imports actualizados v2→v3
+- go.mod con replace directive
+- ✅ `client/v3` compila correctamente
 
-#### Errores de Tests (run_tests.sh):
+**Paso 7**: ⚠️ TESTS v3 - Errores de tipo
 
-1. **client/v2 incompatible con v3/common**
-   - `wstfuncs.InvokeApiJsonM` usa `v2/common.M`
-   - Tests usan `v3/common.M`
-   - ❌ Type mismatch en 10+ archivos
+#### Errores Actuales de Tests v3 (./run_tests.sh):
 
-2. **model.New() signature diferente**
-   - Espera: `*map[string]*StatefulModel`
-   - Recibe: `*map[string]Model`
-   - Error en test_helpers.go:57
+1. **test_helpers.go:57 - Type mismatch en model.New()**
+   - `model.New()` espera: `*map[string]*StatefulModel`
+   - Pasando: `*map[string]Model`
+   - Fix: Cambiar tipo en test_helpers.go
 
-3. **MongoDB port conflict**
-   - Puerto 27017 ya ocupado
-   - Tests requieren MongoDB limpio
+2. **CreateMany no existe en interfaz Model**
+   - westack_createmany_test.go (5 errores)
+   - `noteModel.CreateMany undefined`
+   - Fix: Agregar `CreateMany()` a interfaz Model
+
+3. **Type assertions necesarias**
+   - westack_chunks_test.go (4 errores)
+   - `noteModel` es `Model` (interfaz)
+   - Funciones esperan `*StatefulModel`
+   - Fix: Agregar type assertions: `noteModel.(*model.StatefulModel)`
 
 #### Opciones para Continuar:
 
@@ -1448,7 +1456,7 @@ Agregar referencia a CreateMany en la sección de operaciones.
    - Request body schema array
 
 5. **Correr tests existentes** (5 min)
-   - `cd v2 && timeout 180 ./run_tests.sh`
+   - `cd v3 && timeout 180 ./run_tests.sh`
    - Verificar que NO rompimos nada
 
 6. **Crear tests básicos** (1 hora)
@@ -1494,10 +1502,10 @@ Agregar referencia a CreateMany en la sección de operaciones.
 ### Comandos útiles
 ```bash
 # Correr tests
-cd v2 && ./run_tests.sh
+cd v3 && ./run_tests.sh
 
 # Test específico
-cd v2 && go test -v -run Test_CreateManyWithArrayOfMaps ./tests/
+cd v3 && go test -v -run Test_CreateManyWithArrayOfMaps ./tests/
 
 # Ver OpenAPI
 curl http://localhost:3000/explorer
@@ -1558,7 +1566,7 @@ curl -X POST http://localhost:3000/notes/bulk \
 
 1. **Ejecutar tests existentes** (5 min)
    ```bash
-   cd v2 && ./run_tests.sh
+   cd v3 && ./run_tests.sh
    ```
    Verificar que NO rompimos ningún test existente.
 
