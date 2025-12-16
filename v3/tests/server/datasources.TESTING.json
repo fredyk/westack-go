@@ -1,0 +1,62 @@
+{
+  "db0": {
+    "url": "mongodb://localhost:27017",
+    "database": "example_db_00",
+    "name": "db0",
+    "connector": "mongodb",
+    "useNewUrlParser": true,
+    "allowExtendedOperators": true,
+    "minPoolSize": 0,
+    "maxPoolSize": 1
+  },
+  "db1": {
+    "url": "mongodb://localhost:27017",
+    "database": "example_db_01",
+    "name": "db1",
+    "connector": "mongodb",
+    "useNewUrlParser": true,
+    "allowExtendedOperators": true,
+    "minPoolSize": 0,
+    "maxPoolSize": 1
+  },
+  "db2": {
+    "url": "mongodb://localhost:27017",
+    "database": "example_db_02",
+    "name": "db2",
+    "connector": "mongodb",
+    "useNewUrlParser": true,
+    "allowExtendedOperators": true,
+    "minPoolSize": 0,
+    "maxPoolSize": 1
+  },
+  "db_expected_to_fail": {
+    "url": "mongodb://localhost:27017",
+    "database": "example_db_expected_to_fail",
+    "name": "db_expected_to_fail",
+    "connector": "mongodb",
+    "useNewUrlParser": true,
+    "allowExtendedOperators": true,
+    "minPoolSize": 0,
+    "maxPoolSize": 1,
+    "retryOnError": true
+  },
+  "db_expected_to_be_closed": {
+    "url": "mongodb://localhost:27017",
+    "database": "example_db_expected_to_be_closed",
+    "name": "db_expected_to_be_closed",
+    "connector": "mongodb",
+    "useNewUrlParser": true,
+    "allowExtendedOperators": true,
+    "minPoolSize": 0,
+    "maxPoolSize": 1,
+    "retryOnError": true
+  },
+  "memorykv": {
+    "name": "memorykv",
+    "url": "localhost:0",
+    "database": "example_db",
+    "databaseIndex": 0,
+    "connector": "memorykv"
+  }
+
+}

@@ -1,0 +1,1208 @@
+package westack
+
+import (
+	"errors"
+	"fmt"
+	"log"
+	"os"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/casbin/casbin/v2"
+	"github.com/goccy/go-json"
+	"github.com/gofiber/fiber/v2"
+	"github.com/golang-jwt/jwt"
+	"go.mongodb.org/mongo-driver/bson/primitive"
+
+	wst "github.com/fredyk/westack-go/v3/common"
+	"github.com/fredyk/westack-go/v3/model"
+)
+
+func (app *WeStack) loadNotFoundRoutes() {
+	for _, entry := range *app.modelRegistry {
+		loadedModel := entry
+		if !loadedModel.Config.Public {
+			if app.debug {
+				log.Println("[WARNING] Model", loadedModel.Name, "is not public")
+			}
+			continue
+		}
+		(*loadedModel.Router).Use(func(ctx *fiber.Ctx) error {
+			log.Println("[WARNING] Unresolved method in " + loadedModel.Name + ": " + ctx.Method() + " " + ctx.Path())
+			return ctx.Status(404).JSON(fiber.Map{"error": fiber.Map{"status": 404, "message": fmt.Sprintf("Unknown method %v %v", ctx.Method(), ctx.Path())}})
+		})
+	}
+}
+
+func (app *WeStack) loadModelsFixedRoutes() error {
+	for _, entry := range *app.modelRegistry {
+		loadedModel := entry
+
+		e, err := casbin.NewEnforcer(*loadedModel.CasbinModel, *loadedModel.CasbinAdapter, app.debug)
+		if err != nil {
+			return fmt.Errorf("could not create casbin enforcer: %w", err)
+		}
+
+		loadedModel.Enforcer = e
+
+		e.EnableAutoSave(true)
+		e.AddFunction("isOwner", casbinOwnerFn(loadedModel))
+		e.AddFunction("HasPrefix", func(arguments ...interface{}) (interface{}, error) {
+			return strings.HasPrefix(arguments[0].(string), arguments[1].(string)), nil
+		})
+
+		err = addDefaultCasbinRoles(app, e)
+		if err != nil {
+			return err
+		}
+
+		err = e.SavePolicy()
+		if err != nil {
+			return fmt.Errorf("could not save policy: %w", err)
+		}
+
+		err = e.LoadPolicy()
+		if err != nil {
+			return fmt.Errorf("could not load policy: %w", err)
+		}
+
+		if app.debug {
+			loadedModel.CasbinModel.PrintModel()
+		}
+
+		if app.Viper.GetBool("casbin.dumpModels") {
+			text := loadedModel.CasbinModel.ToText()
+			modelsDumpDir := "common/models"
+			if v := app.Viper.GetString("casbin.models.dumpDirectory"); v != "" {
+				modelsDumpDir = v
+			}
+			err = os.WriteFile(fmt.Sprintf("%v/%v.casbin.dump.conf", modelsDumpDir, loadedModel.Name), []byte(text), 0600)
+			if err != nil {
+				return fmt.Errorf("could not write casbin dump: %w", err)
+			}
+		}
+
+		if !loadedModel.Config.Public {
+			if app.debug {
+				log.Println("[WARNING] Model", loadedModel.Name, "is not public")
+			}
+			continue
+		}
+
+		if wst.IsPersisedModel(loadedModel.Config.Base) {
+			mountBaseModelFixedRoutes(app, loadedModel)
+		}
+
+		if loadedModel.Config.Base == "Account" {
+
+			mountAccountModelFixedRoutes(loadedModel, app)
+
+		} else if loadedModel.Config.Base == "App" {
+			mountAppDynamicRoutes(loadedModel, app)
+		}
+	}
+	return nil
+}
+
+func mountAccountModelFixedRoutes(loadedModel *model.StatefulModel, app *WeStack) {
+
+	systemContext := &model.EventContext{
+		Bearer: &model.BearerToken{
+			Account: &model.BearerAccount{
+				System: true,
+			},
+			Roles: []model.BearerRole{},
+		},
+	}
+
+	loadedModel.RemoteMethod(func(eventContext *model.EventContext) error {
+		return handleEvent(eventContext, loadedModel, string(wst.OperationNameLogin))
+	}, model.RemoteMethodOptions{
+		Name:        string(wst.OperationNameLogin),
+		Description: "Logins an account",
+		Accepts: model.RemoteMethodOptionsHttpArgs{
+			{
+				Arg:         "data",
+				Type:        "object",
+				Description: "",
+				Http:        model.ArgHttp{Source: "body"},
+				Required:    false,
+			},
+		},
+		Http: model.RemoteMethodOptionsHttp{
+			Path: "/login",
+			Verb: "post",
+		},
+	},
+	)
+
+	loadedModel.RemoteMethod(func(eventContext *model.EventContext) error {
+
+		token, err := eventContext.GetBearer(loadedModel)
+		if err != nil {
+			return err
+		}
+		eventContext.ModelID = token.Account.Id
+		return loadedModel.HandleRemoteMethod(string(wst.OperationNameFindById), eventContext)
+
+	}, model.RemoteMethodOptions{
+		Name:        string(wst.OperationNameFindSelf),
+		Description: "Find user with their bearer",
+		Accepts: model.RemoteMethodOptionsHttpArgs{
+			{
+				Arg:         "filter",
+				Type:        "string",
+				Description: "",
+				Http: model.ArgHttp{
+					Source: "query",
+				},
+				Required: false,
+			},
+		},
+		Http: model.RemoteMethodOptionsHttp{
+			Path: "/me",
+			Verb: "get",
+		},
+	},
+	)
+
+	if app.debug {
+		log.Println("Mount POST " + loadedModel.BaseUrl + "/reset-password")
+	}
+	loadedModel.RemoteMethod(func(eventContext *model.EventContext) error {
+		// Developer must implement this event
+		return handleEvent(eventContext, loadedModel, "sendResetPasswordEmail")
+	}, model.RemoteMethodOptions{
+		Name: "resetPassword",
+		Accepts: model.RemoteMethodOptionsHttpArgs{
+			{
+				Arg:         "data",
+				Type:        "object",
+				Description: "",
+				Http:        model.ArgHttp{Source: "body"},
+				Required:    false,
+			},
+		},
+		Http: model.RemoteMethodOptionsHttp{
+			Path: "/reset-password",
+			Verb: "post",
+		},
+	})
+
+	loadedModel.RemoteMethod(func(eventContext *model.EventContext) error {
+		fmt.Println("verify user ", eventContext.Bearer.Account.Id)
+		eventContext.Bearer.Claims["created"] = time.Now().Unix()
+		eventContext.Bearer.Claims["ttl"] = 86400 * 2 * 1000
+		eventContext.Bearer.Claims["allowsEmailVerification"] = true
+
+		token := jwt.NewWithClaims(jwt.SigningMethodHS256, eventContext.Bearer.Claims)
+
+		tokenString, err := token.SignedString(loadedModel.App.JwtSecretKey)
+		if err != nil {
+			return err
+		}
+		eventContext.Bearer.Raw = tokenString
+
+		return handleEvent(eventContext, loadedModel, "sendVerificationEmail")
+	}, model.RemoteMethodOptions{
+		Name: "sendVerificationEmail",
+		Accepts: model.RemoteMethodOptionsHttpArgs{
+			{
+				Arg:         "data",
+				Type:        "object",
+				Description: "",
+				Http:        model.ArgHttp{Source: "body"},
+				Required:    false,
+			},
+		},
+		Http: model.RemoteMethodOptionsHttp{
+			Path: "/verify-mail",
+			Verb: "post",
+		},
+	})
+
+	loadedModel.RemoteMethod(func(eventContext *model.EventContext) error {
+		// Developer must implement this event
+		userId := eventContext.Bearer.Account.Id
+		if userId == "" {
+			return errors.New("no user id found in bearer")
+		}
+		if eventContext.Bearer.Claims["allowsEmailVerification"] == true {
+			user, err := loadedModel.FindById(userId, nil, eventContext)
+			if err != nil {
+				return err
+			}
+			eventContext.SkipFieldProtection = true
+			updated, err := user.UpdateAttributes(wst.M{
+				"emailVerified": true,
+			}, eventContext)
+			if err != nil {
+				return err
+			}
+			if app.debug {
+				log.Println("Updated user ", updated)
+			}
+			redirectToUrl := eventContext.Query.GetString("redirect_uri")
+			return eventContext.Ctx.Redirect(redirectToUrl)
+		}
+
+		return handleEvent(eventContext, loadedModel, "performEmailVerification")
+	}, model.RemoteMethodOptions{
+		Name: "performEmailVerification",
+		Accepts: model.RemoteMethodOptionsHttpArgs{
+			{
+				Arg:         "access_token",
+				Type:        "string",
+				Description: "",
+				Http:        model.ArgHttp{Source: "query"},
+				Required:    true,
+			},
+		},
+		Http: model.RemoteMethodOptionsHttp{
+			Path: "/verify-mail",
+			Verb: "get",
+		},
+	})
+
+	loadedModel.RemoteMethod(func(eventContext *model.EventContext) error {
+		authHeader := strings.TrimSpace(string(eventContext.Ctx.Request().Header.Peek("Authorization")))
+
+		authBearerPair := strings.Split(authHeader, "Bearer ")
+		tokenString := ""
+		userIdHex := ""
+
+		if len(authBearerPair) == 2 {
+
+			bearerValue := authBearerPair[1]
+			token, err := jwt.Parse(bearerValue, func(token *jwt.Token) (interface{}, error) {
+
+				if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+					return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+				}
+
+				return loadedModel.App.JwtSecretKey, nil
+			})
+
+			if err != nil {
+				fmt.Printf("[DEBUG] Invalid token: %s\n", err.Error())
+			} else if token != nil {
+
+				if claims, ok := token.Claims.(jwt.MapClaims); ok && token.Valid {
+					userIdHex = claims["accountId"].(string)
+					userId, _ := primitive.ObjectIDFromHex(userIdHex)
+					roleNames, err := GetRoleNames(app.roleMappingModel, userIdHex, userId)
+					if err != nil {
+						return err
+					}
+
+					newToken, err := CreateNewToken(userIdHex, loadedModel, roleNames)
+					if err != nil {
+						return err
+					}
+					tokenString = newToken
+				} else {
+					fmt.Println("[DEBUG] Invalid token: wrong claims")
+
+					return errors.New("invalid token")
+				}
+
+			} else {
+				return errors.New("invalid token")
+			}
+
+		} else {
+			return errors.New("invalid Authorization header")
+		}
+
+		return eventContext.Ctx.JSON(fiber.Map{"id": tokenString, "accountId": userIdHex})
+	}, model.RemoteMethodOptions{
+		Name:        string(wst.OperationNameRefreshToken),
+		Description: "Obtains current user",
+		Http: model.RemoteMethodOptionsHttp{
+			Path: "/refresh-token",
+			Verb: "post",
+		},
+	})
+
+	model.BindRemoteOperationWithContext(loadedModel, func(req *model.RemoteOperationReq[struct{}]) ([]byte, error) {
+		// This is a dummy operation. It is validated previously with Casbin, so if the user gets here, the token is valid
+		req.Ctx.StatusCode = fiber.StatusNoContent
+		return nil, nil
+	}, model.RemoteOptions().
+		WithName(string(wst.OperationNameValidateToken)).
+		WithPath("/token/validate").
+		WithVerb("head"))
+
+	mountOauthRoutes(app, loadedModel, systemContext)
+
+}
+
+func verboseRedirect(eventContext *model.EventContext, failureUrl string, err error) error {
+	fmt.Printf("[DEBUG] Redirecting to %v: %v\n", failureUrl, err)
+	return eventContext.Ctx.Redirect(fmt.Sprintf("%v?error=%v", failureUrl, err.Error()))
+}
+
+func mountBaseModelFixedRoutes(app *WeStack, loadedModel *model.StatefulModel) {
+	if app.debug {
+		log.Println("Mount GET " + loadedModel.BaseUrl)
+	}
+	loadedModel.RemoteMethod(func(eventContext *model.EventContext) error {
+		return handleEvent(eventContext, loadedModel, string(wst.OperationNameFindMany))
+	}, model.RemoteMethodOptions{
+		Name: string(wst.OperationNameFindMany),
+		Accepts: model.RemoteMethodOptionsHttpArgs{
+			{
+				Arg:         "filter",
+				Type:        "string",
+				Description: "",
+				Http: model.ArgHttp{
+					Source: "query",
+				},
+				Required: false,
+			},
+		},
+		Http: model.RemoteMethodOptionsHttp{
+			Path: "/",
+			Verb: "get",
+		},
+	})
+
+	if app.debug {
+		log.Println("Mount GET " + loadedModel.BaseUrl + "/count")
+	}
+	loadedModel.RemoteMethod(func(eventContext *model.EventContext) error {
+		return handleEvent(eventContext, loadedModel, string(wst.OperationNameCount))
+	}, model.RemoteMethodOptions{
+		Name: string(wst.OperationNameCount),
+		Accepts: model.RemoteMethodOptionsHttpArgs{
+			{
+				Arg:         "filter",
+				Type:        "string",
+				Description: "",
+				Http: model.ArgHttp{
+					Source: "query",
+				},
+				Required: false,
+			},
+		},
+		Http: model.RemoteMethodOptionsHttp{
+			Path: "/count",
+			Verb: "get",
+		},
+	})
+
+	if app.debug {
+		log.Println("Mount POST " + loadedModel.BaseUrl)
+	}
+	loadedModel.RemoteMethod(func(eventContext *model.EventContext) error {
+		return handleEvent(eventContext, loadedModel, string(wst.OperationNameCreate))
+	}, model.RemoteMethodOptions{
+		Name: string(wst.OperationNameCreate),
+		Accepts: model.RemoteMethodOptionsHttpArgs{
+			{
+				Arg:         "body",
+				Type:        "object",
+				Description: "",
+				Http:        model.ArgHttp{Source: "body"},
+				Required:    true,
+			},
+		},
+		Http: model.RemoteMethodOptionsHttp{
+			Path: "/",
+			Verb: "post",
+		},
+	})
+
+	if app.debug {
+		log.Println("Mount POST " + loadedModel.BaseUrl + "/bulk")
+	}
+	// TODO: 01-security/05-concurrency/02-createmany-rate-limiting.md
+	// CreateMany should enforce rate limiting to prevent DoS attacks via large arrays.
+	// Consider: max array size validation, dedicated rate limit for bulk operations.
+	loadedModel.RemoteMethod(func(eventContext *model.EventContext) error {
+		return handleEvent(eventContext, loadedModel, string(wst.OperationNameCreateMany))
+	}, model.RemoteMethodOptions{
+		Name: string(wst.OperationNameCreateMany),
+		Accepts: model.RemoteMethodOptionsHttpArgs{
+			{
+				Arg:         "body",
+				Type:        "array",
+				Description: "Array of objects to create",
+				Http:        model.ArgHttp{Source: "body"},
+				Required:    true,
+			},
+		},
+		Http: model.RemoteMethodOptionsHttp{
+			Path: "/bulk",
+			Verb: "post",
+		},
+	})
+}
+
+func mountAppDynamicRoutes(loadedModel *model.StatefulModel, app *WeStack) {
+	if app.debug {
+		log.Println("Mount POST " + loadedModel.BaseUrl + "/:id/token")
+	}
+	loadedModel.RemoteMethod(func(eventContext *model.EventContext) error {
+		id := eventContext.Ctx.Params("id")
+		ttl := eventContext.Data.GetFloat64("ttl")
+		additionalRolesSt := eventContext.Data.GetString("roles")
+		additionalRoles := make([]string, 0)
+		if len(strings.TrimSpace(additionalRolesSt)) > 0 {
+			additionalRoles = strings.Split(additionalRolesSt, ",")
+			for i, role := range additionalRoles {
+				additionalRoles[i] = strings.TrimSpace(role)
+			}
+		}
+		if ttl <= 0.0 {
+			ttl = 30 * 24 * 60 * 60
+		}
+		var asSt string
+		var asStOk bool
+		if eventContext.ModelID != nil {
+			asSt, asStOk = eventContext.ModelID.(string)
+		}
+		if eventContext.ModelID == nil || asStOk && len(strings.TrimSpace(asSt)) == 0 {
+			eventContext.ModelID = id
+		}
+		roles := []string{"APP"}
+		roles = append(roles, additionalRoles...)
+
+		baseContext := eventContext
+		for baseContext.BaseContext != nil {
+			baseContext = baseContext.BaseContext
+		}
+
+		bearer := model.CreateBearer(eventContext.ModelID, float64(time.Now().Unix()), ttl, roles, map[string]any{
+			"createdBy": baseContext.Bearer.Account.Id,
+		})
+		// sign the bearer
+		token := jwt.NewWithClaims(jwt.SigningMethodHS256, bearer.Claims)
+		tokenString, err := token.SignedString(loadedModel.App.JwtSecretKey)
+		if err != nil {
+			return err
+		}
+		bearer.Raw = tokenString
+		eventContext.Result = wst.M{
+			"id":    bearer.Raw,
+			"appId": eventContext.ModelID,
+		}
+		return nil
+	}, model.RemoteMethodOptions{
+		Name: string(wst.OperationNameCreateToken),
+		Accepts: model.RemoteMethodOptionsHttpArgs{
+			{
+				Arg:         "data",
+				Type:        "object",
+				Description: "",
+				Http:        model.ArgHttp{Source: "body"},
+				Required:    true,
+			},
+		},
+		Http: model.RemoteMethodOptionsHttp{
+			Path: "/:id/token",
+			Verb: "POST",
+		},
+	})
+}
+
+func addDefaultCasbinRoles(app *WeStack, e *casbin.Enforcer) (err error) {
+	_, err = e.AddRoleForUser("findMany", replaceVarNames("read"))
+	if app.debug {
+		app.logger.Printf("[DEBUG] Added role findMany for user %v, err: %v\n", replaceVarNames("read"), err)
+	}
+	_, err = e.AddRoleForUser("findById", replaceVarNames("read"))
+	if app.debug {
+		app.logger.Printf("[DEBUG] Added role findById for user %v, err: %v\n", replaceVarNames("read"), err)
+	}
+	_, err = e.AddRoleForUser("count", replaceVarNames("read"))
+	if app.debug {
+		app.logger.Printf("[DEBUG] Added role count for user %v, err: %v\n", replaceVarNames("read"), err)
+	}
+	_, err = e.AddRoleForUser("create", replaceVarNames("write"))
+	if app.debug {
+		app.logger.Printf("[DEBUG] Added role create for user %v, err: %v\n", replaceVarNames("write"), err)
+	}
+	_, err = e.AddRoleForUser("instance_updateAttributes", replaceVarNames("write"))
+	if app.debug {
+		app.logger.Printf("[DEBUG] Added role instance_updateAttributes for user %v, err: %v\n", replaceVarNames("write"), err)
+	}
+	_, err = e.AddRoleForUser("instance_delete", replaceVarNames("write"))
+	if app.debug {
+		app.logger.Printf("[DEBUG] Added role instance_delete for user %v, err: %v\n", replaceVarNames("write"), err)
+	}
+	_, err = e.AddRoleForUser("read", replaceVarNames("read_write"))
+	if app.debug {
+		app.logger.Printf("[DEBUG] Added role read for user %v, err: %v\n", replaceVarNames("read_write"), err)
+	}
+	_, err = e.AddRoleForUser("write", replaceVarNames("read_write"))
+	if app.debug {
+		app.logger.Printf("[DEBUG] Added role write for user %v, err: %v\n", replaceVarNames("read_write"), err)
+	}
+	_, err = e.AddRoleForUser("read_write", replaceVarNames("*"))
+	if app.debug {
+		app.logger.Printf("[DEBUG] Added role read_write for user %v, err: %v\n", replaceVarNames("*"), err)
+	}
+	return nil
+}
+
+func (app *WeStack) loadModelsDynamicRoutes() {
+	for _, entry := range *app.modelRegistry {
+		loadedModel := entry
+		if !loadedModel.Config.Public {
+			if app.debug {
+				log.Println("[WARNING] Model", loadedModel.Name, "is not public")
+			}
+			continue
+		}
+
+		if wst.IsPersisedModel(loadedModel.Config.Base) {
+			registerPersistedModelDynamicHooks(app, loadedModel)
+		}
+	}
+}
+
+func registerPersistedModelDynamicHooks(app *WeStack, loadedModel *model.StatefulModel) {
+	// Mount relation count routes for hasMany relations (dynamic routes with :id)
+	mountRelatedRoutes(app, loadedModel)
+
+	if app.debug {
+		log.Println("Mount GET " + loadedModel.BaseUrl + "/:id")
+	}
+	loadedModel.RemoteMethod(func(eventContext *model.EventContext) error {
+
+		id := eventContext.Ctx.Params("id")
+		var asSt string
+		var asStOk bool
+		if eventContext.ModelID != nil {
+			asSt, asStOk = eventContext.ModelID.(string)
+		}
+		if eventContext.ModelID == nil || asStOk && len(strings.TrimSpace(asSt)) == 0 {
+			eventContext.ModelID = id
+		}
+
+		return handleEvent(eventContext, loadedModel, string(wst.OperationNameFindById))
+
+	}, model.RemoteMethodOptions{
+		Name: string(wst.OperationNameFindById),
+		Accepts: model.RemoteMethodOptionsHttpArgs{
+			{
+				Arg:         "filter",
+				Type:        "string",
+				Description: "",
+				Http:        model.ArgHttp{Source: "query"},
+				Required:    false,
+			},
+		},
+		Http: model.RemoteMethodOptionsHttp{
+			Path: "/:id",
+			Verb: "get",
+		},
+	})
+
+	if app.debug {
+		log.Println("Mount PATCH " + loadedModel.BaseUrl + "/:id")
+	}
+	loadedModel.RemoteMethod(func(eventContext *model.EventContext) error {
+		id, err := primitive.ObjectIDFromHex(eventContext.Ctx.Params("id"))
+		if err != nil {
+			return err
+		}
+		eventContext.ModelID = &id
+		return handleEvent(eventContext, loadedModel, string(wst.OperationNameUpdateAttributes))
+	}, model.RemoteMethodOptions{
+		Name: string(wst.OperationNameUpdateAttributes),
+		Accepts: model.RemoteMethodOptionsHttpArgs{
+			{
+				Arg:         "data",
+				Type:        "object",
+				Description: "",
+				Http:        model.ArgHttp{Source: "body"},
+				Required:    true,
+			},
+		},
+		Http: model.RemoteMethodOptionsHttp{
+			Path: "/:id",
+			Verb: "patch",
+		},
+	})
+
+	if app.debug {
+		log.Println("Mount DELETE " + loadedModel.BaseUrl + "/:id")
+	}
+	loadedModel.RemoteMethod(func(eventContext *model.EventContext) error {
+		id, err := primitive.ObjectIDFromHex(eventContext.Ctx.Params("id"))
+		if err != nil {
+			return err
+		}
+		eventContext.ModelID = &id
+		return handleEvent(eventContext, loadedModel, string(wst.OperationNameDeleteById))
+	}, model.RemoteMethodOptions{
+		Name: string(wst.OperationNameDeleteById),
+		Http: model.RemoteMethodOptionsHttp{
+			Path: "/:id",
+			Verb: "delete",
+		},
+	})
+
+	if loadedModel.Config.Base == "Account" {
+		loadedModel.RemoteMethod(func(eventContext *model.EventContext) error {
+			id, err := primitive.ObjectIDFromHex(eventContext.Ctx.Params("id"))
+			if err != nil {
+				return err
+			}
+			eventContext.ModelID = &id
+			return handleEvent(eventContext, loadedModel, string(wst.OperationNameUpsertRoles))
+		}, model.RemoteMethodOptions{
+			Name: string(wst.OperationNameUpsertRoles),
+			Http: model.RemoteMethodOptionsHttp{
+				Path: "/:id/roles",
+				Verb: "put",
+			},
+		})
+
+		model.BindRemoteOperationWithContext(loadedModel, func(eventContext *model.RemoteOperationReq[model.EnableMfaBody]) (model.EnableMfaResponse, error) {
+			id, err := primitive.ObjectIDFromHex(eventContext.Ctx.Ctx.Params("id"))
+			if err != nil {
+				return model.EnableMfaResponse{}, err
+			}
+			eventContext.Ctx.ModelID = &id
+
+			return model.EnableMfa(app.mfaModel, eventContext.Ctx, eventContext.Input)
+
+		}, model.RemoteOptions().
+			WithName(string(wst.OperationNameEnableMfa)).
+			WithPath("/:id/enable-mfa").
+			WithVerb("post"))
+
+	}
+}
+
+func handleEvent(eventContext *model.EventContext, loadedModel *model.StatefulModel, event string) (err error) {
+	if !loadedModel.DisabledHandlers[event] {
+		err = loadedModel.GetHandler(event)(eventContext)
+		if err != nil {
+			return
+		}
+	}
+	if !eventContext.Handled {
+		if eventContext.StatusCode == 0 {
+			eventContext.StatusCode = fiber.StatusNotImplemented
+		}
+		err = eventContext.Ctx.Status(eventContext.StatusCode).JSON(eventContext.Result)
+	}
+	return
+}
+
+func casbinOwnerFn(loadedModel *model.StatefulModel) func(arguments ...interface{}) (interface{}, error) {
+	modelConfigsByName := make(map[string]*model.Config)
+	return func(arguments ...interface{}) (interface{}, error) {
+
+		var subId string
+		rawToken := arguments[0].(string)
+		objId := arguments[1].(string)
+
+		policySubj := arguments[2].(string)
+		policyObj := arguments[3].(string)
+		action := arguments[4].(string)
+
+		requiresMfa := policySubj == "_OWNER:MFA_"
+		requiresExplicitNotMfa := policySubj == "_OWNER:NOT:MFA_"
+
+		if rawToken == "" {
+			return false, nil
+		}
+
+		// Decode the token
+		token, err := jwt.Parse(rawToken, func(token *jwt.Token) (interface{}, error) {
+			return loadedModel.App.JwtSecretKey, nil
+		})
+		if err != nil {
+			return false, fmt.Errorf("could not parse token '%v': %w", rawToken, err)
+		}
+		var hasMfa *bool
+		if claims, ok := token.Claims.(jwt.MapClaims); ok && token.Valid {
+			subId = claims["accountId"].(string)
+			if requiresMfa || requiresExplicitNotMfa {
+				for _, role := range claims["roles"].([]interface{}) {
+					if role == "USER:mfa" {
+						t := true
+						hasMfa = &t
+						break
+					}
+				}
+				if hasMfa == nil {
+					f := false
+					hasMfa = &f
+				}
+			}
+		} else {
+			return false, errors.New("invalid token")
+		}
+
+		if loadedModel.App.Debug {
+			fmt.Printf("Checking %v,%v,%v for %v (hasMfa=%v)\n", policySubj, policyObj, action, subId, hasMfa != nil && *hasMfa)
+		}
+
+		if requiresMfa && !*hasMfa {
+			fmt.Printf("[DEBUG] MFA required for %v,%v\n", policyObj, action)
+			return false, nil
+		}
+
+		if requiresExplicitNotMfa && *hasMfa {
+			fmt.Printf("[DEBUG] MFA not allowed for %v,%v\n", policyObj, action)
+			return false, nil
+		}
+
+		if loadedModel.App.Debug {
+			fmt.Printf("isOwner(%v) of %v ?\n", subId, policyObj)
+		}
+
+		objId = strings.TrimSpace(objId)
+
+		if objId == "" || objId == "*" {
+			return false, nil
+		}
+
+		subId = strings.TrimSpace(subId)
+
+		if subId == "" || subId == "*" {
+			return false, nil
+		}
+
+		objOwnerId := ""
+		if loadedModel.Config.Base == "Account" || loadedModel.Config.Base == "App" {
+			objOwnerId = model.GetIDAsString(objId)
+			if subId == objOwnerId {
+				return true, nil
+			}
+		}
+
+		roleKey := fmt.Sprintf("%v_OWNERS", objId)
+		var accountsForRole []string
+		if accountsForRole, err = loadedModel.Enforcer.GetUsersForRole(roleKey); err == nil {
+			for _, userInRole := range accountsForRole {
+				if subId == userInRole {
+					return true, nil
+				}
+			}
+		}
+
+		var recursiveSearchStart time.Time
+		if loadedModel.App.Debug {
+			recursiveSearchStart = time.Now()
+		}
+		sortedRelationKeys := obtainSortedRelationKeys(loadedModel, modelConfigsByName)
+		for _, relationKey := range sortedRelationKeys {
+
+			err = findOwnerRecursiveInRelation(loadedModel, modelConfigsByName, relationKey, objId, roleKey, &accountsForRole)
+			if err != nil {
+				if loadedModel.App.Debug {
+					loadedModel.App.Logger().Printf("[DEBUG] Recursive owner check for %v[%v]-->%v[%v] failed: %v\n", loadedModel.Name, objId, relationKey, objId, err)
+				}
+				return false, err
+			}
+
+		}
+		if loadedModel.App.Debug {
+			loadedModel.App.Logger().Printf("[DEBUG] Recursive owner check for %v took %v ms\n", loadedModel.Name, time.Since(recursiveSearchStart).Milliseconds())
+		}
+
+		for _, userInRole := range accountsForRole {
+			if subId == userInRole {
+				return true, nil
+			}
+		}
+
+		return false, err
+
+	}
+
+}
+
+func obtainSortedRelationKeys(loadedModel *model.StatefulModel, modelConfigsByName map[string]*model.Config) []string {
+	allRelatedKeys := make([]string, 0)
+	for key, r := range *loadedModel.Config.Relations {
+		relatedModelConfig := modelConfigsByName[r.Model]
+		if relatedModelConfig == nil {
+			// Ignore error because we already checked for it at boot time
+			relatedModelI, _ := loadedModel.App.FindModel(r.Model)
+			relatedModel := relatedModelI.(*model.StatefulModel)
+			relatedModelConfig = relatedModel.Config
+			modelConfigsByName[r.Model] = relatedModelConfig
+		}
+		// userId goes first, others later
+		if r.Type == "belongsTo" && (relatedModelConfig.Base == "Account" || relatedModelConfig.Base == "App") {
+			allRelatedKeys = append([]string{key}, allRelatedKeys...)
+		} else {
+			allRelatedKeys = append(allRelatedKeys, key)
+		}
+	}
+	return allRelatedKeys
+}
+
+// mountedRelationRoutes tracks which relation routes have been mounted to prevent infinite recursion
+// Key format: "ModelName.relationName"
+var mountedRelationRoutes = make(map[string]struct{})
+var mountedRelationRoutesMutex = sync.Mutex{}
+
+// mountRelationRoutes mounts relation endpoints for all relation types
+// Endpoints mounted:
+//   - GET /:id/{relationName} - Get related items (array for hasMany, object for hasOne/belongsTo)
+//   - GET /:id/{relationName}/count - Count related items (only for hasMany types)
+//
+// Permission: Requires __get__{relationName} permission on the parent instance
+func mountRelatedRoutes(app *WeStack, loadedModel *model.StatefulModel) {
+	if loadedModel.Config.Relations == nil {
+		return
+	}
+
+	for relationName, relation := range *loadedModel.Config.Relations {
+		// Check if this relation route was already mounted (prevent infinite recursion)
+		routeKey := fmt.Sprintf("%s.%s", loadedModel.Name, relationName)
+		mountedRelationRoutesMutex.Lock()
+		if _, exists := mountedRelationRoutes[routeKey]; exists {
+			mountedRelationRoutesMutex.Unlock()
+			continue
+		}
+		mountedRelationRoutes[routeKey] = struct{}{}
+		mountedRelationRoutesMutex.Unlock()
+		// Capture values for closure
+		rn := relationName
+		rel := relation
+
+		getPermission := fmt.Sprintf("__get__%v", rn)
+		isManyRelation := rel.Type == "hasMany" || rel.Type == "hasAndBelongsToMany"
+		isSingleRelation := rel.Type == "hasOne" || rel.Type == "belongsTo"
+
+		// --- Mount GET /:id/{relationName} endpoint ---
+		getOperationName := fmt.Sprintf("__get__%v", rn)
+		getPath := "/:id/" + rn
+
+		if app.debug {
+			log.Println("Mount GET " + loadedModel.BaseUrl + getPath)
+		}
+
+		loadedModel.RemoteMethod(func(eventContext *model.EventContext) error {
+			// Extract and set ModelID (same pattern as other /:id routes)
+			id, err := primitive.ObjectIDFromHex(eventContext.Ctx.Params("id"))
+			if err != nil {
+				return err
+			}
+			eventContext.ModelID = &id
+
+			// Get related model
+			relatedModelI, err := loadedModel.App.FindModel(rel.Model)
+			if err != nil {
+				return err
+			}
+			relatedModel := relatedModelI.(*model.StatefulModel)
+
+			// Build filter based on relation type
+			filter := eventContext.Filter
+			if filter == nil {
+				filter = &wst.Filter{}
+			}
+			if filter.Where == nil {
+				filter.Where = &wst.Where{}
+			}
+
+			// Determine the key to filter by based on relation type
+			if rel.Type == "belongsTo" {
+				// For belongsTo: we need to get the parent instance first to get the foreign key value
+				parentInstance, err := loadedModel.FindById(id, nil, eventContext)
+				if err != nil {
+					return err
+				}
+				if parentInstance == nil {
+					return fiber.ErrNotFound
+				}
+				// Get the foreign key value from parent and find by primary key in related model
+				fkValue := parentInstance.ToJSON()[*rel.ForeignKey]
+				if fkValue == nil {
+					eventContext.Result = wst.NilMap
+					return nil
+				}
+				(*filter.Where)[*rel.PrimaryKey] = fkValue
+			} else {
+				// For hasOne/hasMany: filter related model by foreign key = parent id
+				(*filter.Where)[*rel.ForeignKey] = id
+			}
+
+			// Query based on relation type
+			if isManyRelation {
+				// Return array
+				instances, err := relatedModel.FindMany(filter, eventContext).All()
+				if err != nil {
+					return err
+				}
+				result := make(wst.A, len(instances))
+				for i, inst := range instances {
+					result[i] = inst.ToJSON()
+				}
+				eventContext.Result = result
+			} else if isSingleRelation {
+				// Return single object or null
+				instance, err := relatedModel.FindOne(filter, eventContext)
+				if err != nil {
+					return err
+				}
+				if instance == nil {
+					eventContext.Result = wst.NilMap
+				} else {
+					eventContext.Result = instance.ToJSON()
+				}
+			}
+
+			return nil
+		}, model.RemoteMethodOptions{
+			Name: getOperationName,
+			Accepts: model.RemoteMethodOptionsHttpArgs{
+				{
+					Arg:         "filter",
+					Type:        "string",
+					Description: "",
+					Http:        model.ArgHttp{Source: "query"},
+					Required:    false,
+				},
+			},
+			Http: model.RemoteMethodOptionsHttp{
+				Path: getPath,
+				Verb: "get",
+			},
+		})
+		if isManyRelation {
+
+			// --- Mount GET /:id/{relationName}/count endpoint (only for hasMany types) ---
+			// IMPORTANT: Must be registered BEFORE /:fk to prevent "count" being matched as an ObjectID
+			countOperationName := fmt.Sprintf("__count__%v", rn)
+
+			// Add role inheritance: __count__{relationName} inherits from __get__{relationName}
+			_, err := loadedModel.Enforcer.AddRoleForUser(countOperationName, getPermission)
+			if err != nil {
+				if app.debug {
+					log.Printf("[WARNING] Could not add role %v for user %v: %v\n", countOperationName, getPermission, err)
+				}
+			}
+
+			countPath := "/:id/" + rn + "/count"
+
+			if app.debug {
+				log.Println("Mount GET " + loadedModel.BaseUrl + countPath)
+			}
+
+			loadedModel.RemoteMethod(func(eventContext *model.EventContext) error {
+				// Extract and set ModelID (same pattern as other /:id routes)
+				id, err := primitive.ObjectIDFromHex(eventContext.Ctx.Params("id"))
+				if err != nil {
+					return err
+				}
+				eventContext.ModelID = &id
+
+				// Get related model
+				relatedModelI, err := loadedModel.App.FindModel(rel.Model)
+				if err != nil {
+					return err
+				}
+				relatedModel := relatedModelI.(*model.StatefulModel)
+
+				// Build filter with parent ID constraint
+				filter := eventContext.Filter
+				if filter == nil {
+					filter = &wst.Filter{}
+				}
+				if filter.Where == nil {
+					filter.Where = &wst.Where{}
+				}
+				(*filter.Where)[*rel.ForeignKey] = id
+
+				// Count items in the related model filtered by parent ID
+				count, err := relatedModel.Count(filter, eventContext)
+				if err != nil {
+					return err
+				}
+
+				eventContext.Result = count
+				return nil
+			}, model.RemoteMethodOptions{
+				Name: countOperationName,
+				Accepts: model.RemoteMethodOptionsHttpArgs{
+					{
+						Arg:         "filter",
+						Type:        "string",
+						Description: "",
+						Http:        model.ArgHttp{Source: "query"},
+						Required:    false,
+					},
+				},
+				Http: model.RemoteMethodOptionsHttp{
+					Path: countPath,
+					Verb: "get",
+				},
+			})
+
+			// --- Mount GET /:id/{relationName}/:fk endpoint (get specific related item) ---
+			fkOperationName := fmt.Sprintf("__get__%v__item", rn)
+
+			// Add role inheritance: __get__{relationName}__item inherits from __get__{relationName}
+			_, err = loadedModel.Enforcer.AddRoleForUser(fkOperationName, getPermission)
+			if err != nil {
+				if app.debug {
+					log.Printf("[WARNING] Could not add role %v for user %v: %v\n", fkOperationName, getPermission, err)
+				}
+			}
+
+			fkPath := "/:id/" + rn + "/:fk"
+
+			if app.debug {
+				log.Println("Mount GET " + loadedModel.BaseUrl + fkPath)
+			}
+
+			loadedModel.RemoteMethod(func(eventContext *model.EventContext) error {
+				// Extract parent ID
+				id, err := primitive.ObjectIDFromHex(eventContext.Ctx.Params("id"))
+				if err != nil {
+					return err
+				}
+				eventContext.ModelID = &id
+
+				// Extract related item ID
+				fk, err := primitive.ObjectIDFromHex(eventContext.Ctx.Params("fk"))
+				if err != nil {
+					return err
+				}
+
+				// Get related model
+				relatedModelI, err := loadedModel.App.FindModel(rel.Model)
+				if err != nil {
+					return err
+				}
+				relatedModel := relatedModelI.(*model.StatefulModel)
+
+				// Build filter to find specific related item
+				// Only for hasMany relations - filter by foreign key = parent id AND _id = fk
+				filter := eventContext.Filter
+				if filter == nil {
+					filter = &wst.Filter{}
+				}
+				if filter.Where == nil {
+					filter.Where = &wst.Where{}
+				}
+				(*filter.Where)[*rel.ForeignKey] = id
+				(*filter.Where)["_id"] = fk
+
+				debugFilterBytes, err := json.Marshal(filter)
+				if err != nil {
+					return err
+				}
+				if app.debug {
+					log.Printf("[DEBUG] Nested GET /%s/%v/%s/%v Filter: '%s'\n", loadedModel.BaseUrl, id, rn, fk, string(debugFilterBytes))
+				}
+
+				// Find the specific related item
+				instance, err := relatedModel.FindOne(filter, eventContext)
+				if err != nil {
+					return err
+				}
+				if instance == nil {
+					return fiber.ErrNotFound
+				}
+
+				eventContext.Result = instance.ToJSON()
+				return nil
+			}, model.RemoteMethodOptions{
+				Name: fkOperationName,
+				Accepts: model.RemoteMethodOptionsHttpArgs{
+					{
+						Arg:         "filter",
+						Type:        "string",
+						Description: "",
+						Http:        model.ArgHttp{Source: "query"},
+						Required:    false,
+					},
+				},
+				Http: model.RemoteMethodOptionsHttp{
+					Path: fkPath,
+					Verb: "get",
+				},
+			})
+		}
+	}
+}
+
+func findOwnerRecursiveInRelation(loadedModel *model.StatefulModel, modelConfigsByName map[string]*model.Config, relationKey string, objId interface{}, roleKey string, ownersForRole *[]string) error {
+	r := (*loadedModel.Config.Relations)[relationKey]
+
+	if r.Type == "belongsTo" {
+
+		thisInstance, err := loadedModel.FindById(objId, &wst.Filter{
+			Include: &wst.Include{{Relation: relationKey}},
+		}, &model.EventContext{
+			Bearer: &model.BearerToken{
+				Account: &model.BearerAccount{System: true},
+			},
+		})
+		if err != nil {
+			return err
+		}
+		if thisInstance == nil {
+			if loadedModel.App.Debug {
+				loadedModel.App.Logger().Printf("[DEBUG] Instance %v[%v] not found\n", loadedModel.Name, objId)
+			}
+			return wst.CreateError(fiber.ErrNotFound, "NOT_FOUND", fiber.Map{"message": fmt.Sprintf("document %v not found", objId)}, "Error")
+		}
+
+		relatedInstance := thisInstance.GetOne(relationKey)
+		if relatedInstance == nil {
+			if loadedModel.App.Debug {
+				loadedModel.App.Logger().Printf("[DEBUG] Related instance %v[%v]-->%v[%v] unreachable\n", loadedModel.Name, objId, r.Model, thisInstance.ToJSON()[*r.ForeignKey])
+			}
+			return nil
+		}
+		relatedModel := relatedInstance.GetModel()
+
+		if relatedModel.GetConfig().Base == "Account" && *r.ForeignKey == "accountId" || relatedModel.GetConfig().Base == "App" && *r.ForeignKey == relatedModel.GetAppOwnerForeignKey() {
+			user := relatedInstance
+
+			// if user != nil && user.GetID() != nil {
+			objOwnerId := model.GetIDAsString(user.GetID())
+
+			_, err := loadedModel.Enforcer.AddRoleForUser(objOwnerId, roleKey)
+			if err != nil {
+				return err
+			}
+			err = loadedModel.Enforcer.SavePolicy()
+			if err != nil {
+				return err
+			}
+
+			if loadedModel.App.Debug {
+				loadedModel.App.Logger().Printf("[DEBUG] Added role %v for user %v\n", roleKey, objOwnerId)
+			}
+
+			*ownersForRole = append(*ownersForRole, objOwnerId)
+
+			// }
+
+		} else if relatedModel.GetConfig().Base != "Account" && relatedModel.GetConfig().Base != "App" {
+			if loadedModel.App.Debug {
+				loadedModel.App.Logger().Printf("[DEBUG] Recursive owner check for %v\n", relatedModel.GetName())
+			}
+			sortedRelationKeys := obtainSortedRelationKeys(relatedModel.(*model.StatefulModel), modelConfigsByName)
+			for _, key := range sortedRelationKeys {
+				if loadedModel.App.Debug {
+					loadedModel.App.Logger().Printf("[DEBUG] Recursive owner check for %v[%v]-->%v[%v]\n", loadedModel.Name, objId, relatedModel.GetName(), relatedInstance.GetID())
+				}
+				err = findOwnerRecursiveInRelation(relatedModel.(*model.StatefulModel), modelConfigsByName, key, relatedInstance.GetID(), roleKey, ownersForRole)
+				if err != nil {
+					return err
+				}
+
+			}
+		} else {
+			fmt.Printf("[WARNING] What to do with %v?", relatedModel)
+		}
+	}
+	return nil
+}

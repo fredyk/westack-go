@@ -1,0 +1,35 @@
+{
+  "name": "App",
+  "plural": "",
+  "base": "App",
+  "public": true,
+  "properties": {},
+  "relations": {
+    "account": {
+      "type": "belongsTo",
+      "model": "Account"
+    }
+  },
+  "hidden": [],
+  "casbin": {
+    "requestDefinition": "",
+    "policyDefinition": "",
+    "roleDefinition": "",
+    "policyEffect": "",
+    "matchersDefinition": "",
+    "policies": [
+      "admin,*,create,allow",
+      "$owner,*,read_write,allow",
+      "$owner,*,createToken,allow",
+      "$authenticated,*,upload,allow"
+    ]
+  },
+  "cache": {
+    "datasource": "",
+    "ttl": 0,
+    "keys": null
+  },
+  "mongo": {
+    "collection": ""
+  }
+}

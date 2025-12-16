@@ -527,7 +527,64 @@ westack-go/
 - **Tiempo**: 2-3 semanas
 - **Riesgo**: Scope creep, retrasa v3.0
 
-**DECISIÓN**: Ver archivo v3/tests/MIGRATION_PLAN.md
+**DECISIÓN**: ✅ OPCIÓN B - Migrar westack completo ahora
+
+## 🚀 FASE 7: Migración Completa de westack v2→v3 (EN PROGRESO)
+
+**Fecha Inicio**: 2025-12-16 19:30  
+**Objetivo**: Migrar completamente v2/westack → v3/westack y habilitar todos los tests
+
+### Plan de Ejecución Detallado
+
+#### Paso 1: Análisis de Dependencias (15 min)
+- [ ] Listar todos los archivos en v2/westack/
+- [ ] Identificar dependencias externas
+- [ ] Mapear cambios necesarios por v3
+
+#### Paso 2: Copia Masiva de Archivos (10 min)
+- [ ] `cp -r v2/westack v3/`
+- [ ] `cp -r v2/lib v3/`
+- [ ] Verificar estructura copiada
+
+#### Paso 3: Actualización de Imports (20 min)
+- [ ] Reemplazo masivo: `v2/` → `v3/`
+- [ ] Verificar imports de terceros
+- [ ] Actualizar go.mod si necesario
+
+#### Paso 4: Adaptación a Cambios v3 (2-3 horas)
+- [ ] **EventContext.Instance**: `*StatefulInstance` → `Instance`
+- [ ] **Build()**: Retorna `Instance`, no `*StatefulInstance`
+- [ ] **HideProperties()**: Ya en interfaz `Instance`
+- [ ] Eliminar casteos innecesarios
+- [ ] Type switches simplificados
+
+#### Paso 5: Compilación Incremental (1-2 horas)
+- [ ] `go build ./westack/`
+- [ ] Corregir errores uno por uno
+- [ ] Documentar cambios breaking
+
+#### Paso 6: Tests HTTP (1-2 horas)
+- [ ] Copiar v2/tests/common/ → v3/tests/common/
+- [ ] Copiar v2/tests/server/ → v3/tests/server/
+- [ ] Copiar v2/tests/fixtures/ → v3/tests/fixtures/
+- [ ] Copiar v2/tests/proto/ → v3/tests/proto/
+- [ ] `go test ./tests/` y documentar fallos
+
+#### Paso 7: Corrección de Tests (2-4 horas)
+- [ ] Adaptar tests a cambios v3
+- [ ] Eliminar casteos `(*StatefulInstance)`
+- [ ] Verificar hooks y callbacks
+- [ ] Verificar RBAC y permisos
+
+#### Paso 8: Validación Final (1 hora)
+- [ ] `go test -v -race ./...`
+- [ ] Verificar 0 fallos
+- [ ] Coverage report
+- [ ] Benchmarks básicos
+
+### Estimación Total: 8-12 horas
+
+### Progreso en Tiempo Real
 
 #### Fase 5: Validación y Benchmarks (2 horas)
 - [ ] Ejecutar suite completa de tests v3

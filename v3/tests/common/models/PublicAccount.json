@@ -1,0 +1,26 @@
+{
+  "name": "PublicAccount",
+  "base": "Account",
+  "public": true,
+  "properties": {
+    "email": {
+      "type": "string"
+    },
+    "phone": {
+      "type": "string",
+      "default": ""
+    }
+  },
+  "protected": [
+    "email",
+    "phone"
+  ],
+  "casbin": {
+    "policies": [
+      "$authenticated,*,read,allow"
+    ]
+  },
+  "mongo": {
+    "collection": "Account"
+  }
+}

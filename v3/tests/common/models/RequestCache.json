@@ -1,0 +1,23 @@
+{
+  "name": "RequestCache",
+  "plural": "request-cache-entries",
+  "base": "PersistedModel",
+  "public": true,
+  "properties": {},
+  "relations": {},
+  "hidden": [],
+  "casbin": {
+    "policies": [
+      "$authenticated,*,create,allow",
+      "$authenticated,*,read,allow"
+    ]
+  },
+  "cache": {
+    "datasource": "",
+    "ttl": 0,
+    "keys": null
+  },
+  "mongo": {
+    "collection": ""
+  }
+}

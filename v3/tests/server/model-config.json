@@ -1,0 +1,44 @@
+{
+  "App": {
+    "dataSource": "db0"
+  },
+  "Customer": {
+    "dataSource": "db0"
+  },
+  "Empty": {
+    "dataSource": "db0"
+  },
+  "Footer": {
+    "dataSource": "db1"
+  },
+  "Header": {
+    "dataSource": "db0"
+  },
+  "Image": {
+    "dataSource": "db1"
+  },
+  "Note": {
+    "dataSource": "db0"
+  },
+  "NoteEntry": {
+    "dataSource": "db0"
+  },
+  "Order": {
+    "dataSource": "db1"
+  },
+  "RequestCache": {
+    "dataSource": "memorykv"
+  },
+  "Store": {
+    "dataSource": "db2"
+  },
+  "PublicAccount": {
+    "dataSource": "db0"
+  },
+  "role": {
+    "dataSource": "db0"
+  },
+  "Account": {
+    "dataSource": "db0"
+  }
+}

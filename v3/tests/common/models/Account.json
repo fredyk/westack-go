@@ -1,0 +1,23 @@
+{
+  "name": "Account",
+  "base": "Account",
+  "plural": "accounts",
+  "public": true,
+  "properties": {
+    "email": {
+      "type": "string"
+    }
+  },
+  "relations": {
+    "notes": {
+      "type": "hasMany",
+      "model": "Note"
+    }
+  },
+  "casbin": {
+    "policies": [
+      "$everyone,*,westackAuthorize,allow",
+      "$everyone,*,westackToken,allow"
+    ]
+  }
+}
