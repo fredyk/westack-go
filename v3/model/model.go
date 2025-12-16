@@ -44,7 +44,7 @@ type Model interface {
 	On(event string, handler func(eventContext *EventContext) error)
 	Observe(operation string, handler func(eventContext *EventContext) error)
 	QueueOperation(operation string, eventContext *EventContext, fn func(nextCtx *EventContext) error)
-	RemoteMethod(handler func(*EventContext) error, options RemoteMethodOptions) interface{}
+	RemoteMethod(handler func(*EventContext) error, options RemoteMethodOptions) fiber.Router
 	EnforceEx(token *BearerToken, objId string, action string, eventContext *EventContext) (error, bool)
 	ExtractLookupsFromFilter(filterMap *wst.Filter, disableTypeConversions bool) (*wst.A, error)
 	SetDebug(debug bool)
