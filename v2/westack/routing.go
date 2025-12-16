@@ -417,6 +417,9 @@ func mountBaseModelFixedRoutes(app *WeStack, loadedModel *model.StatefulModel) {
 	if app.debug {
 		log.Println("Mount POST " + loadedModel.BaseUrl + "/bulk")
 	}
+	// TODO: 01-security/05-concurrency/02-createmany-rate-limiting.md
+	// CreateMany should enforce rate limiting to prevent DoS attacks via large arrays.
+	// Consider: max array size validation, dedicated rate limit for bulk operations.
 	loadedModel.RemoteMethod(func(eventContext *model.EventContext) error {
 		return handleEvent(eventContext, loadedModel, string(wst.OperationNameCreateMany))
 	}, model.RemoteMethodOptions{
