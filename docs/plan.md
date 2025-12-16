@@ -277,35 +277,173 @@ Este análisis es consistente con **v3-roadmap-2026.md**:
 - ✅ **Mejor DX**: API más limpia, menos *StatefulInstance expuesto
 - ✅ **Modernización**: Patrón más idiomático en Go
 
-### 8. Plan de Implementación (v3)
+### 8. Estrategia v3: Mejores Prácticas de Go
 
-#### Fase 1: Preparación (2 horas)
-- [ ] Crear rama `feature/instance-interface-v3`
-- [ ] Agregar HideProperties() a interfaz (NO breaking)
-- [ ] Tests para HideProperties() en interfaz
+**Investigación completada** (16 Dic 2025): Análisis de mejores prácticas de Go para major versions.
 
-#### Fase 2: EventContext (3 horas)
-- [ ] Cambiar EventContext.Instance a Instance
-- [ ] Actualizar todos los usos en model.go
-- [ ] Actualizar tests (estimado 30 tests)
+#### Hallazgos Clave de la Comunidad Go:
 
-#### Fase 3: Firmas (2 horas)
-- [ ] Cambiar Build() para retornar Instance
-- [ ] Cambiar dispatchFindManySingleDocument()
-- [ ] Eliminar copyInstanceSlice
-- [ ] Actualizar tests (estimado 15 tests)
+1. **Semantic Versioning + Module Path**
+   - Go requiere cambiar el import path para v2+: `github.com/fredyk/westack-go/v3`
+   - v0 y v1 no requieren suffix, v2+ sí
+   - Fuente: [Go Modules Documentation](https://go.dev/doc/modules/major-version)
 
-#### Fase 4: Type Switches (1 hora)
-- [ ] Simplificar switches en Create/UpdateById
-- [ ] Actualizar tests (estimado 10 tests)
+2. **Dos Enfoques Principales**:
+   - **Recomendado**: Crear directorio `v3/` con código nuevo
+   - **Alternativa**: Branch/tag con v3.x.y
+   - **Nuestra elección**: Directorio v3/ (más claro para desarrollo paralelo)
 
-#### Fase 5: Validación (2 horas)
-- [ ] Ejecutar suite completa de tests
+3. **Type Assertions en Migraciones**:
+   - Go es fuertemente tipado → breaking changes causan errores de compilación
+   - Mayoría de fixes son simples (según Lane Waggslane)
+   - Type assertions de interface son comunes en refactors
+
+4. **Soporte de Versiones Múltiples**:
+   - Mantener v2 en `main` branch (LTS)
+   - Desarrollar v3 en `v3/` subdirectorio
+   - Users pueden usar ambas versiones simultáneamente
+
+#### Estructura Propuesta:
+
+```
+westack-go/
+├── v2/              # Código actual (mantener para LTS)
+│   ├── model/
+│   ├── westack/
+│   └── go.mod       # module github.com/fredyk/westack-go/v2
+├── v3/              # Nueva implementación
+│   ├── model/
+│   ├── westack/
+│   └── go.mod       # module github.com/fredyk/westack-go/v3
+└── docs/
+    └── v3-migration-guide.md
+```
+
+### 9. Plan de Implementación v3 (TDD)
+
+**Metodología**: Test-Driven Development
+- ✅ Red: Escribir test que falla
+- ✅ Green: Implementar mínimo para pasar
+- ✅ Refactor: Limpiar código
+- 📝 Documentar: Actualizar plan.md después de cada fase
+
+#### Fase 0: Setup v3 (✅ COMPLETADA - 0.5 horas)
+- [x] Investigar mejores prácticas Go para major versions
+- [x] Crear directorio `v3/`
+- [x] Copiar estructura base desde v2/
+- [x] Actualizar go.mod con `module github.com/fredyk/westack-go/v3`
+- [x] Crear v3/docs/migration-guide.md
+- [x] Actualizar imports v2 → v3 en archivos copiados
+- [ ] Commit: "chore(v3): initialize v3 module structure"
+
+**Archivos Creados**:
+- v3/go.mod (module path actualizado)
+- v3/model/instance.go (copiado de v2)
+- v3/model/eventcontext.go (copiado de v2)
+- v3/common/common.go (copiado de v2)
+- v3/docs/migration-guide.md (guía completa 200+ líneas)
+
+#### Fase 1: HideProperties() en Interface (TDD - 2 horas)
+- [ ] **RED**: Test que Instance.HideProperties() existe
+  - [ ] v3/model/instance_test.go: TestInstanceHideProperties
+  - [ ] Debe fallar: método no existe en interfaz
+- [ ] **GREEN**: Agregar HideProperties() a interfaz Instance
+  - [ ] v3/model/instance.go: Agregar método a interface
+  - [ ] StatefulInstance ya lo implementa (copiar desde v2)
+- [ ] **REFACTOR**: Verificar que no rompe nada
+  - [ ] Ejecutar todos los tests de v3
+  - [ ] Verificar que v2 no se ve afectado
+- [ ] Commit: "feat(v3): add HideProperties to Instance interface"
+- [ ] Actualizar plan.md con ✅
+
+#### Fase 2: EventContext.Instance → Instance (TDD - 3 horas)
+- [ ] **RED**: Tests que usen EventContext.Instance con métodos de interfaz
+  - [ ] v3/model/eventcontext_test.go: TestEventContextInstanceAsInterface
+  - [ ] v3/model/model_test.go: TestCreateReturnsInstance
+  - [ ] Deben fallar: casteos innecesarios
+- [ ] **GREEN**: Cambiar EventContext.Instance a Instance
+  - [ ] v3/model/eventcontext.go línea 20: `Instance Instance`
+  - [ ] Eliminar casteos en v3/model/model.go (8 lugares)
+  - [ ] Actualizar asignaciones en hooks
+- [ ] **REFACTOR**: Limpiar code smells
+  - [ ] Buscar más casteos innecesarios
+  - [ ] Simplificar lógica donde sea posible
+- [ ] **TESTS**: Actualizar ~30 tests existentes
+  - [ ] Reemplazar `inst.(*StatefulInstance)` por `inst`
+  - [ ] Verificar que compile
+- [ ] Commit: "feat(v3): change EventContext.Instance to interface"
+- [ ] Actualizar plan.md con ✅ y métricas
+
+#### Fase 3: Firmas retornando Instance (TDD - 2 horas)
+- [ ] **RED**: Tests esperando Instance de Build()
+  - [ ] v3/model/model_test.go: TestBuildReturnsInstance
+  - [ ] v3/model/model_test.go: TestDispatchReturnsInstance
+- [ ] **GREEN**: Cambiar firmas
+  - [ ] Build() retorna Instance
+  - [ ] dispatchFindManySingleDocument() retorna Instance
+  - [ ] Eliminar copyInstanceSlice (ya no necesaria)
+- [ ] **REFACTOR**: Simplificar callers
+  - [ ] Remover casteos en 6 lugares
+- [ ] **TESTS**: Actualizar ~15 tests
+- [ ] Commit: "feat(v3): return Instance from Build and dispatch methods"
+- [ ] Actualizar plan.md con ✅
+
+#### Fase 4: Simplificar Type Switches (TDD - 1 hora)
+- [ ] **RED**: Tests con Instance directo (sin StatefulInstance)
+  - [ ] v3/model/model_test.go: TestCreateAcceptsInstance
+  - [ ] v3/model/model_test.go: TestUpdateAcceptsInstance
+- [ ] **GREEN**: Simplificar switches
+  - [ ] Create() líneas 587-592: solo case Instance
+  - [ ] UpdateById() líneas 1006-1011: solo case Instance
+- [ ] **REFACTOR**: Eliminar dead code
+  - [ ] Remover cases de StatefulInstance
+  - [ ] Verificar que tests legacy no rompan
+- [ ] **TESTS**: Actualizar ~10 tests
+- [ ] Commit: "refactor(v3): simplify type switches to use Instance"
+- [ ] Actualizar plan.md con ✅
+
+#### Fase 5: Validación y Benchmarks (2 horas)
+- [ ] Ejecutar suite completa de tests v3
+  - [ ] `cd v3 && go test -v -race ./...`
+  - [ ] Verificar 0 fallos, 0 race conditions
 - [ ] Verificar coverage no disminuye
+  - [ ] `cd v3 && go test -cover ./model/...`
+  - [ ] Target: >75% coverage (igual que v2)
 - [ ] Performance benchmarks
+  - [ ] Comparar v2 vs v3 en operaciones clave
+  - [ ] Create, FindById, UpdateAttributes
+  - [ ] Documentar resultados en plan.md
 - [ ] Code review exhaustivo
+  - [ ] Revisar cada cambio en model.go
+  - [ ] Verificar que docs estén actualizadas
+- [ ] Commit: "test(v3): validate all changes with benchmarks"
+- [ ] Actualizar plan.md con métricas finales
 
-**Total**: 10 horas
+#### Fase 6: Documentación v3 (1 hora)
+- [ ] Crear v3/docs/migration-guide.md completo
+  - [ ] Qué cambió y por qué
+  - [ ] Ejemplos de migración código v2 → v3
+  - [ ] Breaking changes detallados
+  - [ ] Timeline de soporte v2
+- [ ] Actualizar README principal
+  - [ ] Badges para v2 y v3
+  - [ ] Links a documentación de cada versión
+- [ ] Commit: "docs(v3): complete migration guide"
+
+**Total Estimado**: 12 horas
+
+### 10. Métricas de Progreso (Actualizar después de cada commit)
+
+| Fase | Status | Tests Passing | Coverage | Commits | Tiempo Real |
+|------|--------|---------------|----------|---------|-------------|
+| 0. Setup | ✅ Completada | N/A | N/A | 0 | 0.5h |
+| 1. HideProperties | 🔄 En progreso | 0/5 | 0% | 0 | 0h |
+| 2. EventContext | ⏳ Pendiente | 0/30 | 0% | 0 | 0h |
+| 3. Firmas | ⏳ Pendiente | 0/15 | 0% | 0 | 0h |
+| 4. Type Switches | ⏳ Pendiente | 0/10 | 0% | 0 | 0h |
+| 5. Validación | ⏳ Pendiente | 0/60 | 0% | 0 | 0h |
+| 6. Docs | ⏳ Pendiente | N/A | N/A | 0 | 0h |
+| **TOTAL** | **8%** | **0/120** | **0%** | **0** | **0.5h/12h** |
 
 ### 9. Conclusión
 
