@@ -1,3 +1,328 @@
+# Plan de Desarrollo westack-go v2/v3
+
+**Última actualización**: 2025-12-16
+
+---
+
+## 🔍 ANÁLISIS: Reemplazo de *StatefulInstance por Instance (25 pasos)
+
+**Fecha**: 2025-12-16  
+**Objetivo**: Evaluar cuán cerca estamos de reemplazar el 95% de los usos de `*StatefulInstance` por invocaciones de la interfaz `Instance`
+
+### Resumen Ejecutivo
+
+**Estado Actual**: 8-10% de código cliente ya usa Instance  
+**Potencial con cambios**: 92-96% alcanzable  
+**Complejidad**: Alta (BREAKING CHANGE para v3)  
+**Tiempo estimado**: 8-12 horas  
+**Impacto**: Alto - mejora significativa de type safety y DX
+
+### 1. Interfaz Instance Actual (12 métodos)
+
+La interfaz `Instance` en `v2/model/instance.go` define:
+
+```go
+type Instance interface {
+    GetID() interface{}
+    UpdateAttributes(data interface{}, baseContext *EventContext) (Instance, error)
+    ToJSON() wst.M
+    Get(relationName string) interface{}
+    GetA(path string) *wst.A
+    GetM(path string) *wst.M
+    GetString(path string) string
+    GetInt(path string) int64
+    GetFloat64(path string) float64
+    GetBoolean(path string, defaultValue bool) bool
+    GetObjectId(path string) primitive.ObjectID
+    GetOne(relation string) Instance
+    GetMany(relation string) InstanceA
+    GetModel() Model
+}
+```
+
+**Métodos de `StatefulInstance` NO en interfaz**:
+- `HideProperties()` - Usado en 9 lugares
+- `Transform()` - Usado en 7 lugares (principalmente tests)
+- `UncheckedTransform()` - Usado rara vez
+- `Reload()` - Usado 1 vez (interno)
+
+### 2. Inventario Completo de Usos (57 totales)
+
+#### Por Archivo:
+
+| Archivo | Usos Totales | Receivers | Casteos | Reemplazables |
+|---------|-------------|-----------|---------|---------------|
+| **instance.go** | 31 | 16 | 5 | 4-5 |
+| **model.go** | 23 | 0 | 18 | 20-21 |
+| **eventcontext.go** | 1 | 0 | 0 | 1 (CLAVE) |
+| **fixedchunkgenerator.go** | 1 | 0 | 1 | 1 |
+| **chunks.go** | 1 | 0 | 0 | 0 |
+| **westack/*.go** | 0 | 0 | 0 | 0 |
+| **TOTAL** | **57** | **16** | **24** | **26-28** |
+
+#### Categorización de Usos en model.go (23):
+
+1. **Casteos en hooks** (eventContext.Result) - 8 usos
+   - Líneas: 634-640, 1063-1067
+   - **Reemplazable**: ✅ Si EventContext.Instance es Instance
+
+2. **Casteos en operaciones** (result.(*StatefulInstance)) - 4 usos
+   - Líneas: 664-665, 1090-1091
+   - **Reemplazable**: ✅ Si Build() retorna Instance
+
+3. **Conversiones de data** - 4 usos
+   - Líneas: 589-590, 1009-1010
+   - **Reemplazable**: ⚠️ Parcial (simplificar type switches)
+
+4. **Relaciones** - 2 usos
+   - Línea: 276
+   - **Reemplazable**: ✅ Si relaciones usan Instance
+
+5. **Funciones auxiliares** - 5 usos
+   - copyInstanceSlice (líneas 443-447)
+   - dispatchFindManySingleDocument (línea 1402, 1499)
+   - CreateMany (líneas 834, 844, 1056)
+   - **Reemplazable**: ✅ Con cambio de firmas
+
+### 3. El Cuello de Botella Principal
+
+**EventContext.Instance** (línea 20 de eventcontext.go):
+
+```go
+// ACTUAL (problemático)
+type EventContext struct {
+    Instance *StatefulInstance  // ← ESTO causa el 70% de los casteos
+    // ... otros campos
+}
+
+// PROPUESTO (solución)
+type EventContext struct {
+    Instance Instance  // ← Interfaz en vez de tipo concreto
+    // ... otros campos
+}
+```
+
+**Por qué es crítico**: Este campo se usa en TODOS los hooks y operaciones. Al ser `*StatefulInstance`, fuerza casteos en:
+- Asignación: `eventContext.Instance = result.(*StatefulInstance)`
+- Lectura: `inst := eventContext.Instance` (ya correcto)
+- Return de hooks: `return eventContext.Result.(*StatefulInstance)`
+
+### 4. Cambios Necesarios para Alcanzar 95%
+
+#### Cambio 1: EventContext.Instance → Instance (CLAVE)
+
+**Archivo**: `v2/model/eventcontext.go`
+
+```go
+type EventContext struct {
+-   Instance *StatefulInstance
++   Instance Instance
+}
+```
+
+**Impacto**: Elimina ~8 casteos en model.go  
+**Breaking Change**: ✅ (código que accede a `eventContext.Instance.data` directamente)  
+**Beneficio**: +30% reemplazo
+
+#### Cambio 2: Agregar HideProperties() a interfaz Instance
+
+**Archivo**: `v2/model/instance.go`
+
+```go
+type Instance interface {
+    // ... métodos existentes
++   HideProperties()
+}
+```
+
+**Impacto**: Elimina ~5 casteos (model.go:664, 834, 1090; fixedchunkgenerator.go:61; bootstrap.go:1)  
+**Breaking Change**: ❌ (solo agrega método)  
+**Beneficio**: +15% reemplazo
+
+#### Cambio 3: Firmas retornando Instance
+
+**Archivos**: `v2/model/model.go`, varios métodos
+
+```go
+// Build()
+-func (m *StatefulModel) Build(...) (*StatefulInstance, error)
++func (m *StatefulModel) Build(...) (Instance, error)
+
+// Create()
+-func (m *StatefulModel) Create(...) (Instance, error)  // Ya correcto
+
+// FindById()
+-func (m *StatefulModel) FindById(...) (Instance, error)  // Ya correcto
+
+// dispatchFindManySingleDocument()
+-func (m *StatefulModel) dispatchFindManySingleDocument(...) (*StatefulInstance, error)
++func (m *StatefulModel) dispatchFindManySingleDocument(...) (Instance, error)
+```
+
+**Impacto**: Elimina ~6 casteos  
+**Breaking Change**: ⚠️ (código que castea resultado de Build() directamente)  
+**Beneficio**: +20% reemplazo
+
+#### Cambio 4: Simplificar Type Switches
+
+**Archivo**: `v2/model/model.go`, líneas 587-592, 1006-1011
+
+```go
+// ANTES (acepta múltiples tipos)
+switch data.(type) {
+case StatefulInstance:
+    finalData = (&value).ToJSON()
+case *StatefulInstance:
+    finalData = data.(*StatefulInstance).ToJSON()
+case Instance:
+    finalData = data.(Instance).ToJSON()
+case *Instance:
+    finalData = (*data.(*Instance)).ToJSON()
+}
+
+// DESPUÉS (solo Instance)
+switch v := data.(type) {
+case Instance:
+    finalData = v.ToJSON()
+case wst.M:
+    finalData = v
+// ... otros tipos
+}
+```
+
+**Impacto**: Elimina ~4 casteos  
+**Breaking Change**: ⚠️ (código que pasa StatefulInstance en vez de Instance)  
+**Beneficio**: +15% reemplazo
+
+#### Cambio 5: Eliminar copyInstanceSlice
+
+**Archivo**: `v2/model/model.go`, líneas 443-447
+
+```go
+// ANTES
+case []*StatefulInstance:
+    return newFixedLengthCursor(copyInstanceSlice(result))
+
+// DESPUÉS (si Build retorna Instance)
+case InstanceA:
+    return newFixedLengthCursor(result)
+```
+
+**Impacto**: Elimina función + 1 casteo  
+**Breaking Change**: ❌ (interno)  
+**Beneficio**: +5% reemplazo
+
+### 5. Métricas de Reemplazo
+
+#### Estado Actual:
+```
+Código Cliente (model.go + otros):     3 de 26 = 12%
+Código HTTP Layer (westack/*.go):      0 de 0  = 0% (ya usa Instance ✅)
+Código Interno (instance.go):          Variable (no aplica)
+─────────────────────────────────────────────────
+TOTAL CÓDIGO CLIENTE:                  ~12%
+```
+
+#### Con Cambios Propuestos:
+```
+Cambio 1 (EventContext.Instance):     +30% → 42%
+Cambio 2 (HideProperties):            +15% → 57%
+Cambio 3 (Firmas Instance):           +20% → 77%
+Cambio 4 (Type Switches):             +15% → 92%
+Cambio 5 (copyInstanceSlice):         +5%  → 97%
+─────────────────────────────────────────────────
+TOTAL ALCANZABLE:                     92-97%
+```
+
+**Los 1-2 usos restantes** serían edge cases genuinos (ej: construcción interna de instancias).
+
+### 6. Consideraciones de Implementación
+
+#### Riesgos:
+
+1. **BREAKING CHANGE para v3**: Código que accede directamente a:
+   - `eventContext.Instance.data`
+   - `eventContext.Instance.Model`
+   - `instance.data`
+   
+2. **Impacto en Tests**: ~60 tests necesitan actualización
+
+3. **Código de Terceros**: Cualquier extension/plugin que use `*StatefulInstance` rompe
+
+#### Mitigación:
+
+1. **v3 Only**: Este refactor DEBE ser parte de v3, NO v2.x
+
+2. **Migration Guide**: Documentar patrones de migración:
+   ```go
+   // v2
+   inst := eventContext.Instance
+   data := inst.data
+   
+   // v3
+   inst := eventContext.Instance
+   data := inst.ToJSON()  // Usar método público
+   ```
+
+3. **Deprecation Warnings**: En v2.9, agregar deprecation warnings para accesos directos
+
+4. **Tests Comprehensivos**: Asegurar 100% cobertura antes del cambio
+
+### 7. Relación con v3 Roadmap
+
+Este análisis es consistente con **v3-roadmap-2026.md**:
+
+- ✅ **Pure Go models**: Usar interfaces en vez de casteos manuales
+- ✅ **Type Safety**: Instance interface elimina casteos unsafes
+- ✅ **Mejor DX**: API más limpia, menos *StatefulInstance expuesto
+- ✅ **Modernización**: Patrón más idiomático en Go
+
+### 8. Plan de Implementación (v3)
+
+#### Fase 1: Preparación (2 horas)
+- [ ] Crear rama `feature/instance-interface-v3`
+- [ ] Agregar HideProperties() a interfaz (NO breaking)
+- [ ] Tests para HideProperties() en interfaz
+
+#### Fase 2: EventContext (3 horas)
+- [ ] Cambiar EventContext.Instance a Instance
+- [ ] Actualizar todos los usos en model.go
+- [ ] Actualizar tests (estimado 30 tests)
+
+#### Fase 3: Firmas (2 horas)
+- [ ] Cambiar Build() para retornar Instance
+- [ ] Cambiar dispatchFindManySingleDocument()
+- [ ] Eliminar copyInstanceSlice
+- [ ] Actualizar tests (estimado 15 tests)
+
+#### Fase 4: Type Switches (1 hora)
+- [ ] Simplificar switches en Create/UpdateById
+- [ ] Actualizar tests (estimado 10 tests)
+
+#### Fase 5: Validación (2 horas)
+- [ ] Ejecutar suite completa de tests
+- [ ] Verificar coverage no disminuye
+- [ ] Performance benchmarks
+- [ ] Code review exhaustivo
+
+**Total**: 10 horas
+
+### 9. Conclusión
+
+**Respuesta a la pregunta original**: 
+
+> ¿Cómo de lejos estamos de reemplazar el 95% de los usos y casteos de *StatefulInstance por invocaciones de los métodos de la interfaz Instance?
+
+**Respuesta**: Con 5 cambios estratégicos (principalmente EventContext.Instance y HideProperties en interfaz), podemos alcanzar **92-97% de reemplazo** en código cliente. Esto requiere ~10 horas de trabajo y DEBE ser parte de v3 por ser BREAKING CHANGE.
+
+**Estado actual**: ~12% ya usa Instance  
+**Objetivo alcanzable**: 92-97%  
+**Gap**: 80-85% cerrable con los cambios propuestos  
+**Complejidad**: Alta pero bien definida  
+**ROI**: Alto - mejora significativa de type safety y DX
+
+---
+
 # Plan de Implementación CreateMany() - Estado Actual
 
 **Fecha**: 2025-12-13  
