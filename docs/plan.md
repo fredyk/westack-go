@@ -584,6 +584,16 @@ westack-go/
 
 ### Estimación Total: 8-12 horas
 
+### ⏱️ Tiempo Real Gastado: ~2.5 horas
+- Paso 1 (Análisis): 15 min ✅
+- Paso 2 (Copia): 20 min ✅  
+- Paso 3 (Imports): 15 min ✅
+- Paso 4 (Adaptaciones): 45 min ✅
+- Paso 5 (Compilación westack): 45 min ✅
+- Paso 6 (Tests): 20 min ⚠️ BLOQUEADO
+
+**Restante**: ~6 horas (con client v3 migration)
+
 ### Progreso en Tiempo Real
 
 **Paso 1**: ✅ Análisis completado (11 archivos .go en westack)
@@ -613,6 +623,50 @@ westack-go/
 
 #### Acción Inmediata:
 Verificar y copiar componentes faltantes de v2/model
+
+**Paso 5**: ✅ COMPLETADO - westack compila sin errores
+- Copiados: controllerregistry.go, mfahandler.go, modelremotemethod.go, modelremoteoperation.go
+- Fixes aplicados:
+  - Instance.Id → Instance.GetID() (2 lugares)
+  - Model.Config → Model.GetConfig() (automático)
+- `go build ./westack/` ✅ ÉXITO
+
+**Paso 6**: ⚠️ TESTS BLOQUEADOS - Incompatibilidad de cliente
+
+#### Errores de Tests (run_tests.sh):
+
+1. **client/v2 incompatible con v3/common**
+   - `wstfuncs.InvokeApiJsonM` usa `v2/common.M`
+   - Tests usan `v3/common.M`
+   - ❌ Type mismatch en 10+ archivos
+
+2. **model.New() signature diferente**
+   - Espera: `*map[string]*StatefulModel`
+   - Recibe: `*map[string]Model`
+   - Error en test_helpers.go:57
+
+3. **MongoDB port conflict**
+   - Puerto 27017 ya ocupado
+   - Tests requieren MongoDB limpio
+
+#### Opciones para Continuar:
+
+**OPCIÓN A** (Rápida): Migrar client v2→v3
+- Crear `client/v3` compatible con `v3/common`
+- Actualizar wstfuncs para usar v3 types
+- **Tiempo**: 1-2 horas
+
+**OPCIÓN B** (Pragmática): Tests unitarios sin HTTP
+- Comentar tests HTTP temporalmente
+- Enfoque en tests de model/datasource
+- Mock de dependencies
+- **Tiempo**: 2-3 horas
+
+**OPCIÓN C** (Completa): Esperar a client v3
+- Posponer tests HTTP
+- Solo tests unitarios ahora
+- Client v3 como task separada
+- **Tiempo**: 3-4 horas para tests unitarios
 
 #### Fase 5: Validación y Benchmarks (2 horas)
 - [ ] Ejecutar suite completa de tests v3
