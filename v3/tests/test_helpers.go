@@ -6,7 +6,7 @@ import (
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
-// Global test variables
+// Global test variables - usando interfaces Model en v3
 var (
 	noteModel     model.Model
 	accountModel  model.Model
@@ -40,6 +40,7 @@ func init() {
 }
 
 // CreateMockModel creates a minimal mock model for testing
+// Retorna Model interfaz (v3 style)
 func CreateMockModel(name string) model.Model {
 	config := &model.Config{
 		Name: name,

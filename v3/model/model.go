@@ -34,11 +34,17 @@ type Model interface {
 	FindMany(filterMap *wst.Filter, currentContext *EventContext) Cursor
 	FindById(id interface{}, filterMap *wst.Filter, baseContext *EventContext) (Instance, error)
 	Create(data interface{}, currentContext *EventContext) (Instance, error)
+	CreateMany(data interface{}, currentContext *EventContext) ([]Instance, error)
 	Count(filterMap *wst.Filter, currentContext *EventContext) (wst.CountResult, error)
 	DeleteById(id interface{}, currentContext *EventContext) (wst.DeleteResult, error)
+	DeleteMany(where *wst.Where, currentContext *EventContext) (wst.DeleteResult, error)
 	UpdateById(id interface{}, data interface{}, currentContext *EventContext) (Instance, error)
 	Build(data wst.M, currentContext *EventContext) (Instance, error)
+	On(event string, handler func(eventContext *EventContext) error)
+	Observe(operation string, handler func(eventContext *EventContext) error)
 	QueueOperation(operation string, eventContext *EventContext, fn func(nextCtx *EventContext) error)
+	EnforceEx(token *BearerToken, objId string, action string, eventContext *EventContext) (error, bool)
+	ExtractLookupsFromFilter(filterMap *wst.Filter, disableTypeConversions bool) (*wst.A, error)
 	GetConfig() *Config
 	GetAppOwnerForeignKey() string
 	GetName() string

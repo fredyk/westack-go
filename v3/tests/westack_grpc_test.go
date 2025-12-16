@@ -814,7 +814,7 @@ func revertAllTests() error {
 			"$ne": nil,
 		},
 	}
-	for _, modelToPurge := range []*model.StatefulModel{
+	for _, modelToPurge := range []model.Model{
 		noteModel,
 		accountModel,
 		customerModel,
@@ -829,13 +829,13 @@ func revertAllTests() error {
 		if err != nil {
 			return err
 		}
-		fmt.Printf("Deleted %d instances from model %s\n", deleteManyResult.DeletedCount, modelToPurge.Name)
+		fmt.Printf("Deleted %d instances from model %s\n", deleteManyResult.DeletedCount, modelToPurge.GetName())
 		// Drop db
-		ds := modelToPurge.Datasource
-		if ds.SubViper.GetString("connector") == "mongodb" {
+		ds := modelToPurge.GetDatasource()
+		if ds.GetSubViper().GetString("connector") == "mongodb" {
 			// drop database
-			mongoDatabase := ds.SubViper.GetString("database")
-			err = ds.Db.(*mongo.Client).Database(mongoDatabase).Drop(context.Background())
+			mongoDatabase := ds.GetSubViper().GetString("database")
+			err = ds.GetDb().(*mongo.Client).Database(mongoDatabase).Drop(context.Background())
 			if err != nil {
 				return err
 			} else {

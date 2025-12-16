@@ -87,13 +87,13 @@ func (chunkGenerator *InstanceAChunkGenerator) SetDebug(debug bool) {
 	chunkGenerator.Debug = debug
 }
 
-func NewInstanceAChunkGenerator(loadedModel *StatefulModel, input InstanceA, contentType string) ChunkGenerator {
+func NewInstanceAChunkGenerator(loadedModel Model, input InstanceA, contentType string) ChunkGenerator {
 	result := InstanceAChunkGenerator{
 		contentType:       contentType,
 		currentChunkIndex: 0,
 		totalChunks:       len(input) + 2,
 		input:             input,
-		Debug:             loadedModel.App.Debug,
+		Debug:             false, // Se puede setear después con SetDebug
 	}
 	return &result
 }

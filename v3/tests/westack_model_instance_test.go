@@ -139,9 +139,9 @@ func Test_Instance_Transform_Error(t *testing.T) {
 			Date chan string `bson:"date"`
 		}
 	}
-	noteModel.App.Debug = false
+	noteModel.SetDebug(false)
 	err = instance.(*model.StatefulInstance).Transform(&out)
-	noteModel.App.Debug = true
+	noteModel.SetDebug(true)
 	assert.Error(t, err)
 }
 

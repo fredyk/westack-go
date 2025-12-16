@@ -136,10 +136,11 @@ func (chunkGenerator *cursorChunkGenerator) SetDebug(debug bool) {
 	chunkGenerator.Debug = debug
 }
 
-func NewCursorChunkGenerator(loadedModel *StatefulModel, cursor Cursor) ChunkGenerator {
+func NewCursorChunkGenerator(loadedModel Model, cursor Cursor) ChunkGenerator {
+	// Acepta Model interfaz en lugar de *StatefulModel
 	result := cursorChunkGenerator{
 		cursor:  cursor,
-		Debug:   loadedModel.App.Debug,
+		Debug:   false, // Se puede setear después con SetDebug
 		isFirst: true,
 	}
 	return &result
