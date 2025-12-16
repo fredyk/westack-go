@@ -24,7 +24,7 @@ func Test_ToJSON_NilInstance(t *testing.T) {
 
 	t.Parallel()
 
-	m := model.New(&model.Config{}, &map[string]*model.StatefulModel{}).(*model.StatefulModel)
+	m := model.New(&model.Config{}, &map[string]*model.StatefulModel{})
 	instance := m.NilInstance
 	json := instance.ToJSON()
 	assert.Equal(t, wst.NilMap, json)

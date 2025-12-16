@@ -103,7 +103,7 @@ type Model interface {
 models := &map[string]*model.StatefulModel{}
 
 // westack_grpc_test.go - casteo quirúrgico
-sm := modelToPurge.(*model.StatefulModel)
+sm := modelToPurge
 ds := sm.Datasource
 ```
 

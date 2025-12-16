@@ -94,7 +94,7 @@ client/v2 → client/v3
 3. **Type assertions faltantes** (4 errores)
    ```go
    // westack_chunks_test.go
-   model.NewCursorChunkGenerator(noteModel.(*model.StatefulModel), ...)
+   model.NewCursorChunkGenerator(noteModel, ...)
    ```
 
 ## 🎯 Próximos Pasos (30-45 minutos)
@@ -116,7 +116,7 @@ type Model interface {
 
 ### 3. Fix type assertions en tests (15 min)
 - westack_chunks_test.go: 4 lugares
-- Agregar `.(*model.StatefulModel)` donde sea necesario
+- Agregar `` donde sea necesario
 
 ### 4. Ejecutar tests (10 min)
 ```bash

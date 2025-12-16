@@ -111,7 +111,8 @@ func (loadedModel *StatefulModel) ExtractLookupsFromFilter(filterMap *wst.Filter
 								} else {
 									// ensure that the relation is in the same datasource
 
-									relatedModel, _ := loadedModel.App.FindModel(relation.Model)
+									relatedModelI, _ := loadedModel.App.FindModel(relation.Model)
+									relatedModel := relatedModelI
 
 									if relatedModel.Datasource.Name != loadedModel.Datasource.Name {
 										return nil, wst.CreateError(fiber.ErrBadRequest,

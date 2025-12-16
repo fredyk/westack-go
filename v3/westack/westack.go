@@ -84,7 +84,7 @@ func (app *WeStack) FindDatasource(dsName string) (*datasource.Datasource, error
 
 func (app *WeStack) FindModelsWithClass(modelClass string) (foundModels []*model.StatefulModel) {
 	for _, foundModel := range *app.modelRegistry {
-		if foundModel.Config.Base == modelClass {
+		if foundModel.GetConfig().Base == modelClass {
 			foundModels = append(foundModels, foundModel)
 		}
 	}

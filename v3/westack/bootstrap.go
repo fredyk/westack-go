@@ -100,7 +100,7 @@ func (app *WeStack) loadModels() error {
 	swaggerhelper.RegisterGenericComponent[wst.DeleteResult](app.swaggerHelper)
 	swaggerhelper.RegisterGenericComponent[wst.LoginResult](app.swaggerHelper)
 
-	var someAccountModel *model.StatefulModel
+	var someAccountModel model.Model
 
 	for basePath, fileInfos := range fileInfos {
 		for _, fileInfo := range fileInfos {
@@ -136,12 +136,12 @@ func (app *WeStack) loadModels() error {
 			}
 
 			loadedModel := model.New(config, app.modelRegistry)
-			err = app.setupModel(loadedModel.(*model.StatefulModel), dataSource)
+			err = app.setupModel(loadedModel, dataSource)
 			if err != nil {
 				return err
 			}
-			if loadedModel.(*model.StatefulModel).Config.Base == "Account" {
-				someAccountModel = loadedModel.(*model.StatefulModel)
+			if loadedModel.GetConfig().Base == "Account" {
+				someAccountModel = loadedModel
 			}
 		}
 	}
@@ -181,25 +181,25 @@ type UniqueNessRestriction struct {
 func buildRelationsGraph(app *WeStack) {
 	for _, thisModel := range *app.modelRegistry {
 		for _, otherModel := range *app.modelRegistry {
-			for _, relation := range *otherModel.Config.Relations {
-				if relation.Model == thisModel.Name {
+			for _, relation := range *otherModel.GetConfig().Relations {
+				if relation.Model == thisModel.GetName() {
 					if relation.Type == "hasOne" {
 						// Possible inverse relation bulding:
-						//if thisModel.Config.Relations == nil {
-						//	thisModel.Config.Relations = &map[string]*model.Relation{}
+						//if thisModel.GetConfig().Relations == nil {
+						//	thistModel.GetConfig().Relations = &map[string]*model.Relation{}
 						//}
-						//(*thisModel.Config.Relations)[relationName] = &model.Relation{
+						//(*thisModel.GetConfig().Relations)[relationName] = &model.Relation{
 						//	Type:  "belongsTo",
-						//	Model: otherModel.Name,
+						//	Model: otherModel.GetName(),
 						//}
 
 						// Restrict hasOne relations to be only one-to-one
-						if _, ok := app.restrictModelUniquenessByField[thisModel.Name]; !ok {
-							app.restrictModelUniquenessByField[thisModel.Name] = make(map[string]UniqueNessRestriction)
+						if _, ok := app.restrictModelUniquenessByField[thisModel.GetName()]; !ok {
+							app.restrictModelUniquenessByField[thisModel.GetName()] = make(map[string]UniqueNessRestriction)
 						}
-						app.restrictModelUniquenessByField[thisModel.Name][*relation.ForeignKey] = UniqueNessRestriction{
+						app.restrictModelUniquenessByField[thisModel.GetName()][*relation.ForeignKey] = UniqueNessRestriction{
 							Code:      "UNIQUENESS",
-							Message:   fmt.Sprintf("The `%v` instance is not valid. Details: %v already exists.", thisModel.Name, *relation.ForeignKey),
+							Message:   fmt.Sprintf("The `%v` instance is not valid. Details: %v already exists.", thisModel.GetName(), *relation.ForeignKey),
 							ErrorName: "ValidationError",
 						}
 					}
@@ -321,12 +321,12 @@ func replaceEnvVars(dsViper *viper.Viper) {
 	}
 }
 
-func (app *WeStack) setupModel(loadedModel *model.StatefulModel, dataSource *datasource.Datasource) error {
+func (app *WeStack) setupModel(loadedModel model.Model, dataSource *datasource.Datasource) error {
 
 	loadedModel.App = app.asInterface()
 	loadedModel.Datasource = dataSource
 
-	config := loadedModel.Config
+	config := loadedModel.GetConfig()
 
 	loadedModel.Initialize()
 
@@ -353,7 +353,7 @@ func (app *WeStack) setupModel(loadedModel *model.StatefulModel, dataSource *dat
 		return err
 	}
 
-	if loadedModel.Config.Public {
+	if loadedModel.GetConfig().Public {
 
 		modelRouter := app.Server.Group(app.restApiRoot+"/"+plural, func(ctx *fiber.Ctx) error {
 			return ctx.Next()
@@ -371,7 +371,7 @@ func (app *WeStack) setupModel(loadedModel *model.StatefulModel, dataSource *dat
 	return nil
 }
 
-func registerPersistedModelFixedHooks(loadedModel *model.StatefulModel, app *WeStack, config *model.Config) {
+func registerPersistedModelFixedHooks(loadedModel model.Model, app *WeStack, config *model.Config) {
 	loadedModel.On(string(wst.OperationNameFindMany), func(ctx *model.EventContext) error {
 		return handleFindMany(app, loadedModel, ctx)
 	})
@@ -761,7 +761,7 @@ func registerPersistedModelFixedHooks(loadedModel *model.StatefulModel, app *WeS
 		return nil
 	})
 
-	protectedFieldsCount := len(loadedModel.Config.Protected)
+	protectedFieldsCount := len(loadedModel.GetConfig().Protected)
 	loadedModel.Observe("before build", func(eventContext *model.EventContext) error {
 
 		baseContext := eventContext.BaseContext
@@ -791,7 +791,7 @@ func registerPersistedModelFixedHooks(loadedModel *model.StatefulModel, app *WeS
 			isDifferentAccount = foundAccountId != requesterAccountId.(string)
 		}
 		if isDifferentAccount && !isAllowedForProtectedFields(baseContext.Bearer) {
-			for _, hiddenProperty := range loadedModel.Config.Protected {
+			for _, hiddenProperty := range loadedModel.GetConfig().Protected {
 				delete(*eventContext.Data, hiddenProperty)
 			}
 		}
@@ -829,7 +829,7 @@ func registerPersistedModelFixedHooks(loadedModel *model.StatefulModel, app *WeS
 	}
 }
 
-func handleFindMany(app *WeStack, loadedModel *model.StatefulModel, ctx *model.EventContext) error {
+func handleFindMany(app *WeStack, loadedModel model.Model, ctx *model.EventContext) error {
 	if loadedModel.App.Debug {
 		fmt.Println("[DEBUG] handleFindMany")
 	}
@@ -880,7 +880,7 @@ func handleFindMany(app *WeStack, loadedModel *model.StatefulModel, ctx *model.E
 //
 //		 return createCursorChunkGenerator(cursor)
 //	}
-func traceChunkGenerator(app *WeStack, loadedModel *model.StatefulModel, ctx *model.EventContext, cursor model.Cursor) (model.ChunkGenerator, error) {
+func traceChunkGenerator(app *WeStack, loadedModel model.Model, ctx *model.EventContext, cursor model.Cursor) (model.ChunkGenerator, error) {
 	internalDs, err := app.FindDatasource("<internal>")
 	if err != nil {
 		return nil, err
@@ -992,18 +992,18 @@ func (app *WeStack) asInterface() *wst.IApp {
 	}
 }
 
-func fixModelRelations(loadedModel *model.StatefulModel) error {
-	for relationName, relation := range *loadedModel.Config.Relations {
+func fixModelRelations(loadedModel model.Model) error {
+	for relationName, relation := range *loadedModel.GetConfig().Relations {
 
 		if relation.Type == "" {
-			return fmt.Errorf("relation %v.%v has no type", loadedModel.Name, relationName)
+			return fmt.Errorf("relation %v.%v has no type", loadedModel.GetConfig().Name, relationName)
 		}
 
 		relatedModelName := relation.Model
 		relatedLoadedModel := (*loadedModel.GetModelRegistry())[relatedModelName]
 
 		if relatedLoadedModel == nil {
-			return fmt.Errorf("related model %v not found for relation %v.%v", relatedModelName, loadedModel.Name, relationName)
+			return fmt.Errorf("related model %v not found for relation %v.%v", relatedModelName, loadedModel.GetConfig().Name, relationName)
 		}
 
 		if relation.PrimaryKey == nil {
@@ -1016,11 +1016,11 @@ func fixModelRelations(loadedModel *model.StatefulModel) error {
 			case "belongsTo":
 				foreignKey := strings.ToLower(relatedModelName[:1]) + relatedModelName[1:] + "Id"
 				relation.ForeignKey = &foreignKey
-				//(*loadedModel.Config.Relations)[relationName] = relation
+				//(*loadedModel.GetConfig().Relations)[relationName] = relation
 			case "hasOne", "hasMany":
-				foreignKey := strings.ToLower(loadedModel.Name[:1]) + loadedModel.Name[1:] + "Id"
+				foreignKey := strings.ToLower(loadedModel.GetConfig().Name[:1]) + loadedModel.GetConfig().Name[1:] + "Id"
 				relation.ForeignKey = &foreignKey
-				//(*loadedModel.Config.Relations)[relationName] = relation
+				//(*loadedModel.GetConfig().Relations)[relationName] = relation
 			}
 		}
 	}

@@ -22,9 +22,9 @@ import (
 func (app *WeStack) loadNotFoundRoutes() {
 	for _, entry := range *app.modelRegistry {
 		loadedModel := entry
-		if !loadedModel.Config.Public {
+		if !loadedModel.GetConfig().Public {
 			if app.debug {
-				log.Println("[WARNING] Model", loadedModel.Name, "is not public")
+				log.Println("[WARNING] Model", loadedModel.GetConfig().Name, "is not public")
 			}
 			continue
 		}
@@ -550,20 +550,20 @@ func addDefaultCasbinRoles(app *WeStack, e *casbin.Enforcer) (err error) {
 func (app *WeStack) loadModelsDynamicRoutes() {
 	for _, entry := range *app.modelRegistry {
 		loadedModel := entry
-		if !loadedModel.Config.Public {
+		if !loadedModel.GetConfig().Public {
 			if app.debug {
-				log.Println("[WARNING] Model", loadedModel.Name, "is not public")
+				log.Println("[WARNING] Model", loadedModel.GetName(), "is not public")
 			}
 			continue
 		}
 
-		if wst.IsPersisedModel(loadedModel.Config.Base) {
+		if wst.IsPersisedModel(loadedModel.GetConfig().Base) {
 			registerPersistedModelDynamicHooks(app, loadedModel)
 		}
 	}
 }
 
-func registerPersistedModelDynamicHooks(app *WeStack, loadedModel *model.StatefulModel) {
+func registerPersistedModelDynamicHooks(app *WeStack, loadedModel model.Model) {
 	// Mount relation count routes for hasMany relations (dynamic routes with :id)
 	mountRelatedRoutes(app, loadedModel)
 
@@ -828,7 +828,7 @@ func obtainSortedRelationKeys(loadedModel *model.StatefulModel, modelConfigsByNa
 		if relatedModelConfig == nil {
 			// Ignore error because we already checked for it at boot time
 			relatedModelI, _ := loadedModel.App.FindModel(r.Model)
-			relatedModel := relatedModelI.(*model.StatefulModel)
+			relatedModel := relatedModelI
 			relatedModelConfig = relatedModel.Config
 			modelConfigsByName[r.Model] = relatedModelConfig
 		}
@@ -897,7 +897,7 @@ func mountRelatedRoutes(app *WeStack, loadedModel *model.StatefulModel) {
 			if err != nil {
 				return err
 			}
-			relatedModel := relatedModelI.(*model.StatefulModel)
+			relatedModel := relatedModelI
 
 			// Build filter based on relation type
 			filter := eventContext.Filter
@@ -1005,7 +1005,7 @@ func mountRelatedRoutes(app *WeStack, loadedModel *model.StatefulModel) {
 				if err != nil {
 					return err
 				}
-				relatedModel := relatedModelI.(*model.StatefulModel)
+				relatedModel := relatedModelI
 
 				// Build filter with parent ID constraint
 				filter := eventContext.Filter
@@ -1078,7 +1078,7 @@ func mountRelatedRoutes(app *WeStack, loadedModel *model.StatefulModel) {
 				if err != nil {
 					return err
 				}
-				relatedModel := relatedModelI.(*model.StatefulModel)
+				relatedModel := relatedModelI
 
 				// Build filter to find specific related item
 				// Only for hasMany relations - filter by foreign key = parent id AND _id = fk
@@ -1189,12 +1189,12 @@ func findOwnerRecursiveInRelation(loadedModel *model.StatefulModel, modelConfigs
 			if loadedModel.App.Debug {
 				loadedModel.App.Logger().Printf("[DEBUG] Recursive owner check for %v\n", relatedModel.GetName())
 			}
-			sortedRelationKeys := obtainSortedRelationKeys(relatedModel.(*model.StatefulModel), modelConfigsByName)
+			sortedRelationKeys := obtainSortedRelationKeys(relatedModel, modelConfigsByName)
 			for _, key := range sortedRelationKeys {
 				if loadedModel.App.Debug {
 					loadedModel.App.Logger().Printf("[DEBUG] Recursive owner check for %v[%v]-->%v[%v]\n", loadedModel.Name, objId, relatedModel.GetName(), relatedInstance.GetID())
 				}
-				err = findOwnerRecursiveInRelation(relatedModel.(*model.StatefulModel), modelConfigsByName, key, relatedInstance.GetID(), roleKey, ownersForRole)
+				err = findOwnerRecursiveInRelation(relatedModel, modelConfigsByName, key, relatedInstance.GetID(), roleKey, ownersForRole)
 				if err != nil {
 					return err
 				}

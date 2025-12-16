@@ -431,10 +431,10 @@ func setupInternalModels(config *model.Config, app *WeStack, dataSource *datasou
 			},
 		},
 	}, app.modelRegistry)
-	roleMappingModel.(*model.StatefulModel).App = app.asInterface()
-	roleMappingModel.(*model.StatefulModel).Datasource = dataSource
+	roleMappingModel.App = app.asInterface()
+	roleMappingModel.Datasource = dataSource
 
-	app.roleMappingModel = roleMappingModel.(*model.StatefulModel)
+	app.roleMappingModel = roleMappingModel
 
 	foreignKey := "accountId"
 	accountCredentialsModel := model.New(&model.Config{
@@ -525,9 +525,9 @@ func setupInternalModels(config *model.Config, app *WeStack, dataSource *datasou
 			},
 		},
 	}, app.modelRegistry)
-	accountCredentialsModel.(*model.StatefulModel).App = app.asInterface()
+	accountCredentialsModel.App = app.asInterface()
 
-	app.accountCredentialsModel = accountCredentialsModel.(*model.StatefulModel)
+	app.accountCredentialsModel = accountCredentialsModel
 
 	// Mfa model
 	mfaModel := model.New(&model.Config{
@@ -566,9 +566,9 @@ func setupInternalModels(config *model.Config, app *WeStack, dataSource *datasou
 			},
 		},
 	}, app.modelRegistry)
-	mfaModel.(*model.StatefulModel).App = app.asInterface()
+	mfaModel.App = app.asInterface()
 
-	app.mfaModel = mfaModel.(*model.StatefulModel)
+	app.mfaModel = mfaModel
 
 }
 
