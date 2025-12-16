@@ -4,12 +4,12 @@ go 1.23.0
 
 toolchain go1.24.2
 
-// replace github.com/fredyk/westack-go/client/v2 => ../client/v2
+replace github.com/fredyk/westack-go/client/v3 => ../client/v3
 
 require (
 	github.com/andybalholm/brotli v1.1.0
 	github.com/casbin/casbin/v2 v2.102.0
-	github.com/fredyk/westack-go/client/v2 v2.0.0-20250219144426-d65fddf3b0f6
+	github.com/fredyk/westack-go/client/v3 v3.0.0-00010101000000-000000000000
 	github.com/goccy/go-json v0.10.4
 	github.com/gofiber/fiber/v2 v2.52.6
 	github.com/golang-jwt/jwt v3.2.2+incompatible
@@ -36,7 +36,6 @@ require (
 	github.com/casbin/govaluate v1.2.0 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
-	github.com/fredyk/westack-go/v2 v2.0.0-alpha-rc27 // indirect
 	github.com/fsnotify/fsnotify v1.7.0 // indirect
 	github.com/go-ini/ini v1.67.0 // indirect
 	github.com/golang/snappy v0.0.4 // indirect

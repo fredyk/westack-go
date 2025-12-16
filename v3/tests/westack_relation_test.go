@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/fredyk/westack-go/client/v2/wstfuncs"
+	"github.com/fredyk/westack-go/client/v3/wstfuncs"
 	"github.com/fredyk/westack-go/v3/model"
 	"github.com/mailru/easyjson"
 	"go.mongodb.org/mongo-driver/bson"

@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"github.com/fredyk/westack-go/client/v2/wstfuncs"
+	"github.com/fredyk/westack-go/client/v3/wstfuncs"
 	wst "github.com/fredyk/westack-go/v3/common"
 	"github.com/fredyk/westack-go/v3/lib/uploads"
 	"github.com/stretchr/testify/assert"

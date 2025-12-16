@@ -1448,7 +1448,7 @@ Agregar referencia a CreateMany en la sección de operaciones.
    - Request body schema array
 
 5. **Correr tests existentes** (5 min)
-   - `cd v2 && ./run_tests.sh`
+   - `cd v2 && timeout 180 ./run_tests.sh`
    - Verificar que NO rompimos nada
 
 6. **Crear tests básicos** (1 hora)

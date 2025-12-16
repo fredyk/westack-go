@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/fredyk/westack-go/client/v2/wstfuncs"
+	"github.com/fredyk/westack-go/client/v3/wstfuncs"
 	"github.com/fredyk/westack-go/v3/westack"
 	"github.com/golang-jwt/jwt"
 

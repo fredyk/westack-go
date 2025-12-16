@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/fredyk/westack-go/client/v2/wstfuncs"
+	"github.com/fredyk/westack-go/client/v3/wstfuncs"
 
 	"github.com/mailru/easyjson"
 

@@ -25,3 +25,4 @@ westack/tests/server/datasources.TESTING_PUBLIC.json
 v2/test_output.log
 v3/test_output.txt
 v3/coverage.out
+v2/test_results_v2.txt

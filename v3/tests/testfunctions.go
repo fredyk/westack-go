@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/fredyk/westack-go/client/v2/wstfuncs"
+	"github.com/fredyk/westack-go/client/v3/wstfuncs"
 	wst "github.com/fredyk/westack-go/v3/common"
 	"github.com/fredyk/westack-go/v3/model"
 	"github.com/fredyk/westack-go/v3/westack"
