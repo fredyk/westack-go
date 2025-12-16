@@ -52,6 +52,7 @@ type Model interface {
 	GetConfig() *Config
 	GetAppOwnerForeignKey() string
 	GetName() string
+	GetCollectionName() string
 }
 
 type Property struct {
@@ -196,6 +197,10 @@ func (loadedModel *StatefulModel) GetAppOwnerForeignKey() string {
 
 func (loadedModel *StatefulModel) GetName() string {
 	return loadedModel.Name
+}
+
+func (loadedModel *StatefulModel) GetCollectionName() string {
+	return loadedModel.CollectionName
 }
 
 func (loadedModel *StatefulModel) GetModelRegistry() *map[string]Model {
