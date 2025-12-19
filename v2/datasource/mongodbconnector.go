@@ -90,7 +90,9 @@ func (connector *MongoDBConnector) Connect(parentContext context.Context) error 
 
 	db, err := mongo.Connect(mongoCtx, clientOpts)
 	if err != nil {
-		cancelFn()
+		if cancelFn != nil {
+			cancelFn()
+		}
 		return err
 	}
 	connector.db = db
