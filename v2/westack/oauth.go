@@ -707,10 +707,21 @@ func mountOauthRoutes(app *WeStack, loadedModel *model.StatefulModel, systemCont
 				}
 
 				// update the account with credentials flag
+				fmt.Println("[DEBUG] Updating account with credentials flag")
 				if account != nil {
-					_, err = account.UpdateAttributes(wst.M{
+					plainAcount := wst.M{
 						"has" + firstCharUppercase(providerName) + "Credentials": true,
-					}, systemContext)
+					}
+
+					for key, value := range additionalUserInfo {
+						currenntValue := account.ToJSON()[key]
+						if currenntValue == nil || (isNotEmpty(value) && currenntValue != value) {
+							fmt.Printf("Overriding %v with %v\n", key, value)
+							plainAcount[key] = value
+						}
+					}
+
+					_, err = account.UpdateAttributes(plainAcount, systemContext)
 					if err != nil {
 						fmt.Printf("[ERROR] Could not set user credentials flag: %v\n", err)
 					}
@@ -820,4 +831,8 @@ func firstCharUppercase(s string) string {
 		return ""
 	}
 	return strings.ToUpper(s[:1]) + s[1:]
+}
+
+func isNotEmpty(value interface{}) bool {
+	return value != nil && value != "" && value != 0.0
 }
