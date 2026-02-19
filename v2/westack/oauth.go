@@ -571,26 +571,31 @@ func mountOauthRoutes(app *WeStack, loadedModel *model.StatefulModel, systemCont
 
 					convertedAccount = account.(*model.StatefulInstance)
 					accountId = convertedAccount.GetString("id")
+					needNewAccount = false
+					fmt.Printf("[DEBUG] Found account %v\n", accountId)
+
 				}
 			}
 
 			if needNewAccount {
-				// search by password
+				// search by email
 				userCredentials, err = app.accountCredentialsModel.FindOne(&wst.Filter{
 					Where: &wst.Where{
 						"$and": []wst.M{
 							{
 								"$or": []wst.M{
 									{"email": login},
-									{"username": login},
+									// Tiene que coincidir email
+									// {"username": login},
 								},
 							},
-							{
-								"$or": []wst.M{
-									{"provider": ProviderPassword},
-									{"password": wst.M{"$exists": true}},
-								},
-							},
+							// Ya no nos importa el provider
+							// {
+							// 	"$or": []wst.M{
+							// 		{"provider": ProviderPassword},
+							// 		{"password": wst.M{"$exists": true}},
+							// 	},
+							// },
 						},
 					},
 					Include: &wst.Include{
@@ -629,6 +634,9 @@ func mountOauthRoutes(app *WeStack, loadedModel *model.StatefulModel, systemCont
 
 						convertedAccount = account.(*model.StatefulInstance)
 						accountId = convertedAccount.GetString("id")
+						needNewAccount = false
+						fmt.Printf("[DEBUG] Found account %v\n", accountId)
+
 					}
 
 				}
