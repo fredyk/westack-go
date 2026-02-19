@@ -44,7 +44,7 @@ import (
 )
 
 var defaultScopes = map[string][]string{
-	"google":     {"https://www.googleapis.com/auth/userinfo.email"},
+	"google":     {"https://www.googleapis.com/auth/userinfo.email", "https://www.googleapis.com/auth/userinfo.profile"},
 	"amazon":     {"profile"},
 	"bitbucket":  {},
 	"cern":       {},
@@ -84,7 +84,7 @@ var userInfoUrls = map[string]string{
 	"facebook":      "https://graph.facebook.com/me?fields=email",
 	"fitbit":        "https://api.fitbit.com/1/user/-/profile.json",
 	"foursquare":    "https://api.foursquare.com/v2/users/self",
-	"github":        "https://api.github.com/user/emails",
+	"github":        "https://api.github.com/user",
 	"gitlab":        "https://gitlab.com/api/v4/user",
 	"heroku":        "https://api.heroku.com/account",
 	"hipchat":       "https://api.hipchat.com/v2/oauth/token",
@@ -413,28 +413,65 @@ func mountOauthRoutes(app *WeStack, loadedModel *model.StatefulModel, systemCont
 			if err != nil {
 				return verboseRedirect(eventContext, failureUrl, fmt.Errorf("failed to get user info: %w", err))
 			}
-
 			defer userInfo.Body.Close()
 
-			var infoDataA wst.A
 			var userInfoData wst.M
-			// github returns an array
+			// github returns a single user object (not array anymore)
+			err = json.NewDecoder(userInfo.Body).Decode(&userInfoData)
+			if err != nil {
+				return verboseRedirect(eventContext, failureUrl, fmt.Errorf("failed to decode user info: %w", err))
+			}
+
+			// For GitHub, make second call to get private emails
 			if providerName == "github" {
-				err = json.NewDecoder(userInfo.Body).Decode(&infoDataA)
+				fmt.Printf("[DEBUG] Making second call to GitHub /user/emails endpoint\n")
+				emailsResponse, err := oauthConfig.Client(eventContext.Ctx.Context(), token).Get("https://api.github.com/user/emails")
 				if err != nil {
-					return verboseRedirect(eventContext, failureUrl, fmt.Errorf("failed to decode user info: %w", err))
-				}
-				if len(infoDataA) == 0 {
-					return verboseRedirect(eventContext, failureUrl, fmt.Errorf("empty user info"))
-				}
-				userInfoData = infoDataA[0]
-				if userInfoData == nil {
-					return verboseRedirect(eventContext, failureUrl, fmt.Errorf("empty user info"))
-				}
-			} else {
-				err = json.NewDecoder(userInfo.Body).Decode(&userInfoData)
-				if err != nil {
-					return verboseRedirect(eventContext, failureUrl, fmt.Errorf("failed to decode user info: %w", err))
+					fmt.Printf("[WARNING] Failed to get GitHub emails: %v\n", err)
+				} else {
+					defer emailsResponse.Body.Close()
+					var emailsData []wst.M
+					if err := json.NewDecoder(emailsResponse.Body).Decode(&emailsData); err != nil {
+						fmt.Printf("[WARNING] Failed to decode GitHub emails: %v\n", err)
+					} else {
+						fmt.Printf("[DEBUG] GitHub emails response: %v\n", emailsData)
+
+						// Find primary email, fallback to verified, fallback to first
+						var selectedEmail string
+						for _, emailInfo := range emailsData {
+							if email, ok := emailInfo["email"].(string); ok {
+								// Check if this is primary email
+								if primary, ok := emailInfo["primary"].(bool); ok && primary {
+									selectedEmail = email
+									fmt.Printf("[DEBUG] Found primary email: %v\n", email)
+									break
+								}
+								// If no primary found yet, use verified as fallback
+								if selectedEmail == "" {
+									if verified, ok := emailInfo["verified"].(bool); ok && verified {
+										selectedEmail = email
+										fmt.Printf("[DEBUG] Using verified email as fallback: %v\n", email)
+									}
+								}
+							}
+						}
+
+						// Final fallback: use first email if no primary or verified found
+						if selectedEmail == "" && len(emailsData) > 0 {
+							if firstEmail, ok := emailsData[0]["email"].(string); ok {
+								selectedEmail = firstEmail
+								fmt.Printf("[DEBUG] Using first email as final fallback: %v\n", firstEmail)
+							}
+						}
+
+						// Add email to userInfoData
+						if selectedEmail != "" {
+							userInfoData["email"] = selectedEmail
+							fmt.Printf("[DEBUG] Added email to userInfoData: %v\n", selectedEmail)
+						} else {
+							fmt.Printf("[WARNING] No email found in GitHub emails response\n")
+						}
+					}
 				}
 			}
 
