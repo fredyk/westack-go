@@ -321,9 +321,15 @@ func (m *M) ClearProperties(properties []string) {
 }
 
 func asInt(v any) int {
-	if v1, ok := v.(int64); ok {
+	if v1, ok := v.(int); ok {
+		return v1
+	} else if v1, ok := v.(int32); ok {
+		return int(v1)
+	} else if v1, ok := v.(int64); ok {
 		return int(v1)
 	} else if v1, ok := v.(float64); ok {
+		return int(v1)
+	} else if v1, ok := v.(float32); ok {
 		return int(v1)
 	} else if v1, ok := v.(string); ok {
 		if i, err := strconv.Atoi(v1); err == nil {
@@ -336,9 +342,13 @@ func asInt(v any) int {
 func asInt64(v any) int64 {
 	if v1, ok := v.(int); ok {
 		return int64(v1)
+	} else if v1, ok := v.(int32); ok {
+		return int64(v1)
 	} else if v1, ok := v.(int64); ok {
 		return v1
 	} else if v1, ok := v.(float64); ok {
+		return int64(v1)
+	} else if v1, ok := v.(float32); ok {
 		return int64(v1)
 	} else if v1, ok := v.(string); ok {
 		if i, err := strconv.ParseInt(v1, 10, 64); err == nil {
