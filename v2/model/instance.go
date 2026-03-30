@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"reflect"
+	"strconv"
 
 	"github.com/oliveagle/jsonpath"
 	"go.mongodb.org/mongo-driver/bson"
@@ -324,16 +325,20 @@ func (modelInstance *StatefulInstance) GetFloat64(path string) float64 {
 
 func (modelInstance *StatefulInstance) GetInt(path string) int64 {
 	if res, err := jsonpath.JsonPathLookup(modelInstance.data, fmt.Sprintf("$.%v", path)); err == nil {
-		if v, ok := res.(int64); ok {
-			return v
+		if v, ok := res.(int); ok {
+			return int64(v)
 		} else if v, ok := res.(int32); ok {
 			return int64(v)
-		} else if v, ok := res.(int); ok {
-			return int64(v)
+		} else if v, ok := res.(int64); ok {
+			return v
 		} else if v, ok := res.(float64); ok {
 			return int64(v)
 		} else if v, ok := res.(float32); ok {
 			return int64(v)
+		} else if v, ok := res.(string); ok {
+			if i, err := strconv.ParseInt(v, 10, 64); err == nil {
+				return i
+			}
 		}
 	}
 	return 0
