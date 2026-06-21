@@ -93,12 +93,85 @@ func (connector *MemoryKVConnector) FindMany(collectionName string, lookups *wst
 }
 
 func (connector *MemoryKVConnector) findByObjectId(collectionName string, _id interface{}, lookups *wst.A) (*wst.M, error) {
-	panic("Not implemented")
+	db := connector.db
+	bucket := db.GetBucket(collectionName)
+
+	var idAsString string
+	switch v := _id.(type) {
+	case string:
+		idAsString = v
+	case primitive.ObjectID:
+		idAsString = v.Hex()
+	case uuid.UUID:
+		idAsString = v.String()
+	default:
+		return nil, fmt.Errorf("unsupported id type %T", _id)
+	}
+
+	bytes, err := bucket.Get(idAsString)
+	if err != nil {
+		return nil, err
+	}
+	if bytes == nil || len(bytes) == 0 {
+		return nil, nil
+	}
+
+	var result wst.M
+	if err := bson.UnmarshalWithRegistry(connector.registry, bytes[0], &result); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal document: %w", err)
+	}
+	return &result, nil
 }
 
 func (connector *MemoryKVConnector) Count(collectionName string, lookups *wst.A) (wst.CountResult, error) {
-	//TODO implement me
-	panic("implement me")
+	db := connector.db
+	bucket := db.GetBucket(collectionName)
+
+	if lookups == nil || len(*lookups) == 0 {
+		stats := bucket.Stats()
+		return wst.CountResult{Count: int64(stats.Entries)}, nil
+	}
+
+	potentialMatchStage := (*lookups)[0]
+	match, isPresent := potentialMatchStage["$match"]
+	if !isPresent {
+		stats := bucket.Stats()
+		return wst.CountResult{Count: int64(stats.Entries)}, nil
+	}
+
+	asM, ok := match.(wst.M)
+	if !ok || len(asM) == 0 {
+		stats := bucket.Stats()
+		return wst.CountResult{Count: int64(stats.Entries)}, nil
+	}
+
+	// Extract ID from match (same logic as FindMany)
+	var _id interface{}
+	for _, v := range asM {
+		_id = v
+		break
+	}
+
+	var idAsString string
+	switch v := _id.(type) {
+	case string:
+		idAsString = v
+	case primitive.ObjectID:
+		idAsString = v.Hex()
+	case uuid.UUID:
+		idAsString = v.String()
+	default:
+		return wst.CountResult{Count: 0}, nil
+	}
+
+	bytes, err := bucket.Get(idAsString)
+	if err != nil {
+		return wst.CountResult{Count: 0}, err
+	}
+	if bytes == nil {
+		return wst.CountResult{Count: 0}, nil
+	}
+	return wst.CountResult{Count: int64(len(bytes))}, nil
 }
 
 func (connector *MemoryKVConnector) Create(collectionName string, data *wst.M) (*wst.M, error) {
@@ -166,18 +239,141 @@ func (connector *MemoryKVConnector) CreateMany(collectionName string, data []wst
 }
 
 func (connector *MemoryKVConnector) UpdateById(collectionName string, id interface{}, data *wst.M) (*wst.M, error) {
-	//TODO implement me
-	panic("implement me")
+	db := connector.db
+	bucket := db.GetBucket(collectionName)
+
+	var idAsString string
+	switch v := id.(type) {
+	case string:
+		idAsString = v
+	case primitive.ObjectID:
+		idAsString = v.Hex()
+	case uuid.UUID:
+		idAsString = v.String()
+	default:
+		return nil, fmt.Errorf("unsupported id type %T", id)
+	}
+
+	// Fetch existing entries
+	existingBytes, err := bucket.Get(idAsString)
+	if err != nil {
+		return nil, err
+	}
+	if existingBytes == nil || len(existingBytes) == 0 {
+		return nil, fmt.Errorf("document not found with id %s", idAsString)
+	}
+
+	// Unmarshal first entry, apply updates, re-marshal
+	var existing wst.M
+	if err := bson.UnmarshalWithRegistry(connector.registry, existingBytes[0], &existing); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal existing document: %w", err)
+	}
+
+	// Apply updates from data (skip internal fields)
+	for k, v := range *data {
+		if k == "_id" || k == "_redId" || k == "_entries" {
+			continue
+		}
+		existing[k] = v
+	}
+
+	// Re-marshal and save
+	updatedBytes, err := bson.MarshalWithRegistry(connector.registry, existing)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal updated document: %w", err)
+	}
+
+	if err := bucket.SetEx(idAsString, [][]byte{updatedBytes}, 365*86400*time.Second); err != nil {
+		return nil, err
+	}
+
+	return &existing, nil
 }
 
 func (connector *MemoryKVConnector) DeleteById(collectionName string, id interface{}) (wst.DeleteResult, error) {
-	//TODO implement me
-	panic("implement me")
+	db := connector.db
+	bucket := db.GetBucket(collectionName)
+
+	var idAsString string
+	switch v := id.(type) {
+	case string:
+		idAsString = v
+	case primitive.ObjectID:
+		idAsString = v.Hex()
+	case uuid.UUID:
+		idAsString = v.String()
+	default:
+		return wst.DeleteResult{DeletedCount: 0}, fmt.Errorf("unsupported id type %T", id)
+	}
+
+	existing, err := bucket.Get(idAsString)
+	if err != nil {
+		return wst.DeleteResult{DeletedCount: 0}, err
+	}
+	if existing == nil {
+		return wst.DeleteResult{DeletedCount: 0}, nil
+	}
+
+	if err := bucket.Delete(idAsString); err != nil {
+		return wst.DeleteResult{DeletedCount: 0}, err
+	}
+	return wst.DeleteResult{DeletedCount: 1}, nil
 }
 
 func (connector *MemoryKVConnector) DeleteMany(collectionName string, whereLookups *wst.A) (wst.DeleteResult, error) {
-	//TODO implement me
-	panic("implement me")
+	db := connector.db
+	bucket := db.GetBucket(collectionName)
+
+	if whereLookups == nil || len(*whereLookups) == 0 {
+		// No filter — delete all entries in this collection's bucket
+		bucket.Flush()
+		return wst.DeleteResult{DeletedCount: -1}, nil
+	}
+
+	potentialMatchStage := (*whereLookups)[0]
+	match, isPresent := potentialMatchStage["$match"]
+	if !isPresent {
+		bucket.Flush()
+		return wst.DeleteResult{DeletedCount: -1}, nil
+	}
+
+	asM, ok := match.(wst.M)
+	if !ok || len(asM) == 0 {
+		bucket.Flush()
+		return wst.DeleteResult{DeletedCount: -1}, nil
+	}
+
+	// Extract ID from match
+	var _id interface{}
+	for _, v := range asM {
+		_id = v
+		break
+	}
+
+	var idAsString string
+	switch v := _id.(type) {
+	case string:
+		idAsString = v
+	case primitive.ObjectID:
+		idAsString = v.Hex()
+	case uuid.UUID:
+		idAsString = v.String()
+	default:
+		return wst.DeleteResult{DeletedCount: 0}, nil
+	}
+
+	existing, err := bucket.Get(idAsString)
+	if err != nil {
+		return wst.DeleteResult{DeletedCount: 0}, err
+	}
+	if existing == nil {
+		return wst.DeleteResult{DeletedCount: 0}, nil
+	}
+
+	if err := bucket.Delete(idAsString); err != nil {
+		return wst.DeleteResult{DeletedCount: 0}, err
+	}
+	return wst.DeleteResult{DeletedCount: 1}, nil
 }
 
 func (connector *MemoryKVConnector) Disconnect() error {
