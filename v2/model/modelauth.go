@@ -50,23 +50,28 @@ func (loadedModel *StatefulModel) EnforceEx(token *BearerToken, objId string, ac
 
 		var created int64
 		var ttl int64
-		// try to cast
+		// try to cast (defensivo: un bearer sin "created"/"ttl" — p.ej. autenticación por
+		// X-Api-Key — no debe panicar; se trata como sin expiración por estos campos).
 		if v, ok := token.Claims["created"].(int64); ok {
 			created = v
-		} else {
-			created = int64(token.Claims["created"].(float64))
+		} else if v, ok := token.Claims["created"].(float64); ok {
+			created = int64(v)
 		}
 		if v, ok := token.Claims["ttl"].(int64); ok {
 			ttl = v
-		} else {
-			ttl = int64(token.Claims["ttl"].(float64))
+		} else if v, ok := token.Claims["ttl"].(float64); ok {
+			ttl = int64(v)
 		}
-		expiresAtTimestamp := created + ttl
-		if time.Now().Unix() > expiresAtTimestamp {
-			if loadedModel.App.Debug {
-				fmt.Println("Token expired for user", bearerAccountIdSt)
+		// Solo aplicamos expiración si el bearer trae created+ttl (JWT de cuenta). Una
+		// autenticación por X-Api-Key no tiene estos claims (la revocación se hace por enabled).
+		if created > 0 && ttl > 0 {
+			expiresAtTimestamp := created + ttl
+			if time.Now().Unix() > expiresAtTimestamp {
+				if loadedModel.App.Debug {
+					fmt.Println("Token expired for user", bearerAccountIdSt)
+				}
+				return fiber.ErrUnauthorized, false
 			}
-			return fiber.ErrUnauthorized, false
 		}
 
 		if result, isPresent := loadedModel.authCache[bearerAccountIdSt][targetObjId][action]; isPresent {
