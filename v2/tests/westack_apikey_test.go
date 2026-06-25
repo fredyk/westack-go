@@ -82,3 +82,28 @@ func Test_ApiKey_Revoke(t *testing.T) {
 
 	assert.False(t, inst.GetBoolean("enabled", true))
 }
+
+func Test_ApiKey_OwnedByAccount(t *testing.T) {
+
+	t.Parallel()
+
+	randN := createRandomInt()
+	user, err := westack.UpsertAccountWithRoles(app, westack.AccountWithRoles{
+		Username: fmt.Sprintf("wm-%v", randN),
+		Password: fmt.Sprintf("pwD-%v.Aa9", randN),
+		Roles:    []string{"weddingmanager"},
+	}, systemContext)
+	assert.NoError(t, err)
+
+	// La apikey queda ligada a la cuenta (accountId).
+	key, err := westack.CreateApiKey(app, fmt.Sprintf("k-%v", randN), []string{"weddingmanager"}, user.GetID(), systemContext)
+	assert.NoError(t, err)
+	assert.NotEmpty(t, key)
+
+	m, err := app.FindModel("ApiKey")
+	assert.NoError(t, err)
+	inst, err := m.FindOne(&wst.Filter{Where: &wst.Where{"key": key}}, systemContext)
+	assert.NoError(t, err)
+	assert.NotNil(t, inst)
+	assert.Equal(t, user.GetID(), inst.ToJSON()["accountId"])
+}

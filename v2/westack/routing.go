@@ -137,6 +137,132 @@ func mountAccountModelFixedRoutes(loadedModel *model.StatefulModel, app *WeStack
 	},
 	)
 
+	// --- ApiKeys self-service: cada Account gestiona SUS propias apikeys ---
+	// El header X-Api-Key (ver eventcontext.GetBearer) autentica con los roles de la apikey.
+
+	// POST /<accounts>/me/api-keys {name, roles?} → crea una apikey del propio account.
+	// Anti-escalada: la apikey solo puede recibir roles que el account YA tiene.
+	loadedModel.RemoteMethod(func(ctx *model.EventContext) error {
+		token, err := ctx.GetBearer(loadedModel)
+		if err != nil {
+			return err
+		}
+		if token == nil || token.Account == nil || model.GetIDAsString(token.Account.Id) == "" {
+			return wst.CreateError(fiber.ErrUnauthorized, "NO_ACCOUNT", fiber.Map{"message": "authentication required"}, "Error")
+		}
+		name := ctx.Data.GetString("name")
+		if strings.TrimSpace(name) == "" {
+			return wst.CreateError(fiber.ErrBadRequest, "NAME_REQUIRED", fiber.Map{"message": "name required"}, "Error")
+		}
+		var roles []string
+		if raw, ok := (*ctx.Data)["roles"].([]interface{}); ok {
+			for _, r := range raw {
+				if s, ok := r.(string); ok {
+					roles = append(roles, s)
+				}
+			}
+		}
+		// Roles del account (admin da todo). Una apikey no puede conceder más de lo que el account tiene.
+		owned := map[string]bool{}
+		isAdmin := false
+		for _, r := range token.Roles {
+			owned[r.Name] = true
+			if r.Name == "admin" {
+				isAdmin = true
+			}
+		}
+		if !isAdmin {
+			for _, want := range roles {
+				if !owned[want] {
+					return wst.CreateError(fiber.ErrForbidden, "ROLE_ESCALATION",
+						fiber.Map{"message": "cannot grant a role the account does not have: " + want}, "Error")
+				}
+			}
+		}
+		key, err := CreateApiKey(app, name, roles, token.Account.Id, ctx)
+		if err != nil {
+			return err
+		}
+		ctx.Result = wst.M{"key": key, "name": name, "roles": roles}
+		return nil
+	}, model.RemoteMethodOptions{
+		Name:        "createApiKey",
+		Description: "Create an api key owned by the authenticated account",
+		Accepts: model.RemoteMethodOptionsHttpArgs{
+			{Arg: "name", Type: "string", Http: model.ArgHttp{Source: "body"}, Required: true},
+			{Arg: "roles", Type: "object", Http: model.ArgHttp{Source: "body"}, Required: false},
+		},
+		Http: model.RemoteMethodOptionsHttp{Path: "/me/api-keys", Verb: "post"},
+	})
+
+	// GET /<accounts>/me/api-keys → lista las apikeys del propio account (enmascaradas).
+	loadedModel.RemoteMethod(func(ctx *model.EventContext) error {
+		token, err := ctx.GetBearer(loadedModel)
+		if err != nil {
+			return err
+		}
+		if token == nil || token.Account == nil || model.GetIDAsString(token.Account.Id) == "" {
+			return wst.CreateError(fiber.ErrUnauthorized, "NO_ACCOUNT", fiber.Map{"message": "authentication required"}, "Error")
+		}
+		if app.apiKeyModel == nil {
+			return wst.CreateError(fiber.ErrInternalServerError, "NO_APIKEY_MODEL", fiber.Map{"message": "apiKeyModel not initialized"}, "Error")
+		}
+		cursor := app.apiKeyModel.FindMany(&wst.Filter{Where: &wst.Where{"accountId": token.Account.Id}}, systemContext)
+		items, err := cursor.All()
+		if err != nil {
+			return err
+		}
+		out := wst.A{}
+		for _, it := range items {
+			j := it.ToJSON()
+			out = append(out, wst.M{
+				"id": j["id"], "name": j["name"], "roles": j["roles"],
+				"enabled": j["enabled"], "created": j["created"],
+			})
+		}
+		ctx.Result = out
+		return nil
+	}, model.RemoteMethodOptions{
+		Name:        "listApiKeys",
+		Description: "List api keys owned by the authenticated account",
+		Http:        model.RemoteMethodOptionsHttp{Path: "/me/api-keys", Verb: "get"},
+	})
+
+	// POST /<accounts>/me/api-keys/revoke {key} → revoca una apikey propia.
+	loadedModel.RemoteMethod(func(ctx *model.EventContext) error {
+		token, err := ctx.GetBearer(loadedModel)
+		if err != nil {
+			return err
+		}
+		if token == nil || token.Account == nil || model.GetIDAsString(token.Account.Id) == "" {
+			return wst.CreateError(fiber.ErrUnauthorized, "NO_ACCOUNT", fiber.Map{"message": "authentication required"}, "Error")
+		}
+		key := ctx.Data.GetString("key")
+		if key == "" {
+			return wst.CreateError(fiber.ErrBadRequest, "KEY_REQUIRED", fiber.Map{"message": "key required"}, "Error")
+		}
+		if app.apiKeyModel == nil {
+			return wst.CreateError(fiber.ErrInternalServerError, "NO_APIKEY_MODEL", fiber.Map{"message": "apiKeyModel not initialized"}, "Error")
+		}
+		inst, err := app.apiKeyModel.FindOne(&wst.Filter{Where: &wst.Where{"key": key, "accountId": token.Account.Id}}, systemContext)
+		if err != nil {
+			return err
+		}
+		if inst == nil {
+			return wst.CreateError(fiber.ErrNotFound, "NOT_FOUND", fiber.Map{"message": "api key not found for this account"}, "Error")
+		}
+		if err := RevokeApiKey(app, key, systemContext); err != nil {
+			return err
+		}
+		ctx.Result = wst.M{"status": "revoked"}
+		return nil
+	}, model.RemoteMethodOptions{
+		Name:        "revokeApiKey",
+		Description: "Revoke an api key owned by the authenticated account",
+		Accepts:     model.RemoteMethodOptionsHttpArgs{{Arg: "key", Type: "string", Http: model.ArgHttp{Source: "body"}, Required: true}},
+		Http:        model.RemoteMethodOptionsHttp{Path: "/me/api-keys/revoke", Verb: "post"},
+	})
+
 	loadedModel.RemoteMethod(func(eventContext *model.EventContext) error {
 
 		token, err := eventContext.GetBearer(loadedModel)
