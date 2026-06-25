@@ -6,6 +6,7 @@ import (
 
 	fiber "github.com/gofiber/fiber/v2"
 	"github.com/golang-jwt/jwt"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 
 	wst "github.com/fredyk/westack-go/v2/common"
 )
@@ -101,6 +102,53 @@ func (eventContext *EventContext) GetBearer(loadedModel *StatefulModel) (*Bearer
 		}
 
 	}
+
+	// X-Api-Key authentication: if no user from JWT, try X-Api-Key header
+	if user == nil {
+		apiKey := string(c.Request().Header.Peek("X-Api-Key"))
+		if apiKey != "" {
+			apiKeyModelRaw, err := loadedModel.App.FindModel("ApiKey")
+			if err == nil {
+				apiKeyModel := apiKeyModelRaw.(*StatefulModel)
+				systemCtx := &EventContext{Bearer: &BearerToken{Account: &BearerAccount{System: true}}}
+				apiKeyInstance, err := apiKeyModel.FindOne(&wst.Filter{
+					Where: &wst.Where{
+						"key":     apiKey,
+						"enabled": true,
+					},
+				}, systemCtx)
+				if err == nil && apiKeyInstance != nil {
+					keyId := apiKeyInstance.GetID()
+					var apiRoles []BearerRole
+					// Las propiedades (no relaciones) se leen del JSON: Get() es solo para relaciones
+					// y devolvería nil para "roles". Desde Mongo el array llega como primitive.A;
+					// in-memory puede ser []interface{}. Manejamos ambos.
+					var rolesList []interface{}
+					switch v := apiKeyInstance.ToJSON()["roles"].(type) {
+					case primitive.A:
+						rolesList = v
+					case []interface{}:
+						rolesList = v
+					}
+					for _, r := range rolesList {
+						if roleName, ok := r.(string); ok {
+							apiRoles = append(apiRoles, BearerRole{Name: roleName})
+						}
+					}
+					return &BearerToken{
+						Account: &BearerAccount{
+							Id:   keyId,
+							Data: apiKeyInstance.ToJSON(),
+						},
+						Roles:   apiRoles,
+						Claims:  bearerClaims,
+						Raw:     apiKey,
+					}, nil
+				}
+			}
+		}
+	}
+
 	return &BearerToken{
 		Account: user,
 		Roles:   roles,
