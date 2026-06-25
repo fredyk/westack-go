@@ -100,6 +100,11 @@ func createCasbinModel(loadedModel *model.StatefulModel, app *WeStack, config *m
 		casbModel.AddPolicy("p", "p", []string{replaceVarNames("$owner,*,instance_delete,allow")})
 		casbModel.AddPolicy("p", "p", []string{replaceVarNames("admin,*,user_upsertRoles,allow")})
 		casbModel.AddPolicy("p", "p", []string{replaceVarNames("$owner,*,user_enableMfa,allow")})
+		// ApiKeys self-service: cualquier cuenta autenticada gestiona LAS SUYAS (la lógica del
+		// handler restringe a las propias y aplica anti-escalada de roles).
+		casbModel.AddPolicy("p", "p", []string{replaceVarNames("$authenticated,*,createApiKey,allow")})
+		casbModel.AddPolicy("p", "p", []string{replaceVarNames("$authenticated,*,listApiKeys,allow")})
+		casbModel.AddPolicy("p", "p", []string{replaceVarNames("$authenticated,*,revokeApiKey,allow")})
 	}
 	if config.Base == "App" {
 		casbModel.AddPolicy("p", "p", []string{replaceVarNames("admin,*,create,allow")})
