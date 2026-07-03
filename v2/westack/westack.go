@@ -9,6 +9,7 @@ import (
 	"os/signal"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -106,8 +107,43 @@ func (app *WeStack) Boot(options BootOptions, customRoutesCallbacks ...func(app 
 }
 
 func (app *WeStack) Start() error {
+	// Graceful shutdown on termination signals. Container orchestrators (Docker,
+	// Kubernetes) send SIGTERM by default when stopping a container (`docker stop`),
+	// and a terminal sends SIGINT on Ctrl-C. Both must trigger a clean shutdown and
+	// exit code 0; otherwise the process is force-killed (SIGKILL) and the container
+	// reports a spurious non-zero exit, polluting monitoring and restart accounting.
+	//
+	// We run Listen() in a goroutine and select on either its error or a signal.
+	// On a signal we drain in-flight requests, close datasources and os.Exit(0) *here*,
+	// so that a caller wrapping Start() in `log.Fatal(app.Start())` cannot race us to a
+	// non-zero exit. On a genuine Listen error (e.g. port in use) we return it unchanged.
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM)
+	defer signal.Stop(sigCh)
+
 	log.Printf("[INFO] Swagger available at http://localhost:%v/swagger\n", app.port)
-	return app.Server.Listen(fmt.Sprintf("0.0.0.0:%v", app.port))
+
+	listenErr := make(chan error, 1)
+	go func() {
+		listenErr <- app.Server.Listen(fmt.Sprintf("0.0.0.0:%v", app.port))
+	}()
+
+	select {
+	case err := <-listenErr:
+		return err
+	case sig := <-sigCh:
+		log.Printf("[INFO] Received signal %v, shutting down gracefully\n", sig)
+		if err := app.Server.ShutdownWithTimeout(10 * time.Second); err != nil {
+			log.Printf("[ERROR] server shutdown failed: %v\n", err)
+		}
+		for _, ds := range *app.datasources {
+			if err := ds.Close(); err != nil {
+				log.Printf("[ERROR] closing datasource failed: %v\n", err)
+			}
+		}
+		os.Exit(0)
+		return nil // unreachable
+	}
 }
 
 func (app *WeStack) Middleware(handler fiber.Handler) {
@@ -427,17 +463,6 @@ func InitAndServe(options Options, onBoot ...func(app *WeStack)) {
 
 	}}, onBoot...)
 
-	// Catch SIGINT signal and Stop()
-	go func() {
-		c := make(chan os.Signal, 1)
-		signal.Notify(c, os.Interrupt)
-		<-c
-		err := app.Stop()
-		if err != nil {
-			app.logger.Fatal(err)
-		}
-		os.Exit(0)
-	}()
-
+	// Graceful shutdown on SIGINT/SIGTERM is handled inside app.Start().
 	app.logger.Fatal(app.Start())
 }
