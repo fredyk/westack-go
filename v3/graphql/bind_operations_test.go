@@ -4,21 +4,8 @@ import (
 	"testing"
 )
 
-// localPlaceholder is a minimal stub model used by Bind* stubs.
-type localPlaceholder struct {
-	name   string
-	schema *SchemaHelper
-}
-
-func (m *localPlaceholder) SchemaHelper() *SchemaHelper {
-	if m.schema == nil {
-		m.schema = NewSchemaHelper()
-	}
-	return m.schema
-}
-
 func TestBindGraphQLOperation_StubsExist(t *testing.T) {
-	m := &localPlaceholder{}
+	m := &ModelImpl{}
 	field := BindGraphQLOperation(m, func(req testInput) (testResult, error) {
 		return testResult{}, nil
 	})
@@ -28,7 +15,7 @@ func TestBindGraphQLOperation_StubsExist(t *testing.T) {
 }
 
 func TestBindGraphQLOperationWithContext_StubsExist(t *testing.T) {
-	m := &localPlaceholder{}
+	m := &ModelImpl{}
 	field := BindGraphQLOperationWithContext(m, func(req *RemoteOperationReq[testInput]) (testResult, error) {
 		return testResult{}, nil
 	}, nil)
@@ -38,7 +25,7 @@ func TestBindGraphQLOperationWithContext_StubsExist(t *testing.T) {
 }
 
 func TestBindGraphQLQuery_StubsExist(t *testing.T) {
-	m := &localPlaceholder{}
+	m := &ModelImpl{}
 	field := BindGraphQLQuery(m, func(req testInput) (testResult, error) {
 		return testResult{}, nil
 	})
@@ -48,7 +35,7 @@ func TestBindGraphQLQuery_StubsExist(t *testing.T) {
 }
 
 func TestBindGraphQLMutation_StubsExist(t *testing.T) {
-	m := &localPlaceholder{}
+	m := &ModelImpl{}
 	field := BindGraphQLMutation(m, func(req testInput) (testResult, error) {
 		return testResult{}, nil
 	})

@@ -3,13 +3,15 @@ package graphql
 import (
 	"reflect"
 	"runtime"
+	"strings"
 )
 
 // GraphQLField represents a registered GraphQL field.
 type GraphQLField struct {
-	Name   string
-	Kind   string // "query" or "mutation"
-	Schema *SchemaHelper
+	Name    string
+	Kind    string // "query" or "mutation"
+	Schema  *SchemaHelper
+	Handler any
 }
 
 // RemoteOperationReq wraps a typed input with its context.
@@ -46,14 +48,14 @@ func splitPath(s string) []string {
 	return parts
 }
 
-// BindGraphQLOperation is a stub gemelo de BindRemoteOperation.
-// T = input type, R = result type. Registers a GraphQL operation with auto-SDL.
-func BindGraphQLOperation[T any, R any](m *localPlaceholder, handler func(req T) (R, error)) *GraphQLField {
+// BindGraphQLOperation registers a GraphQL operation with auto-SDL.
+// T = input type, R = result type.
+func BindGraphQLOperation[T any, R any](m Model, handler func(req T) (R, error)) *GraphQLField {
 	return bindGraphQL[T, R](m, "query", "", handler)
 }
 
 // BindGraphQLOperationWithOptions applies options before binding.
-func BindGraphQLOperationWithOptions[T any, R any](m *localPlaceholder, handler func(req T) (R, error), o *GraphQLOperationOptions) *GraphQLField {
+func BindGraphQLOperationWithOptions[T any, R any](m Model, handler func(req T) (R, error), o *GraphQLOperationOptions) *GraphQLField {
 	if o == nil {
 		o = &GraphQLOperationOptions{}
 	}
@@ -61,7 +63,7 @@ func BindGraphQLOperationWithOptions[T any, R any](m *localPlaceholder, handler 
 }
 
 // BindGraphQLOperationWithContext is the full-power variant accepting *RemoteOperationReq.
-func BindGraphQLOperationWithContext[T any, R any](m *localPlaceholder, handler func(req *RemoteOperationReq[T]) (R, error), o *GraphQLOperationOptions) *GraphQLField {
+func BindGraphQLOperationWithContext[T any, R any](m Model, handler func(req *RemoteOperationReq[T]) (R, error), o *GraphQLOperationOptions) *GraphQLField {
 	if o == nil {
 		o = &GraphQLOperationOptions{}
 	}
@@ -69,30 +71,23 @@ func BindGraphQLOperationWithContext[T any, R any](m *localPlaceholder, handler 
 }
 
 // BindGraphQLQuery registers a read-only operation as a GraphQL Query.
-func BindGraphQLQuery[T any, R any](m *localPlaceholder, handler func(req T) (R, error)) *GraphQLField {
-	return func() *GraphQLField {
-		return bindGraphQL[T, R](m, "query", "", handler)
-	}()
+func BindGraphQLQuery[T any, R any](m Model, handler func(req T) (R, error)) *GraphQLField {
+	return bindGraphQL[T, R](m, "query", getFunctionName(handler), handler)
 }
 
 // BindGraphQLMutation registers a side-effect operation as a GraphQL Mutation.
-func BindGraphQLMutation[T any, R any](m *localPlaceholder, handler func(req T) (R, error)) *GraphQLField {
-	return func() *GraphQLField {
-		return bindGraphQL[T, R](m, "mutation", "", handler)
-	}()
+func BindGraphQLMutation[T any, R any](m Model, handler func(req T) (R, error)) *GraphQLField {
+	return bindGraphQL[T, R](m, "mutation", getFunctionName(handler), handler)
 }
 
-func bindGraphQL[T any, R any](m *localPlaceholder, kind, customName string, handler any) *GraphQLField {
+func bindGraphQL[T any, R any](m Model, kind, customName string, handler any) *GraphQLField {
 	if m == nil {
 		return &GraphQLField{Name: customName, Kind: kind}
 	}
 
 	schema := m.SchemaHelper()
 
-	// Register input type T
 	inputName := schema.RegisterInputType(new(T))
-
-	// Register result type R
 	resultName := schema.RegisterOutputType(new(R))
 
 	name := customName
@@ -103,13 +98,14 @@ func bindGraphQL[T any, R any](m *localPlaceholder, kind, customName string, han
 	schema.AddOperation(kind, name, inputName, resultName, "")
 
 	return &GraphQLField{
-		Name:   name,
-		Kind:   kind,
-		Schema: schema,
+		Name:    name,
+		Kind:    kind,
+		Schema:  schema,
+		Handler: handler,
 	}
 }
 
-func bindGraphQLCtx[T any, R any](m *localPlaceholder, kind, name string, _ any, o *GraphQLOperationOptions) *GraphQLField {
+func bindGraphQLCtx[T any, R any](m Model, kind, name string, handler any, o *GraphQLOperationOptions) *GraphQLField {
 	if m == nil {
 		return &GraphQLField{Name: name, Kind: kind}
 	}
@@ -126,8 +122,15 @@ func bindGraphQLCtx[T any, R any](m *localPlaceholder, kind, name string, _ any,
 	schema.AddOperation(kind, name, inputName, resultName, "")
 
 	return &GraphQLField{
-		Name:   name,
-		Kind:   kind,
-		Schema: schema,
+		Name:    name,
+		Kind:    kind,
+		Schema:  schema,
+		Handler: handler,
 	}
+}
+
+func getFunctionName(fn any) string {
+	name := runtime.FuncForPC(reflect.ValueOf(fn).Pointer()).Name()
+	parts := strings.Split(name, ".")
+	return parts[len(parts)-1]
 }

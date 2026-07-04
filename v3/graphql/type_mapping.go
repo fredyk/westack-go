@@ -2,8 +2,6 @@ package graphql
 
 import (
 	"reflect"
-	"runtime"
-	"strings"
 	"time"
 )
 
@@ -87,11 +85,4 @@ func GoTypeToSDLFragment(t reflect.Type, nullable bool) string {
 		return base
 	}
 	return base + "!"
-}
-
-// getFunctionName extracts the function name from a function value using reflection.
-func getFunctionName(fn any) string {
-	name := runtime.FuncForPC(reflect.ValueOf(fn).Pointer()).Name()
-	splt := strings.Split(name, ".")
-	return splt[len(splt)-1]
 }
