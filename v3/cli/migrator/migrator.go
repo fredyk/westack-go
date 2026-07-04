@@ -84,7 +84,7 @@ func (migratorImpl) DDL(models []cli.Model) string {
 			}
 		}
 
-		b.WriteString(strings.Join(cols, "\n"))
+		b.WriteString(strings.Join(cols, ",\n"))
 		b.WriteString("\n);")
 		b.WriteString("\n\n")
 	}
