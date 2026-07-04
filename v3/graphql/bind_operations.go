@@ -59,7 +59,35 @@ func BindGraphQLOperationWithOptions[T any, R any](m Model, handler func(req T) 
 	if o == nil {
 		o = &GraphQLOperationOptions{}
 	}
-	return bindGraphQL[T, R](m, "query", o.Name, handler)
+	return bindGraphQL[T, R](m, "query", nameOr(o.Name, handler), handler)
+}
+
+// BindGraphQLQueryWithOptions registers a Query with an explicit name (o.Name),
+// falling back to the handler's function name when empty.
+func BindGraphQLQueryWithOptions[T any, R any](m Model, handler func(req T) (R, error), o *GraphQLOperationOptions) *GraphQLField {
+	if o == nil {
+		o = &GraphQLOperationOptions{}
+	}
+	return bindGraphQL[T, R](m, "query", nameOr(o.Name, handler), handler)
+}
+
+// BindGraphQLMutationWithOptions registers a Mutation with an explicit name
+// (o.Name), falling back to the handler's function name when empty. It is the
+// mutation twin of BindGraphQLOperationWithOptions, enabling apps to register
+// named side-effect operations without reimplementing the GraphQL engine.
+func BindGraphQLMutationWithOptions[T any, R any](m Model, handler func(req T) (R, error), o *GraphQLOperationOptions) *GraphQLField {
+	if o == nil {
+		o = &GraphQLOperationOptions{}
+	}
+	return bindGraphQL[T, R](m, "mutation", nameOr(o.Name, handler), handler)
+}
+
+// nameOr returns explicit if non-empty, else the handler's derived function name.
+func nameOr(explicit string, handler any) string {
+	if explicit != "" {
+		return explicit
+	}
+	return getFunctionName(handler)
 }
 
 // BindGraphQLOperationWithContext is the full-power variant accepting *RemoteOperationReq.

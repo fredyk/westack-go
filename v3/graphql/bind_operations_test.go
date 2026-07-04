@@ -1,6 +1,7 @@
 package graphql
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -43,3 +44,35 @@ func TestBindGraphQLMutation_StubsExist(t *testing.T) {
 		t.Error("BindGraphQLMutation returned nil")
 	}
 }
+
+func TestBindGraphQLMutationWithOptions_ExplicitName(t *testing.T) {
+	m := &ModelImpl{}
+	field := BindGraphQLMutationWithOptions(m, func(req testInput) (testResult, error) {
+		return testResult{}, nil
+	}, &GraphQLOperationOptions{Name: "crearExpediente"})
+	if field == nil {
+		t.Fatal("BindGraphQLMutationWithOptions returned nil")
+	}
+	if field.Name != "crearExpediente" {
+		t.Errorf("expected op name crearExpediente, got %q", field.Name)
+	}
+	if field.Kind != "mutation" {
+		t.Errorf("expected kind mutation, got %q", field.Kind)
+	}
+	// El SDL auto-generado debe contener la mutation con ese nombre.
+	sdl := m.SchemaHelper().SDL()
+	if !strings.Contains(sdl, "crearExpediente") {
+		t.Errorf("SDL should declare crearExpediente. SDL:\n%s", sdl)
+	}
+}
+
+func TestBindGraphQLQueryWithOptions_ExplicitName(t *testing.T) {
+	m := &ModelImpl{}
+	field := BindGraphQLQueryWithOptions(m, func(req testInput) (testResult, error) {
+		return testResult{}, nil
+	}, &GraphQLOperationOptions{Name: "expedientes"})
+	if field == nil || field.Name != "expedientes" || field.Kind != "query" {
+		t.Fatalf("expected query op 'expedientes', got %+v", field)
+	}
+}
+
