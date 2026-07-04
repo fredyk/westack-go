@@ -70,6 +70,7 @@ func (s *GraphQLServer) ServeGraphQL(w http.ResponseWriter, r *http.Request) {
 	}
 
 	operationName, args := parseGraphQLQuery(req.Query, req.OperationName)
+	args = resolveVariables(args, req.Variables)
 	if operationName == "" {
 		writeGraphQLError(w, http.StatusBadRequest, "could not parse operation name from query")
 		return
@@ -87,7 +88,7 @@ func (s *GraphQLServer) ServeGraphQL(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeGraphQLResult(w, result)
+	writeGraphQLResult(w, operationName, result)
 }
 
 func (s *GraphQLServer) callResolver(handler any, args map[string]any) (any, error) {
@@ -137,7 +138,34 @@ func parseGraphQLQuery(query string, operationName string) (string, map[string]a
 		// Try to guess the operation name from the query: { fieldName(...) }
 		name = extractOperationName(query)
 	}
-	return name, nil
+	// Parsear los argumentos inline de la operación (id, limit, input:{...}, …).
+	args := parseFieldArgs(query, name)
+	return name, args
+}
+
+// resolveVariables sustituye los valores de args que sean referencias "$var"
+// por su valor en el mapa de variables del cuerpo de la petición.
+func resolveVariables(args, variables map[string]any) map[string]any {
+	if len(variables) == 0 {
+		return args
+	}
+	if args == nil {
+		args = map[string]any{}
+	}
+	for k, v := range args {
+		if s, ok := v.(string); ok && strings.HasPrefix(s, "$") {
+			if rv, found := variables[strings.TrimPrefix(s, "$")]; found {
+				args[k] = rv
+			}
+		}
+	}
+	// Variables declaradas y no referenciadas inline: inyectarlas si no colisionan.
+	for k, v := range variables {
+		if _, exists := args[k]; !exists {
+			args[k] = v
+		}
+	}
+	return args
 }
 
 func extractOperationName(query string) string {
@@ -200,11 +228,13 @@ func writeGraphQLError(w http.ResponseWriter, status int, message string) {
 	})
 }
 
-func writeGraphQLResult(w http.ResponseWriter, data any) {
+// writeGraphQLResult escribe la respuesta GraphQL. Conforme a la spec, el
+// resultado va anidado bajo el nombre de la operación: {"data":{"<op>":result}}.
+func writeGraphQLResult(w http.ResponseWriter, operationName string, data any) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(w).Encode(map[string]any{
-		"data": data,
+		"data": map[string]any{operationName: data},
 	})
 }
 
