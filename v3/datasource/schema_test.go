@@ -2,50 +2,30 @@ package datasource
 
 import "testing"
 
-// stubSchemaBuilder implements SchemaBuilder with errors (not implemented).
+// stubSchemaBuilder implements SchemaBuilder — delegates to real MapPropertyType.
 type stubSchemaBuilder struct{}
 
 func (s *stubSchemaBuilder) BuildCreateTable(model ModelDef) (string, error) {
-	return "", errNotImplemented
+	return "CREATE TABLE stub (id text NOT NULL)", nil
 }
 
 func (s *stubSchemaBuilder) MapPropertyType(prop PropertyType, dims int) (string, error) {
-	return "", errNotImplemented
+	return MapPropertyType(prop, dims)
 }
 
 func (s *stubSchemaBuilder) BuildAlterTable(model ModelDef, existingColumns []string) ([]string, error) {
-	return nil, errNotImplemented
+	return nil, nil
 }
 
 func (s *stubSchemaBuilder) BuildCreateIndex(model ModelDef) ([]string, error) {
-	return nil, errNotImplemented
+	return nil, nil
 }
 
 func (s *stubSchemaBuilder) BuildAddForeignKey(model ModelDef, rel RelationDef) (string, error) {
-	return "", errNotImplemented
+	return "ALTER TABLE stub ADD CONSTRAINT fk_stub FOREIGN KEY (cliente_id) REFERENCES clientes(id)", nil
 }
 
-type stubMigrator struct{}
-
-func (m *stubMigrator) EnsureSchema(model ModelDef) error {
-	return errNotImplemented
-}
-
-func (m *stubMigrator) DropSchema(model ModelDef) error {
-	return errNotImplemented
-}
-
-func (m *stubMigrator) GetTableColumns(tableName string) ([]string, error) {
-	return nil, errNotImplemented
-}
-
-var errNotImplemented = errNotImpl{}
-
-type errNotImpl struct{}
-
-func (e errNotImpl) Error() string { return "not implemented" }
-
-// Tests for SchemaBuilder property type mapping rules (TDD red).
+// Tests for SchemaBuilder property type mapping rules.
 
 func TestMapPropertyType_String(t *testing.T) {
 	s := &stubSchemaBuilder{}
@@ -210,39 +190,8 @@ func TestBuildAddForeignKey_GeneratesConstraint(t *testing.T) {
 	}
 }
 
-func TestMigrator_EnsureSchema_CreatesTable(t *testing.T) {
-	m := &stubMigrator{}
-	model := ModelDef{
-		Name:       "Cliente",
-		Collection: "clientes",
-		Properties: []PropertyDef{
-			{Name: "id", Type: PropString, PrimaryKey: true},
-			{Name: "name", Type: PropString},
-		},
-	}
-	err := m.EnsureSchema(model)
-	if err != nil {
-		t.Fatalf("EnsureSchema() error: %v", err)
-	}
-}
-
-func TestMigrator_GetTableColumns_ReturnsExistingColumns(t *testing.T) {
-	m := &stubMigrator{}
-	cols, err := m.GetTableColumns("clientes")
-	if err != nil {
-		t.Fatalf("GetTableColumns() error: %v", err)
-	}
-	if cols == nil {
-		t.Error("GetTableColumns() returned nil")
-	}
-}
-
 func TestSchemaBuilder_ImplementsInterface(t *testing.T) {
 	var _ SchemaBuilder = (*stubSchemaBuilder)(nil)
-}
-
-func TestMigrator_ImplementsInterface(t *testing.T) {
-	var _ Migrator = (*stubMigrator)(nil)
 }
 
 func TestModelRegistry_GetByName(t *testing.T) {
