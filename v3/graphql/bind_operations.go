@@ -1,6 +1,7 @@
 package graphql
 
 import (
+	"context"
 	"reflect"
 	"runtime"
 	"strings"
@@ -14,8 +15,12 @@ type GraphQLField struct {
 	Handler any
 }
 
-// RemoteOperationReq wraps a typed input with its context.
+// RemoteOperationReq wraps a typed input with its per-request context.
+// Handlers bound via BindGraphQLOperationWithContext receive this so that
+// request-scoped values (auth principal, deadline, cancellation) flow into
+// the resolver. Ctx is the HTTP request context; Input is the decoded args.
 type RemoteOperationReq[T any] struct {
+	Ctx   context.Context
 	Input T
 }
 
