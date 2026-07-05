@@ -47,7 +47,7 @@ func (modelWriterImpl) NewModel(model cli.Model, path string) error {
 	// Build the Go source for the model
 	var fields []string
 	for _, f := range model.Fields {
-		fields = append(fields, fmt.Sprintf("    %s %s", f.Name, goTypeToGo(f)))
+		fields = append(fields, fmt.Sprintf("    %s %s %s", f.Name, goTypeToGo(f), buildTag(f)))
 	}
 
 	src := fmt.Sprintf("package models\n\ntype %s struct {\n%s\n}\n", model.Name, strings.Join(fields, "\n"))
