@@ -35,6 +35,12 @@ func TestDDL_singleModel(t *testing.T) {
 	if !strings.Contains(got, "created timestamptz") {
 		t.Errorf("golden: expected 'created timestamptz' column mapping. Got:\n%s", got)
 	}
+	// Regresión: las columnas deben ir separadas por COMA (un CREATE TABLE con
+	// columnas unidas solo por '\n' es SQL inválido — "syntax error"). Bug real
+	// cazado por el e2e de integración; aquí queda protegido en unit.
+	if !strings.Contains(got, "email text,") {
+		t.Errorf("columnas sin coma separadora (DDL inválido). Got:\n%s", got)
+	}
 }
 
 func TestDDL_withBelongsToFK(t *testing.T) {
