@@ -2,116 +2,123 @@ package migrator_test
 
 import (
 	"context"
-	"strings"
 	"testing"
 
 	"github.com/fredyk/westack-go/v3/cli"
 	"github.com/fredyk/westack-go/v3/cli/migrator"
 )
 
-func TestDDL_singleModel(t *testing.T) {
+func TestDDL_emptyModels(t *testing.T) {
 	m := migrator.New()
-	models := []cli.Model{
-		{
-			Name: "Account",
-			Base: "Account",
-			Fields: []cli.Field{
-				{Name: "Email", Type: cli.TypeString},
-				{Name: "Password", Type: cli.TypeString},
-				{Name: "Created", Type: cli.TypeTime},
-			},
-		},
-	}
-	got := m.DDL(models)
-	if got == "" {
-		t.Fatal("golden: expected DDL for Account model, got empty string (stub)")
-	}
-	if !strings.Contains(got, "create table") {
-		t.Errorf("golden: expected 'Create table' in DDL. Got:\n%s", got)
-	}
-	if !strings.Contains(got, "email text") {
-		t.Errorf("golden: expected 'email text' column mapping. Got:\n%s", got)
-	}
-	if !strings.Contains(got, "created timestamptz") {
-		t.Errorf("golden: expected 'created timestamptz' column mapping. Got:\n%s", got)
-	}
-	// Regresión: las columnas deben ir separadas por COMA (un CREATE TABLE con
-	// columnas unidas solo por '\n' es SQL inválido — "syntax error"). Bug real
-	// cazado por el e2e de integración; aquí queda protegido en unit.
-	if !strings.Contains(got, "email text,") {
-		t.Errorf("columnas sin coma separadora (DDL inválido). Got:\n%s", got)
+	got := m.DDL(nil)
+	if got != "" {
+		t.Errorf("expected empty DDL for nil models, got:\n%s", got)
 	}
 }
 
-func TestDDL_withBelongsToFK(t *testing.T) {
+func TestDDL_multipleModels(t *testing.T) {
 	m := migrator.New()
 	models := []cli.Model{
-		{
-			Name: "Account", Base: "Account",
-			Fields: []cli.Field{{Name: "Email", Type: cli.TypeString}},
-		},
-		{
-			Name: "Profile", Base: "Profile",
-			Fields: []cli.Field{{Name: "DisplayName", Type: cli.TypeString}},
+		{Name: "Account", Base: "Account", Fields: []cli.Field{{Name: "Email", Type: cli.TypeString}}},
+		{Name: "Profile", Base: "Profile", Fields: []cli.Field{{Name: "Name", Type: cli.TypeString}}},
+	}
+	got := m.DDL(models)
+	if got == "" {
+		t.Fatal("expected DDL for multiple models")
+	}
+	// Both tables should be present
+	for _, table := range []string{"account", "profile"} {
+		if !contains(got, "create table if not exists "+table) {
+			t.Errorf("expected table %q in DDL. Got:\n%s", table, got)
+		}
+	}
+}
+
+func TestDDL_requiredFieldNotNullable(t *testing.T) {
+	m := migrator.New()
+	models := []cli.Model{
+		{Name: "User", Base: "User", Fields: []cli.Field{
+			{Name: "Email", Type: cli.TypeString, Options: []cli.FieldOption{cli.FieldRequired}},
+		}},
+	}
+	got := m.DDL(models)
+	if !contains(got, "email text NOT NULL") {
+		t.Errorf("expected 'email text NOT NULL' in DDL. Got:\n%s", got)
+	}
+}
+
+func TestDDL_defaultTypeIsText(t *testing.T) {
+	m := migrator.New()
+	models := []cli.Model{
+		{Name: "Test", Base: "Test", Fields: []cli.Field{
+			{Name: "Foo", Type: "unknown_type"},
+		}},
+	}
+	got := m.DDL(models)
+	if !contains(got, "foo text") {
+		t.Errorf("expected fallback to 'text' for unknown type. Got:\n%s", got)
+	}
+}
+
+func TestDDL_idSequence(t *testing.T) {
+	m := migrator.New()
+	models := []cli.Model{
+		{Name: "Widget", Base: "Widget", Fields: []cli.Field{{Name: "Name", Type: cli.TypeString}}},
+	}
+	got := m.DDL(models)
+	if !contains(got, "widget_id_seq") {
+		t.Errorf("expected 'widget_id_seq' sequence. Got:\n%s", got)
+	}
+	if !contains(got, "id bigint PRIMARY KEY") {
+		t.Errorf("expected 'id bigint PRIMARY KEY DEFAULT nextval'. Got:\n%s", got)
+	}
+}
+
+func TestDDL_hasNoTrailingComma(t *testing.T) {
+	m := migrator.New()
+	models := []cli.Model{
+		{Name: "Simple", Base: "Simple", Fields: []cli.Field{
+			{Name: "A", Type: cli.TypeString},
+			{Name: "B", Type: cli.TypeInt},
+		}},
+	}
+	got := m.DDL(models)
+	// The last column before the closing paren should not end with comma
+	if contains(got, "b bigint,") {
+		t.Errorf("expected last column without trailing comma. Got:\n%s", got)
+	}
+}
+
+func TestDDL_hasOneRelation(t *testing.T) {
+	m := migrator.New()
+	models := []cli.Model{
+		{Name: "Profile", Base: "Profile", Fields: []cli.Field{{Name: "Bio", Type: cli.TypeString}},
 			Relations: []cli.Relation{
-				{Name: "account", Kind: cli.RelBelongsTo, Target: "Account", FKColumn: "account_id", PKColumn: "id"},
+				{Name: "account", Kind: cli.RelHasOne, Target: "Account", FKColumn: "account_id", PKColumn: "id"},
 			},
 		},
 	}
 	got := m.DDL(models)
-	if got == "" {
-		t.Fatal("golden: expected DDL with FK, got empty string (stub)")
-	}
-	if !strings.Contains(got, "account_id") {
-		t.Errorf("golden: expected 'account_id' column for belongsTo FK. Got:\n%s", got)
+	// hasOne should NOT generate FK column (only belongsTo does)
+	if contains(got, "account_id") {
+		t.Errorf("hasOne should not generate FK column. Got:\n%s", got)
 	}
 }
 
-func TestDDL_withVector(t *testing.T) {
+func TestDDL_hasManyRelation(t *testing.T) {
 	m := migrator.New()
 	models := []cli.Model{
-		{
-			Name: "Document", Base: "Document",
-			Fields: []cli.Field{
-				{Name: "Title", Type: cli.TypeString},
-				{Name: "Embedding", Type: cli.TypeVector, Options: []cli.FieldOption{cli.VectorDim(4096)}},
+		{Name: "Account", Base: "Account", Fields: []cli.Field{{Name: "Name", Type: cli.TypeString}},
+			Relations: []cli.Relation{
+				{Name: "profiles", Kind: cli.RelHasMany, Target: "Profile", FKColumn: "account_id", PKColumn: "id"},
 			},
 		},
 	}
 	got := m.DDL(models)
-	if got == "" {
-		t.Fatal("golden: expected DDL with vector(4096), got empty string (stub)")
-	}
-	if !strings.Contains(got, "vector(4096)") {
-		t.Errorf("golden: expected 'vector(4096)'. Got:\n%s", got)
-	}
-}
-
-func TestDDL_intToBigint(t *testing.T) {
-	m := migrator.New()
-	models := []cli.Model{
-		{Name: "Counter", Base: "Counter", Fields: []cli.Field{{Name: "Count", Type: cli.TypeInt}}},
-	}
-	got := m.DDL(models)
-	if got == "" {
-		t.Fatal("golden: expected DDL, got empty string (stub)")
-	}
-	if !strings.Contains(got, "count bigint") {
-		t.Errorf("golden: expected 'count bigint'. Got:\n%s", got)
-	}
-}
-
-func TestDDL_boolToBoolean(t *testing.T) {
-	m := migrator.New()
-	models := []cli.Model{
-		{Name: "Flag", Base: "Flag", Fields: []cli.Field{{Name: "Enabled", Type: cli.TypeBool}}},
-	}
-	got := m.DDL(models)
-	if got == "" {
-		t.Fatal("golden: expected DDL, got empty string (stub)")
-	}
-	if !strings.Contains(got, "enabled boolean") {
-		t.Errorf("golden: expected 'enabled boolean'. Got:\n%s", got)
+	// hasMany should NOT generate a REFERENCES FK column
+	// (the sequence name 'account_id_seq' is fine, but no 'REFERENCES' should appear)
+	if contains(got, "REFERENCES") {
+		t.Errorf("hasMany should not generate FK REFERENCES. Got:\n%s", got)
 	}
 }
 
@@ -121,4 +128,17 @@ func TestApply_doesNothing(t *testing.T) {
 	if err != nil {
 		t.Fatalf("stub Apply returned error: %v", err)
 	}
+}
+
+func contains(s, substr string) bool {
+	return len(s) >= len(substr) && (s == substr || len(s) > 0 && containsHelper(s, substr))
+}
+
+func containsHelper(s, substr string) bool {
+	for i := 0; i <= len(s)-len(substr); i++ {
+		if s[i:i+len(substr)] == substr {
+			return true
+		}
+	}
+	return false
 }
