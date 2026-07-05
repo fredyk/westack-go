@@ -1,12 +1,16 @@
 package graphql
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"reflect"
 	"strings"
 )
+
+// contextType is context.Context's reflect.Type, used to detect RemoteOperationReq.
+var contextType = reflect.TypeOf((*context.Context)(nil)).Elem()
 
 // GraphQLServer provides HTTP handlers for GraphQL endpoints.
 type GraphQLServer struct {
@@ -82,7 +86,7 @@ func (s *GraphQLServer) ServeGraphQL(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result, err := s.callResolver(handler, args)
+	result, err := s.callResolver(r.Context(), handler, args)
 	if err != nil {
 		writeGraphQLError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -91,10 +95,10 @@ func (s *GraphQLServer) ServeGraphQL(w http.ResponseWriter, r *http.Request) {
 	writeGraphQLResult(w, operationName, result)
 }
 
-func (s *GraphQLServer) callResolver(handler any, args map[string]any) (any, error) {
-	// Wrap the handler in a reflect-based call.
-	// The handler is a function of the form func(req T) (R, error).
-	// We create a T from args and call the function.
+func (s *GraphQLServer) callResolver(ctx context.Context, handler any, args map[string]any) (any, error) {
+	// Reflect-based call. The handler is either:
+	//   func(req T) (R, error)                      — simple, no context
+	//   func(req *RemoteOperationReq[T]) (R, error) — carries per-request ctx
 	rv := reflect.ValueOf(handler)
 	if rv.Kind() != reflect.Func {
 		return nil, fmt.Errorf("handler is not a function")
@@ -106,12 +110,31 @@ func (s *GraphQLServer) callResolver(handler any, args map[string]any) (any, err
 	}
 
 	inputType := rType.In(0)
-	inputValue := reflect.New(inputType)
-	if err := mapToStruct(args, inputValue.Interface()); err != nil {
-		return nil, fmt.Errorf("cannot map args to input: %w", err)
+
+	var callArg reflect.Value
+	if isRemoteOpReq(inputType) {
+		// *RemoteOperationReq[T]: inyecta el context de la request y mapea los
+		// argumentos GraphQL al campo Input (no al wrapper).
+		reqPtr := reflect.New(inputType.Elem())
+		elem := reqPtr.Elem()
+		if ctx != nil {
+			elem.FieldByName("Ctx").Set(reflect.ValueOf(ctx))
+		}
+		inputField := elem.FieldByName("Input")
+		if err := mapToStruct(args, inputField.Addr().Interface()); err != nil {
+			return nil, fmt.Errorf("cannot map args to input: %w", err)
+		}
+		callArg = reqPtr
+	} else {
+		// func(T): retrocompatible, sin context.
+		inputValue := reflect.New(inputType)
+		if err := mapToStruct(args, inputValue.Interface()); err != nil {
+			return nil, fmt.Errorf("cannot map args to input: %w", err)
+		}
+		callArg = inputValue.Elem()
 	}
 
-	results := rv.Call([]reflect.Value{inputValue.Elem()})
+	results := rv.Call([]reflect.Value{callArg})
 	if len(results) != 2 {
 		return nil, fmt.Errorf("handler must return (R, error)")
 	}
@@ -122,6 +145,25 @@ func (s *GraphQLServer) callResolver(handler any, args map[string]any) (any, err
 	}
 
 	return results[0].Interface(), nil
+}
+
+// isRemoteOpReq reports whether t is *RemoteOperationReq[T] — a pointer to a
+// struct carrying both a Ctx context.Context and an Input field. Lets callResolver
+// pick the context-injection path without matching the generic instantiation.
+func isRemoteOpReq(t reflect.Type) bool {
+	if t.Kind() != reflect.Ptr {
+		return false
+	}
+	e := t.Elem()
+	if e.Kind() != reflect.Struct {
+		return false
+	}
+	ctxField, ok := e.FieldByName("Ctx")
+	if !ok || ctxField.Type != contextType {
+		return false
+	}
+	_, ok = e.FieldByName("Input")
+	return ok
 }
 
 func mapToStruct(args map[string]any, dest any) error {
