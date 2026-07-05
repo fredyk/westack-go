@@ -208,7 +208,11 @@ func (c *PostgresConnector) Create(ctx context.Context, collection string, data 
 		strings.Join(cols, ", "),
 		strings.Join(placeholders, ", "),
 		returnCols)
-	return c.queryRow(ctx, sql, vals...)
+	doc, err := c.queryRow(ctx, sql, vals...)
+	if err != nil {
+		return nil, c.mapErr(err)
+	}
+	return doc, nil
 }
 
 func (c *PostgresConnector) CreateMany(ctx context.Context, collection string, data []map[string]interface{}) ([]map[string]interface{}, error) {
@@ -247,11 +251,11 @@ func (c *PostgresConnector) CreateMany(ctx context.Context, collection string, d
 			returnCols)
 		doc, err := c.txQueryRow(ctx, tx, sql, vals...)
 		if err != nil {
-			return nil, err
+			return nil, c.mapErr(err)
 		}
 		results = append(results, doc)
 	}
-	return results, tx.Commit(ctx)
+	return results, c.mapErr(tx.Commit(ctx))
 }
 
 func (c *PostgresConnector) FindById(ctx context.Context, collection string, id interface{}) (map[string]interface{}, error) {
@@ -269,7 +273,10 @@ func (c *PostgresConnector) FindById(ctx context.Context, collection string, id 
 	if err == pgx.ErrNoRows {
 		return nil, nil
 	}
-	return doc, err
+	if err != nil {
+		return nil, c.mapErr(err)
+	}
+	return doc, nil
 }
 
 func (c *PostgresConnector) FindMany(ctx context.Context, collection string, query *Query) (Cursor, error) {
@@ -311,7 +318,7 @@ func (c *PostgresConnector) FindMany(ctx context.Context, collection string, que
 
 	rows, err := c.pool.Query(ctx, sql, args...)
 	if err != nil {
-		return nil, err
+		return nil, c.mapErr(err)
 	}
 	return &pgxCursor{rows: rows}, nil
 }
@@ -330,7 +337,7 @@ func (c *PostgresConnector) Count(ctx context.Context, collection string, filter
 		pqQuoteIdent(c.schema), pqQuoteIdent(collection), where)
 	var count int64
 	err := c.pool.QueryRow(ctx, sql, args...).Scan(&count)
-	return count, err
+	return count, c.mapErr(err)
 }
 
 func (c *PostgresConnector) UpdateById(ctx context.Context, collection string, id interface{}, data map[string]interface{}) (map[string]interface{}, error) {
@@ -362,7 +369,10 @@ func (c *PostgresConnector) UpdateById(ctx context.Context, collection string, i
 	if err == pgx.ErrNoRows {
 		return nil, nil
 	}
-	return doc, err
+	if err != nil {
+		return nil, c.mapErr(err)
+	}
+	return doc, nil
 }
 
 func (c *PostgresConnector) DeleteById(ctx context.Context, collection string, id interface{}) (int64, error) {
@@ -380,7 +390,7 @@ func (c *PostgresConnector) DeleteById(ctx context.Context, collection string, i
 		id,
 	)
 	if err != nil {
-		return 0, err
+		return 0, c.mapErr(err)
 	}
 	return tag.RowsAffected(), nil
 }
@@ -401,7 +411,7 @@ func (c *PostgresConnector) DeleteMany(ctx context.Context, collection string, f
 		args...,
 	)
 	if err != nil {
-		return 0, err
+		return 0, c.mapErr(err)
 	}
 	return tag.RowsAffected(), nil
 }
@@ -481,6 +491,13 @@ func (c *PostgresConnector) CreateVectorIndex(ctx context.Context, collection st
 	return err
 }
 
+func (c *PostgresConnector) mapErr(err error) error {
+	if err == nil {
+		return nil
+	}
+	return MapPGError(err)
+}
+
 // ── internal helpers ─────────────────────────────────────────────────────────
 
 func (c *PostgresConnector) queryRow(ctx context.Context, sql string, args ...interface{}) (map[string]interface{}, error) {
@@ -490,6 +507,9 @@ func (c *PostgresConnector) queryRow(ctx context.Context, sql string, args ...in
 	}
 	defer rows.Close()
 	if !rows.Next() {
+		if err := rows.Err(); err != nil {
+			return nil, err
+		}
 		return nil, pgx.ErrNoRows
 	}
 	return scanCurrentRow(rows)
@@ -502,6 +522,9 @@ func (c *PostgresConnector) txQueryRow(ctx context.Context, tx pgx.Tx, sql strin
 	}
 	defer rows.Close()
 	if !rows.Next() {
+		if err := rows.Err(); err != nil {
+			return nil, err
+		}
 		return nil, pgx.ErrNoRows
 	}
 	return scanCurrentRow(rows)
@@ -645,10 +668,10 @@ func vectorToLiteral(vec Vector) string {
 
 // pgxCursor wraps pgx.Rows and implements the Cursor interface.
 type pgxCursor struct {
-	rows  pgx.Rows
-	pos   int
+	rows    pgx.Rows
+	pos     int
 	current map[string]interface{}
-	err   error
+	err     error
 }
 
 func (c *pgxCursor) Next(ctx context.Context) bool {
