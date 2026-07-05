@@ -452,5 +452,319 @@ func TestIntegration_DeleteById_NotFound(t *testing.T) {
 	}
 }
 
+// ── Adversarial: KNN partition (RGPD) ────────────────────────────────────────
+
+func TestIntegration_SearchSimilar_FilterEnforcesTenantIsolation(t *testing.T) {
+	dsn := testDSN(t)
+	ctx := context.Background()
+
+	c := NewPostgresConnector(dsn, "public")
+	if err := c.Connect(ctx); err != nil {
+		t.Fatalf("Connect() error: %v", err)
+	}
+	defer c.Disconnect()
+
+	schemaName := fmt.Sprintf("wsk_it_%d", time.Now().UnixNano())
+	if _, err := c.pool.Exec(ctx, "CREATE SCHEMA "+pqQuoteIdent(schemaName)); err != nil {
+		t.Fatalf("CREATE SCHEMA error: %v", err)
+	}
+	defer c.pool.Exec(ctx, "DROP SCHEMA "+pqQuoteIdent(schemaName)+" CASCADE")
+	c.schema = schemaName
+
+	model := ModelDef{
+		Name:       "Chunk",
+		Collection: "chunks",
+		Properties: []PropertyDef{
+			{Name: "id", Type: PropString, PrimaryKey: true},
+			{Name: "content", Type: PropString},
+			{Name: "cliente_id", Type: PropString},
+			{Name: "embedding", Type: PropVector, Length: 3},
+		},
+	}
+	if err := c.Migrate(ctx, model); err != nil {
+		t.Fatalf("Migrate() error: %v", err)
+	}
+
+	// Insert chunks for two different clients
+	for _, d := range []struct {
+		id, content, clienteID string
+		vec                    string
+	}{
+		{"c1-a", "Alice doc 1", "alice", "[0.1,0.2,0.3]"},
+		{"c1-b", "Alice doc 2", "alice", "[0.11,0.21,0.31]"},
+		{"c1-c", "Alice doc 3", "alice", "[0.4,0.5,0.6]"},
+		{"bob-a", "Bob doc 1", "bob", "[0.15,0.25,0.35]"},
+		{"bob-b", "Bob doc 2", "bob", "[0.9,0.95,0.99]"},
+	} {
+		_, err := c.Create(ctx, "chunks", map[string]interface{}{
+			"id":         d.id,
+			"content":    d.content,
+			"cliente_id": d.clienteID,
+			"embedding":  d.vec,
+		})
+		if err != nil {
+			t.Fatalf("Create(%s) error: %v", d.id, err)
+		}
+	}
+
+	// Alice searches — should ONLY return Alice's chunks, NEVER Bob's
+	queryVec := Vector{Values: []float32{0.1, 0.2, 0.3}, Dimensions: 3}
+	filter := &Filter{Conditions: []Condition{
+		{Field: "cliente_id", Op: "eq", Value: "alice"},
+	}}
+	results, err := c.SearchSimilar(ctx, "chunks", queryVec, 10, filter)
+	if err != nil {
+		t.Fatalf("SearchSimilar() error: %v", err)
+	}
+	if len(results) == 0 {
+		t.Fatal("SearchSimilar() returned 0 results — expected at least 1")
+	}
+	for _, r := range results {
+		if r.ID == "bob-a" || r.ID == "bob-b" {
+			t.Errorf("RGPD LEAK: Bob's chunk %q returned in Alice's search", r.ID)
+		}
+	}
+	if len(results) != 3 {
+		t.Errorf("SearchSimilar() returned %d results, want 3", len(results))
+	}
+}
+
+// ── Unique constraint → typed error ──────────────────────────────────────────
+
+func TestIntegration_Create_DuplicatePK_ReturnsTypedError(t *testing.T) {
+	dsn := testDSN(t)
+	ctx := context.Background()
+
+	c := NewPostgresConnector(dsn, "public")
+	if err := c.Connect(ctx); err != nil {
+		t.Fatalf("Connect() error: %v", err)
+	}
+	defer c.Disconnect()
+
+	schemaName := fmt.Sprintf("wsk_it_%d", time.Now().UnixNano())
+	if _, err := c.pool.Exec(ctx, "CREATE SCHEMA "+pqQuoteIdent(schemaName)); err != nil {
+		t.Fatalf("CREATE SCHEMA error: %v", err)
+	}
+	defer c.pool.Exec(ctx, "DROP SCHEMA "+pqQuoteIdent(schemaName)+" CASCADE")
+	c.schema = schemaName
+
+	model := ModelDef{
+		Name:       "Item",
+		Collection: "items",
+		Properties: []PropertyDef{
+			{Name: "id", Type: PropString, PrimaryKey: true},
+			{Name: "name", Type: PropString},
+		},
+	}
+	if err := c.Migrate(ctx, model); err != nil {
+		t.Fatalf("Migrate() error: %v", err)
+	}
+
+	_, err := c.Create(ctx, "items", map[string]interface{}{"id": "x", "name": "first"})
+	if err != nil {
+		t.Fatalf("first Create() error: %v", err)
+	}
+	_, err = c.Create(ctx, "items", map[string]interface{}{"id": "x", "name": "second"})
+	if err == nil {
+		t.Fatal("second Create() should fail with duplicate PK")
+	}
+	if !IsPGError(err, ErrUniqueViolation) {
+		t.Errorf("expected ErrUniqueViolation, got %T: %v", err, err)
+	}
+}
+
+// ── NULL round-trip for all types ────────────────────────────────────────────
+
+func TestIntegration_NullableColumnRoundTrip(t *testing.T) {
+	dsn := testDSN(t)
+	ctx := context.Background()
+
+	c := NewPostgresConnector(dsn, "public")
+	if err := c.Connect(ctx); err != nil {
+		t.Fatalf("Connect() error: %v", err)
+	}
+	defer c.Disconnect()
+
+	schemaName := fmt.Sprintf("wsk_it_%d", time.Now().UnixNano())
+	if _, err := c.pool.Exec(ctx, "CREATE SCHEMA "+pqQuoteIdent(schemaName)); err != nil {
+		t.Fatalf("CREATE SCHEMA error: %v", err)
+	}
+	defer c.pool.Exec(ctx, "DROP SCHEMA "+pqQuoteIdent(schemaName)+" CASCADE")
+	c.schema = schemaName
+
+	model := ModelDef{
+		Name:       "AllTypes",
+		Collection: "all_types",
+		Properties: []PropertyDef{
+			{Name: "id", Type: PropString, PrimaryKey: true},
+			{Name: "nullable_string", Type: PropString, Nullable: true},
+			{Name: "nullable_int", Type: PropInt64, Nullable: true},
+			{Name: "nullable_float", Type: PropFloat64, Nullable: true},
+			{Name: "nullable_bool", Type: PropBool, Nullable: true},
+			{Name: "nullable_time", Type: PropTime, Nullable: true},
+		},
+	}
+	if err := c.Migrate(ctx, model); err != nil {
+		t.Fatalf("Migrate() error: %v", err)
+	}
+
+	// Insert with explicit NULLs
+	_, err := c.Create(ctx, "all_types", map[string]interface{}{
+		"id":              "null-row",
+		"nullable_string": nil,
+		"nullable_int":    nil,
+		"nullable_float":  nil,
+		"nullable_bool":   nil,
+		"nullable_time":   nil,
+	})
+	if err != nil {
+		t.Fatalf("Create() with nulls error: %v", err)
+	}
+
+	// Read back — nulls should survive
+	found, err := c.FindById(ctx, "all_types", "null-row")
+	if err != nil {
+		t.Fatalf("FindById() error: %v", err)
+	}
+	if found == nil {
+		t.Fatal("FindById() returned nil")
+	}
+	if v := found["nullable_string"]; v != nil {
+		t.Errorf("nullable_string = %v (%T), want nil", v, v)
+	}
+	if v := found["nullable_int"]; v != nil {
+		t.Errorf("nullable_int = %v (%T), want nil", v, v)
+	}
+	if v := found["nullable_float"]; v != nil {
+		t.Errorf("nullable_float = %v (%T), want nil", v, v)
+	}
+	if v := found["nullable_bool"]; v != nil {
+		t.Errorf("nullable_bool = %v (%T), want nil", v, v)
+	}
+	if v := found["nullable_time"]; v != nil {
+		t.Errorf("nullable_time = %v (%T), want nil", v, v)
+	}
+}
+
+// ── time.Time and int64 round-trip ───────────────────────────────────────────
+
+func TestIntegration_TimeAndInt64RoundTrip(t *testing.T) {
+	dsn := testDSN(t)
+	ctx := context.Background()
+
+	c := NewPostgresConnector(dsn, "public")
+	if err := c.Connect(ctx); err != nil {
+		t.Fatalf("Connect() error: %v", err)
+	}
+	defer c.Disconnect()
+
+	schemaName := fmt.Sprintf("wsk_it_%d", time.Now().UnixNano())
+	if _, err := c.pool.Exec(ctx, "CREATE SCHEMA "+pqQuoteIdent(schemaName)); err != nil {
+		t.Fatalf("CREATE SCHEMA error: %v", err)
+	}
+	defer c.pool.Exec(ctx, "DROP SCHEMA "+pqQuoteIdent(schemaName)+" CASCADE")
+	c.schema = schemaName
+
+	model := ModelDef{
+		Name:       "TypedRow",
+		Collection: "typed_rows",
+		Properties: []PropertyDef{
+			{Name: "id", Type: PropString, PrimaryKey: true},
+			{Name: "count", Type: PropInt64},
+			{Name: "created_at", Type: PropTime},
+		},
+	}
+	if err := c.Migrate(ctx, model); err != nil {
+		t.Fatalf("Migrate() error: %v", err)
+	}
+
+	now := time.Date(2026, 6, 15, 10, 0, 0, 0, time.UTC)
+	_, err := c.Create(ctx, "typed_rows", map[string]interface{}{
+		"id":         "row-1",
+		"count":      int64(12345),
+		"created_at": now,
+	})
+	if err != nil {
+		t.Fatalf("Create() error: %v", err)
+	}
+
+	found, err := c.FindById(ctx, "typed_rows", "row-1")
+	if err != nil {
+		t.Fatalf("FindById() error: %v", err)
+	}
+	if found == nil {
+		t.Fatal("FindById() returned nil")
+	}
+	if v := found["count"]; v == nil {
+		t.Error("count is nil after round-trip")
+	}
+	if v := found["created_at"]; v == nil {
+		t.Error("created_at is nil after round-trip")
+	}
+}
+
+// ── Migrate idempotence ──────────────────────────────────────────────────────
+
+func TestIntegration_Migrate_Idempotent(t *testing.T) {
+	dsn := testDSN(t)
+	ctx := context.Background()
+
+	c := NewPostgresConnector(dsn, "public")
+	if err := c.Connect(ctx); err != nil {
+		t.Fatalf("Connect() error: %v", err)
+	}
+	defer c.Disconnect()
+
+	schemaName := fmt.Sprintf("wsk_it_%d", time.Now().UnixNano())
+	if _, err := c.pool.Exec(ctx, "CREATE SCHEMA "+pqQuoteIdent(schemaName)); err != nil {
+		t.Fatalf("CREATE SCHEMA error: %v", err)
+	}
+	defer c.pool.Exec(ctx, "DROP SCHEMA "+pqQuoteIdent(schemaName)+" CASCADE")
+	c.schema = schemaName
+
+	model := ModelDef{
+		Name:       "Idempotent",
+		Collection: "idempotent",
+		Properties: []PropertyDef{
+			{Name: "id", Type: PropString, PrimaryKey: true},
+			{Name: "name", Type: PropString},
+		},
+	}
+
+	// First migrate — should create the table
+	if err := c.Migrate(ctx, model); err != nil {
+		t.Fatalf("first Migrate() error: %v", err)
+	}
+
+	// Second migrate — must not error (table already exists)
+	if err := c.Migrate(ctx, model); err != nil {
+		t.Fatalf("second (idempotent) Migrate() error: %v", err)
+	}
+
+	// Third migrate with a new column — should add it without error
+	model2 := ModelDef{
+		Name:       "Idempotent",
+		Collection: "idempotent",
+		Properties: []PropertyDef{
+			{Name: "id", Type: PropString, PrimaryKey: true},
+			{Name: "name", Type: PropString},
+			{Name: "email", Type: PropString, Nullable: true},
+		},
+	}
+	if err := c.Migrate(ctx, model2); err != nil {
+		t.Fatalf("third Migrate() (add column) error: %v", err)
+	}
+
+	// Verify the new column exists and we can use it
+	_, err := c.Create(ctx, "idempotent", map[string]interface{}{
+		"id":    "test-1",
+		"name":  "test",
+		"email": "test@example.com",
+	})
+	if err != nil {
+		t.Fatalf("Create() after migrate error: %v", err)
+	}
+}
+
 // Ensure pgx.ErrNoRows is handled correctly (import used).
 var _ = pgx.ErrNoRows
