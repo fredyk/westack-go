@@ -80,6 +80,15 @@ func (s *GraphQLServer) ServeGraphQL(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// El SDL auto-generado declara `op(op: InputType)`: parseFieldArgs deja los
+	// campos del input anidados bajo la clave del argumento (== nombre de la
+	// operación). Desenvolvemos ese input-object para que sus campos mapeen al
+	// struct del resolver. Si los args ya vienen planos (`op(campo: val)`), la
+	// clave no existe y no se toca nada (retrocompatible).
+	if inner, ok := args[operationName].(map[string]any); ok {
+		args = inner
+	}
+
 	handler, ok := s.resolvers[operationName]
 	if !ok {
 		writeGraphQLError(w, http.StatusNotFound, fmt.Sprintf("unknown operation: %s", operationName))

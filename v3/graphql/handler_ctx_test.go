@@ -60,3 +60,40 @@ func TestServeGraphQL_ContextAndInputFlowToHandler(t *testing.T) {
 		t.Errorf("input NO fluyó: Name esperado 'bob', got %q", got.Name)
 	}
 }
+
+// El SDL auto-generado declara `op(op: InputType)` (un único argumento nombrado
+// como la operación, cuyo valor es el input-object). Un cliente que sigue ese
+// SDL envía `op(op: {campo: valor})`. callResolver debe desenvolver ese
+// input-object y mapear sus campos al struct del resolver. Antes del fix el
+// input llegaba VACÍO (los campos quedaban anidados bajo la clave del arg) —
+// rompía toda mutación/consulta con input (p. ej. crearExpediente en ec-api).
+func TestServeGraphQL_WrappedInputObjectReachesResolver(t *testing.T) {
+	m := &ModelImpl{}
+	field := BindGraphQLMutationWithOptions(m, func(in testInput) (testResult, error) {
+		return testResult{Name: in.Name}, nil
+	}, &GraphQLOperationOptions{Name: "makeThing"})
+	srv := NewGraphQLServer(m)
+	srv.RegisterField(field)
+
+	body := `{"query":"mutation{makeThing(makeThing:{name:\"hello\"}){id name}}"}`
+	r := httptest.NewRequest("POST", "/graphql", strings.NewReader(body))
+	w := httptest.NewRecorder()
+	srv.ServeGraphQL(w, r)
+
+	if w.Code != 200 {
+		t.Fatalf("status %d body=%s", w.Code, w.Body.String())
+	}
+	var resp struct {
+		Data   map[string]testResult `json:"data"`
+		Errors []map[string]any      `json:"errors"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal: %v body=%s", err, w.Body.String())
+	}
+	if len(resp.Errors) > 0 {
+		t.Fatalf("graphql errors: %v", resp.Errors)
+	}
+	if got := resp.Data["makeThing"]; got.Name != "hello" {
+		t.Errorf("input-object anidado NO llegó al resolver: Name esperado 'hello', got %q (body=%s)", got.Name, w.Body.String())
+	}
+}
