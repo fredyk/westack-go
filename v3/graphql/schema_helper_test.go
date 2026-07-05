@@ -143,6 +143,59 @@ func TestSchemaHelper_SDLEmpty(t *testing.T) {
 	}
 }
 
+type sliceResultItem struct {
+	ID   string
+	Name string
+}
+
+func TestSchemaHelper_SliceResult(t *testing.T) {
+	h := NewSchemaHelper()
+
+	// Register a slice of pointers to a struct as output type
+	resultName := h.RegisterOutputType(new([]*sliceResultItem))
+
+	// BUG: this returns "String" instead of "[sliceResultItem]"
+	if resultName != "[sliceResultItem]" {
+		t.Errorf("RegisterOutputType([]*sliceResultItem) = %q, want %q", resultName, "[sliceResultItem]")
+	}
+
+	sdl := h.SDL()
+	if !contains(sdl, "type sliceResultItem") {
+		t.Errorf("SDL missing 'type sliceResultItem':\n%s", sdl)
+	}
+
+	// Also test non-pointer element slice
+	resultName2 := h.RegisterOutputType(new([]sliceResultItem))
+	if resultName2 != "[sliceResultItem]" {
+		t.Errorf("RegisterOutputType([]sliceResultItem) = %q, want %q", resultName2, "[sliceResultItem]")
+	}
+}
+
+func TestSchemaHelper_SliceResultViaBind(t *testing.T) {
+	// Verify that BindGraphQLOperation with a slice result produces correct SDL
+	type listFooInput struct {
+		Limit int
+	}
+	type fooItem struct {
+		ID   string
+		Name string
+	}
+
+	m := &ModelImpl{Name: "test"}
+	BindGraphQLOperation(m, func(req listFooInput) ([]*fooItem, error) {
+		return nil, nil
+	})
+
+	// The result type in SDL should be [fooItem], not String
+	sdl := m.SchemaHelper().SDL()
+	if !contains(sdl, "[fooItem]") {
+		t.Errorf("SDL should contain '[fooItem]' but got:\n%s", sdl)
+	}
+	if contains(sdl, "String") && !contains(sdl, "[fooItem]") {
+		t.Errorf("SDL contains 'String' as result type instead of '[fooItem]':\n%s", sdl)
+	}
+}
+
 func contains(s, substr string) bool {
 	return len(s) >= len(substr) && (s == substr || len(s) > 0 && containsHelper(s, substr))
 }
