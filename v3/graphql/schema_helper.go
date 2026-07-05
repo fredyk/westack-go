@@ -59,7 +59,21 @@ func (h *SchemaHelper) registerType(v any, kind string) string {
 
 	name := GoTypeName(t)
 	if name == "" {
-		// Anonymous type
+		// Handle slices and anonymous types
+		if t.Kind() == reflect.Slice {
+			elem := t.Elem()
+			for elem.Kind() == reflect.Ptr {
+				elem = elem.Elem()
+			}
+			// []float32 → Vector
+			if elem.Kind() == reflect.Float32 {
+				return "Vector"
+			}
+			if elemName := GoTypeName(elem); elemName != "" && elem.Kind() == reflect.Struct {
+				h.registerType(reflect.New(elem).Interface(), kind)
+				return "[" + elemName + "]"
+			}
+		}
 		return "String"
 	}
 
