@@ -97,14 +97,21 @@ func (s *GraphQLServer) ServeGraphQL(w http.ResponseWriter, r *http.Request) {
 
 	result, err := s.callResolver(r.Context(), handler, args)
 	if err != nil {
-		writeGraphQLError(w, http.StatusInternalServerError, err.Error())
+		writeGraphQLResultWithErrors(w, operationName, result, []map[string]any{{"message": err.Error()}})
 		return
 	}
 
 	writeGraphQLResult(w, operationName, result)
 }
 
-func (s *GraphQLServer) callResolver(ctx context.Context, handler any, args map[string]any) (any, error) {
+func (s *GraphQLServer) callResolver(ctx context.Context, handler any, args map[string]any) (result any, errRet error) {
+	// Recover from panics in the resolver and return them as GraphQL errors.
+	defer func() {
+		if r := recover(); r != nil {
+			errRet = fmt.Errorf("resolver panic: %v", r)
+		}
+	}()
+
 	// Reflect-based call. The handler is either:
 	//   func(req T) (R, error)                      — simple, no context
 	//   func(req *RemoteOperationReq[T]) (R, error) — carries per-request ctx
@@ -144,13 +151,14 @@ func (s *GraphQLServer) callResolver(ctx context.Context, handler any, args map[
 	}
 
 	results := rv.Call([]reflect.Value{callArg})
+
 	if len(results) != 2 {
 		return nil, fmt.Errorf("handler must return (R, error)")
 	}
 
 	if !results[1].IsNil() {
 		err, _ := results[1].Interface().(error)
-		return nil, err
+		return results[0].Interface(), err
 	}
 
 	return results[0].Interface(), nil
@@ -196,6 +204,7 @@ func parseGraphQLQuery(query string, operationName string) (string, map[string]a
 
 // resolveVariables sustituye los valores de args que sean referencias "$var"
 // por su valor en el mapa de variables del cuerpo de la petición.
+// Resuelve recursivamente dentro de objetos anidados y listas.
 func resolveVariables(args, variables map[string]any) map[string]any {
 	if len(variables) == 0 {
 		return args
@@ -204,11 +213,7 @@ func resolveVariables(args, variables map[string]any) map[string]any {
 		args = map[string]any{}
 	}
 	for k, v := range args {
-		if s, ok := v.(string); ok && strings.HasPrefix(s, "$") {
-			if rv, found := variables[strings.TrimPrefix(s, "$")]; found {
-				args[k] = rv
-			}
-		}
+		args[k] = resolveValue(v, variables)
 	}
 	// Variables declaradas y no referenciadas inline: inyectarlas si no colisionan.
 	for k, v := range variables {
@@ -219,56 +224,91 @@ func resolveVariables(args, variables map[string]any) map[string]any {
 	return args
 }
 
+func resolveValue(v any, variables map[string]any) any {
+	switch val := v.(type) {
+	case string:
+		if strings.HasPrefix(val, "$") {
+			if rv, found := variables[strings.TrimPrefix(val, "$")]; found {
+				return rv
+			}
+			return val
+		}
+		return val
+	case map[string]any:
+		for k, child := range val {
+			val[k] = resolveValue(child, variables)
+		}
+		return val
+	case []any:
+		for i, child := range val {
+			val[i] = resolveValue(child, variables)
+		}
+		return val
+	default:
+		return val
+	}
+}
+
+// extractOperationName devuelve el nombre del PRIMER campo de la selección de nivel
+// superior (que es la clave con la que se despacha el resolver). Soporta las cuatro
+// formas que emiten los clientes GraphQL reales (Apollo/urql declaran SIEMPRE
+// variables):
+//   {campo(...)}                          (anónima, sin keyword)
+//   query|mutation {campo(...)}           (con keyword)
+//   query|mutation ($v: T){campo(...)}    (anónima con declaración de variables)
+//   query|mutation Nombre($v: T){campo}   (nombrada con variables)
+// Salta keyword + nombre de operación opcional + bloque `(...)` de variables
+// (balanceado, tolera paréntesis anidados) hasta el `{` de la selección. Devolver
+// "" aquí obliga a ServeGraphQL a responder un error — nunca cuelga el parser.
 func extractOperationName(query string) string {
-	query = strings.TrimSpace(query)
-	if query == "" {
-		return ""
-	}
-
-	// Skip "mutation" or "query" keyword
-	idx := 0
-	for idx < len(query) && (query[idx] == ' ' || query[idx] == '\t' || query[idx] == '\n') {
-		idx++
-	}
-	rest := query[idx:]
-
-	// Handle "query" or "mutation" keyword
-	lower := strings.ToLower(rest)
-	if strings.HasPrefix(lower, "query") {
-		rest = rest[5:]
-		rest = strings.TrimSpace(rest)
-	} else if strings.HasPrefix(lower, "mutation") {
-		rest = rest[8:]
-		rest = strings.TrimSpace(rest)
-	}
-
-	// Now we expect either '{' (anonymous) or an identifier
-	if len(rest) == 0 {
-		return ""
-	}
-
-	if rest[0] == '{' {
-		// Anonymous query: extract first field name inside braces
-		inner := rest[1:]
-		inner = strings.TrimSpace(inner)
-		end := strings.IndexAny(inner, " ({\n\t\r")
-		if end == -1 {
-			end = len(inner)
+	q := strings.TrimSpace(query)
+	i := 0
+	// keyword opcional (query/mutation/subscription)
+	for _, kw := range []string{"query", "mutation", "subscription"} {
+		if strings.HasPrefix(q, kw) && (len(q) == len(kw) || !isIdentChar(q[len(kw)])) {
+			i = len(kw)
+			break
 		}
-		field := strings.TrimSpace(inner[:end])
-		parts := strings.Fields(field)
-		if len(parts) > 0 {
-			return parts[0]
+	}
+	skipWS := func() {
+		for i < len(q) && isSpace(q[i]) {
+			i++
 		}
-		return ""
 	}
-
-	// Named operation: "operationName(...)"
-	end := strings.IndexAny(rest, " (")
-	if end == -1 {
-		end = len(rest)
+	skipWS()
+	// nombre de operación opcional (identificador antes de '(' o '{')
+	for i < len(q) && isIdentChar(q[i]) {
+		i++
 	}
-	return strings.TrimSpace(rest[:end])
+	skipWS()
+	// bloque de declaración de variables '(...)' opcional — saltar balanceado
+	if i < len(q) && q[i] == '(' {
+		depth := 0
+		for i < len(q) {
+			switch q[i] {
+			case '(':
+				depth++
+			case ')':
+				depth--
+			}
+			i++
+			if depth == 0 {
+				break
+			}
+		}
+	}
+	skipWS()
+	// selección: '{'
+	if i < len(q) && q[i] == '{' {
+		i++
+	}
+	skipWS()
+	// primer campo
+	start := i
+	for i < len(q) && isIdentChar(q[i]) {
+		i++
+	}
+	return q[start:i]
 }
 
 func writeGraphQLError(w http.ResponseWriter, status int, message string) {
@@ -286,6 +326,17 @@ func writeGraphQLResult(w http.ResponseWriter, operationName string, data any) {
 	w.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(w).Encode(map[string]any{
 		"data": map[string]any{operationName: data},
+	})
+}
+
+// writeGraphQLResultWithErrors escribe data+errors conforme a la spec de
+// GraphQL (HTTP 200, objeto data con el resultado parcial y array errors).
+func writeGraphQLResultWithErrors(w http.ResponseWriter, operationName string, data any, errors []map[string]any) {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(map[string]any{
+		"data":   map[string]any{operationName: data},
+		"errors": errors,
 	})
 }
 

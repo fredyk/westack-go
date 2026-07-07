@@ -11,6 +11,12 @@ import (
 // (identificadores), objetos `{...}` y listas `[...]` de forma recursiva.
 // Devuelve nil si la operación no tiene argumentos.
 func parseFieldArgs(query, opName string) map[string]any {
+	// Guard: opName vacío haría que strings.Index(q, "") devuelva 0 en cada
+	// iteración con `from` sin avanzar → bucle infinito (DoS). Sin nombre de
+	// operación no hay args que parsear.
+	if opName == "" {
+		return nil
+	}
 	// Buscar `opName` seguido (tras espacios) de '('. Recorremos todas las
 	// apariciones por si el nombre aparece antes en un alias/comentario.
 	from := 0
