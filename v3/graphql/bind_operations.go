@@ -103,6 +103,16 @@ func BindGraphQLOperationWithContext[T any, R any](m Model, handler func(req *Re
 	return bindGraphQLCtx[T, R](m, "query", o.Name, handler, o)
 }
 
+// BindGraphQLMutationWithContext is the mutation twin of BindGraphQLOperationWithContext.
+// Handlers receive *RemoteOperationReq[T] with the per-request context so that
+// auth principal, deadlines and cancellation flow into mutation resolvers.
+func BindGraphQLMutationWithContext[T any, R any](m Model, handler func(req *RemoteOperationReq[T]) (R, error), o *GraphQLOperationOptions) *GraphQLField {
+	if o == nil {
+		o = &GraphQLOperationOptions{}
+	}
+	return bindGraphQLCtx[T, R](m, "mutation", o.Name, handler, o)
+}
+
 // BindGraphQLQuery registers a read-only operation as a GraphQL Query.
 func BindGraphQLQuery[T any, R any](m Model, handler func(req T) (R, error)) *GraphQLField {
 	return bindGraphQL[T, R](m, "query", getFunctionName(handler), handler)
