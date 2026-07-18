@@ -1,0 +1,990 @@
+[0m
+> build · qwen3.6
+[0m
+[0m→ [0mRead .opencode-prompts/wsk-gql.md
+[0m• [0mExplore v3 structure and spec[90m Explore Agent[0m
+[0m✓ [0mExplore v3 structure and spec[90m Explore Agent[0m
+[0m
+[0m# [0mTodos
+[✓] Read full spec file and v2 reference code
+[ ] Create v3/graphql/ directory structure
+[ ] Implement SchemaHelper interface + SDL accumulator
+[ ] Implement type mapping Go→GraphQL (pure testable function)
+[ ] Implement BindGraphQLOperation signatures (stubs)
+[ ] Implement BindGraphQLQuery + BindGraphQLMutation
+[ ] Write tests - type mapping (red→green)
+[ ] Write tests - SchemaHelper.SDL() (red→green)
+[ ] Write tests - Query vs Mutation (red→green)
+[0m
+Ahora voy a leer el código fuente clave para entender los patrones exactos a replicar.
+[0m→ [0mRead v2/lib/swaggerhelper
+[0m→ [0mRead v2/model/modelremoteoperation.go
+[0m✱ [0mGlob "v3/**/*"[90m 0 matches[0m
+[0m✱ [0mGlob "v3/go.mod"[90m 0 matches[0m
+[0m✗ [0mRead go.mod failed
+[91m[1mError: [0mFile not found: /home/fred/dev/projects/westack-go.oc-wsk-gql/go.mod
+[0m→ [0mRead v2/lib/swaggerhelper/swaggerhelper.go
+[0m✱ [0mGlob "v2/model/*.go"[90m 15 matches[0m
+[0m→ [0mRead v2/model/model.go
+[0m✱ [0mGlob "**/go.mod"[90m 5 matches[0m
+[0m→ [0mRead v2/go.mod[90m [limit=50][0m
+[0m
+[0m# [0mTodos
+[✓] Read full spec file and v2 reference code
+[•] Create v3/graphql/ directory structure and go.mod
+[ ] Implement type mapping Go→GraphQL (pure testable function)
+[ ] Write type mapping tests (RED first)
+[ ] Implement SchemaHelper interface + SDL accumulator
+[ ] Write SchemaHelper.SDL() tests (RED first)
+[ ] Implement BindGraphQLOperation signatures (stubs)
+[ ] Implement BindGraphQLQuery + BindGraphQLMutation
+[ ] Write Query vs Mutation tests (RED first)
+[0m
+Ahora entiendo el contexto completo. El trabajo es en `v3/` que aún no existe como directorio. Voy a crear la estructura de `v3/graphql/` con los archivos necesarios, siguiendo TDD (tests rojos primero).
+[0m$ [0mls /home/fred/dev/projects/westack-go.oc-wsk-gql/
+CHANGELOG.md
+LICENSE.md
+README.md
+SECURITY.md
+client
+docs
+examples
+lambdas
+oc-wsk-gql.log
+v2
+[0m
+[0m$ [0mmkdir -p /home/fred/dev/projects/westack-go.oc-wsk-gql/v3/graphql
+(no output)
+[0m
+Ahora necesito crear el `go.mod` para v3 y los archivos fuente. Voy a empezar con los tests ROJOS primero (TDD estricto), luego la implementación.
+
+Primero, el `go.mod`:
+[0m← [0mWrite v3/go.mod
+Wrote file successfully.
+[0m
+Ahora, siguiendo TDD estricto (red → green → refactor), voy a escribir PRIMERO los tests que deben fallar, luego la implementación mínima que los ponga en verde.
+
+Empezando con el mapeo de tipos Go→GraphQL:
+[0m← [0mWrite v3/graphql/type_mapping_test.go
+Wrote file successfully.
+[0m
+[0m$ [0mcd /home/fred/dev/projects/westack-go.oc-wsk-gql/v3 && go test ./graphql/ 2>&1 | head -20
+# github.com/fredyk/westack-go/v3/graphql [github.com/fredyk/westack-go/v3/graphql.test]
+graphql/type_mapping_test.go:68:14: undefined: GoTypeToGraphQL
+graphql/type_mapping_test.go:81:12: undefined: GoTypeToGraphQL
+FAIL	github.com/fredyk/westack-go/v3/graphql [build failed]
+FAIL
+[0m
+Test compila pero falla porque `GoTypeToGraphQL` no existe. Ahora la implementación mínima:
+[0m← [0mWrite v3/graphql/type_mapping.go
+Wrote file successfully.
+[0m
+Los tests están escritos pero aún no he visto el resultado. Voy a correrlos para ver si pasan (GREEN) o fallan (RED).
+[0m$ [0mcd /home/fred/dev/projects/westack-go.oc-wsk-gql/v3 && go test -race -v ./graphql/ -run TestGoTypeToGraphQL 2>&1
+=== RUN   TestGoTypeToGraphQL
+=== RUN   TestGoTypeToGraphQL/string_maps_to_String
+=== RUN   TestGoTypeToGraphQL/int_maps_to_Int
+=== RUN   TestGoTypeToGraphQL/int64_maps_to_Int
+=== RUN   TestGoTypeToGraphQL/float64_maps_to_Float
+=== RUN   TestGoTypeToGraphQL/bool_maps_to_Boolean
+=== RUN   TestGoTypeToGraphQL/time.Time_maps_to_DateTime
+=== RUN   TestGoTypeToGraphQL/[]string_maps_to_[String]
+runtime: goroutine stack exceeds 1000000000-byte limit
+runtime: sp=0xc0201e0680 stack=[0xc0201e0000, 0xc0401e0000]
+fatal error: stack overflow
+
+runtime stack:
+runtime.throw({0x644802?, 0x0?})
+	/home/fred/go/src/runtime/panic.go:1094 +0x48 fp=0x79000dffcd10 sp=0x79000dffcce0 pc=0x4b3bc8
+runtime.newstack()
+	/home/fred/go/src/runtime/stack.go:1159 +0x5bd fp=0x79000dffce40 sp=0x79000dffcd10 pc=0x49845d
+runtime.morestack()
+	/home/fred/go/src/runtime/asm_amd64.s:620 +0x7d fp=0x79000dffce48 sp=0x79000dffce40 pc=0x4b975d
+
+goroutine 28 gp=0xc000103340 m=4 mp=0xc00006f808 [running]:
+runtime.mapaccess1_fast32(0x61a7a0, 0x0, 0xbee0)
+	/home/fred/go/src/internal/runtime/maps/runtime_fast32_swiss.go:17 +0x214 fp=0xc0201e0690 sp=0xc0201e0688 pc=0x4410f4
+runtime.resolveTypeOff(0x4be511?, 0xbee0)
+	/home/fred/go/src/runtime/type.go:356 +0x7c fp=0xc0201e06e8 sp=0xc0201e0690 pc=0x4ac4dc
+runtime.rtype.typeOff(...)
+	/home/fred/go/src/runtime/type.go:368
+reflect.resolveTypeOff(0x0?, 0x0?)
+	/home/fred/go/src/runtime/runtime1.go:700 +0x13 fp=0xc0201e0708 sp=0xc0201e06e8 pc=0x4b4ff3
+reflect.(*rtype).typeOff(...)
+	/home/fred/go/src/reflect/type.go:567
+reflect.(*rtype).ptrTo(0x60dbe0)
+	/home/fred/go/src/reflect/type.go:1348 +0x115 fp=0xc0201e07f8 sp=0xc0201e0708 pc=0x51c5f5
+reflect.ptrTo(...)
+	/home/fred/go/src/reflect/type.go:1390
+reflect.New({0x685f60, 0x60dbe0})
+	/home/fred/go/src/reflect/value.go:3090 +0x68 fp=0xc0201e0830 sp=0xc0201e07f8 pc=0x51baa8
+github.com/fredyk/westack-go/v3/graphql.GoTypeToGraphQL({0x607ee0, 0xc0010b1d30})
+	/home/fred/dev/projects/westack-go.oc-wsk-gql/v3/graphql/type_mapping.go:21 +0x329 fp=0xc0201e08d8 sp=0xc0201e0830 pc=0x5e2389
+github.com/fredyk/westack-go/v3/graphql.GoTypeToGraphQL({0x607ee0, 0xc0010b1d20})
+	/home/fred/dev/projects/westack-go.oc-wsk-gql/v3/graphql/type_mapping.go:21 +0x338 fp=0xc0201e0980 sp=0xc0201e08d8 pc=0x5e2398
+github.com/fredyk/westack-go/v3/graphql.GoTypeToGraphQL({0x607ee0, 0xc0010b1d10})
+	/home/fred/dev/projects/westack-go.oc-wsk-gql/v3/graphql/type_mapping.go:21 +0x338 fp=0xc0201e0a28 sp=0xc0201e0980 pc=0x5e2398
+github.com/fredyk/westack-go/v3/graphql.GoTypeToGraphQL({0x607ee0, 0xc0010b1d00})
+	/home/fred/dev/projects/westack-go.oc-wsk-gql/v3/graphql/type_mapping.go:21 +0x338 fp=0xc0201e0ad0 sp=0xc0201e0a28 pc=0x5e2398
+github.com/fredyk/westack-go/v3/graphql.GoTypeToGraphQL({0x607ee0, 0xc0010b1cf0})
+	/home/fred/dev/projects/westack-go.oc-wsk-gql/v3/graphql/type_mapping.go:21 +0x338 fp=0xc0201e0b78 sp=0xc0201e0ad0 pc=0x5e2398
+github.com/fredyk/westack-go/v3/graphql.GoTypeToGraphQL({0x607ee0, 0xc0010b1ce0})
+	/home/fred/dev/projects/westack-go.oc-wsk-gql/v3/graphql/type_mapping.go:21 +0x338 fp=0xc0201e0c20 sp=0xc0201e0b78 pc=0x5e2398
+github.com/fredyk/westack-go/v3/graphql.GoTypeToGraphQL({0x607ee0, 0xc0010b1cd0})
+	/home/fred/dev/projects/westack-go.oc-wsk-gql/v3/graphql/type_mapping.go:21 +0x338 fp=0xc0201e0cc8 sp=0xc0201e0c20 pc=0x5e2398
+github.com/fredyk/westack-go/v3/graphql.GoTypeToGraphQL({0x607ee0, 0xc0010b1cc0})
+	/home/fred/dev/projects/westack-go.oc-wsk-gql/v3/graphql/type_mapping.go:21 +0x338 fp=0xc0201e0d70 sp=0xc0201e0cc8 pc=0x5e2398
+github.com/fredyk/westack-go/v3/graphql.GoTypeToGraphQL({0x607ee0, 0xc0010b1cb0})
+	/home/fred/dev/projects/westack-go.oc-wsk-gql/v3/graphql/type_mapping.go:21 +0x338 fp=0xc0201e0e18 sp=0xc0201e0d70 pc=0x5e2398
+github.com/fredyk/westack-go/v3/graphql.GoTypeToGraphQL({0x607ee0, 0xc0010b1ca0})
+	/home/fred/dev/projects/westack-go.oc-wsk-gql/v3/graphql/type_mapping.go:21 +0x338 fp=0xc0201e0ec0 sp=0xc0201e0e18 pc=0x5e2398
+github.com/fredyk/westack-go/v3/graphql.GoTypeToGraphQL({0x607ee0, 0xc0010b1c90})
+	/home/fred/dev/projects/westack-go.oc-wsk-gql/v3/graphql/type_mapping.go:21 +0x338 fp=0xc0201e0f68 sp=0xc0201e0ec0 pc=0x5e2398
+github.com/fredyk/westack-go/v3/graphql.GoTypeToGraphQL({0x607ee0, 0xc0010b1c80})
+	/home/fred/dev/projects/westack-go.oc-wsk-gql/v3/graphql/type_mapping.go:21 +0x338 fp=0xc0201e1010 sp=0xc0201e0f68 pc=0x5e2398
+github.com/fredyk/westack-go/v3/graphql.GoTypeToGraphQL({0x607ee0, 0xc0010b1c70})
+	/home/fred/dev/projects/westack-go.oc-wsk-gql/v3/graphql/type_mapping.go:21 +0x338 fp=0xc0201e10b8 sp=0xc0201e1010 pc=0x5e2398
+github.com/fredyk/westack-go/v3/graphql.GoTypeToGraphQL({0x607ee0, 0xc0010b1c60})
+	/home/fred/dev/projects/westack-go.oc-wsk-gql/v3/graphql/type_mapping.go:21 +0x338 fp=0xc0201e1160 sp=0xc0201e10b8 pc=0x5e2398
+github.com/fredyk/westack-go/v3/graphql.GoTypeToGraphQL({0x607ee0, 0xc0010b1c50})
+	/home/fred/dev/projects/westack-go.oc-wsk-gql/v3/graphql/type_mapping.go:21 +0x338 fp=0xc0201e1208 sp=0xc0201e1160 pc=0x5e2398
+github.com/fredyk/westack-go/v3/graphql.GoTypeToGraphQL({0x607ee0, 0xc0010b1c40})
+	/home/fred/dev/projects/westack-go.oc-wsk-gql/v3/graphql/type_mapping.go:21 +0x338 fp=0xc0201e12b0 sp=0xc0201e1208 pc=0x5e2398
+github.com/fredyk/westack-go/v3/graphql.GoTypeToGraphQL({0x607ee0, 0xc0010b1c30})
+	/home/fred/dev/projects/westack-go.oc-wsk-gql/v3/graphql/type_mapping.go:21 +0x338 fp=0xc0201e1358 sp=0xc0201e12b0 pc=0x5e2398
+github.com/fredyk/westack-go/v3/graphql.GoTypeToGraphQL({0x607ee0, 0xc0010b1c20})
+	/home/fred/dev/projects/westack-go.oc-wsk-gql/v3/graphql/type_mapping.go:21 +0x338 fp=0xc0201e1400 sp=0xc0201e1358 pc=0x5e2398
+github.com/fredyk/westack-go/v3/graphql.GoTypeToGraphQL({0x607ee0, 0xc0010b1c10})
+	/home/fred/dev/projects/westack-go.oc-wsk-gql/v3/graphql/type_mapping.go:21 +0x338 fp=0xc0201e14a8 sp=0xc0201e1400 pc=0x5e2398
+github.com/fredyk/westack-go/v3/graphql.GoTypeToGraphQL({0x607ee0, 0xc0010b1c00})
+	/home/fred/dev/projects/westack-go.oc-wsk-gql/v3/graphql/type_mapping.go:21 +0x338 fp=0xc0201e1550 sp=0xc0201e14a8 pc=0x5e2398
+github.com/fredyk/westack-go/v3/graphql.GoTypeToGraphQL({0x607ee0, 0xc0010b1bf0})
+	/home/fred/dev/projects/westack-go.oc-wsk-gql/v3/graphql/type_mapping.go:21 +0x338 fp=0xc0201e15f8 sp=0xc0201e1550 pc=0x5e2398
+github.com/fredyk/westack-go/v3/graphql.GoTypeToGraphQL({0x607ee0, 0xc0010b1be0})
+	/home/fred/dev/projects/westack-go.oc-wsk-gql/v3/graphql/type_mapping.go:21 +0x338 fp=0xc0201e16a0 sp=0xc0201e15f8 pc=0x5e2398
+github.com/fredyk/westack-go/v3/graphql.GoTypeToGraphQL({0x607ee0, 0xc0010b1bd0})
+	/home/fred/dev/projects/westack-go.oc-wsk-gql/v3/graphql/type_mapping.go:21 +0x338 fp=0xc0201e1748 sp=0xc0201e16a0 pc=0x5e2398
+github.com/fredyk/westack-go/v3/graphql.GoTypeToGraphQL({0x607ee0, 0xc0010b1bc0})
+	/home/fred/dev/projects/westack-go.oc-wsk-gql/v3/graphql/type_mapping.go:21 +0x338 fp=0xc0201e17f0 sp=0xc0201e1748 pc=0x5e2398
+github.com/fredyk/westack-go/v3/graphql.GoTypeToGraphQL({0x607ee0, 0xc0010b1bb0})
+	/home/fred/dev/projects/westack-go.oc-wsk-gql/v3/graphql/type_mapping.go:21 +0x338 fp=0xc0201e1898 sp=0xc0201e17f0 pc=0x5e2398
+github.com/fredyk/westack-go/v3/graphql.GoTypeToGraphQL({0x607ee0, 0xc0010b1ba0})
+	/home/fred/dev/projects/westack-go.oc-wsk-gql/v3/graphql/type_mapping.go:21 +0x338 fp=0xc0201e1940 sp=0xc0201e1898 pc=0x5e2398
+github.com/fredyk/westack-go/v3/graphql.GoTypeToGraphQL({0x607ee0, 0xc0010b1b90})
+	/home/fred/dev/projects/westack-go.oc-wsk-gql/v3/graphql/type_mapping.go:21 +0x338 fp=0xc0201e19e8 sp=0xc0201e1940 pc=0x5e2398
+github.com/fredyk/westack-go/v3/graphql.GoTypeToGraphQL({0x607ee0, 0xc0010b1b80})
+	/home/fred/dev/projects/westack-go.oc-wsk-gql/v3/graphql/type_mapping.go:21 +0x338 fp=0xc0201e1a90 sp=0xc0201e19e8 pc=0x5e2398
+github.com/fredyk/westack-go/v3/graphql.GoTypeToGraphQL({0x607ee0, 0xc0010b1b70})
+	/home/fred/dev/projects/westack-go.oc-wsk-gql/v3/graphql/type_mapping.go:21 +0x338 fp=0xc0201e1b38 sp=0xc0201e1a90 pc=0x5e2398
+github.com/fredyk/westack-go/v3/graphql.GoTypeToGraphQL({0x607ee0, 0xc0010b1b60})
+	/home/fred/dev/projects/westack-go.oc-wsk-gql/v3/graphql/type_mapping.go:21 +0x338 fp=0xc0201e1be0 sp=0xc0201e1b38 pc=0x5e2398
+github.com/fredyk/westack-go/v3/graphql.GoTypeToGraphQL({0x607ee0, 0xc0010b1b50})
+	/home/fred/dev/projects/westack-go.oc-wsk-gql/v3/graphql/type_mapping.go:21 +0x338 fp=0xc0201e1c88 sp=0xc0201e1be0 pc=0x5e2398
+github.com/fredyk/westack-go/v3/graphql.GoTypeToGraphQL({0x607ee0, 0xc0010b1b40})
+	/home/fred/dev/projects/westack-go.oc-wsk-gql/v3/graphql/type_mapping.go:21 +0x338 fp=0xc0201e1d30 sp=0xc0201e1c88 pc=0x5e2398
+github.com/fredyk/westack-go/v3/graphql.GoTypeToGraphQL({0x607ee0, 0xc0010b1b30})
+	/home/fred/dev/projects/westack-go.oc-wsk-gql/v3/graphql/type_mapping.go:21 +0x338 fp=0xc0201e1dd8 sp=0xc0201e1d30 pc=0x5e2398
+github.com/fredyk/westack-go/v3/graphql.GoTypeToGraphQL({0x607ee0, 0xc0010b1b20})
+	/home/fred/dev/projects/westack-go.oc-wsk-gql/v3/graphql/type_mapping.go:21 +0x338 fp=0xc0201e1e80 sp=0xc0201e1dd8 pc=0x5e2398
+github.com/fredyk/westack-go/v3/graphql.GoTypeToGraphQL({0x607ee0, 0xc0010b1b10})
+	/home/fred/dev/projects/westack-go.oc-wsk-gql/v3/graphql/type_mapping.go:21 +0x338 fp=0xc0201e1f28 sp=0xc0201e1e80 pc=0x5e2398
+github.com/fredyk/westack-go/v3/graphql.GoTypeToGraphQL({0x607ee0, 0xc0010b1b00})
+	/home/fred/dev/projects/westack-go.oc-wsk-gql/v3/graphql/type_mapping.go:21 +0x338 fp=0xc0201e1fd0 sp=0xc0201e1f28 pc=0x5e2398
+github.com/fredyk/westack-go/v3/graphql.GoTypeToGraphQL({0x607ee0, 0xc0010b1af0})
+	/home/fred/dev/projects/westack-go.oc-wsk-gql/v3/graphql/type_mapping.go:21 +0x338 fp=0xc0201e2078 sp=0xc0201e1fd0 pc=0x5e2398
+github.com/fredyk/westack-go/v3/graphql.GoTypeToGraphQL({0x607ee0, 0xc0010b1ae0})
+	/home/fred/dev/projects/westack-go.oc-wsk-gql/v3/graphql/type_mapping.go:21 +0x338 fp=0xc0201e2120 sp=0xc0201e2078 pc=0x5e2398
+github.com/fredyk/westack-go/v3/graphql.GoTypeToGraphQL({0x607ee0, 0xc0010b1ad0})
+	/home/fred/dev/projects/westack-go.oc-wsk-gql/v3/graphql/type_mapping.go:21 +0x338 fp=0xc0201e21c8 sp=0xc0201e2120 pc=0x5e2398
+github.com/fredyk/westack-go/v3/graphql.GoTypeToGraphQL({0x607ee0, 0xc0010b1ac0})
+	/home/fred/dev/projects/westack-go.oc-wsk-gql/v3/graphql/type_mapping.go:21 +0x338 fp=0xc0201e2270 sp=0xc0201e21c8 pc=0x5e2398
+github.com/fredyk/westack-go/v3/graphql.GoTypeToGraphQL({0x607ee0, 0xc0010b1ab0})
+	/home/fred/dev/projects/westack-go.oc-wsk-gql/v3/graphql/type_mapping.go:21 +0x338 fp=0xc0201e2318 sp=0xc0201e2270 pc=0x5e2398
+github.com/fredyk/westack-go/v3/graphql.GoTypeToGraphQL({0x607ee0, 0xc0010b1aa0})
+	/home/fred/dev/projects/westack-go.oc-wsk-gql/v3/graphql/type_mapping.go:21 +0x338 fp=0xc0201e23c0 sp=0xc0201e2318 pc=0x5e2398
+...3195557 frames elided...
+github.com/fredyk/westack-go/v3/graphql.GoTypeToGraphQL({0x607ee0, 0xc0001128a0})
+	/home/fred/dev/projects/westack-go.oc-wsk-gql/v3/graphql/type_mapping.go:21 +0x338 fp=0xc0401de0b0 sp=0xc0401de008 pc=0x5e2398
+github.com/fredyk/westack-go/v3/graphql.GoTypeToGraphQL({0x607ee0, 0xc000112890})
+	/home/fred/dev/projects/westack-go.oc-wsk-gql/v3/graphql/type_mapping.go:21 +0x338 fp=0xc0401de158 sp=0xc0401de0b0 pc=0x5e2398
+github.com/fredyk/westack-go/v3/graphql.GoTypeToGraphQL({0x607ee0, 0xc000112880})
+	/home/fred/dev/projects/westack-go.oc-wsk-gql/v3/graphql/type_mapping.go:21 +0x338 fp=0xc0401de200 sp=0xc0401de158 pc=0x5e2398
+github.com/fredyk/westack-go/v3/graphql.GoTypeToGraphQL({0x607ee0, 0xc000112870})
+	/home/fred/dev/projects/westack-go.oc-wsk-gql/v3/graphql/type_mapping.go:21 +0x338 fp=0xc0401de2a8 sp=0xc0401de200 pc=0x5e2398
+github.com/fredyk/westack-go/v3/graphql.GoTypeToGraphQL({0x607ee0, 0xc000112860})
+	/home/fred/dev/projects/westack-go.oc-wsk-gql/v3/graphql/type_mapping.go:21 +0x338 fp=0xc0401de350 sp=0xc0401de2a8 pc=0x5e2398
+github.com/fredyk/westack-go/v3/graphql.GoTypeToGraphQL({0x607ee0, 0xc000112850})
+	/home/fred/dev/projects/westack-go.oc-wsk-gql/v3/graphql/type_mapping.go:21 +0x338 fp=0xc0401de3f8 sp=0xc0401de350 pc=0x5e2398
+github.com/fredyk/westack-go/v3/graphql.GoTypeToGraphQL({0x607ee0, 0xc000112840})
+	/home/fred/dev/projects/westack-go.oc-wsk-gql/v3/graphql/type_mapping.go:21 +0x338 fp=0xc0401de4a0 sp=0xc0401de3f8 pc=0x5e2398
+github.com/fredyk/westack-go/v3/graphql.GoTypeToGraphQL({0x607ee0, 0xc000112830})
+	/home/fred/dev/projects/westack-go.oc-wsk-gql/v3/graphql/type_mapping.go:21 +0x338 fp=0xc0401de548 sp=0xc0401de4a0 pc=0x5e2398
+github.com/fredyk/westack-go/v3/graphql.GoTypeToGraphQL({0x607ee0, 0xc000112820})
+	/home/fred/dev/projects/westack-go.oc-wsk-gql/v3/graphql/type_mapping.go:21 +0x338 fp=0xc0401de5f0 sp=0xc0401de548 pc=0x5e2398
+github.com/fredyk/westack-go/v3/graphql.GoTypeToGraphQL({0x607ee0, 0xc000112810})
+	/home/fred/dev/projects/westack-go.oc-wsk-gql/v3/graphql/type_mapping.go:21 +0x338 fp=0xc0401de698 sp=0xc0401de5f0 pc=0x5e2398
+github.com/fredyk/westack-go/v3/graphql.GoTypeToGraphQL({0x607ee0, 0xc000112800})
+	/home/fred/dev/projects/westack-go.oc-wsk-gql/v3/graphql/type_mapping.go:21 +0x338 fp=0xc0401de740 sp=0xc0401de698 pc=0x5e2398
+github.com/fredyk/westack-go/v3/graphql.GoTypeToGraphQL({0x607ee0, 0xc0001127f0})
+	/home/fred/dev/projects/westack-go.oc-wsk-gql/v3/graphql/type_mapping.go:21 +0x338 fp=0xc0401de7e8 sp=0xc0401de740 pc=0x5e2398
+github.com/fredyk/westack-go/v3/graphql.GoTypeToGraphQL({0x607ee0, 0xc0001127e0})
+	/home/fred/dev/projects/westack-go.oc-wsk-gql/v3/graphql/type_mapping.go:21 +0x338 fp=0xc0401de890 sp=0xc0401de7e8 pc=0x5e2398
+github.com/fredyk/westack-go/v3/graphql.GoTypeToGraphQL({0x607ee0, 0xc0001127d0})
+	/home/fred/dev/projects/westack-go.oc-wsk-gql/v3/graphql/type_mapping.go:21 +0x338 fp=0xc0401de938 sp=0xc0401de890 pc=0x5e2398
+github.com/fredyk/westack-go/v3/graphql.GoTypeToGraphQL({0x607ee0, 0xc0001127c0})
+	/home/fred/dev/projects/westack-go.oc-wsk-gql/v3/graphql/type_mapping.go:21 +0x338 fp=0xc0401de9e0 sp=0xc0401de938 pc=0x5e2398
+github.com/fredyk/westack-go/v3/graphql.GoTypeToGraphQL({0x607ee0, 0xc0001127b0})
+	/home/fred/dev/projects/westack-go.oc-wsk-gql/v3/graphql/type_mapping.go:21 +0x338 fp=0xc0401dea88 sp=0xc0401de9e0 pc=0x5e2398
+github.com/fredyk/westack-go/v3/graphql.GoTypeToGraphQL({0x607ee0, 0xc0001127a0})
+	/home/fred/dev/projects/westack-go.oc-wsk-gql/v3/graphql/type_mapping.go:21 +0x338 fp=0xc0401deb30 sp=0xc0401dea88 pc=0x5e2398
+github.com/fredyk/westack-go/v3/graphql.GoTypeToGraphQL({0x607ee0, 0xc000112790})
+	/home/fred/dev/projects/westack-go.oc-wsk-gql/v3/graphql/type_mapping.go:21 +0x338 fp=0xc0401debd8 sp=0xc0401deb30 pc=0x5e2398
+github.com/fredyk/westack-go/v3/graphql.GoTypeToGraphQL({0x607ee0, 0xc000112780})
+	/home/fred/dev/projects/westack-go.oc-wsk-gql/v3/graphql/type_mapping.go:21 +0x338 fp=0xc0401dec80 sp=0xc0401debd8 pc=0x5e2398
+github.com/fredyk/westack-go/v3/graphql.GoTypeToGraphQL({0x607ee0, 0xc000112770})
+	/home/fred/dev/projects/westack-go.oc-wsk-gql/v3/graphql/type_mapping.go:21 +0x338 fp=0xc0401ded28 sp=0xc0401dec80 pc=0x5e2398
+github.com/fredyk/westack-go/v3/graphql.GoTypeToGraphQL({0x607ee0, 0xc000112760})
+	/home/fred/dev/projects/westack-go.oc-wsk-gql/v3/graphql/type_mapping.go:21 +0x338 fp=0xc0401dedd0 sp=0xc0401ded28 pc=0x5e2398
+github.com/fredyk/westack-go/v3/graphql.GoTypeToGraphQL({0x607ee0, 0xc000112750})
+	/home/fred/dev/projects/westack-go.oc-wsk-gql/v3/graphql/type_mapping.go:21 +0x338 fp=0xc0401dee78 sp=0xc0401dedd0 pc=0x5e2398
+github.com/fredyk/westack-go/v3/graphql.GoTypeToGraphQL({0x607ee0, 0xc000112740})
+	/home/fred/dev/projects/westack-go.oc-wsk-gql/v3/graphql/type_mapping.go:21 +0x338 fp=0xc0401def20 sp=0xc0401dee78 pc=0x5e2398
+github.com/fredyk/westack-go/v3/graphql.GoTypeToGraphQL({0x607ee0, 0xc000112730})
+	/home/fred/dev/projects/westack-go.oc-wsk-gql/v3/graphql/type_mapping.go:21 +0x338 fp=0xc0401defc8 sp=0xc0401def20 pc=0x5e2398
+github.com/fredyk/westack-go/v3/graphql.GoTypeToGraphQL({0x607ee0, 0xc000112720})
+	/home/fred/dev/projects/westack-go.oc-wsk-gql/v3/graphql/type_mapping.go:21 +0x338 fp=0xc0401df070 sp=0xc0401defc8 pc=0x5e2398
+github.com/fredyk/westack-go/v3/graphql.GoTypeToGraphQL({0x607ee0, 0xc000112710})
+	/home/fred/dev/projects/westack-go.oc-wsk-gql/v3/graphql/type_mapping.go:21 +0x338 fp=0xc0401df118 sp=0xc0401df070 pc=0x5e2398
+github.com/fredyk/westack-go/v3/graphql.GoTypeToGraphQL({0x607ee0, 0xc000112700})
+	/home/fred/dev/projects/westack-go.oc-wsk-gql/v3/graphql/type_mapping.go:21 +0x338 fp=0xc0401df1c0 sp=0xc0401df118 pc=0x5e2398
+github.com/fredyk/westack-go/v3/graphql.GoTypeToGraphQL({0x607ee0, 0xc0001126f0})
+	/home/fred/dev/projects/westack-go.oc-wsk-gql/v3/graphql/type_mapping.go:21 +0x338 fp=0xc0401df268 sp=0xc0401df1c0 pc=0x5e2398
+github.com/fredyk/westack-go/v3/graphql.GoTypeToGraphQL({0x607ee0, 0xc0001126e0})
+	/home/fred/dev/projects/westack-go.oc-wsk-gql/v3/graphql/type_mapping.go:21 +0x338 fp=0xc0401df310 sp=0xc0401df268 pc=0x5e2398
+github.com/fredyk/westack-go/v3/graphql.GoTypeToGraphQL({0x607ee0, 0xc0001126d0})
+	/home/fred/dev/projects/westack-go.oc-wsk-gql/v3/graphql/type_mapping.go:21 +0x338 fp=0xc0401df3b8 sp=0xc0401df310 pc=0x5e2398
+github.com/fredyk/westack-go/v3/graphql.GoTypeToGraphQL({0x607ee0, 0xc0001126c0})
+	/home/fred/dev/projects/westack-go.oc-wsk-gql/v3/graphql/type_mapping.go:21 +0x338 fp=0xc0401df460 sp=0xc0401df3b8 pc=0x5e2398
+github.com/fredyk/westack-go/v3/graphql.GoTypeToGraphQL({0x607ee0, 0xc0001126b0})
+	/home/fred/dev/projects/westack-go.oc-wsk-gql/v3/graphql/type_mapping.go:21 +0x338 fp=0xc0401df508 sp=0xc0401df460 pc=0x5e2398
+github.com/fredyk/westack-go/v3/graphql.GoTypeToGraphQL({0x607ee0, 0xc0001126a0})
+	/home/fred/dev/projects/westack-go.oc-wsk-gql/v3/graphql/type_mapping.go:21 +0x338 fp=0xc0401df5b0 sp=0xc0401df508 pc=0x5e2398
+github.com/fredyk/westack-go/v3/graphql.GoTypeToGraphQL({0x607ee0, 0xc000112690})
+	/home/fred/dev/projects/westack-go.oc-wsk-gql/v3/graphql/type_mapping.go:21 +0x338 fp=0xc0401df658 sp=0xc0401df5b0 pc=0x5e2398
+github.com/fredyk/westack-go/v3/graphql.GoTypeToGraphQL({0x607ee0, 0xc000112680})
+	/home/fred/dev/projects/westack-go.oc-wsk-gql/v3/graphql/type_mapping.go:21 +0x338 fp=0xc0401df700 sp=0xc0401df658 pc=0x5e2398
+github.com/fredyk/westack-go/v3/graphql.GoTypeToGraphQL({0x607ee0, 0xc000112670})
+	/home/fred/dev/projects/westack-go.oc-wsk-gql/v3/graphql/type_mapping.go:21 +0x338 fp=0xc0401df7a8 sp=0xc0401df700 pc=0x5e2398
+github.com/fredyk/westack-go/v3/graphql.GoTypeToGraphQL({0x607ee0, 0xc000112660})
+	/home/fred/dev/projects/westack-go.oc-wsk-gql/v3/graphql/type_mapping.go:21 +0x338 fp=0xc0401df850 sp=0xc0401df7a8 pc=0x5e2398
+github.com/fredyk/westack-go/v3/graphql.GoTypeToGraphQL({0x607ee0, 0xc000112650})
+	/home/fred/dev/projects/westack-go.oc-wsk-gql/v3/graphql/type_mapping.go:21 +0x338 fp=0xc0401df8f8 sp=0xc0401df850 pc=0x5e2398
+github.com/fredyk/westack-go/v3/graphql.GoTypeToGraphQL({0x607ee0, 0xc000112640})
+	/home/fred/dev/projects/westack-go.oc-wsk-gql/v3/graphql/type_mapping.go:21 +0x338 fp=0xc0401df9a0 sp=0xc0401df8f8 pc=0x5e2398
+github.com/fredyk/westack-go/v3/graphql.GoTypeToGraphQL({0x607ee0, 0xc000112630})
+	/home/fred/dev/projects/westack-go.oc-wsk-gql/v3/graphql/type_mapping.go:21 +0x338 fp=0xc0401dfa48 sp=0xc0401df9a0 pc=0x5e2398
+github.com/fredyk/westack-go/v3/graphql.GoTypeToGraphQL({0x607ee0, 0xc000112620})
+	/home/fred/dev/projects/westack-go.oc-wsk-gql/v3/graphql/type_mapping.go:21 +0x338 fp=0xc0401dfaf0 sp=0xc0401dfa48 pc=0x5e2398
+github.com/fredyk/westack-go/v3/graphql.GoTypeToGraphQL({0x607ee0, 0xc000112610})
+	/home/fred/dev/projects/westack-go.oc-wsk-gql/v3/graphql/type_mapping.go:21 +0x338 fp=0xc0401dfb98 sp=0xc0401dfaf0 pc=0x5e2398
+github.com/fredyk/westack-go/v3/graphql.GoTypeToGraphQL({0x607ee0, 0xc000112600})
+	/home/fred/dev/projects/westack-go.oc-wsk-gql/v3/graphql/type_mapping.go:21 +0x338 fp=0xc0401dfc40 sp=0xc0401dfb98 pc=0x5e2398
+github.com/fredyk/westack-go/v3/graphql.GoTypeToGraphQL({0x607ee0, 0xc0001125f0})
+	/home/fred/dev/projects/westack-go.oc-wsk-gql/v3/graphql/type_mapping.go:21 +0x338 fp=0xc0401dfce8 sp=0xc0401dfc40 pc=0x5e2398
+github.com/fredyk/westack-go/v3/graphql.GoTypeToGraphQL({0x607ee0, 0xc0001125e0})
+	/home/fred/dev/projects/westack-go.oc-wsk-gql/v3/graphql/type_mapping.go:21 +0x338 fp=0xc0401dfd90 sp=0xc0401dfce8 pc=0x5e2398
+github.com/fredyk/westack-go/v3/graphql.GoTypeToGraphQL({0x60bd20, 0xc0001262d0})
+	/home/fred/dev/projects/westack-go.oc-wsk-gql/v3/graphql/type_mapping.go:28 +0xfb fp=0xc0401dfe38 sp=0xc0401dfd90 pc=0x5e215b
+github.com/fredyk/westack-go/v3/graphql.TestGoTypeToGraphQL.func1(0xc000103dc0)
+	/home/fred/dev/projects/westack-go.oc-wsk-gql/v3/graphql/type_mapping_test.go:68 +0x4c fp=0xc0401dfee0 sp=0xc0401dfe38 pc=0x5e280c
+testing.tRunner(0xc000103dc0, 0xc000114b00)
+	/home/fred/go/src/testing/testing.go:1934 +0x21d fp=0xc0401dffb0 sp=0xc0401dfee0 pc=0x56487d
+testing.(*T).Run.gowrap1()
+	/home/fred/go/src/testing/testing.go:1997 +0x45 fp=0xc0401dffe0 sp=0xc0401dffb0 pc=0x566745
+runtime.goexit({})
+	/home/fred/go/src/runtime/asm_amd64.s:1693 +0x1 fp=0xc0401dffe8 sp=0xc0401dffe0 pc=0x4bb601
+created by testing.(*T).Run in goroutine 21
+	/home/fred/go/src/testing/testing.go:1997 +0x9d3
+
+goroutine 1 gp=0xc000002380 m=nil [chan receive]:
+runtime.gopark(0x18?, 0x7bbe40?, 0xb8?, 0x62?, 0xc000167710?)
+	/home/fred/go/src/runtime/proc.go:460 +0xce fp=0xc0001676a8 sp=0xc000167688 pc=0x4b3d0e
+runtime.chanrecv(0xc000110300, 0xc00016778e, 0x1)
+	/home/fred/go/src/runtime/chan.go:667 +0x425 fp=0xc000167720 sp=0xc0001676a8 pc=0x448845
+runtime.chanrecv1(0x7ba9a0?, 0x60dbe0?)
+	/home/fred/go/src/runtime/chan.go:509 +0x12 fp=0xc000167748 sp=0xc000167720 pc=0x448412
+testing.(*T).Run(0xc000102c40, {0x645da6, 0x13}, 0x6505d8)
+	/home/fred/go/src/testing/testing.go:2005 +0x9fe fp=0xc000167888 sp=0xc000167748 pc=0x56649e
+testing.runTests.func1(0xc000102c40)
+	/home/fred/go/src/testing/testing.go:2477 +0x85 fp=0xc0001678d8 sp=0xc000167888 pc=0x56a885
+testing.tRunner(0xc000102c40, 0xc000167ae0)
+	/home/fred/go/src/testing/testing.go:1934 +0x21d fp=0xc0001679a8 sp=0xc0001678d8 pc=0x56487d
+testing.runTests(0xc000126258, {0x7b1aa0, 0x2, 0x2}, {0x0?, 0x4b21e5?, 0x7bab60?})
+	/home/fred/go/src/testing/testing.go:2475 +0x96d fp=0xc000167b10 sp=0xc0001679a8 pc=0x56a6ed
+testing.(*M).Run(0xc000124500)
+	/home/fred/go/src/testing/testing.go:2337 +0xed5 fp=0xc000167e88 sp=0xc000167b10 pc=0x567cb5
+main.main()
+	_testmain.go:47 +0x165 fp=0xc000167f50 sp=0xc000167e88 pc=0x5e2e45
+runtime.main()
+	/home/fred/go/src/runtime/proc.go:285 +0x29d fp=0xc000167fe0 sp=0xc000167f50 pc=0x47d5bd
+runtime.goexit({})
+	/home/fred/go/src/runtime/asm_amd64.s:1693 +0x1 fp=0xc000167fe8 sp=0xc000167fe0 pc=0x4bb601
+
+goroutine 2 gp=0xc000002e00 m=nil [force gc (idle)]:
+runtime.gopark(0x791f00?, 0x7bbe40?, 0x0?, 0x0?, 0x0?)
+	/home/fred/go/src/runtime/proc.go:460 +0xce fp=0xc0000687a8 sp=0xc000068788 pc=0x4b3d0e
+runtime.goparkunlock(...)
+	/home/fred/go/src/runtime/proc.go:466
+runtime.forcegchelper()
+	/home/fred/go/src/runtime/proc.go:373 +0xb3 fp=0xc0000687e0 sp=0xc0000687a8 pc=0x47d8f3
+runtime.goexit({})
+	/home/fred/go/src/runtime/asm_amd64.s:1693 +0x1 fp=0xc0000687e8 sp=0xc0000687e0 pc=0x4bb601
+created by runtime.init.7 in goroutine 1
+	/home/fred/go/src/runtime/proc.go:361 +0x1a
+
+goroutine 18 gp=0xc000102380 m=nil [GC sweep wait]:
+runtime.gopark(0x1?, 0x0?, 0x0?, 0x0?, 0x0?)
+	/home/fred/go/src/runtime/proc.go:460 +0xce fp=0xc0004adf80 sp=0xc0004adf60 pc=0x4b3d0e
+runtime.goparkunlock(...)
+	/home/fred/go/src/runtime/proc.go:466
+runtime.bgsweep(0xc000110000)
+	/home/fred/go/src/runtime/mgcsweep.go:323 +0xdf fp=0xc0004adfc8 sp=0xc0004adf80 pc=0x46589f
+runtime.gcenable.gowrap1()
+	/home/fred/go/src/runtime/mgc.go:212 +0x25 fp=0xc0004adfe0 sp=0xc0004adfc8 pc=0x459885
+runtime.goexit({})
+	/home/fred/go/src/runtime/asm_amd64.s:1693 +0x1 fp=0xc0004adfe8 sp=0xc0004adfe0 pc=0x4bb601
+created by runtime.gcenable in goroutine 1
+	/home/fred/go/src/runtime/mgc.go:212 +0x66
+
+goroutine 19 gp=0xc000102540 m=nil [sleep]:
+runtime.gopark(0xc0000160c0?, 0x1050d6a2871e9?, 0x0?, 0x0?, 0x0?)
+	/home/fred/go/src/runtime/proc.go:460 +0xce fp=0xc00007ef38 sp=0xc00007ef18 pc=0x4b3d0e
+runtime.goparkunlock(...)
+	/home/fred/go/src/runtime/proc.go:466
+runtime.(*scavengerState).sleep(0x7babe0, 0x4130ae2f00000000)
+	/home/fred/go/src/runtime/mgcscavenge.go:504 +0xf6 fp=0xc00007efa8 sp=0xc00007ef38 pc=0x4634f6
+runtime.bgscavenge(0xc000110000)
+	/home/fred/go/src/runtime/mgcscavenge.go:662 +0x74 fp=0xc00007efc8 sp=0xc00007efa8 pc=0x4638f4
+runtime.gcenable.gowrap2()
+	/home/fred/go/src/runtime/mgc.go:213 +0x25 fp=0xc00007efe0 sp=0xc00007efc8 pc=0x459825
+runtime.goexit({})
+	/home/fred/go/src/runtime/asm_amd64.s:1693 +0x1 fp=0xc00007efe8 sp=0xc00007efe0 pc=0x4bb601
+created by runtime.gcenable in goroutine 1
+	/home/fred/go/src/runtime/mgc.go:213 +0xa5
+
+goroutine 20 gp=0xc000102a80 m=nil [finalizer wait]:
+runtime.gopark(0x0?, 0x0?, 0x0?, 0x0?, 0x0?)
+	/home/fred/go/src/runtime/proc.go:460 +0xce fp=0xc00007fe20 sp=0xc00007fe00 pc=0x4b3d0e
+runtime.runFinalizers()
+	/home/fred/go/src/runtime/mfinal.go:210 +0x145 fp=0xc00007ffe0 sp=0xc00007fe20 pc=0x458785
+runtime.goexit({})
+	/home/fred/go/src/runtime/asm_amd64.s:1693 +0x1 fp=0xc00007ffe8 sp=0xc00007ffe0 pc=0x4bb601
+created by runtime.createfing in goroutine 1
+	/home/fred/go/src/runtime/mfinal.go:172 +0x3d
+
+goroutine 21 gp=0xc000102fc0 m=nil [chan receive]:
+runtime.gopark(0x18?, 0x7bbe40?, 0x38?, 0x64?, 0xc000169ad8?)
+	/home/fred/go/src/runtime/proc.go:460 +0xce fp=0xc000169a70 sp=0xc000169a50 pc=0x4b3d0e
+runtime.chanrecv(0xc000110780, 0xc000169b56, 0x1)
+	/home/fred/go/src/runtime/chan.go:667 +0x425 fp=0xc000169ae8 sp=0xc000169a70 pc=0x448845
+runtime.chanrecv1(0x7ba9a0?, 0x60dbe0?)
+	/home/fred/go/src/runtime/chan.go:509 +0x12 fp=0xc000169b10 sp=0xc000169ae8 pc=0x448412
+testing.(*T).Run(0xc000102e00, {0x647b27, 0x19}, 0xc000114b00)
+	/home/fred/go/src/testing/testing.go:2005 +0x9fe fp=0xc000169c50 sp=0xc000169b10 pc=0x56649e
+github.com/fredyk/westack-go/v3/graphql.TestGoTypeToGraphQL(0xc000102e00)
+	/home/fred/dev/projects/westack-go.oc-wsk-gql/v3/graphql/type_mapping_test.go:67 +0x274 fp=0xc000169ee0 sp=0xc000169c50 pc=0x5e2674
+testing.tRunner(0xc000102e00, 0x6505d8)
+	/home/fred/go/src/testing/testing.go:1934 +0x21d fp=0xc000169fb0 sp=0xc000169ee0 pc=0x56487d
+testing.(*T).Run.gowrap1()
+	/home/fred/go/src/testing/testing.go:1997 +0x45 fp=0xc000169fe0 sp=0xc000169fb0 pc=0x566745
+runtime.goexit({})
+	/home/fred/go/src/runtime/asm_amd64.s:1693 +0x1 fp=0xc000169fe8 sp=0xc000169fe0 pc=0x4bb601
+created by testing.(*T).Run in goroutine 1
+	/home/fred/go/src/testing/testing.go:1997 +0x9d3
+
+goroutine 29 gp=0xc00048c000 m=nil [GC worker (idle)]:
+runtime.gopark(0x0?, 0x0?, 0x0?, 0x0?, 0x0?)
+	/home/fred/go/src/runtime/proc.go:460 +0xce fp=0xc00007bf38 sp=0xc00007bf18 pc=0x4b3d0e
+runtime.gcBgMarkWorker(0xc000116540)
+	/home/fred/go/src/runtime/mgc.go:1463 +0xeb fp=0xc00007bfc8 sp=0xc00007bf38 pc=0x45bf8b
+runtime.gcBgMarkStartWorkers.gowrap1()
+	/home/fred/go/src/runtime/mgc.go:1373 +0x25 fp=0xc00007bfe0 sp=0xc00007bfc8 pc=0x45be65
+runtime.goexit({})
+	/home/fred/go/src/runtime/asm_amd64.s:1693 +0x1 fp=0xc00007bfe8 sp=0xc00007bfe0 pc=0x4bb601
+created by runtime.gcBgMarkStartWorkers in goroutine 28
+	/home/fred/go/src/runtime/mgc.go:1373 +0x105
+
+goroutine 30 gp=0xc00048c1c0 m=nil [GC worker (idle)]:
+runtime.gopark(0x0?, 0x0?, 0x0?, 0x0?, 0x0?)
+	/home/fred/go/src/runtime/proc.go:460 +0xce fp=0xc00007af38 sp=0xc00007af18 pc=0x4b3d0e
+runtime.gcBgMarkWorker(0xc000116540)
+	/home/fred/go/src/runtime/mgc.go:1463 +0xeb fp=0xc00007afc8 sp=0xc00007af38 pc=0x45bf8b
+runtime.gcBgMarkStartWorkers.gowrap1()
+	/home/fred/go/src/runtime/mgc.go:1373 +0x25 fp=0xc00007afe0 sp=0xc00007afc8 pc=0x45be65
+runtime.goexit({})
+	/home/fred/go/src/runtime/asm_amd64.s:1693 +0x1 fp=0xc00007afe8 sp=0xc00007afe0 pc=0x4bb601
+created by runtime.gcBgMarkStartWorkers in goroutine 28
+	/home/fred/go/src/runtime/mgc.go:1373 +0x105
+
+goroutine 31 gp=0xc00048c380 m=nil [GC worker (idle)]:
+runtime.gopark(0x0?, 0x0?, 0x0?, 0x0?, 0x0?)
+	/home/fred/go/src/runtime/proc.go:460 +0xce fp=0xc000079f38 sp=0xc000079f18 pc=0x4b3d0e
+runtime.gcBgMarkWorker(0xc000116540)
+	/home/fred/go/src/runtime/mgc.go:1463 +0xeb fp=0xc000079fc8 sp=0xc000079f38 pc=0x45bf8b
+runtime.gcBgMarkStartWorkers.gowrap1()
+	/home/fred/go/src/runtime/mgc.go:1373 +0x25 fp=0xc000079fe0 sp=0xc000079fc8 pc=0x45be65
+runtime.goexit({})
+	/home/fred/go/src/runtime/asm_amd64.s:1693 +0x1 fp=0xc000079fe8 sp=0xc000079fe0 pc=0x4bb601
+created by runtime.gcBgMarkStartWorkers in goroutine 28
+	/home/fred/go/src/runtime/mgc.go:1373 +0x105
+
+goroutine 32 gp=0xc00048c540 m=nil [GC worker (idle)]:
+runtime.gopark(0x0?, 0x0?, 0x0?, 0x0?, 0x0?)
+	/home/fred/go/src/runtime/proc.go:460 +0xce fp=0xc000078f38 sp=0xc000078f18 pc=0x4b3d0e
+runtime.gcBgMarkWorker(0xc000116540)
+	/home/fred/go/src/runtime/mgc.go:1463 +0xeb fp=0xc000078fc8 sp=0xc000078f38 pc=0x45bf8b
+runtime.gcBgMarkStartWorkers.gowrap1()
+	/home/fred/go/src/runtime/mgc.go:1373 +0x25 fp=0xc000078fe0 sp=0xc000078fc8 pc=0x45be65
+runtime.goexit({})
+	/home/fred/go/src/runtime/asm_amd64.s:1693 +0x1 fp=0xc000078fe8 sp=0xc000078fe0 pc=0x4bb601
+created by runtime.gcBgMarkStartWorkers in goroutine 28
+	/home/fred/go/src/runtime/mgc.go:1373 +0x105
+
+goroutine 33 gp=0xc00048c700 m=nil [GC worker (idle)]:
+runtime.gopark(0x0?, 0x0?, 0x0?, 0x0?, 0x0?)
+	/home/fred/go/src/runtime/proc.go:460 +0xce fp=0xc000495f38 sp=0xc000495f18 pc=0x4b3d0e
+runtime.gcBgMarkWorker(0xc000116540)
+	/home/fred/go/src/runtime/mgc.go:1463 +0xeb fp=0xc000495fc8 sp=0xc000495f38 pc=0x45bf8b
+runtime.gcBgMarkStartWorkers.gowrap1()
+	/home/fred/go/src/runtime/mgc.go:1373 +0x25 fp=0xc000495fe0 sp=0xc000495fc8 pc=0x45be65
+runtime.goexit({})
+	/home/fred/go/src/runtime/asm_amd64.s:1693 +0x1 fp=0xc000495fe8 sp=0xc000495fe0 pc=0x4bb601
+created by runtime.gcBgMarkStartWorkers in goroutine 28
+	/home/fred/go/src/runtime/mgc.go:1373 +0x105
+
+goroutine 34 gp=0xc00048c8c0 m=nil [GC worker (idle)]:
+runtime.gopark(0x60dbe0?, 0x607ee0?, 0xe0?, 0x7e?, 0x51bacf?)
+	/home/fred/go/src/runtime/proc.go:460 +0xce fp=0xc000494f38 sp=0xc000494f18 pc=0x4b3d0e
+runtime.gcBgMarkWorker(0xc000116540)
+	/home/fred/go/src/runtime/mgc.go:1463 +0xeb fp=0xc000494fc8 sp=0xc000494f38 pc=0x45bf8b
+runtime.gcBgMarkStartWorkers.gowrap1()
+	/home/fred/go/src/runtime/mgc.go:1373 +0x25 fp=0xc000494fe0 sp=0xc000494fc8 pc=0x45be65
+runtime.goexit({})
+	/home/fred/go/src/runtime/asm_amd64.s:1693 +0x1 fp=0xc000494fe8 sp=0xc000494fe0 pc=0x4bb601
+created by runtime.gcBgMarkStartWorkers in goroutine 28
+	/home/fred/go/src/runtime/mgc.go:1373 +0x105
+
+goroutine 35 gp=0xc00048ca80 m=nil [GC worker (idle)]:
+runtime.gopark(0x607ee0?, 0xc00049d760?, 0xa0?, 0x98?, 0x607ee0?)
+	/home/fred/go/src/runtime/proc.go:460 +0xce fp=0xc000493f38 sp=0xc000493f18 pc=0x4b3d0e
+runtime.gcBgMarkWorker(0xc000116540)
+	/home/fred/go/src/runtime/mgc.go:1463 +0xeb fp=0xc000493fc8 sp=0xc000493f38 pc=0x45bf8b
+runtime.gcBgMarkStartWorkers.gowrap1()
+	/home/fred/go/src/runtime/mgc.go:1373 +0x25 fp=0xc000493fe0 sp=0xc000493fc8 pc=0x45be65
+runtime.goexit({})
+	/home/fred/go/src/runtime/asm_amd64.s:1693 +0x1 fp=0xc000493fe8 sp=0xc000493fe0 pc=0x4bb601
+created by runtime.gcBgMarkStartWorkers in goroutine 28
+	/home/fred/go/src/runtime/mgc.go:1373 +0x105
+
+goroutine 36 gp=0xc00048cc40 m=nil [GC worker (idle)]:
+runtime.gopark(0xc0001b97e0?, 0xc00049dfe8?, 0x98?, 0x23?, 0x607ee0?)
+	/home/fred/go/src/runtime/proc.go:460 +0xce fp=0xc000492f38 sp=0xc000492f18 pc=0x4b3d0e
+runtime.gcBgMarkWorker(0xc000116540)
+	/home/fred/go/src/runtime/mgc.go:1463 +0xeb fp=0xc000492fc8 sp=0xc000492f38 pc=0x45bf8b
+runtime.gcBgMarkStartWorkers.gowrap1()
+	/home/fred/go/src/runtime/mgc.go:1373 +0x25 fp=0xc000492fe0 sp=0xc000492fc8 pc=0x45be65
+runtime.goexit({})
+	/home/fred/go/src/runtime/asm_amd64.s:1693 +0x1 fp=0xc000492fe8 sp=0xc000492fe0 pc=0x4bb601
+created by runtime.gcBgMarkStartWorkers in goroutine 28
+	/home/fred/go/src/runtime/mgc.go:1373 +0x105
+
+goroutine 37 gp=0xc00048ce00 m=nil [GC worker (idle)]:
+runtime.gopark(0x1050d15945540?, 0x0?, 0x0?, 0x0?, 0x0?)
+	/home/fred/go/src/runtime/proc.go:460 +0xce fp=0xc000491f38 sp=0xc000491f18 pc=0x4b3d0e
+runtime.gcBgMarkWorker(0xc000116540)
+	/home/fred/go/src/runtime/mgc.go:1463 +0xeb fp=0xc000491fc8 sp=0xc000491f38 pc=0x45bf8b
+runtime.gcBgMarkStartWorkers.gowrap1()
+	/home/fred/go/src/runtime/mgc.go:1373 +0x25 fp=0xc000491fe0 sp=0xc000491fc8 pc=0x45be65
+runtime.goexit({})
+	/home/fred/go/src/runtime/asm_amd64.s:1693 +0x1 fp=0xc000491fe8 sp=0xc000491fe0 pc=0x4bb601
+created by runtime.gcBgMarkStartWorkers in goroutine 28
+	/home/fred/go/src/runtime/mgc.go:1373 +0x105
+
+goroutine 38 gp=0xc00048cfc0 m=nil [GC worker (idle)]:
+runtime.gopark(0x1050d15967698?, 0x0?, 0x0?, 0x0?, 0x0?)
+	/home/fred/go/src/runtime/proc.go:460 +0xce fp=0xc000490f38 sp=0xc000490f18 pc=0x4b3d0e
+runtime.gcBgMarkWorker(0xc000116540)
+	/home/fred/go/src/runtime/mgc.go:1463 +0xeb fp=0xc000490fc8 sp=0xc000490f38 pc=0x45bf8b
+runtime.gcBgMarkStartWorkers.gowrap1()
+	/home/fred/go/src/runtime/mgc.go:1373 +0x25 fp=0xc000490fe0 sp=0xc000490fc8 pc=0x45be65
+runtime.goexit({})
+	/home/fred/go/src/runtime/asm_amd64.s:1693 +0x1 fp=0xc000490fe8 sp=0xc000490fe0 pc=0x4bb601
+created by runtime.gcBgMarkStartWorkers in goroutine 28
+	/home/fred/go/src/runtime/mgc.go:1373 +0x105
+
+goroutine 39 gp=0xc00048d180 m=nil [GC worker (idle)]:
+runtime.gopark(0x7dbca0?, 0x1?, 0xf4?, 0xe1?, 0x0?)
+	/home/fred/go/src/runtime/proc.go:460 +0xce fp=0xc00048ff38 sp=0xc00048ff18 pc=0x4b3d0e
+runtime.gcBgMarkWorker(0xc000116540)
+	/home/fred/go/src/runtime/mgc.go:1463 +0xeb fp=0xc00048ffc8 sp=0xc00048ff38 pc=0x45bf8b
+runtime.gcBgMarkStartWorkers.gowrap1()
+	/home/fred/go/src/runtime/mgc.go:1373 +0x25 fp=0xc00048ffe0 sp=0xc00048ffc8 pc=0x45be65
+runtime.goexit({})
+	/home/fred/go/src/runtime/asm_amd64.s:1693 +0x1 fp=0xc00048ffe8 sp=0xc00048ffe0 pc=0x4bb601
+created by runtime.gcBgMarkStartWorkers in goroutine 28
+	/home/fred/go/src/runtime/mgc.go:1373 +0x105
+
+goroutine 40 gp=0xc00048d340 m=nil [GC worker (idle)]:
+runtime.gopark(0x1050d1594571e?, 0x0?, 0x0?, 0x0?, 0x0?)
+	/home/fred/go/src/runtime/proc.go:460 +0xce fp=0xc00048ef38 sp=0xc00048ef18 pc=0x4b3d0e
+runtime.gcBgMarkWorker(0xc000116540)
+	/home/fred/go/src/runtime/mgc.go:1463 +0xeb fp=0xc00048efc8 sp=0xc00048ef38 pc=0x45bf8b
+runtime.gcBgMarkStartWorkers.gowrap1()
+	/home/fred/go/src/runtime/mgc.go:1373 +0x25 fp=0xc00048efe0 sp=0xc00048efc8 pc=0x45be65
+runtime.goexit({})
+	/home/fred/go/src/runtime/asm_amd64.s:1693 +0x1 fp=0xc00048efe8 sp=0xc00048efe0 pc=0x4bb601
+created by runtime.gcBgMarkStartWorkers in goroutine 28
+	/home/fred/go/src/runtime/mgc.go:1373 +0x105
+FAIL	github.com/fredyk/westack-go/v3/graphql	3.983s
+FAIL
+[0m
+Stack overflow por recursión infinita en `reflect.New` con tipos de interfaz. El bug está en que `reflect.New(elem)` cuando `elem` es una interfaz crea un `*interface{}` que al pasar a `GoTypeToGraphQL` de nuevo entra en el branch de pointer → Elem → interfaz → recursión infinita. Necesito usar `reflect.TypeOf` directamente en lugar de `reflect.New().Interface()`.
+[0m← [0mWrite v3/graphql/type_mapping.go
+Wrote file successfully.
+[0m
+[0m$ [0mcd /home/fred/dev/projects/westack-go.oc-wsk-gql/v3 && go test -race -v ./graphql/ -run TestGoTypeToGraphQL 2>&1
+=== RUN   TestGoTypeToGraphQL
+=== RUN   TestGoTypeToGraphQL/string_maps_to_String
+=== RUN   TestGoTypeToGraphQL/int_maps_to_Int
+=== RUN   TestGoTypeToGraphQL/int64_maps_to_Int
+=== RUN   TestGoTypeToGraphQL/float64_maps_to_Float
+=== RUN   TestGoTypeToGraphQL/bool_maps_to_Boolean
+=== RUN   TestGoTypeToGraphQL/time.Time_maps_to_DateTime
+=== RUN   TestGoTypeToGraphQL/[]string_maps_to_[String]
+=== RUN   TestGoTypeToGraphQL/[]int_maps_to_[Int]
+=== RUN   TestGoTypeToGraphQL/*string_(pointer)_maps_to_nullable_String
+=== RUN   TestGoTypeToGraphQL/[]float32_with_vector_tag_maps_to_Vector
+    type_mapping_test.go:70: GoTypeToGraphQL(float32) = "Float", want "Vector"
+--- FAIL: TestGoTypeToGraphQL (0.00s)
+    --- PASS: TestGoTypeToGraphQL/string_maps_to_String (0.00s)
+    --- PASS: TestGoTypeToGraphQL/int_maps_to_Int (0.00s)
+    --- PASS: TestGoTypeToGraphQL/int64_maps_to_Int (0.00s)
+    --- PASS: TestGoTypeToGraphQL/float64_maps_to_Float (0.00s)
+    --- PASS: TestGoTypeToGraphQL/bool_maps_to_Boolean (0.00s)
+    --- PASS: TestGoTypeToGraphQL/time.Time_maps_to_DateTime (0.00s)
+    --- PASS: TestGoTypeToGraphQL/[]string_maps_to_[String] (0.00s)
+    --- PASS: TestGoTypeToGraphQL/[]int_maps_to_[Int] (0.00s)
+    --- PASS: TestGoTypeToGraphQL/*string_(pointer)_maps_to_nullable_String (0.00s)
+    --- FAIL: TestGoTypeToGraphQL/[]float32_with_vector_tag_maps_to_Vector (0.00s)
+=== RUN   TestGoTypeToGraphQL_NonPointerRequired
+--- PASS: TestGoTypeToGraphQL_NonPointerRequired (0.00s)
+FAIL
+FAIL	github.com/fredyk/westack-go/v3/graphql	0.019s
+FAIL
+[0m
+9 de 10 tests pasan. El de `[]float32` falla porque el test pasa `float32(0)` en vez de `[]float32{}`. El test está mal. Arreglándolo:
+[0m← [0mEdit v3/graphql/type_mapping_test.go
+Index: /home/fred/dev/projects/westack-go.oc-wsk-gql/v3/graphql/type_mapping_test.go
+===================================================================
+--- /home/fred/dev/projects/westack-go.oc-wsk-gql/v3/graphql/type_mapping_test.go
++++ /home/fred/dev/projects/westack-go.oc-wsk-gql/v3/graphql/type_mapping_test.go
+@@ -57,9 +57,9 @@
+ 		expected: "String",
+ 	},
+ 	{
+ 		name:     "[]float32 with vector tag maps to Vector",
+-		input:    float32(0),
++		input:    []float32{},
+ 		expected: "Vector",
+ 	},
+ }
+ 
+
+[0m
+[0m$ [0mcd /home/fred/dev/projects/westack-go.oc-wsk-gql/v3 && go test -race -v ./graphql/ -run TestGoTypeToGraphQL 2>&1
+=== RUN   TestGoTypeToGraphQL
+=== RUN   TestGoTypeToGraphQL/string_maps_to_String
+=== RUN   TestGoTypeToGraphQL/int_maps_to_Int
+=== RUN   TestGoTypeToGraphQL/int64_maps_to_Int
+=== RUN   TestGoTypeToGraphQL/float64_maps_to_Float
+=== RUN   TestGoTypeToGraphQL/bool_maps_to_Boolean
+=== RUN   TestGoTypeToGraphQL/time.Time_maps_to_DateTime
+=== RUN   TestGoTypeToGraphQL/[]string_maps_to_[String]
+=== RUN   TestGoTypeToGraphQL/[]int_maps_to_[Int]
+=== RUN   TestGoTypeToGraphQL/*string_(pointer)_maps_to_nullable_String
+=== RUN   TestGoTypeToGraphQL/[]float32_with_vector_tag_maps_to_Vector
+--- PASS: TestGoTypeToGraphQL (0.00s)
+    --- PASS: TestGoTypeToGraphQL/string_maps_to_String (0.00s)
+    --- PASS: TestGoTypeToGraphQL/int_maps_to_Int (0.00s)
+    --- PASS: TestGoTypeToGraphQL/int64_maps_to_Int (0.00s)
+    --- PASS: TestGoTypeToGraphQL/float64_maps_to_Float (0.00s)
+    --- PASS: TestGoTypeToGraphQL/bool_maps_to_Boolean (0.00s)
+    --- PASS: TestGoTypeToGraphQL/time.Time_maps_to_DateTime (0.00s)
+    --- PASS: TestGoTypeToGraphQL/[]string_maps_to_[String] (0.00s)
+    --- PASS: TestGoTypeToGraphQL/[]int_maps_to_[Int] (0.00s)
+    --- PASS: TestGoTypeToGraphQL/*string_(pointer)_maps_to_nullable_String (0.00s)
+    --- PASS: TestGoTypeToGraphQL/[]float32_with_vector_tag_maps_to_Vector (0.00s)
+=== RUN   TestGoTypeToGraphQL_NonPointerRequired
+--- PASS: TestGoTypeToGraphQL_NonPointerRequired (0.00s)
+PASS
+ok  	github.com/fredyk/westack-go/v3/graphql	1.016s
+[0m
+Type mapping tests PASS. Ahora SchemaHelper + SDL accumulator. Escribo los tests ROJOS primero:
+[0m← [0mWrite v3/graphql/schema_helper_test.go
+Wrote file successfully.
+[0m
+[0m$ [0mcd /home/fred/dev/projects/westack-go.oc-wsk-gql/v3 && go test -race ./graphql/ -run TestSchemaHelper -count=1 2>&1 | head -10
+# github.com/fredyk/westack-go/v3/graphql [github.com/fredyk/westack-go/v3/graphql.test]
+graphql/schema_helper_test.go:25:7: undefined: NewSchemaHelper
+graphql/schema_helper_test.go:53:7: undefined: NewSchemaHelper
+graphql/schema_helper_test.go:81:7: undefined: NewSchemaHelper
+graphql/schema_helper_test.go:106:7: undefined: NewSchemaHelper
+graphql/schema_helper_test.go:124:7: undefined: NewSchemaHelper
+graphql/schema_helper_test.go:139:7: undefined: NewSchemaHelper
+FAIL	github.com/fredyk/westack-go/v3/graphql [build failed]
+FAIL
+[0m
+Tests están ROJOS (no compilan porque `NewSchemaHelper` no existe). Ahora la implementación mínima:
+[0m← [0mWrite v3/graphql/schema_helper.go
+Wrote file successfully.
+[0m
+[0m$ [0mcd /home/fred/dev/projects/westack-go.oc-wsk-gql/v3 && go test -race -v ./graphql/ -run TestSchemaHelper -count=1 2>&1
+# github.com/fredyk/westack-go/v3/graphql [github.com/fredyk/westack-go/v3/graphql.test]
+graphql/schema_helper.go:53:5: declared and not used: frag
+FAIL	github.com/fredyk/westack-go/v3/graphql [build failed]
+FAIL
+[0m
+[0m← [0mEdit v3/graphql/schema_helper.go
+Index: /home/fred/dev/projects/westack-go.oc-wsk-gql/v3/graphql/schema_helper.go
+===================================================================
+--- /home/fred/dev/projects/westack-go.oc-wsk-gql/v3/graphql/schema_helper.go
++++ /home/fred/dev/projects/westack-go.oc-wsk-gql/v3/graphql/schema_helper.go
+@@ -49,9 +49,9 @@
+ 	return "String"
+ }
+ 
+ // Dedupe
+-if frag, ok := h.types[name]; ok {
++if _, ok := h.types[name]; ok {
+ 	return name
+ }
+ 
+ // Generate SDL fragment
+
+[0m
+[0m$ [0mcd /home/fred/dev/projects/westack-go.oc-wsk-gql/v3 && go test -race -v ./graphql/ -run TestSchemaHelper -count=1 2>&1
+=== RUN   TestSchemaHelper_RegisterGenericType
+--- PASS: TestSchemaHelper_RegisterGenericType (0.00s)
+=== RUN   TestSchemaHelper_AddOperation
+    schema_helper_test.go:71: SDL does not contain 'type testResult':
+        input testInput {
+          Name: String!
+          Age: Int!
+        }
+        
+        input testResult {
+          ID: String!
+          Name: String!
+          Email: String!
+        }
+        
+        type Query {
+          getUser(getUser: testInput): testResult
+        }
+--- FAIL: TestSchemaHelper_AddOperation (0.00s)
+=== RUN   TestSchemaHelper_QueryVsMutation
+--- PASS: TestSchemaHelper_QueryVsMutation (0.00s)
+=== RUN   TestSchemaHelper_DedupeNestedTypes
+--- PASS: TestSchemaHelper_DedupeNestedTypes (0.00s)
+=== RUN   TestSchemaHelper_NonPointerRequired
+--- PASS: TestSchemaHelper_NonPointerRequired (0.00s)
+=== RUN   TestSchemaHelper_SDLEmpty
+--- PASS: TestSchemaHelper_SDLEmpty (0.00s)
+FAIL
+FAIL	github.com/fredyk/westack-go/v3/graphql	0.016s
+FAIL
+[0m
+El problema es que `testResult` se registra como `input` en vez de `type`. La spec dice: T (input) genera `input`, R (result) genera `type`. Necesito distinguir entre input y output types. Voy a agregar un parámetro `isInput` a `RegisterGenericType` o crear dos métodos. La spec dice `RegisterGenericType[T]` para input y `RegisterGenericType[R]` para result — pero internamente el SchemaHelper necesita saber cuál es cuál.
+
+La forma más limpia: agregar un método `RegisterOutputType` para los resultados, o usar un flag. Voy a seguir el patrón de la spec que dice T(input) → `input`, R(result) → `type`.
+[0m← [0mEdit v3/graphql/schema_helper.go
+Index: /home/fred/dev/projects/westack-go.oc-wsk-gql/v3/graphql/schema_helper.go
+===================================================================
+--- /home/fred/dev/projects/westack-go.oc-wsk-gql/v3/graphql/schema_helper.go
++++ /home/fred/dev/projects/westack-go.oc-wsk-gql/v3/graphql/schema_helper.go
+@@ -28,12 +28,26 @@
+ 		operations: make([]operationDef, 0),
+ 	}
+ }
+ 
+-// RegisterGenericType registers a Go type and returns its GraphQL name.
+-// Generates "input <Name>" for input types (T) or "type <Name>" for result types (R).
++// RegisterInputType registers a Go type as a GraphQL input type and returns its name.
+ // Deduplicates by name.
++func (h *SchemaHelper) RegisterInputType(v any) string {
++	return h.registerType(v, "input")
++}
++
++// RegisterOutputType registers a Go type as a GraphQL output type and returns its name.
++// Deduplicates by name.
++func (h *SchemaHelper) RegisterOutputType(v any) string {
++	return h.registerType(v, "type")
++}
++
++// RegisterGenericType is an alias for RegisterInputType (for API compatibility with spec).
+ func (h *SchemaHelper) RegisterGenericType(v any) string {
++	return h.registerType(v, "input")
++}
++
++func (h *SchemaHelper) registerType(v any, kind string) string {
+ 	t := reflect.TypeOf(v)
+ 	if t == nil {
+ 		return "String"
+ 	}
+@@ -54,9 +68,9 @@
+ 		return name
+ 	}
+ 
+ 	// Generate SDL fragment
+-	frag := generateTypeSDL(name, t)
++	frag := generateTypeSDL(name, t, kind)
+ 	h.types[name] = frag
+ 
+ 	return name
+ }
+
+[0m
+Now update `generateTypeSDL` to accept the kind parameter:
+[0m← [0mEdit v3/graphql/schema_helper.go
+Index: /home/fred/dev/projects/westack-go.oc-wsk-gql/v3/graphql/schema_helper.go
+===================================================================
+--- /home/fred/dev/projects/westack-go.oc-wsk-gql/v3/graphql/schema_helper.go
++++ /home/fred/dev/projects/westack-go.oc-wsk-gql/v3/graphql/schema_helper.go
+@@ -126,13 +126,12 @@
+ 	return strings.TrimSpace(sb.String())
+ }
+ 
+ // generateTypeSDL creates the SDL fragment for a Go struct.
+-func generateTypeSDL(name string, t reflect.Type) string {
++func generateTypeSDL(name string, t reflect.Type, kind string) string {
+ 	var sb strings.Builder
+ 
+-	// Determine if input or output: for now, always "input" (caller decides context)
+-	sb.WriteString(fmt.Sprintf("input %s {\n", name))
++	sb.WriteString(fmt.Sprintf("%s %s {\n", kind, name))
+ 
+ 	for i := 0; i < t.NumField(); i++ {
+ 		field := t.Field(i)
+ 		if field.PkgPath != "" {
+
+[0m
+Now fix the tests to use the right method for input vs output types:
+[0m← [0mEdit v3/graphql/schema_helper_test.go
+Index: /home/fred/dev/projects/westack-go.oc-wsk-gql/v3/graphql/schema_helper_test.go
+===================================================================
+--- /home/fred/dev/projects/westack-go.oc-wsk-gql/v3/graphql/schema_helper_test.go
++++ /home/fred/dev/projects/westack-go.oc-wsk-gql/v3/graphql/schema_helper_test.go
+@@ -51,10 +51,10 @@
+ 
+ func TestSchemaHelper_AddOperation(t *testing.T) {
+ 	h := NewSchemaHelper()
+ 
+-	h.RegisterGenericType(testInput{})
+-	h.RegisterGenericType(testResult{})
++	h.RegisterInputType(testInput{})
++	h.RegisterOutputType(testResult{})
+ 	h.AddOperation("query", "getUser", "testInput", "testResult", "Gets a user by input")
+ 
+ 	sdl := h.SDL()
+ 	if sdl == "" {
+
+[0m
+[0m← [0mEdit v3/graphql/schema_helper_test.go
+Index: /home/fred/dev/projects/westack-go.oc-wsk-gql/v3/graphql/schema_helper_test.go
+===================================================================
+--- /home/fred/dev/projects/westack-go.oc-wsk-gql/v3/graphql/schema_helper_test.go
++++ /home/fred/dev/projects/westack-go.oc-wsk-gql/v3/graphql/schema_helper_test.go
+@@ -79,10 +79,10 @@
+ 
+ func TestSchemaHelper_QueryVsMutation(t *testing.T) {
+ 	h := NewSchemaHelper()
+ 
+-	h.RegisterGenericType(testInput{})
+-	h.RegisterGenericType(testResult{})
++	h.RegisterInputType(testInput{})
++	h.RegisterOutputType(testResult{})
+ 
+ 	// GET → query
+ 	h.AddOperation("query", "getUser", "testInput", "testResult", "Gets a user")
+ 
+
+[0m
+[0m← [0mEdit v3/graphql/schema_helper_test.go
+Index: /home/fred/dev/projects/westack-go.oc-wsk-gql/v3/graphql/schema_helper_test.go
+===================================================================
+--- /home/fred/dev/projects/westack-go.oc-wsk-gql/v3/graphql/schema_helper_test.go
++++ /home/fred/dev/projects/westack-go.oc-wsk-gql/v3/graphql/schema_helper_test.go
+@@ -123,9 +123,9 @@
+ func TestSchemaHelper_NonPointerRequired(t *testing.T) {
+ 	h := NewSchemaHelper()
+ 
+ 	// Non-pointer structs should be registered by name
+-	name := h.RegisterGenericType(testInput{})
++	name := h.RegisterInputType(testInput{})
+ 	if name != "testInput" {
+ 		t.Errorf("RegisterGenericType(testInput) = %q, want %q", name, "testInput")
+ 	}
+ 
+
+[0m
+[0m$ [0mcd /home/fred/dev/projects/westack-go.oc-wsk-gql/v3 && go test -race -v ./graphql/ -run TestSchemaHelper -count=1 2>&1
+=== RUN   TestSchemaHelper_RegisterGenericType
+--- PASS: TestSchemaHelper_RegisterGenericType (0.00s)
+=== RUN   TestSchemaHelper_AddOperation
+--- PASS: TestSchemaHelper_AddOperation (0.00s)
+=== RUN   TestSchemaHelper_QueryVsMutation
+--- PASS: TestSchemaHelper_QueryVsMutation (0.00s)
+=== RUN   TestSchemaHelper_DedupeNestedTypes
+--- PASS: TestSchemaHelper_DedupeNestedTypes (0.00s)
+=== RUN   TestSchemaHelper_NonPointerRequired
+--- PASS: TestSchemaHelper_NonPointerRequired (0.00s)
+=== RUN   TestSchemaHelper_SDLEmpty
+--- PASS: TestSchemaHelper_SDLEmpty (0.00s)
+PASS
+ok  	github.com/fredyk/westack-go/v3/graphql	1.015s
+[0m
+Todos los tests de SchemaHelper pasan. Ahora los Bind* functions. Escribo los tests ROJOS primero:
+[0m← [0mWrite v3/graphql/bind_operations_test.go
+Wrote file successfully.
+[0m
+Espera - `StatefulModel` es de v2, y no debo tocar v2. Para los stubs, necesito un tipo placeholder local en v3.
+[0m← [0mWrite v3/graphql/bind_operations_test.go
+Wrote file successfully.
+[0m
+[0m$ [0mcd /home/fred/dev/projects/westack-go.oc-wsk-gql/v3 && go test -race ./graphql/ -run TestBind -count=1 2>&1 | head -10
+# github.com/fredyk/westack-go/v3/graphql [github.com/fredyk/westack-go/v3/graphql.test]
+graphql/bind_operations_test.go:22:11: undefined: BindGraphQLOperation
+graphql/bind_operations_test.go:32:11: undefined: BindGraphQLOperationWithContext
+graphql/bind_operations_test.go:32:56: undefined: RemoteOperationReq
+graphql/bind_operations_test.go:42:11: undefined: BindGraphQLQuery
+graphql/bind_operations_test.go:52:11: undefined: BindGraphQLMutation
+FAIL	github.com/fredyk/westack-go/v3/graphql [build failed]
+FAIL
+[0m
+Tests ROJOS. Ahora la implementación mínima de los stubs:
+[0m← [0mWrite v3/graphql/bind_operations.go
+Wrote file successfully.
+[0m
+[0m$ [0mcd /home/fred/dev/projects/westack-go.oc-wsk-gql/v3 && go test -race -v ./graphql/ -count=1 2>&1
+# github.com/fredyk/westack-go/v3/graphql [github.com/fredyk/westack-go/v3/graphql.test]
+graphql/bind_operations.go:24:28: in call to bindGraphQLWithKind, cannot infer T (declared at graphql/bind_operations.go:53:26)
+graphql/bind_operations.go:32:28: in call to bindGraphQLWithKind, cannot infer T (declared at graphql/bind_operations.go:53:26)
+graphql/bind_operations.go:40:28: in call to bindGraphQLWithKind, cannot infer T (declared at graphql/bind_operations.go:53:26)
+graphql/bind_operations.go:45:28: in call to bindGraphQLWithKind, cannot infer T (declared at graphql/bind_operations.go:53:26)
+graphql/bind_operations.go:50:28: in call to bindGraphQLWithKind, cannot infer T (declared at graphql/bind_operations.go:53:26)
+FAIL	github.com/fredyk/westack-go/v3/graphql [build failed]
+FAIL
+[0m
+The problem is `bindGraphQLWithKind` tries to infer `T` but handler can be nil. Let me restructure:
+[0m← [0mWrite v3/graphql/bind_operations.go
+Wrote file successfully.
+[0m
+[0m$ [0mcd /home/fred/dev/projects/westack-go.oc-wsk-gql/v3 && go test -race -v ./graphql/ -count=1 2>&1
+# github.com/fredyk/westack-go/v3/graphql [github.com/fredyk/westack-go/v3/graphql.test]
+graphql/bind_operations.go:25:28: undefined: reflect
+FAIL	github.com/fredyk/westack-go/v3/graphql [build failed]
+FAIL
+[0m
+[0m← [0mEdit v3/graphql/bind_operations.go
+Index: /home/fred/dev/projects/westack-go.oc-wsk-gql/v3/graphql/bind_operations.go
+===================================================================
+--- /home/fred/dev/projects/westack-go.oc-wsk-gql/v3/graphql/bind_operations.go
++++ /home/fred/dev/projects/westack-go.oc-wsk-gql/v3/graphql/bind_operations.go
+@@ -1,7 +1,10 @@
+ package graphql
+ 
+-import "runtime"
++import (
++	"reflect"
++	"runtime"
++)
+ 
+ // GraphQLField represents a registered GraphQL field.
+ type GraphQLField struct {
+ 	Name   string
+
+[0m
+[0m$ [0mcd /home/fred/dev/projects/westack-go.oc-wsk-gql/v3 && go test -race -v ./graphql/ -count=1 2>&1
+=== RUN   TestBindGraphQLOperation_StubsExist
+--- PASS: TestBindGraphQLOperation_StubsExist (0.00s)
+=== RUN   TestBindGraphQLOperationWithContext_StubsExist
+--- PASS: TestBindGraphQLOperationWithContext_StubsExist (0.00s)
+=== RUN   TestBindGraphQLQuery_StubsExist
+--- PASS: TestBindGraphQLQuery_StubsExist (0.00s)
+=== RUN   TestBindGraphQLMutation_StubsExist
+--- PASS: TestBindGraphQLMutation_StubsExist (0.00s)
+=== RUN   TestSchemaHelper_RegisterGenericType
+--- PASS: TestSchemaHelper_RegisterGenericType (0.00s)
+=== RUN   TestSchemaHelper_AddOperation
+--- PASS: TestSchemaHelper_AddOperation (0.00s)
+=== RUN   TestSchemaHelper_QueryVsMutation
+--- PASS: TestSchemaHelper_QueryVsMutation (0.00s)
+=== RUN   TestSchemaHelper_DedupeNestedTypes
+--- PASS: TestSchemaHelper_DedupeNestedTypes (0.00s)
+=== RUN   TestSchemaHelper_NonPointerRequired
+--- PASS: TestSchemaHelper_NonPointerRequired (0.00s)
+=== RUN   TestSchemaHelper_SDLEmpty
+--- PASS: TestSchemaHelper_SDLEmpty (0.00s)
+=== RUN   TestGoTypeToGraphQL
+=== RUN   TestGoTypeToGraphQL/string_maps_to_String
+=== RUN   TestGoTypeToGraphQL/int_maps_to_Int
+=== RUN   TestGoTypeToGraphQL/int64_maps_to_Int
+=== RUN   TestGoTypeToGraphQL/float64_maps_to_Float
+=== RUN   TestGoTypeToGraphQL/bool_maps_to_Boolean
+=== RUN   TestGoTypeToGraphQL/time.Time_maps_to_DateTime
+=== RUN   TestGoTypeToGraphQL/[]string_maps_to_[String]
+=== RUN   TestGoTypeToGraphQL/[]int_maps_to_[Int]
+=== RUN   TestGoTypeToGraphQL/*string_(pointer)_maps_to_nullable_String
+=== RUN   TestGoTypeToGraphQL/[]float32_with_vector_tag_maps_to_Vector
+--- PASS: TestGoTypeToGraphQL (0.00s)
+    --- PASS: TestGoTypeToGraphQL/string_maps_to_String (0.00s)
+    --- PASS: TestGoTypeToGraphQL/int_maps_to_Int (0.00s)
+    --- PASS: TestGoTypeToGraphQL/int64_maps_to_Int (0.00s)
+    --- PASS: TestGoTypeToGraphQL/float64_maps_to_Float (0.00s)
+    --- PASS: TestGoTypeToGraphQL/bool_maps_to_Boolean (0.00s)
+    --- PASS: TestGoTypeToGraphQL/time.Time_maps_to_DateTime (0.00s)
+    --- PASS: TestGoTypeToGraphQL/[]string_maps_to_[String] (0.00s)
+    --- PASS: TestGoTypeToGraphQL/[]int_maps_to_[Int] (0.00s)
+    --- PASS: TestGoTypeToGraphQL/*string_(pointer)_maps_to_nullable_String (0.00s)
+    --- PASS: TestGoTypeToGraphQL/[]float32_with_vector_tag_maps_to_Vector (0.00s)
+=== RUN   TestGoTypeToGraphQL_NonPointerRequired
+--- PASS: TestGoTypeToGraphQL_NonPointerRequired (0.00s)
+PASS
+ok  	github.com/fredyk/westack-go/v3/graphql	1.018s
+[0m
+[0m$ [0mcd /home/fred/dev/projects/westack-go.oc-wsk-gql/v3 && go vet ./graphql/ 2>&1
+(no output)
+[0m
+12/12 tests PASS, go vet limpio. Resumen de lo entregado:
+
+**`v3/go.mod`** — Módulo `github.com/fredyk/westack-go/v3`
+
+**`v3/graphql/type_mapping.go`** — Funciones pures para mapear tipos Go → GraphQL:
+- `GoTypeToGraphQL(v any) string` — `string→String`, `int/int64→Int`, `float→Float`, `bool→Boolean`, `time.Time→DateTime`, `[]T→[T]`, `[]float32→Vector`, structs→nombre
+- `GoTypeName(t reflect.Type) string` — nombre del tipo para SDL
+- `GoTypeToSDLFragment(t reflect.Type, nullable bool) string` — fragmento SDL con nullability (`String`, `String!`, `[Int]`, etc.)
+
+**`v3/graphql/schema_helper.go`** — SchemaHelper gemelo de swaggerhelper:
+- `NewSchemaHelper()` / `RegisterInputType[T](v any) string` / `RegisterOutputType[R](v any) string` — reflexión + dedupe
+- `AddOperation(kind, name, inputType, resultType, desc string)` — registra Query/Mutation
+- `SDL() string` — materializa el contrato SDL acumulado
+
+**`v3/graphql/bind_operations.go`** — Firmas gemelo de BindRemoteOperation:
+- `BindGraphQLOperation[T,R]`, `BindGraphQLOperationWithOptions`, `BindGraphQLOperationWithContext`
+- `BindGraphQLQuery[T,R]` (get→query), `BindGraphQLMutation[T,R]` (post/put/patch→mutation)
+- Stubs que registran tipos en SchemaHelper y generan SDL; sin runtime GraphQL real
+
+**Tests** (12/12 verdes):
+- `type_mapping_test.go` — 10 casos de mapeo + struct name
+- `schema_helper_test.go` — Register + dedupe + AddOperation + Query vs Mutation + nested dedupe + empty SDL
+- `bind_operations_test.go` — 4 stubs retornan non-nil
