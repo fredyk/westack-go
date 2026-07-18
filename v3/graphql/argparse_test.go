@@ -42,3 +42,5 @@ func TestResolveVariables(t *testing.T) {
 		t.Errorf("variable declarada no inyectada: %v", got["extra"])
 	}
 }
+
+

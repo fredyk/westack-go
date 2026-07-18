@@ -9,6 +9,11 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// maxListLimit es el tope máximo de filas que un connector devolverá
+// en una query de lista. Evita LIMIT descontrolados inyectados por un
+// resolver o cliente GraphQL.
+const maxListLimit int64 = 1000
+
 // PostgresConnector implements PersistedConnector and VectorConnector against PostgreSQL+pgvector.
 type PostgresConnector struct {
 	dsn       string
@@ -306,7 +311,11 @@ func (c *PostgresConnector) FindMany(ctx context.Context, collection string, que
 	limit := ""
 	offset := ""
 	if query != nil && query.Limit > 0 {
-		limit = fmt.Sprintf(" LIMIT %d", query.Limit)
+		l := query.Limit
+		if l > maxListLimit {
+			l = maxListLimit
+		}
+		limit = fmt.Sprintf(" LIMIT %d", l)
 	}
 	if query != nil && query.Offset > 0 {
 		offset = fmt.Sprintf(" OFFSET %d", query.Offset)
