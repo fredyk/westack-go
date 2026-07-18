@@ -88,7 +88,7 @@ func (s *GraphQLServer) ServeGraphQL(w http.ResponseWriter, r *http.Request) {
 
 	result, err := s.callResolver(r.Context(), handler, args)
 	if err != nil {
-		writeGraphQLError(w, http.StatusInternalServerError, err.Error())
+		writeGraphQLErrorWithData(w, operationName, err.Error())
 		return
 	}
 
@@ -96,9 +96,15 @@ func (s *GraphQLServer) ServeGraphQL(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *GraphQLServer) callResolver(ctx context.Context, handler any, args map[string]any) (any, error) {
-	// Reflect-based call. The handler is either:
-	//   func(req T) (R, error)                      — simple, no context
-	//   func(req *RemoteOperationReq[T]) (R, error) — carries per-request ctx
+	// Recover from panics in user resolvers: per GraphQL spec, the error
+	// should appear in the "errors" array and the field should be null.
+	var panicked any
+	defer func() {
+		if r := recover(); r != nil {
+			panicked = r
+		}
+	}()
+
 	rv := reflect.ValueOf(handler)
 	if rv.Kind() != reflect.Func {
 		return nil, fmt.Errorf("handler is not a function")
@@ -134,17 +140,26 @@ func (s *GraphQLServer) callResolver(ctx context.Context, handler any, args map[
 		callArg = inputValue.Elem()
 	}
 
-	results := rv.Call([]reflect.Value{callArg})
-	if len(results) != 2 {
-		return nil, fmt.Errorf("handler must return (R, error)")
+	var result any
+	if panicked == nil {
+		results := rv.Call([]reflect.Value{callArg})
+		if len(results) != 2 {
+			return nil, fmt.Errorf("handler must return (R, error)")
+		}
+
+		if !results[1].IsNil() {
+			err, _ := results[1].Interface().(error)
+			return nil, err
+		}
+
+		result = results[0].Interface()
 	}
 
-	if !results[1].IsNil() {
-		err, _ := results[1].Interface().(error)
-		return nil, err
+	if panicked != nil {
+		return nil, fmt.Errorf("resolver panic: %v", panicked)
 	}
 
-	return results[0].Interface(), nil
+	return result, nil
 }
 
 // isRemoteOpReq reports whether t is *RemoteOperationReq[T] — a pointer to a
@@ -266,6 +281,17 @@ func writeGraphQLError(w http.ResponseWriter, status int, message string) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(map[string]any{
+		"errors": []map[string]any{{"message": message}},
+	})
+}
+
+// writeGraphQLErrorWithData writes a GraphQL response with both data and errors,
+// conforming to the GraphQL spec (errors coexist with data, even when partial).
+func writeGraphQLErrorWithData(w http.ResponseWriter, operationName, message string) {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(map[string]any{
+		"data": map[string]any{operationName: nil},
 		"errors": []map[string]any{{"message": message}},
 	})
 }

@@ -83,7 +83,7 @@ func (h *SchemaHelper) registerType(v any, kind string) string {
 	}
 
 	// Generate SDL fragment
-	frag := generateTypeSDL(name, t, kind)
+	frag := generateTypeSDL(h, name, t, kind)
 	h.types[name] = frag
 
 	return name
@@ -141,7 +141,7 @@ func (h *SchemaHelper) SDL() string {
 }
 
 // generateTypeSDL creates the SDL fragment for a Go struct.
-func generateTypeSDL(name string, t reflect.Type, kind string) string {
+func generateTypeSDL(h *SchemaHelper, name string, t reflect.Type, kind string) string {
 	var sb strings.Builder
 
 	sb.WriteString(fmt.Sprintf("%s %s {\n", kind, name))
@@ -162,10 +162,16 @@ func generateTypeSDL(name string, t reflect.Type, kind string) string {
 		}
 
 		// Determine if nullable (pointer)
-		nullable := field.Type.Kind() == reflect.Ptr
 		fieldType := field.Type
-		if nullable {
+		nullable := false
+		for fieldType.Kind() == reflect.Ptr {
+			nullable = true
 			fieldType = fieldType.Elem()
+		}
+
+		// If the field is a (non-slice) struct, recursively register it as a type.
+		if fieldType.Kind() == reflect.Struct && fieldType.Name() != "" {
+			h.registerType(reflect.New(fieldType).Interface(), "type")
 		}
 
 		sdlType := GoTypeToSDLFragment(fieldType, nullable)

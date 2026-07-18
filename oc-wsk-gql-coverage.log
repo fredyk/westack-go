@@ -1,0 +1,882 @@
+[0m
+> build · qwen3.6
+[0m
+[0m→ [0mRead .opencode-prompts/wsk-gql-coverage.md
+Starting the task. First reading the relevant files as instructed.
+[0m→ [0mRead .
+[0m✗ [0mRead graphql failed
+[91m[1mError: [0mFile not found: /home/fred/dev/projects/westack-go.oc-wsk-gql-coverage/graphql
+The prompt references `westack-go/v3` and the files are in `v3/graphql/`. Let me explore.
+[0m→ [0mRead v3
+[0m→ [0mRead v3/graphql
+[0m→ [0mRead v3/graphql/handler.go
+[0m→ [0mRead v3/graphql/bind_operations.go
+[0m→ [0mRead v3/graphql/schema_helper.go
+[0m→ [0mRead v3/graphql/schema_helper_test.go
+[0m→ [0mRead v3/graphql/type_mapping.go
+[0m→ [0mRead v3/graphql/type_mapping_test.go
+[0m→ [0mRead v3/graphql/argparse.go
+[0m→ [0mRead v3/graphql/argparse_test.go
+[0m→ [0mRead v3/graphql/handler_ctx_test.go
+[0m→ [0mRead v3/graphql/model.go
+[0m→ [0mRead v3/graphql/bind_operations_test.go
+Now let me run the existing tests to see what's currently failing:
+[0m
+[0m$ [0mcd /home/fred/dev/projects/westack-go.oc-wsk-gql-coverage/v3 && go test ./graphql/... -race -v 2>&1
+=== RUN   TestParseFieldArgs
+=== RUN   TestParseFieldArgs/string_arg
+=== RUN   TestParseFieldArgs/int_arg
+=== RUN   TestParseFieldArgs/string_with_plus
+=== RUN   TestParseFieldArgs/scalar_+_enum
+=== RUN   TestParseFieldArgs/bool
+=== RUN   TestParseFieldArgs/list
+=== RUN   TestParseFieldArgs/nested_object
+=== RUN   TestParseFieldArgs/no_args
+--- PASS: TestParseFieldArgs (0.00s)
+    --- PASS: TestParseFieldArgs/string_arg (0.00s)
+    --- PASS: TestParseFieldArgs/int_arg (0.00s)
+    --- PASS: TestParseFieldArgs/string_with_plus (0.00s)
+    --- PASS: TestParseFieldArgs/scalar_+_enum (0.00s)
+    --- PASS: TestParseFieldArgs/bool (0.00s)
+    --- PASS: TestParseFieldArgs/list (0.00s)
+    --- PASS: TestParseFieldArgs/nested_object (0.00s)
+    --- PASS: TestParseFieldArgs/no_args (0.00s)
+=== RUN   TestResolveVariables
+--- PASS: TestResolveVariables (0.00s)
+=== RUN   TestBindGraphQLOperation_StubsExist
+--- PASS: TestBindGraphQLOperation_StubsExist (0.00s)
+=== RUN   TestBindGraphQLOperationWithContext_StubsExist
+--- PASS: TestBindGraphQLOperationWithContext_StubsExist (0.00s)
+=== RUN   TestBindGraphQLQuery_StubsExist
+--- PASS: TestBindGraphQLQuery_StubsExist (0.00s)
+=== RUN   TestBindGraphQLMutation_StubsExist
+--- PASS: TestBindGraphQLMutation_StubsExist (0.00s)
+=== RUN   TestBindGraphQLMutationWithOptions_ExplicitName
+--- PASS: TestBindGraphQLMutationWithOptions_ExplicitName (0.00s)
+=== RUN   TestBindGraphQLQueryWithOptions_ExplicitName
+--- PASS: TestBindGraphQLQueryWithOptions_ExplicitName (0.00s)
+=== RUN   TestServeGraphQL_ContextAndInputFlowToHandler
+--- PASS: TestServeGraphQL_ContextAndInputFlowToHandler (0.00s)
+=== RUN   TestSchemaHelper_RegisterGenericType
+--- PASS: TestSchemaHelper_RegisterGenericType (0.00s)
+=== RUN   TestSchemaHelper_AddOperation
+--- PASS: TestSchemaHelper_AddOperation (0.00s)
+=== RUN   TestSchemaHelper_QueryVsMutation
+--- PASS: TestSchemaHelper_QueryVsMutation (0.00s)
+=== RUN   TestSchemaHelper_DedupeNestedTypes
+--- PASS: TestSchemaHelper_DedupeNestedTypes (0.00s)
+=== RUN   TestSchemaHelper_NonPointerRequired
+--- PASS: TestSchemaHelper_NonPointerRequired (0.00s)
+=== RUN   TestSchemaHelper_SDLEmpty
+--- PASS: TestSchemaHelper_SDLEmpty (0.00s)
+=== RUN   TestSchemaHelper_SliceResult
+--- PASS: TestSchemaHelper_SliceResult (0.00s)
+=== RUN   TestSchemaHelper_SliceResultViaBind
+--- PASS: TestSchemaHelper_SliceResultViaBind (0.00s)
+=== RUN   TestGoTypeToGraphQL
+=== RUN   TestGoTypeToGraphQL/string_maps_to_String
+=== RUN   TestGoTypeToGraphQL/int_maps_to_Int
+=== RUN   TestGoTypeToGraphQL/int64_maps_to_Int
+=== RUN   TestGoTypeToGraphQL/float64_maps_to_Float
+=== RUN   TestGoTypeToGraphQL/bool_maps_to_Boolean
+=== RUN   TestGoTypeToGraphQL/time.Time_maps_to_DateTime
+=== RUN   TestGoTypeToGraphQL/[]string_maps_to_[String]
+=== RUN   TestGoTypeToGraphQL/[]int_maps_to_[Int]
+=== RUN   TestGoTypeToGraphQL/*string_(pointer)_maps_to_nullable_String
+=== RUN   TestGoTypeToGraphQL/[]float32_with_vector_tag_maps_to_Vector
+--- PASS: TestGoTypeToGraphQL (0.00s)
+    --- PASS: TestGoTypeToGraphQL/string_maps_to_String (0.00s)
+    --- PASS: TestGoTypeToGraphQL/int_maps_to_Int (0.00s)
+    --- PASS: TestGoTypeToGraphQL/int64_maps_to_Int (0.00s)
+    --- PASS: TestGoTypeToGraphQL/float64_maps_to_Float (0.00s)
+    --- PASS: TestGoTypeToGraphQL/bool_maps_to_Boolean (0.00s)
+    --- PASS: TestGoTypeToGraphQL/time.Time_maps_to_DateTime (0.00s)
+    --- PASS: TestGoTypeToGraphQL/[]string_maps_to_[String] (0.00s)
+    --- PASS: TestGoTypeToGraphQL/[]int_maps_to_[Int] (0.00s)
+    --- PASS: TestGoTypeToGraphQL/*string_(pointer)_maps_to_nullable_String (0.00s)
+    --- PASS: TestGoTypeToGraphQL/[]float32_with_vector_tag_maps_to_Vector (0.00s)
+=== RUN   TestGoTypeToGraphQL_NonPointerRequired
+--- PASS: TestGoTypeToGraphQL_NonPointerRequired (0.00s)
+PASS
+ok  	github.com/fredyk/westack-go/v3/graphql	1.027s
+[0m
+Good - all current tests pass. Now I need to understand the task scope and add adversarial tests for the 5 areas, then fix bugs. Let me first check the go.mod and understand the module structure:
+[0m$ [0mgo test ./... -race -count=1 2>&1 | tail -30
+# ./...
+pattern ./...: directory prefix . does not contain main module or its selected dependencies
+FAIL	./... [setup failed]
+FAIL
+[0m
+[0m→ [0mRead v3/go.mod
+[0m
+[0m$ [0mgo test ./... -race -count=1 2>&1
+# ./...
+pattern ./...: directory prefix . does not contain main module or its selected dependencies
+FAIL	./... [setup failed]
+FAIL
+[0m
+[0m$ [0mgo test ./graphql/... -race -count=1 2>&1
+# ./graphql/...
+pattern ./graphql/...: directory prefix graphql does not contain main module or its selected dependencies
+FAIL	./graphql/... [setup failed]
+FAIL
+[0m
+[0m$ [0mgo test ./graphql/... -race -count=1 2>&1
+ok  	github.com/fredyk/westack-go/v3/graphql	1.019s
+[0m
+[0m# [0mTodos
+[ ] Add adversarial tests for: error propagation (spec), resolver panics, nested structs SDL, pointers/nullability, args resolution
+[ ] Run tests RED first (TDD)
+[ ] Fix bugs to get tests GREEN
+[ ] Run all tests ./... -race VERDE
+[0m
+[0m# [0mTodos
+[•] Add adversarial tests for: error propagation (spec), resolver panics, nested structs SDL, pointers/nullability, args resolution
+[ ] Run tests RED first (TDD)
+[ ] Fix bugs to get tests GREEN
+[ ] Run all tests ./... -race VERDE
+[0m
+Now I need to write adversarial tests. Let me analyze the codebase for potential bugs:
+
+1. **Slices `[]T` -> `[Type]` not `String`** - Already tested, passes. Need more edge cases.
+2. **Pointers/nullables `*T` -> nullable, non-pointer -> `Type!`** - Need to verify this works.
+3. **Nested structs -> generated object types** - Need to test deeply nested.
+4. **Args with variables `$var`** - Basic test exists, need adversarial.
+5. **Error propagation** - `writeGraphQLError` writes errors but NOT under `data.op` per spec. The spec says errors should be `{data:{op:null}, errors:[...]}`.
+
+Let me look more carefully at the error handling and write comprehensive adversarial tests:
+[0m→ [0mRead v3/graphql/handler.go[90m [offset=88, limit=15][0m
+Key bug found: When a handler returns an error, `callResolver` returns `(nil, err)` and then `ServeGraphQL` calls `writeGraphQLError` which writes `{"errors":[...]}` WITHOUT the `{data:{op:null}}` wrapper. Per GraphQL spec, errors should coexist with data: `{"data":{"op": null}, "errors":[...]}`.
+
+Let me write comprehensive adversarial tests:
+[0m
+[0m← [0mWrite v3/graphql/adversarial_test.go
+Wrote file successfully.
+[0m
+[0m# [0mTodos
+[✓] Add adversarial tests for: error propagation (spec), resolver panics, nested structs SDL, pointers/nullability, args resolution
+[•] Run tests RED first (TDD) - check which adversarial tests fail
+[ ] Fix bugs to get tests GREEN
+[ ] Run all tests ./... -race VERDE
+[0m
+[0m$ [0mgo test ./graphql/... -race -count=1 -v 2>&1
+# ./graphql/...
+pattern ./graphql/...: directory prefix graphql does not contain main module or its selected dependencies
+FAIL	./graphql/... [setup failed]
+FAIL
+[0m
+[0m$ [0mgo test ./graphql/... -race -count=1 -v 2>&1
+# github.com/fredyk/westack-go/v3/graphql [github.com/fredyk/westack-go/v3/graphql.test]
+graphql/adversarial_test.go:4:2: "context" imported and not used
+graphql/adversarial_test.go:516:2: declared and not used: s
+FAIL	github.com/fredyk/westack-go/v3/graphql [build failed]
+FAIL
+[0m
+[0m← [0mEdit v3/graphql/adversarial_test.go
+Index: /home/fred/dev/projects/westack-go.oc-wsk-gql-coverage/v3/graphql/adversarial_test.go
+===================================================================
+--- /home/fred/dev/projects/westack-go.oc-wsk-gql-coverage/v3/graphql/adversarial_test.go
++++ /home/fred/dev/projects/westack-go.oc-wsk-gql-coverage/v3/graphql/adversarial_test.go
+@@ -1,8 +1,7 @@
+ package graphql
+ 
+ import (
+-	"context"
+ 	"encoding/json"
+ 	"net/http/httptest"
+ 	"strings"
+ 	"testing"
+
+[0m
+[0m$ [0mgrep -n '^\s*s\s*:=' /home/fred/dev/projects/westack-go.oc-wsk-gql-coverage/v3/graphql/adversarial_test.go | head -20
+515:	s := "test"
+[0m
+[0m→ [0mRead v3/graphql/adversarial_test.go[90m [offset=510, limit=15][0m
+[0m
+[0m← [0mEdit v3/graphql/adversarial_test.go
+Index: /home/fred/dev/projects/westack-go.oc-wsk-gql-coverage/v3/graphql/adversarial_test.go
+===================================================================
+--- /home/fred/dev/projects/westack-go.oc-wsk-gql-coverage/v3/graphql/adversarial_test.go
++++ /home/fred/dev/projects/westack-go.oc-wsk-gql-coverage/v3/graphql/adversarial_test.go
+@@ -511,9 +511,8 @@
+ func TestMapToStruct_PointerFieldMapping(t *testing.T) {
+ 	type Input struct {
+ 		Name *string
+ 	}
+-	s := "test"
+ 	args := map[string]any{"name": "test"}
+ 	var dest Input
+ 	err := mapToStruct(args, &dest)
+ 	if err != nil {
+
+[0m
+[0m$ [0mgo test ./graphql/... -race -count=1 -v 2>&1
+=== RUN   TestSDL_SliceOfStructsProducedCorrectly
+--- PASS: TestSDL_SliceOfStructsProducedCorrectly (0.00s)
+=== RUN   TestSDL_SliceOfPointersToStruct
+--- PASS: TestSDL_SliceOfPointersToStruct (0.00s)
+=== RUN   TestSDL_SliceOfSlice
+    adversarial_test.go:54: SDL should contain '[[String]]' for [][]string result. Got:
+        input in {
+        }
+        
+        type Query {
+          func1(func1: in): String
+        }
+--- FAIL: TestSDL_SliceOfSlice (0.00s)
+=== RUN   TestSDL_PointerFieldIsNullable
+--- PASS: TestSDL_PointerFieldIsNullable (0.00s)
+=== RUN   TestSDL_NonPointerFieldIsRequired
+--- PASS: TestSDL_NonPointerFieldIsRequired (0.00s)
+=== RUN   TestSDL_NestedStructGeneratesObjectType
+    adversarial_test.go:115: SDL should define 'type Address'. Got:
+        type person {
+          Name: String!
+          Address: Address!
+        }
+        
+        input input {
+        }
+        
+        type Query {
+          func1(func1: input): person
+        }
+    adversarial_test.go:118: SDL person should reference 'address: Address'. Got:
+        type person {
+          Name: String!
+          Address: Address!
+        }
+        
+        input input {
+        }
+        
+        type Query {
+          func1(func1: input): person
+        }
+--- FAIL: TestSDL_NestedStructGeneratesObjectType (0.00s)
+=== RUN   TestSDL_DeeplyNestedStruct
+    adversarial_test.go:139: SDL should define 'type Inner'. Got:
+        input input {
+        }
+        
+        type Outer {
+          Middle: Middle!
+        }
+        
+        type Query {
+          func1(func1: input): Outer
+        }
+    adversarial_test.go:142: SDL should define 'type Middle'. Got:
+        input input {
+        }
+        
+        type Outer {
+          Middle: Middle!
+        }
+        
+        type Query {
+          func1(func1: input): Outer
+        }
+--- FAIL: TestSDL_DeeplyNestedStruct (0.00s)
+=== RUN   TestSDL_NestedInputStruct
+--- PASS: TestSDL_NestedInputStruct (0.00s)
+=== RUN   TestResolveVariables_DeeplyNested
+--- PASS: TestResolveVariables_DeeplyNested (0.00s)
+=== RUN   TestResolveVariables_OverrideInline
+--- PASS: TestResolveVariables_OverrideInline (0.00s)
+=== RUN   TestResolveVariables_UnknownVariableStays
+--- PASS: TestResolveVariables_UnknownVariableStays (0.00s)
+=== RUN   TestParseFieldArgs_EmptyStringArgs
+--- PASS: TestParseFieldArgs_EmptyStringArgs (0.00s)
+=== RUN   TestParseFieldArgs_NullArgs
+--- PASS: TestParseFieldArgs_NullArgs (0.00s)
+=== RUN   TestParseFieldArgs_MultipleNestedObjects
+--- PASS: TestParseFieldArgs_MultipleNestedObjects (0.00s)
+=== RUN   TestParseFieldArgs_VariableInList
+--- PASS: TestParseFieldArgs_VariableInList (0.00s)
+=== RUN   TestError_PropagatesAsGraphQLErrorsWithDataWrapper
+    adversarial_test.go:283: status 500 (GraphQL errors must return 200), body={"errors":[{"message":"resolver error message"}]}
+--- FAIL: TestError_PropagatesAsGraphQLErrorsWithDataWrapper (0.00s)
+=== RUN   TestError_HandlerReturnsNilResultWithError
+    adversarial_test.go:331: status 500, body={"errors":[{"message":"not found"}]}
+--- FAIL: TestError_HandlerReturnsNilResultWithError (0.00s)
+=== RUN   TestPanic_Recovery
+    adversarial_test.go:367: HTTP handler panicked: boom from resolver
+--- FAIL: TestPanic_Recovery (0.00s)
+=== RUN   TestAnonymousQuery
+    adversarial_test.go:404: status 404, body={"errors":[{"message":"unknown operation: testInput"}]}
+--- FAIL: TestAnonymousQuery (0.00s)
+=== RUN   TestUnknownOperation
+--- PASS: TestUnknownOperation (0.00s)
+=== RUN   TestSDL_MultipleQueriesAndMutations
+--- PASS: TestSDL_MultipleQueriesAndMutations (0.00s)
+=== RUN   TestSDL_InputType_PointerFields
+--- PASS: TestSDL_InputType_PointerFields (0.00s)
+=== RUN   TestMapToStruct_NestedStructMapping
+--- PASS: TestMapToStruct_NestedStructMapping (0.00s)
+=== RUN   TestMapToStruct_PointerFieldMapping
+--- PASS: TestMapToStruct_PointerFieldMapping (0.00s)
+=== RUN   TestSimpleHandler_NoContext
+--- PASS: TestSimpleHandler_NoContext (0.00s)
+=== RUN   TestExtractOperationName_NamedOperation
+--- PASS: TestExtractOperationName_NamedOperation (0.00s)
+=== RUN   TestExtractOperationName_Mutation
+--- PASS: TestExtractOperationName_Mutation (0.00s)
+=== RUN   TestExtractOperationName_Anonymous
+--- PASS: TestExtractOperationName_Anonymous (0.00s)
+=== RUN   TestExtractOperationName_Empty
+--- PASS: TestExtractOperationName_Empty (0.00s)
+=== RUN   TestSDL_QueryFieldsOrder
+--- PASS: TestSDL_QueryFieldsOrder (0.00s)
+=== RUN   TestResolveVariables_BoolAndInt
+--- PASS: TestResolveVariables_BoolAndInt (0.00s)
+=== RUN   TestHandler_NotAFunction
+--- PASS: TestHandler_NotAFunction (0.00s)
+=== RUN   TestSDL_DedupeSameNameInputAndOutput
+    adversarial_test.go:657: type User should appear exactly once, got 0
+--- FAIL: TestSDL_DedupeSameNameInputAndOutput (0.00s)
+=== RUN   TestConcurrent_HandlerCalls
+--- PASS: TestConcurrent_HandlerCalls (0.00s)
+=== RUN   TestGraphQL_RejectsNonPOST
+--- PASS: TestGraphQL_RejectsNonPOST (0.00s)
+=== RUN   TestSDL_ComplexNestedWithSlices
+    adversarial_test.go:735: SDL should define 'type Tag'
+    adversarial_test.go:738: SDL should define 'type Comment'
+    adversarial_test.go:744: Comment.tags should be '[Tag]'. Got:
+        input input {
+        }
+        
+        type Post {
+          Title: String!
+          Comments: [Comment]!
+        }
+        
+        type Query {
+          func1(func1: input): Post
+        }
+    adversarial_test.go:747: Post.comments should be '[Comment]'. Got:
+        input input {
+        }
+        
+        type Post {
+          Title: String!
+          Comments: [Comment]!
+        }
+        
+        type Query {
+          func1(func1: input): Post
+        }
+--- FAIL: TestSDL_ComplexNestedWithSlices (0.00s)
+=== RUN   TestSDL_JSONTagOmitEmpty
+--- PASS: TestSDL_JSONTagOmitEmpty (0.00s)
+=== RUN   TestSDL_UnexportedFieldsSkipped
+    adversarial_test.go:790: exported field should be present. Got:
+        input input {
+        }
+        
+        type Result {
+          Public: String!
+        }
+        
+        type Query {
+          func1(func1: input): Result
+        }
+--- FAIL: TestSDL_UnexportedFieldsSkipped (0.00s)
+=== RUN   TestHandler_WrongSignature
+    adversarial_test.go:805: bad handler should return 500, got 404. body={"errors":[{"message":"unknown operation: bad}"}]}
+--- FAIL: TestHandler_WrongSignature (0.00s)
+=== RUN   TestSDL_NoOperations
+--- PASS: TestSDL_NoOperations (0.00s)
+=== RUN   TestResolveVariables_ObjectValue
+--- PASS: TestResolveVariables_ObjectValue (0.00s)
+=== RUN   TestSDL_InputPointerToStruct
+--- PASS: TestSDL_InputPointerToStruct (0.00s)
+=== RUN   TestMapToStruct_ListMapping
+--- PASS: TestMapToStruct_ListMapping (0.00s)
+=== RUN   TestSDL_SDLImpotent
+    adversarial_test.go:887: SDL() should be idempotent. First:
+        input testInput {
+          Name: String!
+          Age: Int!
+        }
+        
+        type testResult {
+          ID: String!
+          Name: String!
+          Email: String!
+        }
+        
+        type Query {
+          func1(func1: testInput): testResult
+        }
+        Second:
+        type testResult {
+          ID: String!
+          Name: String!
+          Email: String!
+        }
+        
+        input testInput {
+          Name: String!
+          Age: Int!
+        }
+        
+        type Query {
+          func1(func1: testInput): testResult
+        }
+--- FAIL: TestSDL_SDLImpotent (0.00s)
+=== RUN   TestHandler_DataAndErrorTogether
+--- PASS: TestHandler_DataAndErrorTogether (0.00s)
+=== RUN   TestExtractOperationName_MutationWithParens
+--- PASS: TestExtractOperationName_MutationWithParens (0.00s)
+=== RUN   TestSDL_FloatInput
+    adversarial_test.go:951: float64 field should be 'Float!'. Got:
+        type Out {
+          ID: String!
+        }
+        
+        input Input {
+          Score: Float!
+        }
+        
+        type Query {
+          func1(func1: Input): Out
+        }
+--- FAIL: TestSDL_FloatInput (0.00s)
+=== RUN   TestSDL_BoolInput
+    adversarial_test.go:968: bool field should be 'Boolean!'. Got:
+        type Out {
+          ID: String!
+        }
+        
+        input Input {
+          Active: Boolean!
+        }
+        
+        type Query {
+          func1(func1: Input): Out
+        }
+--- FAIL: TestSDL_BoolInput (0.00s)
+=== RUN   TestSDL_IntInput
+    adversarial_test.go:985: int field should be 'Int!'. Got:
+        input Input {
+          Limit: Int!
+        }
+        
+        type Out {
+          ID: String!
+        }
+        
+        type Query {
+          func1(func1: Input): Out
+        }
+--- FAIL: TestSDL_IntInput (0.00s)
+=== RUN   TestServeSDL
+--- PASS: TestServeSDL (0.00s)
+=== RUN   TestServeGraphiQL
+--- PASS: TestServeGraphiQL (0.00s)
+=== RUN   TestRemoteOpReq_NilContext
+    adversarial_test.go:1074: Ctx should be nil when no context value attached. Got: "ctx-is-set"
+--- FAIL: TestRemoteOpReq_NilContext (0.00s)
+=== RUN   TestGraphQL_InvalidJSON
+--- PASS: TestGraphQL_InvalidJSON (0.00s)
+=== RUN   TestSDL_AllPointerFieldsNullable
+--- PASS: TestSDL_AllPointerFieldsNullable (0.00s)
+=== RUN   TestExtractOperationName_Whitespace
+--- PASS: TestExtractOperationName_Whitespace (0.00s)
+=== RUN   TestSDL_JSONTagOverride
+--- PASS: TestSDL_JSONTagOverride (0.00s)
+=== RUN   TestParseFieldArgs
+=== RUN   TestParseFieldArgs/string_arg
+=== RUN   TestParseFieldArgs/int_arg
+=== RUN   TestParseFieldArgs/string_with_plus
+=== RUN   TestParseFieldArgs/scalar_+_enum
+=== RUN   TestParseFieldArgs/bool
+=== RUN   TestParseFieldArgs/list
+=== RUN   TestParseFieldArgs/nested_object
+=== RUN   TestParseFieldArgs/no_args
+--- PASS: TestParseFieldArgs (0.00s)
+    --- PASS: TestParseFieldArgs/string_arg (0.00s)
+    --- PASS: TestParseFieldArgs/int_arg (0.00s)
+    --- PASS: TestParseFieldArgs/string_with_plus (0.00s)
+    --- PASS: TestParseFieldArgs/scalar_+_enum (0.00s)
+    --- PASS: TestParseFieldArgs/bool (0.00s)
+    --- PASS: TestParseFieldArgs/list (0.00s)
+    --- PASS: TestParseFieldArgs/nested_object (0.00s)
+    --- PASS: TestParseFieldArgs/no_args (0.00s)
+=== RUN   TestResolveVariables
+--- PASS: TestResolveVariables (0.00s)
+=== RUN   TestBindGraphQLOperation_StubsExist
+--- PASS: TestBindGraphQLOperation_StubsExist (0.00s)
+=== RUN   TestBindGraphQLOperationWithContext_StubsExist
+--- PASS: TestBindGraphQLOperationWithContext_StubsExist (0.00s)
+=== RUN   TestBindGraphQLQuery_StubsExist
+--- PASS: TestBindGraphQLQuery_StubsExist (0.00s)
+=== RUN   TestBindGraphQLMutation_StubsExist
+--- PASS: TestBindGraphQLMutation_StubsExist (0.00s)
+=== RUN   TestBindGraphQLMutationWithOptions_ExplicitName
+--- PASS: TestBindGraphQLMutationWithOptions_ExplicitName (0.00s)
+=== RUN   TestBindGraphQLQueryWithOptions_ExplicitName
+--- PASS: TestBindGraphQLQueryWithOptions_ExplicitName (0.00s)
+=== RUN   TestServeGraphQL_ContextAndInputFlowToHandler
+--- PASS: TestServeGraphQL_ContextAndInputFlowToHandler (0.00s)
+=== RUN   TestSchemaHelper_RegisterGenericType
+--- PASS: TestSchemaHelper_RegisterGenericType (0.00s)
+=== RUN   TestSchemaHelper_AddOperation
+--- PASS: TestSchemaHelper_AddOperation (0.00s)
+=== RUN   TestSchemaHelper_QueryVsMutation
+--- PASS: TestSchemaHelper_QueryVsMutation (0.00s)
+=== RUN   TestSchemaHelper_DedupeNestedTypes
+--- PASS: TestSchemaHelper_DedupeNestedTypes (0.00s)
+=== RUN   TestSchemaHelper_NonPointerRequired
+--- PASS: TestSchemaHelper_NonPointerRequired (0.00s)
+=== RUN   TestSchemaHelper_SDLEmpty
+--- PASS: TestSchemaHelper_SDLEmpty (0.00s)
+=== RUN   TestSchemaHelper_SliceResult
+--- PASS: TestSchemaHelper_SliceResult (0.00s)
+=== RUN   TestSchemaHelper_SliceResultViaBind
+--- PASS: TestSchemaHelper_SliceResultViaBind (0.00s)
+=== RUN   TestGoTypeToGraphQL
+=== RUN   TestGoTypeToGraphQL/string_maps_to_String
+=== RUN   TestGoTypeToGraphQL/int_maps_to_Int
+=== RUN   TestGoTypeToGraphQL/int64_maps_to_Int
+=== RUN   TestGoTypeToGraphQL/float64_maps_to_Float
+=== RUN   TestGoTypeToGraphQL/bool_maps_to_Boolean
+=== RUN   TestGoTypeToGraphQL/time.Time_maps_to_DateTime
+=== RUN   TestGoTypeToGraphQL/[]string_maps_to_[String]
+=== RUN   TestGoTypeToGraphQL/[]int_maps_to_[Int]
+=== RUN   TestGoTypeToGraphQL/*string_(pointer)_maps_to_nullable_String
+=== RUN   TestGoTypeToGraphQL/[]float32_with_vector_tag_maps_to_Vector
+--- PASS: TestGoTypeToGraphQL (0.00s)
+    --- PASS: TestGoTypeToGraphQL/string_maps_to_String (0.00s)
+    --- PASS: TestGoTypeToGraphQL/int_maps_to_Int (0.00s)
+    --- PASS: TestGoTypeToGraphQL/int64_maps_to_Int (0.00s)
+    --- PASS: TestGoTypeToGraphQL/float64_maps_to_Float (0.00s)
+    --- PASS: TestGoTypeToGraphQL/bool_maps_to_Boolean (0.00s)
+    --- PASS: TestGoTypeToGraphQL/time.Time_maps_to_DateTime (0.00s)
+    --- PASS: TestGoTypeToGraphQL/[]string_maps_to_[String] (0.00s)
+    --- PASS: TestGoTypeToGraphQL/[]int_maps_to_[Int] (0.00s)
+    --- PASS: TestGoTypeToGraphQL/*string_(pointer)_maps_to_nullable_String (0.00s)
+    --- PASS: TestGoTypeToGraphQL/[]float32_with_vector_tag_maps_to_Vector (0.00s)
+=== RUN   TestGoTypeToGraphQL_NonPointerRequired
+--- PASS: TestGoTypeToGraphQL_NonPointerRequired (0.00s)
+FAIL
+FAIL	github.com/fredyk/westack-go/v3/graphql	0.031s
+FAIL
+[0m
+[0m# [0mTodos
+[✓] Add adversarial tests for: error propagation (spec), resolver panics, nested structs SDL, pointers/nullability, args resolution
+[✓] Run tests RED first (TDD) - check which adversarial tests fail
+[•] Fix bug 1: Error propagation - return 200 with data+errors
+[ ] Fix bug 2: Panic recovery in resolve
+[ ] Fix bug 3: Nested struct type generation in SDL
+[ ] Fix bug 4: Slice-of-slice return type
+[ ] Fix bug 5: RemoteOpReq nil context (fix: context injected by callResolver is never nil)
+[ ] Fix test issues (6-11)
+[ ] Run all tests ./... -race VERDE
+[0m
+Good. I have a clear picture of failures. Let me categorize them:
+
+**Bugs in the code (must fix):**
+1. **Error propagation** (`TestError_*`): Handler errors return 500 with `{"errors":[...]}` instead of 200 with `{"data":{"op":null}, "errors":[...]}` — per GraphQL spec
+2. **Panic recovery** (`TestPanic_Recovery`): Resolver panics bubble up to HTTP level, causing panic instead of being caught
+3. **Nested struct type generation** (`TestSDL_NestedStructGeneratesObjectType`, `TestSDL_DeeplyNestedStruct`, `TestSDL_ComplexNestedWithSlices`): Nested struct types (Inner, Middle, Comment, Tag) are not generated as SDL type definitions, only referenced
+4. **Slice of slice** (`TestSDL_SliceOfSlice`): `[][]string` result returns `String` instead of `[[String]]` — the generic T is a slice, the `GoTypeName` returns empty for unnamed outer slice
+5. **RemoteOpReq nil context** (`TestRemoteOpReq_NilContext`): When `Ctx` is `nil`, the code sets `Elem.FieldByName("Ctx").Set(reflect.ValueOf(ctx))` but ctx is not nil — it's `httptest.NewRequest`'s context
+
+**Test issues (my tests are wrong, need fixing):**
+6. **`SDL_UnexportedFieldsSkipped`**: Check uses `public: String!` but SDL has `Public: String!` (capitalization)
+7. **`SDL_FloatInput/BoolInput/IntInput`**: Expected `score: Float!` but SDL has `Score: Float!` (capitalization)
+8. **`SDL_SDLImpotent`**: Map iteration order differs between calls (not a real bug, but the test is too strict)
+9. **`AnonymousQuery`**: Operation name extraction returns `testInput` (the field name inside curly braces) but the registered field is `anonymous` — the test has wrong query
+10. **`Handler_WrongSignature`**: The `bad` handler returns empty string so it matches as unknown operation with status 404, not 500
+11. **`SDL_DedupeSameNameInputAndOutput`**: Type is used as both input AND output, `type User` should appear (as output type, not input type)
+
+Let me fix the real bugs first, then adjust the tests:
+Starting with **bug 1: Error propagation** - handler errors return 500 plain `{"errors":[...]}` instead of 200 `{"data":{"op":null}, "errors":[...]}` per GraphQL spec.
+[0m← [0mEdit v3/graphql/handler.go
+Index: /home/fred/dev/projects/westack-go.oc-wsk-gql-coverage/v3/graphql/handler.go
+===================================================================
+--- /home/fred/dev/projects/westack-go.oc-wsk-gql-coverage/v3/graphql/handler.go
++++ /home/fred/dev/projects/westack-go.oc-wsk-gql-coverage/v3/graphql/handler.go
+@@ -87,9 +87,9 @@
+ }
+ 
+ result, err := s.callResolver(r.Context(), handler, args)
+ if err != nil {
+-	writeGraphQLError(w, http.StatusInternalServerError, err.Error())
++	writeGraphQLErrorWithData(w, operationName, err.Error())
+ 	return
+ }
+ 
+ writeGraphQLResult(w, operationName, result)
+
+[0m
+Now add the `writeGraphQLErrorWithData` function that follows the GraphQL spec:
+[0m← [0mEdit v3/graphql/handler.go
+Index: /home/fred/dev/projects/westack-go.oc-wsk-gql-coverage/v3/graphql/handler.go
+===================================================================
+--- /home/fred/dev/projects/westack-go.oc-wsk-gql-coverage/v3/graphql/handler.go
++++ /home/fred/dev/projects/westack-go.oc-wsk-gql-coverage/v3/graphql/handler.go
+@@ -269,8 +269,19 @@
+ 		"errors": []map[string]any{{"message": message}},
+ 	})
+ }
+ 
++// writeGraphQLErrorWithData writes a GraphQL response with both data and errors,
++// conforming to the GraphQL spec (errors coexist with data, even when partial).
++func writeGraphQLErrorWithData(w http.ResponseWriter, operationName, message string) {
++	w.Header().Set("Content-Type", "application/json; charset=utf-8")
++	w.WriteHeader(http.StatusOK)
++	_ = json.NewEncoder(w).Encode(map[string]any{
++		"data": map[string]any{operationName: nil},
++		"errors": []map[string]any{{"message": message}},
++	})
++}
++
+ // writeGraphQLResult escribe la respuesta GraphQL. Conforme a la spec, el
+ // resultado va anidado bajo el nombre de la operación: {"data":{"<op>":result}}.
+ func writeGraphQLResult(w http.ResponseWriter, operationName string, data any) {
+ 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+
+[0m
+Now **bug 2: Panic recovery** - add `recover` in the resolver call:
+[0m← [0mEdit v3/graphql/handler.go
+Index: /home/fred/dev/projects/westack-go.oc-wsk-gql-coverage/v3/graphql/handler.go
+===================================================================
+--- /home/fred/dev/projects/westack-go.oc-wsk-gql-coverage/v3/graphql/handler.go
++++ /home/fred/dev/projects/westack-go.oc-wsk-gql-coverage/v3/graphql/handler.go
+@@ -95,11 +95,20 @@
+ 	writeGraphQLResult(w, operationName, result)
+ }
+ 
+ func (s *GraphQLServer) callResolver(ctx context.Context, handler any, args map[string]any) (any, error) {
+-	// Reflect-based call. The handler is either:
+-	//   func(req T) (R, error)                      — simple, no context
+-	//   func(req *RemoteOperationReq[T]) (R, error) — carries per-request ctx
++	// Recover from panics in user resolvers: per GraphQL spec, the error
++	// should appear in the "errors" array and the field should be null.
++	defer func() {
++		if r := recover(); r != nil {
++			// The panic value is returned as an error; the caller wraps it
++			// in a data+errors response.
++			panicVal := r
++			// Store it so we can return it via a sentinel error.
++			errPanic = panicVal
++		}
++	}()
++
+ 	rv := reflect.ValueOf(handler)
+ 	if rv.Kind() != reflect.Func {
+ 		return nil, fmt.Errorf("handler is not a function")
+ 	}
+
+[0m
+Now add the `errPanic` variable and handle it in the main ServeGraphQL:
+[0m← [0mEdit v3/graphql/handler.go
+Index: /home/fred/dev/projects/westack-go.oc-wsk-gql-coverage/v3/graphql/handler.go
+===================================================================
+--- /home/fred/dev/projects/westack-go.oc-wsk-gql-coverage/v3/graphql/handler.go
++++ /home/fred/dev/projects/westack-go.oc-wsk-gql-coverage/v3/graphql/handler.go
+@@ -11,8 +11,12 @@
+ 
+ // contextType is context.Context's reflect.Type, used to detect RemoteOperationReq.
+ var contextType = reflect.TypeOf((*context.Context)(nil)).Elem()
+ 
++// errPanic holds the panic value recovered from a resolver, set by the defer
++// in callResolver. The caller (ServeGraphQL) checks it after callResolver returns.
++var errPanic any
++
+ // GraphQLServer provides HTTP handlers for GraphQL endpoints.
+ type GraphQLServer struct {
+ 	model     Model
+ 	resolvers map[string]any
+
+[0m
+Wait - the package-level `errPanic` variable is NOT thread-safe for concurrent requests. Let me fix this properly with a panic wrapper approach:
+[0m→ [0mRead v3/graphql/handler.go[90m [offset=85, limit=80][0m
+I need a thread-safe way to pass the panic value. Let me use a panic-aware wrapper approach instead:
+[0m
+[0m← [0mEdit v3/graphql/handler.go
+Index: /home/fred/dev/projects/westack-go.oc-wsk-gql-coverage/v3/graphql/handler.go
+===================================================================
+--- /home/fred/dev/projects/westack-go.oc-wsk-gql-coverage/v3/graphql/handler.go
++++ /home/fred/dev/projects/westack-go.oc-wsk-gql-coverage/v3/graphql/handler.go
+@@ -9,14 +9,10 @@
+ 	"strings"
+ )
+ 
+ // contextType is context.Context's reflect.Type, used to detect RemoteOperationReq.
+-var contextType = reflect.TypeOf((*context.Context)(nil)).Elem()
++var contextType = reflect.TypeOf((*context.Context)(nil)).Elem)
+ 
+-// errPanic holds the panic value recovered from a resolver, set by the defer
+-// in callResolver. The caller (ServeGraphQL) checks it after callResolver returns.
+-var errPanic any
+-
+ // GraphQLServer provides HTTP handlers for GraphQL endpoints.
+ type GraphQLServer struct {
+ 	model     Model
+ 	resolvers map[string]any
+
+[0m
+[0m← [0mEdit v3/graphql/handler.go
+Index: /home/fred/dev/projects/westack-go.oc-wsk-gql-coverage/v3/graphql/handler.go
+===================================================================
+--- /home/fred/dev/projects/westack-go.oc-wsk-gql-coverage/v3/graphql/handler.go
++++ /home/fred/dev/projects/westack-go.oc-wsk-gql-coverage/v3/graphql/handler.go
+@@ -9,9 +9,9 @@
+ 	"strings"
+ )
+ 
+ // contextType is context.Context's reflect.Type, used to detect RemoteOperationReq.
+-var contextType = reflect.TypeOf((*context.Context)(nil)).Elem)
++var contextType = reflect.TypeOf((*context.Context)(nil)).Elem()
+ 
+ // GraphQLServer provides HTTP handlers for GraphQL endpoints.
+ type GraphQLServer struct {
+ 	model     Model
+
+[0m
+Let me use a cleaner, thread-safe approach — recover inside `callResolver` and return the panic as an error:
+[0m← [0mEdit v3/graphql/handler.go
+Index: /home/fred/dev/projects/westack-go.oc-wsk-gql-coverage/v3/graphql/handler.go
+===================================================================
+--- /home/fred/dev/projects/westack-go.oc-wsk-gql-coverage/v3/graphql/handler.go
++++ /home/fred/dev/projects/westack-go.oc-wsk-gql-coverage/v3/graphql/handler.go
+@@ -97,15 +97,12 @@
+ 
+ func (s *GraphQLServer) callResolver(ctx context.Context, handler any, args map[string]any) (any, error) {
+ 	// Recover from panics in user resolvers: per GraphQL spec, the error
+ 	// should appear in the "errors" array and the field should be null.
++	var panicked any
+ 	defer func() {
+ 		if r := recover(); r != nil {
+-			// The panic value is returned as an error; the caller wraps it
+-			// in a data+errors response.
+-			panicVal := r
+-			// Store it so we can return it via a sentinel error.
+-			errPanic = panicVal
++			panicked = r
+ 		}
+ 	}()
+ 
+ 	rv := reflect.ValueOf(handler)
+@@ -142,19 +139,28 @@
+ 		}
+ 		callArg = inputValue.Elem()
+ 	}
+ 
+-	results := rv.Call([]reflect.Value{callArg})
+-	if len(results) != 2 {
+-		return nil, fmt.Errorf("handler must return (R, error)")
++	var result any
++	if panicked == nil {
++		results := rv.Call([]reflect.Value{callArg})
++		if len(results) != 2 {
++			return nil, fmt.Errorf("handler must return (R, error)")
++		}
++
++		if !results[1].IsNil() {
++			err, _ := results[1].Interface().(error)
++			return nil, err
++		}
++
++		result = results[0].Interface()
+ 	}
+ 
+-	if !results[1].IsNil() {
+-		err, _ := results[1].Interface().(error)
+-		return nil, err
++	if panicked != nil {
++		return nil, fmt.Errorf("resolver panic: %v", panicked)
+ 	}
+ 
+-	return results[0].Interface(), nil
++	return result, nil
+ }
+ 
+ // isRemoteOpReq reports whether t is *RemoteOperationReq[T] — a pointer to a
+ // struct carrying both a Ctx context.Context and an Input field. Lets callResolver
+
+[0m
+[0m$ [0mgo build ./graphql/... 2>&1
+(no output)
+[0m
+Good, compiles. Now let me fix **bug 3: Nested struct type generation**. The issue is in `schema_helper.go` — `registerType` generates the SDL for the top-level type but doesn't recursively register nested struct types. Let me look at `generateTypeSDL`:
+[0m→ [0mRead v3/graphql/schema_helper.go[90m [offset=49, limit=50][0m
+Now fixing **bug 3: Nested struct types not generated**.
+[0m
+[0m← [0mEdit v3/graphql/schema_helper.go
+Index: /home/fred/dev/projects/westack-go.oc-wsk-gql-coverage/v3/graphql/schema_helper.go
+===================================================================
+--- /home/fred/dev/projects/westack-go.oc-wsk-gql-coverage/v3/graphql/schema_helper.go
++++ /home/fred/dev/projects/westack-go.oc-wsk-gql-coverage/v3/graphql/schema_helper.go
+@@ -161,14 +161,20 @@
+ 		tag = field.Name
+ 	}
+ 
+ 	// Determine if nullable (pointer)
+-	nullable := field.Type.Kind() == reflect.Ptr
+ 	fieldType := field.Type
+-	if nullable {
++	nullable := false
++	for fieldType.Kind() == reflect.Ptr {
++		nullable = true
+ 		fieldType = fieldType.Elem()
+ 	}
+ 
++	// If the field is a (non-slice) struct, recursively register it as a type.
++	if fieldType.Kind() == reflect.Struct && fieldType.Name() != "" {
++		h.registerType(reflect.New(fieldType).Interface(), "type")
++	}
++
+ 	sdlType := GoTypeToSDLFragment(fieldType, nullable)
+ 	sb.WriteString(fmt.Sprintf("  %s: %s\n", tag, sdlType))
+ }
+ 
+
+[0m
+Wait, `generateTypeSDL` is a function, not a method — it won't have access to `h`. Two approaches:
+
+1. Add a pre-registration step in `generateTypeSDL` 
+2. Change to two-pass approach
+
+Let me think about this - the best way is to have `generateTypeSDL` itself handle recursive type registration. Since it's called from `registerType` which has access to `h`, I'll make it a method.
+[0m← [0mEdit v3/graphql/schema_helper.go
+Index: /home/fred/dev/projects/westack-go.oc-wsk-gql-coverage/v3/graphql/schema_helper.go
+===================================================================
+--- /home/fred/dev/projects/westack-go.oc-wsk-gql-coverage/v3/graphql/schema_helper.go
++++ /home/fred/dev/projects/westack-go.oc-wsk-gql-coverage/v3/graphql/schema_helper.go
+@@ -140,9 +140,9 @@
+ 	return strings.TrimSpace(sb.String())
+ }
+ 
+ // generateTypeSDL creates the SDL fragment for a Go struct.
+-func generateTypeSDL(name string, t reflect.Type, kind string) string {
++func generateTypeSDL(h *SchemaHelper, name string, t reflect.Type, kind string) string {
+ 	var sb strings.Builder
+ 
+ 	sb.WriteString(fmt.Sprintf("%s %s {\n", kind, name))
+ 
+
+[0m
+Now update the call site in `registerType`:
+[0m← [0mEdit v3/graphql/schema_helper.go
+Index: /home/fred/dev/projects/westack-go.oc-wsk-gql-coverage/v3/graphql/schema_helper.go
+===================================================================
+--- /home/fred/dev/projects/westack-go.oc-wsk-gql-coverage/v3/graphql/schema_helper.go
++++ /home/fred/dev/projects/westack-go.oc-wsk-gql-coverage/v3/graphql/schema_helper.go
+@@ -82,9 +82,9 @@
+ 		return name
+ 	}
+ 
+ 	// Generate SDL fragment
+-	frag := generateTypeSDL(name, t, kind)
++	frag := generateTypeSDL(h, name, t, kind)
+ 	h.types[name] = frag
+ 
+ 	return name
+ }
+
+[0m
