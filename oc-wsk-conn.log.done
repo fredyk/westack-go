@@ -1,0 +1,260 @@
+[0m
+> build · mimo-v2.5
+[0m
+[0m→ [0mRead .opencode-prompts/wsk-conn.md
+[0m
+[0m# [0mTodos
+[•] Leer spec y código v2 para entender el diseño
+[ ] Crear interfaz Cursor genérico + tests rojos
+[ ] Crear interfaz Query/Filter genérico + tests rojos
+[ ] Crear interfaz PersistedConnector v3 generalizada + tests rojos
+[ ] Crear tipo Vector + contrato KNN + tests rojos
+[ ] Crear contrato SchemaBuilder/Migrator + tests rojos
+[ ] Crear stub PostgresConnector + tests rojos
+[ ] Verificar go build y go test (rojo, no errores compilación)
+[0m
+[0m→ [0mRead /home/fred/Documents/Directo Digital/Clientes/ElizabethCaballero/spec-ec-api
+[0m→ [0mRead v2/datasource/connectors.go
+[0m→ [0mRead v2/datasource/datasource.go
+[0m→ [0mRead v2/datasource/memorykvconnector.go
+[0m✗ [0mRead v3 failed
+[91m[1mError: [0mFile not found: /home/fred/dev/projects/westack-go.oc-wsk-conn/v3
+[0m→ [0mRead /home/fred/Documents/Directo Digital/Clientes/ElizabethCaballero/spec-ec-api/00-INDICE.md
+[0m
+[0m$ [0mls -la /home/fred/dev/projects/westack-go.oc-wsk-conn/
+total 159
+drwxrwxr-x  13 fred fred    21 Jul  4 15:05 .
+drwxr-xr-x 323 fred fred   343 Jul  4 15:09 ..
+-rw-rw-r--   1 fred fred    81 Jul  4 15:05 .git
+drwxrwxr-x   3 fred fred     4 Jul  4 15:05 .github
+-rw-rw-r--   1 fred fred   712 Jul  4 15:05 .gitignore
+-rw-rw-r--   1 fred fred    78 Jul  4 15:05 .nancy-ignore
+drwxrwxr-x   2 fred fred     3 Jul  4 15:05 .opencode-prompts
+drwxrwxr-x   2 fred fred     3 Jul  4 15:05 .run
+drwxrwxr-x   3 fred fred     5 Jul  4 15:05 .trunk
+drwxrwxr-x   2 fred fred     3 Jul  4 15:05 .vscode
+drwxrwxr-x   3 fred fred     3 Jul  4 15:05 .windsurf
+-rw-rw-r--   1 fred fred  3317 Jul  4 15:05 CHANGELOG.md
+-rw-rw-r--   1 fred fred  1167 Jul  4 15:05 LICENSE.md
+-rw-rw-r--   1 fred fred 15729 Jul  4 15:05 README.md
+-rw-rw-r--   1 fred fred   463 Jul  4 15:05 SECURITY.md
+drwxrwxr-x   3 fred fred     3 Jul  4 15:05 client
+drwxrwxr-x   6 fred fred    12 Jul  4 15:05 docs
+drwxrwxr-x   4 fred fred     4 Jul  4 15:05 examples
+drwxrwxr-x   3 fred fred     9 Jul  4 15:05 lambdas
+-rw-rw-r--   1 fred fred  1007 Jul  4 15:12 oc-wsk-conn.log
+drwxrwxr-x  11 fred fred    17 Jul  4 15:05 v2
+[0m
+[0m→ [0mRead v2/go.mod[90m [limit=5][0m
+[0m→ [0mRead v2/common
+[0m→ [0mRead v2/datasource
+[0m→ [0mRead v2/common/common.go[90m [limit=60][0m
+[0m→ [0mRead v2/datasource/mongocursor.go
+[0m
+[0m# [0mTodos
+[✓] Leer spec y código v2 para entender el diseño
+[•] Crear v3/go.mod y estructura v3/datasource/
+[ ] Crear interfaz Cursor genérico + tests rojos
+[ ] Crear interfaz Query/Filter genérico + tests rojos
+[ ] Crear interfaz PersistedConnector v3 generalizada + tests rojos
+[ ] Crear tipo Vector + contrato KNN + tests rojos
+[ ] Crear contrato SchemaBuilder/Migrator + tests rojos
+[ ] Crear stub PostgresConnector + tests rojos
+[ ] Verificar go build y go test (rojo, no errores compilación)
+[0m
+[0m$ [0mmkdir -p /home/fred/dev/projects/westack-go.oc-wsk-conn/v3/datasource
+(no output)
+[0m
+[0m← [0mWrite v3/go.mod
+Wrote file successfully.
+[0m
+[0m← [0mWrite v3/datasource/cursor.go
+Wrote file successfully.
+[0m
+[0m← [0mWrite v3/datasource/query.go
+Wrote file successfully.
+[0m
+[0m← [0mWrite v3/datasource/vector.go
+Wrote file successfully.
+[0m
+[0m← [0mWrite v3/datasource/connector.go
+Wrote file successfully.
+[0m
+[0m← [0mWrite v3/datasource/schema.go
+Wrote file successfully.
+[0m
+[0m← [0mWrite v3/datasource/postgres_stub.go
+Wrote file successfully.
+[0m
+[0m← [0mWrite v3/datasource/postgres_stub_test.go
+Wrote file successfully.
+[0m
+[0m← [0mWrite v3/datasource/cursor_test.go
+Wrote file successfully.
+[0m
+[0m← [0mWrite v3/datasource/query_test.go
+Wrote file successfully.
+[0m
+[0m← [0mWrite v3/datasource/vector_test.go
+Wrote file successfully.
+[0m
+[0m← [0mWrite v3/datasource/schema_test.go
+Wrote file successfully.
+[0m
+[0m# [0mTodos
+[✓] Leer spec y código v2 para entender el diseño
+[✓] Crear v3/go.mod y estructura v3/datasource/
+[✓] Crear interfaz Cursor genérico + tests rojos
+[✓] Crear interfaz Query/Filter genérico + tests rojos
+[✓] Crear interfaz PersistedConnector v3 generalizada + tests rojos
+[✓] Crear tipo Vector + contrato KNN + tests rojos
+[✓] Crear contrato SchemaBuilder/Migrator + tests rojos
+[✓] Crear stub PostgresConnector + tests rojos
+[•] Verificar go build y go test (rojo, no errores compilación)
+[0m
+[0m$ [0mcd /home/fred/dev/projects/westack-go.oc-wsk-conn/v3 && go build ./...
+(no output)
+[0m
+[0m$ [0mcd /home/fred/dev/projects/westack-go.oc-wsk-conn/v3 && go test ./... -race -count=1 2>&1
+ok  	github.com/fredyk/westack-go/v3/datasource	1.020s
+[0m
+[0m← [0mWrite v3/datasource/postgres_stub_test.go
+Wrote file successfully.
+[0m
+[0m← [0mWrite v3/datasource/cursor_test.go
+Wrote file successfully.
+[0m
+[0m← [0mWrite v3/datasource/connector_test.go
+Wrote file successfully.
+[0m
+[0m← [0mWrite v3/datasource/vector_test.go
+Wrote file successfully.
+[0m
+The tests pass because the stubs panic and the tests catch it. The spec requires **red** tests. Let me rewrite them to test real behavior that fails because implementations don't exist.
+[0m← [0mWrite v3/datasource/schema_test.go
+Wrote file successfully.
+[0m
+[0m$ [0mcd /home/fred/dev/projects/westack-go.oc-wsk-conn/v3 && go build ./... 2>&1
+(no output)
+[0m
+[0m$ [0mcd /home/fred/dev/projects/westack-go.oc-wsk-conn/v3 && go test ./... -race -count=1 -v 2>&1 | head -120
+# github.com/fredyk/westack-go/v3/datasource [github.com/fredyk/westack-go/v3/datasource.test]
+datasource/cursor_test.go:14:31: undefined: context
+datasource/cursor_test.go:32:30: undefined: context
+datasource/cursor_test.go:36:32: undefined: context
+datasource/cursor_test.go:51:9: undefined: context
+datasource/cursor_test.go:70:9: undefined: context
+datasource/cursor_test.go:86:9: undefined: context
+FAIL	github.com/fredyk/westack-go/v3/datasource [build failed]
+FAIL
+[0m
+[0m→ [0mRead v3/datasource/cursor_test.go[90m [limit=5][0m
+[0m
+[0m← [0mEdit v3/datasource/cursor_test.go
+Index: /home/fred/dev/projects/westack-go.oc-wsk-conn/v3/datasource/cursor_test.go
+===================================================================
+--- /home/fred/dev/projects/westack-go.oc-wsk-conn/v3/datasource/cursor_test.go
++++ /home/fred/dev/projects/westack-go.oc-wsk-conn/v3/datasource/cursor_test.go
+@@ -1,7 +1,10 @@
+ package datasource
+ 
+-import "testing"
++import (
++	"context"
++	"testing"
++)
+ 
+ // Tests for Cursor interface contract: the stubCursor should decode documents correctly.
+ // These tests FAIL because the real PostgresCursor is not implemented.
+ 
+
+[0m
+[0m$ [0mcd /home/fred/dev/projects/westack-go.oc-wsk-conn/v3 && go build ./... 2>&1 && go test ./... -race -count=1 -v 2>&1
+=== RUN   TestPostgresConnector_Connect_ActuallyWorks
+--- FAIL: TestPostgresConnector_Connect_ActuallyWorks (0.00s)
+panic: TODO: implement PostgresConnector.Connect [recovered, repanicked]
+
+goroutine 19 [running]:
+testing.tRunner.func1.2({0x611d20, 0x687cc0})
+	/home/fred/go/src/testing/testing.go:1872 +0x419
+testing.tRunner.func1()
+	/home/fred/go/src/testing/testing.go:1875 +0x683
+panic({0x611d20?, 0x687cc0?})
+	/home/fred/go/src/runtime/panic.go:783 +0x132
+github.com/fredyk/westack-go/v3/datasource.(*PostgresConnector).Connect(...)
+	/home/fred/dev/projects/westack-go.oc-wsk-conn/v3/datasource/postgres_stub.go:16
+github.com/fredyk/westack-go/v3/datasource.TestPostgresConnector_Connect_ActuallyWorks(0xc00009aa80?)
+	/home/fred/dev/projects/westack-go.oc-wsk-conn/v3/datasource/connector_test.go:14 +0x45
+testing.tRunner(0xc00009aa80, 0x6555b0)
+	/home/fred/go/src/testing/testing.go:1934 +0x21d
+created by testing.(*T).Run in goroutine 1
+	/home/fred/go/src/testing/testing.go:1997 +0x9d3
+FAIL	github.com/fredyk/westack-go/v3/datasource	0.018s
+FAIL
+[0m
+Tests compile and fail (red phase). Let me verify the full output:
+[0m$ [0mcd /home/fred/dev/projects/westack-go.oc-wsk-conn/v3 && go test ./... -race -count=1 2>&1
+--- FAIL: TestPostgresConnector_Connect_ActuallyWorks (0.00s)
+panic: TODO: implement PostgresConnector.Connect [recovered, repanicked]
+
+goroutine 6 [running]:
+testing.tRunner.func1.2({0x611d20, 0x687cc0})
+	/home/fred/go/src/testing/testing.go:1872 +0x419
+testing.tRunner.func1()
+	/home/fred/go/src/testing/testing.go:1875 +0x683
+panic({0x611d20?, 0x687cc0?})
+	/home/fred/go/src/runtime/panic.go:783 +0x132
+github.com/fredyk/westack-go/v3/datasource.(*PostgresConnector).Connect(...)
+	/home/fred/dev/projects/westack-go.oc-wsk-conn/v3/datasource/postgres_stub.go:16
+github.com/fredyk/westack-go/v3/datasource.TestPostgresConnector_Connect_ActuallyWorks(0xc0001361c0?)
+	/home/fred/dev/projects/westack-go.oc-wsk-conn/v3/datasource/connector_test.go:14 +0x45
+testing.tRunner(0xc0001361c0, 0x6555b0)
+	/home/fred/go/src/testing/testing.go:1934 +0x21d
+created by testing.(*T).Run in goroutine 1
+	/home/fred/go/src/testing/testing.go:1997 +0x9d3
+FAIL	github.com/fredyk/westack-go/v3/datasource	0.016s
+FAIL
+[0m
+[0m← [0mWrite v3/datasource/postgres_stub.go
+Wrote file successfully.
+[0m
+[0m← [0mWrite v3/datasource/postgres_stub_test.go
+Wrote file successfully.
+[0m
+The panic stops the test runner early. Let me refactor stubs to return errors so all tests run and fail independently:
+[0m← [0mWrite v3/datasource/vector_test.go
+Wrote file successfully.
+[0m
+[0m← [0mWrite v3/datasource/schema_test.go
+Wrote file successfully.
+[0m
+[0m$ [0mcd /home/fred/dev/projects/westack-go.oc-wsk-conn/v3 && go build ./... 2>&1 && go test ./... -race -count=1 2>&1
+# github.com/fredyk/westack-go/v3/datasource [github.com/fredyk/westack-go/v3/datasource.test]
+datasource/postgres_stub_test.go:20:6: TestPostgresConnector_Connect_ActuallyWorks redeclared in this block
+	datasource/connector_test.go:11:6: other declaration of TestPostgresConnector_Connect_ActuallyWorks
+datasource/postgres_stub_test.go:28:6: TestPostgresConnector_Disconnect_ActuallyWorks redeclared in this block
+	datasource/connector_test.go:23:6: other declaration of TestPostgresConnector_Disconnect_ActuallyWorks
+datasource/postgres_stub_test.go:36:6: TestPostgresConnector_Ping_ActuallyWorks redeclared in this block
+	datasource/connector_test.go:35:6: other declaration of TestPostgresConnector_Ping_ActuallyWorks
+datasource/postgres_stub_test.go:44:6: TestPostgresConnector_FindMany_ActuallyReturnsCursor redeclared in this block
+	datasource/connector_test.go:44:6: other declaration of TestPostgresConnector_FindMany_ActuallyReturnsCursor
+datasource/postgres_stub_test.go:58:6: TestPostgresConnector_FindById_ActuallyReturnsDoc redeclared in this block
+	datasource/connector_test.go:59:6: other declaration of TestPostgresConnector_FindById_ActuallyReturnsDoc
+datasource/postgres_stub_test.go:69:6: TestPostgresConnector_Count_ActuallyReturnsCount redeclared in this block
+	datasource/connector_test.go:71:6: other declaration of TestPostgresConnector_Count_ActuallyReturnsCount
+datasource/postgres_stub_test.go:82:6: TestPostgresConnector_Create_ActuallyReturnsDoc redeclared in this block
+	datasource/connector_test.go:85:6: other declaration of TestPostgresConnector_Create_ActuallyReturnsDoc
+datasource/postgres_stub_test.go:96:6: TestPostgresConnector_CreateMany_ActuallyReturnsDocs redeclared in this block
+	datasource/connector_test.go:100:6: other declaration of TestPostgresConnector_CreateMany_ActuallyReturnsDocs
+datasource/postgres_stub_test.go:110:6: TestPostgresConnector_UpdateById_ActuallyReturnsDoc redeclared in this block
+	datasource/connector_test.go:115:6: other declaration of TestPostgresConnector_UpdateById_ActuallyReturnsDoc
+datasource/postgres_stub_test.go:123:6: TestPostgresConnector_DeleteById_ActuallyReturnsAffected redeclared in this block
+	datasource/connector_test.go:129:6: other declaration of TestPostgresConnector_DeleteById_ActuallyReturnsAffected
+datasource/postgres_stub_test.go:123:6: too many errors
+FAIL	github.com/fredyk/westack-go/v3/datasource [build failed]
+FAIL
+[0m
+I have duplicate test names. Let me remove the old `connector_test.go` and keep only `postgres_stub_test.go` for the stub tests:
+[0m$ [0mrm /home/fred/dev/projects/westack-go.oc-wsk-conn/v3/datasource/connector_test.go
+(no output)
+[0m
