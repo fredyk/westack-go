@@ -2,6 +2,7 @@ package datasource
 
 import (
 	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgconn"
@@ -63,5 +64,61 @@ func TestMapPGError_WrapsOriginal(t *testing.T) {
 	}
 	if inner.Code != "23505" {
 		t.Errorf("inner Code = %q, want 23505", inner.Code)
+	}
+}
+
+func TestPGError_Error(t *testing.T) {
+	err := &PGError{Code: "23505", Message: "duplicate key"}
+	got := err.Error()
+	want := "pg error 23505: duplicate key"
+	if got != want {
+		t.Errorf("PGError.Error() = %q, want %q", got, want)
+	}
+}
+
+func TestPGError_Unwrap(t *testing.T) {
+	inner := errors.New("inner error")
+	pgErr := &PGError{Code: "23505", Message: "dup", err: inner}
+	unwrapped := pgErr.Unwrap()
+	if unwrapped != inner {
+		t.Errorf("Unwrap() = %v, want %v", unwrapped, inner)
+	}
+}
+
+func TestIsPGError_Match(t *testing.T) {
+	pgErr := &pgconn.PgError{Code: "23505", Message: `duplicate key`}
+	mapped := MapPGError(pgErr)
+	if !IsPGError(mapped, ErrUniqueViolation) {
+		t.Error("IsPGError should match ErrUniqueViolation")
+	}
+}
+
+func TestIsPGError_NoMatch(t *testing.T) {
+	pgErr := &pgconn.PgError{Code: "42P01", Message: `no table`}
+	mapped := MapPGError(pgErr)
+	if IsPGError(mapped, ErrUniqueViolation) {
+		t.Error("IsPGError should not match ErrUniqueViolation for 42P01")
+	}
+}
+
+func TestIsPGError_NilError(t *testing.T) {
+	if IsPGError(nil, ErrUniqueViolation) {
+		t.Error("IsPGError(nil) should be false")
+	}
+}
+
+func TestIsPGError_Wrapped(t *testing.T) {
+	pgErr := &pgconn.PgError{Code: "23505", Message: `duplicate key`}
+	mapped := MapPGError(pgErr)
+	wrapped := fmt.Errorf("wrapped: %w", mapped)
+	if !IsPGError(wrapped, ErrUniqueViolation) {
+		t.Error("IsPGError should find PGError through error chain")
+	}
+}
+
+func TestIsPGError_NonPGError(t *testing.T) {
+	plain := errors.New("plain error")
+	if IsPGError(plain, ErrUniqueViolation) {
+		t.Error("IsPGError should be false for non-PGError")
 	}
 }

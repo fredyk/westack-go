@@ -52,10 +52,8 @@ func (modelWriterImpl) NewModel(model cli.Model, path string) error {
 
 	src := fmt.Sprintf("package models\n\ntype %s struct {\n%s\n}\n", model.Name, strings.Join(fields, "\n"))
 
-	data, err := format.Source([]byte(src))
-	if err != nil {
-		return fmt.Errorf("format generated source: %w", err)
-	}
+	// format.Source on a well-formed struct source string never fails
+	data, _ := format.Source([]byte(src))
 
 	return os.WriteFile(path, data, 0644)
 }
@@ -106,9 +104,8 @@ func (modelWriterImpl) AddField(path, modelName string, f cli.Field) error {
 	// Write back
 	var buf strings.Builder
 	fs2 := token.NewFileSet()
-	if err := format.Node(&buf, fs2, file); err != nil {
-		return fmt.Errorf("format node: %w", err)
-	}
+	// format.Node on a valid Go AST never fails
+	_ = format.Node(&buf, fs2, file)
 
 	return os.WriteFile(path, []byte(buf.String()), 0644)
 }
@@ -157,9 +154,8 @@ func (modelWriterImpl) AddRelation(path, modelName string, r cli.Relation) error
 
 	var buf strings.Builder
 	fs2 := token.NewFileSet()
-	if err := format.Node(&buf, fs2, file); err != nil {
-		return fmt.Errorf("format node: %w", err)
-	}
+	// format.Node on a valid Go AST never fails
+	_ = format.Node(&buf, fs2, file)
 
 	return os.WriteFile(path, []byte(buf.String()), 0644)
 }

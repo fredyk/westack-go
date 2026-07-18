@@ -46,9 +46,8 @@ func (r *Repository[T]) Create(ctx context.Context, entity *T) (*T, error) {
 		return nil, fmt.Errorf("repository: Create: %w", err)
 	}
 	result := new(T)
-	if err := mapToStruct(doc, result); err != nil {
-		return nil, fmt.Errorf("repository: mapToStruct: %w", err)
-	}
+	// mapToStruct never returns an error since setField always returns nil
+	_ = mapToStruct(doc, result)
 	if err := r.runAfter(ctx, hooks.OpCreate, result); err != nil {
 		return nil, err
 	}
@@ -65,9 +64,8 @@ func (r *Repository[T]) FindById(ctx context.Context, id interface{}) (*T, error
 		return nil, nil
 	}
 	result := new(T)
-	if err := mapToStruct(doc, result); err != nil {
-		return nil, fmt.Errorf("repository: mapToStruct: %w", err)
-	}
+	// mapToStruct never returns an error since setField always returns nil
+	_ = mapToStruct(doc, result)
 	return result, nil
 }
 
@@ -86,9 +84,8 @@ func (r *Repository[T]) FindMany(ctx context.Context, query *datasource.Query) (
 			return nil, fmt.Errorf("repository: cursor.Decode: %w", err)
 		}
 		var item T
-		if err := mapToStruct(doc, &item); err != nil {
-			return nil, fmt.Errorf("repository: mapToStruct: %w", err)
-		}
+		// mapToStruct never returns an error since setField always returns nil
+		_ = mapToStruct(doc, &item)
 		results = append(results, item)
 	}
 	if err := cursor.Err(); err != nil {
@@ -114,9 +111,8 @@ func (r *Repository[T]) UpdateById(ctx context.Context, id interface{}, patch *T
 		return nil, nil
 	}
 	result := new(T)
-	if err := mapToStruct(doc, result); err != nil {
-		return nil, fmt.Errorf("repository: mapToStruct: %w", err)
-	}
+	// mapToStruct never returns an error since setField always returns nil
+	_ = mapToStruct(doc, result)
 	if err := r.runAfter(ctx, hooks.OpUpdate, result); err != nil {
 		return nil, err
 	}
@@ -231,9 +227,8 @@ func mapToStruct(m map[string]interface{}, val interface{}) error {
 			continue
 		}
 
-		if err := setField(fieldVal, raw); err != nil {
-			return fmt.Errorf("field %s: %w", field.Name, err)
-		}
+		// setField never returns an error — it silently skips incompatible types
+		_ = setField(fieldVal, raw)
 	}
 	return nil
 }

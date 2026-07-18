@@ -2,6 +2,7 @@ package datasource
 
 import (
 	"context"
+	"errors"
 	"testing"
 )
 
@@ -95,4 +96,51 @@ func TestCursor_EmptyResults(t *testing.T) {
 
 func TestCursor_ImplementsInterface(t *testing.T) {
 	var _ Cursor = (*stubCursor)(nil)
+}
+
+func TestCursor_All_ReturnsNil(t *testing.T) {
+	c := &stubCursor{
+		results: []map[string]interface{}{
+			{"id": "1", "name": "Alice"},
+		},
+	}
+	ctx := context.Background()
+	var docs []map[string]interface{}
+	err := c.All(ctx, &docs)
+	if err != nil {
+		t.Fatalf("All() error: %v", err)
+	}
+}
+
+func TestCursor_Close_NoError(t *testing.T) {
+	c := &stubCursor{
+		results: []map[string]interface{}{{"id": "1"}},
+	}
+	ctx := context.Background()
+	if err := c.Close(ctx); err != nil {
+		t.Fatalf("Close() error: %v", err)
+	}
+}
+
+func TestCursor_Close_Empty_NoError(t *testing.T) {
+	c := &stubCursor{results: nil}
+	ctx := context.Background()
+	if err := c.Close(ctx); err != nil {
+		t.Fatalf("Close() error: %v", err)
+	}
+}
+
+func TestCursor_Err_Nil(t *testing.T) {
+	c := &stubCursor{err: nil}
+	if c.Err() != nil {
+		t.Errorf("Err() = %v, want nil", c.Err())
+	}
+}
+
+func TestCursor_Err_WithError(t *testing.T) {
+	want := errors.New("cursor error")
+	c := &stubCursor{err: want}
+	if c.Err() != want {
+		t.Errorf("Err() = %v, want %v", c.Err(), want)
+	}
 }

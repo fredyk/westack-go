@@ -1,6 +1,8 @@
 package datasource
 
 import (
+	"context"
+	"fmt"
 	"testing"
 )
 
@@ -276,5 +278,56 @@ func TestMapPropertyType_Unknown(t *testing.T) {
 	_, err := MapPropertyType("unknown_type", 0)
 	if err == nil {
 		t.Fatal("MapPropertyType(unknown) should error")
+	}
+}
+
+func TestPostgresConnector_GetName(t *testing.T) {
+	c := NewPostgresConnector("postgres://u:p@localhost/db", "public")
+	if c.GetName() != "postgres" {
+		t.Errorf("GetName() = %q, want %q", c.GetName(), "postgres")
+	}
+}
+
+func TestPostgresConnector_Connect_BadDSN(t *testing.T) {
+	c := NewPostgresConnector("not-a-valid-dsn!!!", "public")
+	ctx := context.Background()
+	err := c.Connect(ctx)
+	if err == nil {
+		t.Fatal("Connect() with bad DSN should error")
+	}
+}
+
+func TestPostgresConnector_Ping_NotConnected(t *testing.T) {
+	c := NewPostgresConnector("postgres://u:p@localhost/db", "public")
+	ctx := context.Background()
+	err := c.Ping(ctx)
+	if err == nil {
+		t.Fatal("Ping() on unconnected should error")
+	}
+}
+
+func TestPostgresConnector_GetModel_NotFound(t *testing.T) {
+	c := NewPostgresConnector("postgres://u:p@localhost/db", "public")
+	_, err := c.getModel("nonexistent")
+	if err == nil {
+		t.Fatal("getModel() on unregistered should error")
+	}
+}
+
+func TestPgxCursor_Err_ReturnsStoredError(t *testing.T) {
+	want := fmt.Errorf("stored cursor error")
+	cur := &pgxCursor{err: want}
+	if cur.Err() != want {
+		t.Errorf("Err() = %v, want %v", cur.Err(), want)
+	}
+}
+
+func TestPgxCursor_Decode_WithError(t *testing.T) {
+	want := fmt.Errorf("decode error")
+	cur := &pgxCursor{err: want}
+	var doc map[string]interface{}
+	err := cur.Decode(&doc)
+	if err != want {
+		t.Errorf("Decode() error = %v, want %v", err, want)
 	}
 }

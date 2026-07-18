@@ -97,6 +97,60 @@ func TestRegistry_NoHooksRegistered_IsNoOp(t *testing.T) {
 	}
 }
 
+func TestRegistry_AfterHookReturnsError(t *testing.T) {
+	reg := NewRegistry[string]()
+	afterErr := errors.New("after hook failed")
+
+	reg.After(OpCreate, func(ctx context.Context, entity *string) error {
+		return afterErr
+	})
+
+	err := reg.RunAfter(OpCreate, context.Background(), nil)
+	if !errors.Is(err, afterErr) {
+		t.Errorf("RunAfter() error = %v, want %v", err, afterErr)
+	}
+}
+
+func TestRegistry_AfterHookOrderWithAbort(t *testing.T) {
+	reg := NewRegistry[string]()
+	abortErr := errors.New("second after hook failed")
+
+	var firstFired bool
+
+	reg.After(OpCreate, func(ctx context.Context, entity *string) error {
+		firstFired = true
+		return nil
+	})
+	reg.After(OpCreate, func(ctx context.Context, entity *string) error {
+		return abortErr
+	})
+
+	err := reg.RunAfter(OpCreate, context.Background(), nil)
+	if !firstFired {
+		t.Error("first after hook did not fire")
+	}
+	if !errors.Is(err, abortErr) {
+		t.Errorf("RunAfter() error = %v, want %v", err, abortErr)
+	}
+}
+
+func TestRegistry_AfterHookModifiesEntity(t *testing.T) {
+	reg := NewRegistry[string]()
+
+	reg.After(OpCreate, func(ctx context.Context, entity *string) error {
+		*entity = "post-processed"
+		return nil
+	})
+
+	val := "original"
+	if err := reg.RunAfter(OpCreate, context.Background(), &val); err != nil {
+		t.Fatalf("RunAfter() error = %v", err)
+	}
+	if val != "post-processed" {
+		t.Errorf("entity = %q, want %q", val, "post-processed")
+	}
+}
+
 func TestRegistry_DifferentOperationsAreIndependent(t *testing.T) {
 	reg := NewRegistry[string]()
 	var createFired, deleteFired bool

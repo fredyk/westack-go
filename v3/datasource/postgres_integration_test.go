@@ -376,6 +376,566 @@ func TestIntegration_CreateVectorIndex(t *testing.T) {
 	}
 }
 
+func TestIntegration_FindMany_CursorClose(t *testing.T) {
+	dsn := testDSN(t)
+	ctx := context.Background()
+
+	c := NewPostgresConnector(dsn, "public")
+	if err := c.Connect(ctx); err != nil {
+		t.Fatalf("Connect() error: %v", err)
+	}
+	defer c.Disconnect()
+
+	schemaName := fmt.Sprintf("wsk_it_%d", time.Now().UnixNano())
+	if _, err := c.pool.Exec(ctx, "CREATE SCHEMA "+pqQuoteIdent(schemaName)); err != nil {
+		t.Fatalf("CREATE SCHEMA error: %v", err)
+	}
+	defer c.pool.Exec(ctx, "DROP SCHEMA "+pqQuoteIdent(schemaName)+" CASCADE")
+	c.schema = schemaName
+
+	model := ModelDef{
+		Name:       "Item",
+		Collection: "items",
+		Properties: []PropertyDef{
+			{Name: "id", Type: PropString, PrimaryKey: true},
+			{Name: "name", Type: PropString},
+		},
+	}
+	if err := c.Migrate(ctx, model); err != nil {
+		t.Fatalf("Migrate() error: %v", err)
+	}
+
+	_, err := c.Create(ctx, "items", map[string]interface{}{"id": "1", "name": "Test"})
+	if err != nil {
+		t.Fatalf("Create() error: %v", err)
+	}
+
+	cur, err := c.FindMany(ctx, "items", nil)
+	if err != nil {
+		t.Fatalf("FindMany() error: %v", err)
+	}
+	defer cur.Close(ctx)
+
+	var docs []map[string]interface{}
+	if err := cur.All(ctx, &docs); err != nil {
+		t.Fatalf("All() error: %v", err)
+	}
+	if len(docs) != 1 {
+		t.Errorf("FindMany() returned %d docs, want 1", len(docs))
+	}
+}
+
+func TestIntegration_Create_EmptyData(t *testing.T) {
+	dsn := testDSN(t)
+	ctx := context.Background()
+
+	c := NewPostgresConnector(dsn, "public")
+	if err := c.Connect(ctx); err != nil {
+		t.Fatalf("Connect() error: %v", err)
+	}
+	defer c.Disconnect()
+
+	schemaName := fmt.Sprintf("wsk_it_%d", time.Now().UnixNano())
+	if _, err := c.pool.Exec(ctx, "CREATE SCHEMA "+pqQuoteIdent(schemaName)); err != nil {
+		t.Fatalf("CREATE SCHEMA error: %v", err)
+	}
+	defer c.pool.Exec(ctx, "DROP SCHEMA "+pqQuoteIdent(schemaName)+" CASCADE")
+	c.schema = schemaName
+
+	_, err := c.Create(ctx, "nonexistent", map[string]interface{}{})
+	if err == nil {
+		t.Fatal("Create() with empty data should error")
+	}
+}
+
+func TestIntegration_FindById_ModelNotFound(t *testing.T) {
+	dsn := testDSN(t)
+	ctx := context.Background()
+
+	c := NewPostgresConnector(dsn, "public")
+	if err := c.Connect(ctx); err != nil {
+		t.Fatalf("Connect() error: %v", err)
+	}
+	defer c.Disconnect()
+
+	schemaName := fmt.Sprintf("wsk_it_%d", time.Now().UnixNano())
+	if _, err := c.pool.Exec(ctx, "CREATE SCHEMA "+pqQuoteIdent(schemaName)); err != nil {
+		t.Fatalf("CREATE SCHEMA error: %v", err)
+	}
+	defer c.pool.Exec(ctx, "DROP SCHEMA "+pqQuoteIdent(schemaName)+" CASCADE")
+	c.schema = schemaName
+
+	_, err := c.FindById(ctx, "nonexistent_collection", "1")
+	if err == nil {
+		t.Fatal("FindById() on unregistered model should error")
+	}
+}
+
+func TestIntegration_UpdateById_EmptyData(t *testing.T) {
+	dsn := testDSN(t)
+	ctx := context.Background()
+
+	c := NewPostgresConnector(dsn, "public")
+	if err := c.Connect(ctx); err != nil {
+		t.Fatalf("Connect() error: %v", err)
+	}
+	defer c.Disconnect()
+
+	schemaName := fmt.Sprintf("wsk_it_%d", time.Now().UnixNano())
+	if _, err := c.pool.Exec(ctx, "CREATE SCHEMA "+pqQuoteIdent(schemaName)); err != nil {
+		t.Fatalf("CREATE SCHEMA error: %v", err)
+	}
+	defer c.pool.Exec(ctx, "DROP SCHEMA "+pqQuoteIdent(schemaName)+" CASCADE")
+	c.schema = schemaName
+
+	model := ModelDef{
+		Name:       "Item",
+		Collection: "items",
+		Properties: []PropertyDef{
+			{Name: "id", Type: PropString, PrimaryKey: true},
+			{Name: "name", Type: PropString},
+		},
+	}
+	if err := c.Migrate(ctx, model); err != nil {
+		t.Fatalf("Migrate() error: %v", err)
+	}
+
+	_, err := c.Create(ctx, "items", map[string]interface{}{"id": "1", "name": "Test"})
+	if err != nil {
+		t.Fatalf("Create() error: %v", err)
+	}
+
+	// Empty data → delegates to FindById
+	updated, err := c.UpdateById(ctx, "items", "1", map[string]interface{}{})
+	if err != nil {
+		t.Fatalf("UpdateById() with empty data should return the existing row, got error: %v", err)
+	}
+	if updated == nil {
+		t.Fatal("UpdateById() with empty data should return the existing row")
+	}
+	if updated["name"] != "Test" {
+		t.Errorf("UpdateById() name = %v, want Test", updated["name"])
+	}
+}
+
+func TestIntegration_DeleteById_ModelNotFound(t *testing.T) {
+	dsn := testDSN(t)
+	ctx := context.Background()
+
+	c := NewPostgresConnector(dsn, "public")
+	if err := c.Connect(ctx); err != nil {
+		t.Fatalf("Connect() error: %v", err)
+	}
+	defer c.Disconnect()
+
+	schemaName := fmt.Sprintf("wsk_it_%d", time.Now().UnixNano())
+	if _, err := c.pool.Exec(ctx, "CREATE SCHEMA "+pqQuoteIdent(schemaName)); err != nil {
+		t.Fatalf("CREATE SCHEMA error: %v", err)
+	}
+	defer c.pool.Exec(ctx, "DROP SCHEMA "+pqQuoteIdent(schemaName)+" CASCADE")
+	c.schema = schemaName
+
+	_, err := c.DeleteById(ctx, "nonexistent_collection", "1")
+	if err == nil {
+		t.Fatal("DeleteById() on unregistered model should error")
+	}
+}
+
+func TestIntegration_FindMany_SortAndOffset(t *testing.T) {
+	dsn := testDSN(t)
+	ctx := context.Background()
+
+	c := NewPostgresConnector(dsn, "public")
+	if err := c.Connect(ctx); err != nil {
+		t.Fatalf("Connect() error: %v", err)
+	}
+	defer c.Disconnect()
+
+	schemaName := fmt.Sprintf("wsk_it_%d", time.Now().UnixNano())
+	if _, err := c.pool.Exec(ctx, "CREATE SCHEMA "+pqQuoteIdent(schemaName)); err != nil {
+		t.Fatalf("CREATE SCHEMA error: %v", err)
+	}
+	defer c.pool.Exec(ctx, "DROP SCHEMA "+pqQuoteIdent(schemaName)+" CASCADE")
+	c.schema = schemaName
+
+	model := ModelDef{
+		Name:       "Item",
+		Collection: "items",
+		Properties: []PropertyDef{
+			{Name: "id", Type: PropString, PrimaryKey: true},
+			{Name: "name", Type: PropString},
+			{Name: "seq", Type: PropInt64},
+		},
+	}
+	if err := c.Migrate(ctx, model); err != nil {
+		t.Fatalf("Migrate() error: %v", err)
+	}
+
+	for _, d := range []map[string]interface{}{
+		{"id": "1", "name": "Charlie", "seq": 3},
+		{"id": "2", "name": "Alice", "seq": 1},
+		{"id": "3", "name": "Bob", "seq": 2},
+	} {
+		_, err := c.Create(ctx, "items", d)
+		if err != nil {
+			t.Fatalf("Create(%s) error: %v", d["id"], err)
+		}
+	}
+
+	// Test sort ASC
+	cur, err := c.FindMany(ctx, "items", &Query{
+		Sort: []SortField{{Field: "name", Order: "asc"}},
+	})
+	if err != nil {
+		t.Fatalf("FindMany(sort) error: %v", err)
+	}
+	var sorted []map[string]interface{}
+	if err := cur.All(ctx, &sorted); err != nil {
+		t.Fatalf("All() error: %v", err)
+	}
+	cur.Close(ctx)
+	if len(sorted) != 3 {
+		t.Fatalf("FindMany(sort) returned %d, want 3", len(sorted))
+	}
+	if sorted[0]["name"] != "Alice" {
+		t.Errorf("First sorted name = %v, want Alice", sorted[0]["name"])
+	}
+
+	// Test sort DESC + limit + offset
+	cur2, err := c.FindMany(ctx, "items", &Query{
+		Sort:  []SortField{{Field: "seq", Order: "desc"}},
+		Limit: 2,
+		Offset: 1,
+	})
+	if err != nil {
+		t.Fatalf("FindMany(sort+limit+offset) error: %v", err)
+	}
+	var limited []map[string]interface{}
+	if err := cur2.All(ctx, &limited); err != nil {
+		t.Fatalf("All() error: %v", err)
+	}
+	cur2.Close(ctx)
+	if len(limited) != 2 {
+		t.Errorf("FindMany(limit+offset) returned %d, want 2", len(limited))
+	}
+}
+
+func TestIntegration_CreateMany_QueryError(t *testing.T) {
+	dsn := testDSN(t)
+	ctx := context.Background()
+
+	c := NewPostgresConnector(dsn, "public")
+	if err := c.Connect(ctx); err != nil {
+		t.Fatalf("Connect() error: %v", err)
+	}
+	defer c.Disconnect()
+
+	schemaName := fmt.Sprintf("wsk_it_%d", time.Now().UnixNano())
+	if _, err := c.pool.Exec(ctx, "CREATE SCHEMA "+pqQuoteIdent(schemaName)); err != nil {
+		t.Fatalf("CREATE SCHEMA error: %v", err)
+	}
+	defer c.pool.Exec(ctx, "DROP SCHEMA "+pqQuoteIdent(schemaName)+" CASCADE")
+	c.schema = schemaName
+
+	// Don't migrate — try to insert into a table that doesn't exist
+	_, err := c.CreateMany(ctx, "nonexistent_table", []map[string]interface{}{
+		{"id": "1", "name": "Test"},
+	})
+	if err == nil {
+		t.Fatal("CreateMany() on non-existent table should error (txQueryRow error path)")
+	}
+}
+
+func TestIntegration_Cursor_ErrPath(t *testing.T) {
+	dsn := testDSN(t)
+	ctx := context.Background()
+
+	c := NewPostgresConnector(dsn, "public")
+	if err := c.Connect(ctx); err != nil {
+		t.Fatalf("Connect() error: %v", err)
+	}
+	defer c.Disconnect()
+
+	schemaName := fmt.Sprintf("wsk_it_%d", time.Now().UnixNano())
+	if _, err := c.pool.Exec(ctx, "CREATE SCHEMA "+pqQuoteIdent(schemaName)); err != nil {
+		t.Fatalf("CREATE SCHEMA error: %v", err)
+	}
+	defer c.pool.Exec(ctx, "DROP SCHEMA "+pqQuoteIdent(schemaName)+" CASCADE")
+	c.schema = schemaName
+
+	model := ModelDef{
+		Name:       "Item",
+		Collection: "items",
+		Properties: []PropertyDef{
+			{Name: "id", Type: PropString, PrimaryKey: true},
+			{Name: "name", Type: PropString},
+		},
+	}
+	if err := c.Migrate(ctx, model); err != nil {
+		t.Fatalf("Migrate() error: %v", err)
+	}
+
+	_, err := c.Create(ctx, "items", map[string]interface{}{"id": "1", "name": "Test"})
+	if err != nil {
+		t.Fatalf("Create() error: %v", err)
+	}
+
+	// Test Err() on a healthy cursor — should return nil
+	cur, err := c.FindMany(ctx, "items", nil)
+	if err != nil {
+		t.Fatalf("FindMany() error: %v", err)
+	}
+	defer cur.Close(ctx)
+
+	if cur.Err() != nil {
+		t.Errorf("Err() on healthy cursor = %v, want nil", cur.Err())
+	}
+
+	// Exhaust the cursor and verify Err() is still nil
+	for cur.Next(ctx) {
+		var doc map[string]interface{}
+		if err := cur.Decode(&doc); err != nil {
+			t.Fatalf("Decode() error: %v", err)
+		}
+	}
+	if cur.Err() != nil {
+		t.Errorf("Err() after exhaustion = %v, want nil", cur.Err())
+	}
+}
+
+func TestIntegration_CreateMany_CommitError(t *testing.T) {
+	dsn := testDSN(t)
+	ctx := context.Background()
+
+	c := NewPostgresConnector(dsn, "public")
+	if err := c.Connect(ctx); err != nil {
+		t.Fatalf("Connect() error: %v", err)
+	}
+	defer c.Disconnect()
+
+	schemaName := fmt.Sprintf("wsk_it_%d", time.Now().UnixNano())
+	if _, err := c.pool.Exec(ctx, "CREATE SCHEMA "+pqQuoteIdent(schemaName)); err != nil {
+		t.Fatalf("CREATE SCHEMA error: %v", err)
+	}
+	defer c.pool.Exec(ctx, "DROP SCHEMA "+pqQuoteIdent(schemaName)+" CASCADE")
+	c.schema = schemaName
+
+	model := ModelDef{
+		Name:       "Item",
+		Collection: "items",
+		Properties: []PropertyDef{
+			{Name: "id", Type: PropString, PrimaryKey: true},
+			{Name: "name", Type: PropString},
+		},
+	}
+	if err := c.Migrate(ctx, model); err != nil {
+		t.Fatalf("Migrate() error: %v", err)
+	}
+
+	// CreateMany with duplicate PK should trigger error inside tx → rollback
+	_, err := c.Create(ctx, "items", map[string]interface{}{"id": "dup", "name": "first"})
+	if err != nil {
+		t.Fatalf("Create() error: %v", err)
+	}
+
+	// This should fail with unique violation inside the transaction
+	_, err = c.CreateMany(ctx, "items", []map[string]interface{}{
+		{"id": "dup", "name": "dup"},
+	})
+	if err == nil {
+		t.Fatal("CreateMany() with duplicate PK should error (tx error path)")
+	}
+}
+
+func TestIntegration_FindById_QueryError(t *testing.T) {
+	dsn := testDSN(t)
+	ctx := context.Background()
+
+	c := NewPostgresConnector(dsn, "public")
+	if err := c.Connect(ctx); err != nil {
+		t.Fatalf("Connect() error: %v", err)
+	}
+	defer c.Disconnect()
+
+	schemaName := fmt.Sprintf("wsk_it_%d", time.Now().UnixNano())
+	if _, err := c.pool.Exec(ctx, "CREATE SCHEMA "+pqQuoteIdent(schemaName)); err != nil {
+		t.Fatalf("CREATE SCHEMA error: %v", err)
+	}
+	defer c.pool.Exec(ctx, "DROP SCHEMA "+pqQuoteIdent(schemaName)+" CASCADE")
+	c.schema = schemaName
+
+	cur, err := c.FindMany(ctx, "invalid_table_name!!!", nil)
+	if err == nil {
+		t.Fatal("FindMany() on invalid table should error (pool.Query error path)")
+	}
+	_ = cur
+}
+
+func TestIntegration_Count_QueryError(t *testing.T) {
+	dsn := testDSN(t)
+	ctx := context.Background()
+
+	c := NewPostgresConnector(dsn, "public")
+	if err := c.Connect(ctx); err != nil {
+		t.Fatalf("Connect() error: %v", err)
+	}
+	defer c.Disconnect()
+
+	schemaName := fmt.Sprintf("wsk_it_%d", time.Now().UnixNano())
+	if _, err := c.pool.Exec(ctx, "CREATE SCHEMA "+pqQuoteIdent(schemaName)); err != nil {
+		t.Fatalf("CREATE SCHEMA error: %v", err)
+	}
+	defer c.pool.Exec(ctx, "DROP SCHEMA "+pqQuoteIdent(schemaName)+" CASCADE")
+	c.schema = schemaName
+
+	_, err := c.Count(ctx, "invalid_table_name!!!", nil)
+	if err == nil {
+		t.Fatal("Count() on invalid table should error")
+	}
+}
+
+func TestIntegration_DeleteById_QueryError(t *testing.T) {
+	dsn := testDSN(t)
+	ctx := context.Background()
+
+	c := NewPostgresConnector(dsn, "public")
+	if err := c.Connect(ctx); err != nil {
+		t.Fatalf("Connect() error: %v", err)
+	}
+	defer c.Disconnect()
+
+	schemaName := fmt.Sprintf("wsk_it_%d", time.Now().UnixNano())
+	if _, err := c.pool.Exec(ctx, "CREATE SCHEMA "+pqQuoteIdent(schemaName)); err != nil {
+		t.Fatalf("CREATE SCHEMA error: %v", err)
+	}
+	defer c.pool.Exec(ctx, "DROP SCHEMA "+pqQuoteIdent(schemaName)+" CASCADE")
+	c.schema = schemaName
+
+	_, err := c.DeleteById(ctx, "invalid_table_name!!!", "1")
+	if err == nil {
+		t.Fatal("DeleteById() on invalid table should error")
+	}
+}
+
+func TestIntegration_DeleteMany_QueryError(t *testing.T) {
+	dsn := testDSN(t)
+	ctx := context.Background()
+
+	c := NewPostgresConnector(dsn, "public")
+	if err := c.Connect(ctx); err != nil {
+		t.Fatalf("Connect() error: %v", err)
+	}
+	defer c.Disconnect()
+
+	schemaName := fmt.Sprintf("wsk_it_%d", time.Now().UnixNano())
+	if _, err := c.pool.Exec(ctx, "CREATE SCHEMA "+pqQuoteIdent(schemaName)); err != nil {
+		t.Fatalf("CREATE SCHEMA error: %v", err)
+	}
+	defer c.pool.Exec(ctx, "DROP SCHEMA "+pqQuoteIdent(schemaName)+" CASCADE")
+	c.schema = schemaName
+
+	_, err := c.DeleteMany(ctx, "invalid_table_name!!!", nil)
+	if err == nil {
+		t.Fatal("DeleteMany() on invalid table should error")
+	}
+}
+
+func TestIntegration_UpdateById_QueryError(t *testing.T) {
+	dsn := testDSN(t)
+	ctx := context.Background()
+
+	c := NewPostgresConnector(dsn, "public")
+	if err := c.Connect(ctx); err != nil {
+		t.Fatalf("Connect() error: %v", err)
+	}
+	defer c.Disconnect()
+
+	schemaName := fmt.Sprintf("wsk_it_%d", time.Now().UnixNano())
+	if _, err := c.pool.Exec(ctx, "CREATE SCHEMA "+pqQuoteIdent(schemaName)); err != nil {
+		t.Fatalf("CREATE SCHEMA error: %v", err)
+	}
+	defer c.pool.Exec(ctx, "DROP SCHEMA "+pqQuoteIdent(schemaName)+" CASCADE")
+	c.schema = schemaName
+
+	_, err := c.UpdateById(ctx, "invalid_table_name!!!", "1", map[string]interface{}{"name": "x"})
+	if err == nil {
+		t.Fatal("UpdateById() on invalid table should error")
+	}
+}
+
+func TestIntegration_CreateVectorIndex_Error(t *testing.T) {
+	dsn := testDSN(t)
+	ctx := context.Background()
+
+	c := NewPostgresConnector(dsn, "public")
+	if err := c.Connect(ctx); err != nil {
+		t.Fatalf("Connect() error: %v", err)
+	}
+	defer c.Disconnect()
+
+	schemaName := fmt.Sprintf("wsk_it_%d", time.Now().UnixNano())
+	if _, err := c.pool.Exec(ctx, "CREATE SCHEMA "+pqQuoteIdent(schemaName)); err != nil {
+		t.Fatalf("CREATE SCHEMA error: %v", err)
+	}
+	defer c.pool.Exec(ctx, "DROP SCHEMA "+pqQuoteIdent(schemaName)+" CASCADE")
+	c.schema = schemaName
+
+	model := ModelDef{
+		Name:       "Item",
+		Collection: "items",
+		Properties: []PropertyDef{
+			{Name: "id", Type: PropString, PrimaryKey: true},
+			{Name: "name", Type: PropString},
+		},
+	}
+	if err := c.Migrate(ctx, model); err != nil {
+		t.Fatalf("Migrate() error: %v", err)
+	}
+
+	// Create index on non-existent column — should error
+	err := c.CreateVectorIndex(ctx, "items", "nonexistent_col", 3, "cosine")
+	if err == nil {
+		t.Fatal("CreateVectorIndex() on nonexistent column should error")
+	}
+}
+
+func TestIntegration_SearchSimilar_Error(t *testing.T) {
+	dsn := testDSN(t)
+	ctx := context.Background()
+
+	c := NewPostgresConnector(dsn, "public")
+	if err := c.Connect(ctx); err != nil {
+		t.Fatalf("Connect() error: %v", err)
+	}
+	defer c.Disconnect()
+
+	schemaName := fmt.Sprintf("wsk_it_%d", time.Now().UnixNano())
+	if _, err := c.pool.Exec(ctx, "CREATE SCHEMA "+pqQuoteIdent(schemaName)); err != nil {
+		t.Fatalf("CREATE SCHEMA error: %v", err)
+	}
+	defer c.pool.Exec(ctx, "DROP SCHEMA "+pqQuoteIdent(schemaName)+" CASCADE")
+	c.schema = schemaName
+
+	model := ModelDef{
+		Name:       "Item",
+		Collection: "items",
+		Properties: []PropertyDef{
+			{Name: "id", Type: PropString, PrimaryKey: true},
+			{Name: "name", Type: PropString},
+		},
+	}
+	if err := c.Migrate(ctx, model); err != nil {
+		t.Fatalf("Migrate() error: %v", err)
+	}
+
+	// SearchSimilar on table with no vector column — should error
+	queryVec := Vector{Values: []float32{0.1, 0.2, 0.3}, Dimensions: 3}
+	_, err := c.SearchSimilar(ctx, "items", queryVec, 10, nil)
+	if err == nil {
+		t.Fatal("SearchSimilar() on table with no vector should error")
+	}
+}
+
 func TestIntegration_FindById_NotFound(t *testing.T) {
 	dsn := testDSN(t)
 	ctx := context.Background()

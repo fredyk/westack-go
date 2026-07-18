@@ -130,6 +130,100 @@ func TestApply_doesNothing(t *testing.T) {
 	}
 }
 
+func TestTypeTimeMapsToTimestamptz(t *testing.T) {
+	m := migrator.New()
+	models := []cli.Model{
+		{Name: "Event", Base: "Event", Fields: []cli.Field{
+			{Name: "CreatedAt", Type: cli.TypeTime},
+		}},
+	}
+	got := m.DDL(models)
+	if !contains(got, "createdAt timestamptz") {
+		t.Errorf("expected 'createdAt timestamptz' for TypeTime. Got:\n%s", got)
+	}
+}
+
+func TestTypeBoolMapsToBoolean(t *testing.T) {
+	m := migrator.New()
+	models := []cli.Model{
+		{Name: "Post", Base: "Post", Fields: []cli.Field{
+			{Name: "Published", Type: cli.TypeBool},
+		}},
+	}
+	got := m.DDL(models)
+	if !contains(got, "published boolean") {
+		t.Errorf("expected 'published boolean' for TypeBool. Got:\n%s", got)
+	}
+}
+
+func TestTypeVectorDefaultDimension(t *testing.T) {
+	m := migrator.New()
+	models := []cli.Model{
+		{Name: "Embedding", Base: "Embedding", Fields: []cli.Field{
+			{Name: "Vec", Type: cli.TypeVector},
+		}},
+	}
+	got := m.DDL(models)
+	if !contains(got, "vec vector(1536)") {
+		t.Errorf("expected 'vec vector(1536)' for default dimension. Got:\n%s", got)
+	}
+}
+
+func TestTypeVectorCustomDimension(t *testing.T) {
+	m := migrator.New()
+	models := []cli.Model{
+		{Name: "Embedding", Base: "Embedding", Fields: []cli.Field{
+			{Name: "Vec", Type: cli.TypeVector, Options: []cli.FieldOption{cli.VectorDim(768)}},
+		}},
+	}
+	got := m.DDL(models)
+	if !contains(got, "vec vector(768)") {
+		t.Errorf("expected 'vec vector(768)' for custom dimension. Got:\n%s", got)
+	}
+}
+
+func TestRelBelongsToGeneratesFK(t *testing.T) {
+	m := migrator.New()
+	models := []cli.Model{
+		{Name: "Comment", Base: "Comment", Fields: []cli.Field{{Name: "Body", Type: cli.TypeString}},
+			Relations: []cli.Relation{
+				{Name: "author", Kind: cli.RelBelongsTo, Target: "User", FKColumn: "author_id", PKColumn: "id"},
+			},
+		},
+	}
+	got := m.DDL(models)
+	if !contains(got, "author_id bigint REFERENCES user(id)") {
+		t.Errorf("expected 'author_id bigint REFERENCES user(id)' for belongsTo. Got:\n%s", got)
+	}
+}
+
+func TestModelZeroFieldsOnlyAutoID(t *testing.T) {
+	m := migrator.New()
+	models := []cli.Model{
+		{Name: "Empty", Base: "Empty", Fields: []cli.Field{}},
+	}
+	got := m.DDL(models)
+	if !contains(got, "create table if not exists empty") {
+		t.Errorf("expected table 'empty' in DDL. Got:\n%s", got)
+	}
+	if !contains(got, "id bigint PRIMARY KEY DEFAULT nextval('empty_id_seq')") {
+		t.Errorf("expected auto-generated id column. Got:\n%s", got)
+	}
+}
+
+func TestRequiredOnTypeInt(t *testing.T) {
+	m := migrator.New()
+	models := []cli.Model{
+		{Name: "Config", Base: "Config", Fields: []cli.Field{
+			{Name: "Count", Type: cli.TypeInt, Options: []cli.FieldOption{cli.FieldRequired}},
+		}},
+	}
+	got := m.DDL(models)
+	if !contains(got, "count bigint NOT NULL") {
+		t.Errorf("expected 'count bigint NOT NULL' for required int. Got:\n%s", got)
+	}
+}
+
 func contains(s, substr string) bool {
 	return len(s) >= len(substr) && (s == substr || len(s) > 0 && containsHelper(s, substr))
 }

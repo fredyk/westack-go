@@ -228,3 +228,92 @@ func countOccurrences(s, substr string) int {
 	}
 	return count
 }
+
+type jsonTagStruct struct {
+	Visible   string `json:"visible"`
+	Omitempty string `json:"omitted,omitempty"`
+	Dash      string `json:"-"`
+}
+
+func TestGetJSONTag_Comma(t *testing.T) {
+	// getJSONTag is called via generateTypeSDL; test through the struct
+	h := NewSchemaHelper()
+	h.RegisterOutputType(jsonTagStruct{})
+	sdl := h.SDL()
+	if !contains(sdl, "visible: String") {
+		t.Errorf("SDL should contain 'visible: String':\n%s", sdl)
+	}
+	// omitempty field should still appear (nullable)
+	if !contains(sdl, "omitted: String") {
+		t.Errorf("SDL should contain 'omitted: String' (nullable):\n%s", sdl)
+	}
+	// dash field should be excluded
+	if contains(sdl, "dash") {
+		t.Errorf("SDL should NOT contain 'dash' field:\n%s", sdl)
+	}
+}
+
+func TestRegisterType_NilType(t *testing.T) {
+	h := NewSchemaHelper()
+	name := h.registerType(nil, "input")
+	if name != "String" {
+		t.Errorf("registerType(nil) = %q, want %q", name, "String")
+	}
+}
+
+func TestRegisterInputType_NilType(t *testing.T) {
+	h := NewSchemaHelper()
+	name := h.RegisterInputType(nil)
+	if name != "String" {
+		t.Errorf("RegisterInputType(nil) = %q, want %q", name, "String")
+	}
+}
+
+func TestRegisterOutputType_NilType(t *testing.T) {
+	h := NewSchemaHelper()
+	name := h.RegisterOutputType(nil)
+	if name != "String" {
+		t.Errorf("RegisterOutputType(nil) = %q, want %q", name, "String")
+	}
+}
+
+func TestGenerateTypeSDL_UnexportedFields(t *testing.T) {
+	type withUnexported struct {
+		Public  string
+		private string
+	}
+	h := NewSchemaHelper()
+	h.RegisterOutputType(withUnexported{})
+	sdl := h.SDL()
+	if !contains(sdl, "Public: String!") {
+		t.Errorf("SDL should contain 'Public: String!':\n%s", sdl)
+	}
+	if contains(sdl, "private") {
+		t.Errorf("SDL should NOT contain unexported 'private':\n%s", sdl)
+	}
+}
+
+func TestGenerateTypeSDL_PointerFields(t *testing.T) {
+	type withPointer struct {
+		Name    string
+		Address *string
+	}
+	h := NewSchemaHelper()
+	h.RegisterOutputType(withPointer{})
+	sdl := h.SDL()
+	if !contains(sdl, "Name: String!") {
+		t.Errorf("SDL should contain 'Name: String!':\n%s", sdl)
+	}
+	// pointer field should be nullable (no !)
+	if contains(sdl, "Address: String!") {
+		t.Errorf("pointer field should be nullable (no !):\n%s", sdl)
+	}
+}
+
+func TestRegisterGenericType_Nil(t *testing.T) {
+	h := NewSchemaHelper()
+	name := h.RegisterGenericType(nil)
+	if name != "String" {
+		t.Errorf("RegisterGenericType(nil) = %q, want %q", name, "String")
+	}
+}
