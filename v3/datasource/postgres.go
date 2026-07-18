@@ -603,6 +603,46 @@ func MapPropertyType(prop PropertyType, dims int) (string, error) {
 	}
 }
 
+func appendInClause(parts []string, cond Condition, idx int, operator string) ([]string, []interface{}, int) {
+	var values []interface{}
+	switch vv := cond.Value.(type) {
+	case []interface{}:
+		values = vv
+	case []string:
+		for _, v := range vv {
+			values = append(values, v)
+		}
+	case []int:
+		for _, v := range vv {
+			values = append(values, v)
+		}
+	case []int64:
+		for _, v := range vv {
+			values = append(values, v)
+		}
+	case []float64:
+		for _, v := range vv {
+			values = append(values, v)
+		}
+	default:
+		values = []interface{}{cond.Value}
+	}
+	parts = append(parts, fmt.Sprintf("%s %s %s", pqQuoteIdent(cond.Field), operator, placeholderTuple(len(values), idx)))
+	args := make([]interface{}, 0, len(values))
+	for _, v := range values {
+		args = append(args, v)
+	}
+	return parts, args, idx + len(values)
+}
+
+func placeholderTuple(count int, startIdx int) string {
+	parts := make([]string, count)
+	for i := 0; i < count; i++ {
+		parts[i] = fmt.Sprintf("$%d", startIdx+i)
+	}
+	return "(" + strings.Join(parts, ",") + ")"
+}
+
 func pqQuoteIdent(s string) string {
 	return fmt.Sprintf(`"%s"`, strings.ReplaceAll(s, `"`, `""`))
 }
@@ -658,6 +698,10 @@ func buildWhereClause(filter *Filter, startIdx int) (string, []interface{}) {
 			parts = append(parts, fmt.Sprintf("%s LIKE $%d", pqQuoteIdent(cond.Field), idx))
 			args = append(args, cond.Value)
 			idx++
+		case "in":
+			parts, args, idx = appendInClause(parts, cond, idx, "IN")
+		case "nin":
+			parts, args, idx = appendInClause(parts, cond, idx, "NOT IN")
 		default:
 			parts = append(parts, fmt.Sprintf("%s = $%d", pqQuoteIdent(cond.Field), idx))
 			args = append(args, cond.Value)
