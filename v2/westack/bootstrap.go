@@ -164,6 +164,14 @@ func (app *WeStack) loadModels() error {
 		return err
 	}
 
+	if app.apiKeyModel != nil {
+		(*app.apiKeyModel.Config.Relations)["account"].Model = someAccountModel.Name
+		err = app.setupModel(app.apiKeyModel, app.apiKeyModel.Datasource)
+		if err != nil {
+			return err
+		}
+	}
+
 	err2 := fixRelations(app)
 	if err2 != nil {
 		return err2

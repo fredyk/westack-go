@@ -570,6 +570,52 @@ func setupInternalModels(config *model.Config, app *WeStack, dataSource *datasou
 
 	app.mfaModel = mfaModel.(*model.StatefulModel)
 
+	// ApiKey model
+	apiKeyModel := model.New(&model.Config{
+		Name:   "ApiKey",
+		Plural: "api-keys",
+		Base:   "PersistedModel",
+		Public: false,
+		Properties: map[string]model.Property{
+			"key": {
+				Type:     "string",
+				Required: true,
+			},
+			"secretHash": {
+				Type: "string",
+			},
+			"name": {
+				Type: "string",
+			},
+			"roles": {
+				Type: "array",
+			},
+			"enabled": {
+				Type:    "boolean",
+				Default: true,
+			},
+			"lastUsedAt": {
+				Type: "date",
+			},
+		},
+		Relations: &map[string]*model.Relation{
+			"account": {
+				Type:  "belongsTo",
+				Model: "Account",
+			},
+		},
+		Casbin: model.CasbinConfig{
+			Policies: []string{
+				"admin,*,read,allow",
+				"admin,*,write,allow",
+			},
+		},
+	}, app.modelRegistry)
+	apiKeyModel.(*model.StatefulModel).App = app.asInterface()
+	apiKeyModel.(*model.StatefulModel).Datasource = dataSource
+
+	app.apiKeyModel = apiKeyModel.(*model.StatefulModel)
+
 }
 
 func GetRoleNames(RoleMappingModel *model.StatefulModel, userIdHex string, userId primitive.ObjectID) ([]string, error) {

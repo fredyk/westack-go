@@ -101,6 +101,48 @@ func (eventContext *EventContext) GetBearer(loadedModel *StatefulModel) (*Bearer
 		}
 
 	}
+
+	// X-Api-Key authentication: if no user from JWT, try X-Api-Key header
+	if user == nil {
+		apiKey := string(c.Request().Header.Peek("X-Api-Key"))
+		if apiKey != "" {
+			apiKeyModelRaw, err := loadedModel.App.FindModel("ApiKey")
+			if err == nil {
+				apiKeyModel := apiKeyModelRaw.(*StatefulModel)
+				systemCtx := &EventContext{Bearer: &BearerToken{Account: &BearerAccount{System: true}}}
+				apiKeyInstance, err := apiKeyModel.FindOne(&wst.Filter{
+					Where: &wst.Where{
+						"key":     apiKey,
+						"enabled": true,
+					},
+				}, systemCtx)
+				if err == nil && apiKeyInstance != nil {
+					keyId := apiKeyInstance.GetID()
+					var apiRoles []BearerRole
+					rawRoles := apiKeyInstance.Get("roles")
+					if rawRoles != nil {
+						if rolesSlice, ok := rawRoles.([]interface{}); ok {
+							for _, r := range rolesSlice {
+								if roleName, ok := r.(string); ok {
+									apiRoles = append(apiRoles, BearerRole{Name: roleName})
+								}
+							}
+						}
+					}
+					return &BearerToken{
+						Account: &BearerAccount{
+							Id:   keyId,
+							Data: apiKeyInstance.ToJSON(),
+						},
+						Roles:   apiRoles,
+						Claims:  bearerClaims,
+						Raw:     apiKey,
+					}, nil
+				}
+			}
+		}
+	}
+
 	return &BearerToken{
 		Account: user,
 		Roles:   roles,
