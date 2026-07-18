@@ -1,6 +1,8 @@
 package model
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"strings"
 
@@ -111,10 +113,13 @@ func (eventContext *EventContext) GetBearer(loadedModel *StatefulModel) (*Bearer
 			if err == nil {
 				apiKeyModel := apiKeyModelRaw.(*StatefulModel)
 				systemCtx := &EventContext{Bearer: &BearerToken{Account: &BearerAccount{System: true}}}
+				// La key en claro NUNCA se guarda: se busca por su SHA-256 (secretHash).
+				apiKeySum := sha256.Sum256([]byte(apiKey))
+				apiKeyHash := hex.EncodeToString(apiKeySum[:])
 				apiKeyInstance, err := apiKeyModel.FindOne(&wst.Filter{
 					Where: &wst.Where{
-						"key":     apiKey,
-						"enabled": true,
+						"secretHash": apiKeyHash,
+						"enabled":    true,
 					},
 				}, systemCtx)
 				if err == nil && apiKeyInstance != nil {

@@ -216,7 +216,9 @@ func setupAccountModel(loadedModel *model.StatefulModel, app *WeStack) {
 			return err
 		}
 
-		var ttl int64 = 604800 * 2 * 1000
+		// ttl EN SEGUNDOS (2 semanas). EnforceEx compara created+ttl contra time.Now().Unix(),
+		// así que created y ttl deben expresarse en segundos, igual que en el flujo OAuth.
+		var ttl int64 = 604800 * 2
 		receivedTtl := data.GetInt64("ttl")
 		if receivedTtl > 0 {
 			ttl = receivedTtl
@@ -312,11 +314,11 @@ func setupAccountModel(loadedModel *model.StatefulModel, app *WeStack) {
 		fullAccount = linkedAccount.(*model.StatefulInstance)
 		ctx.Instance = fullAccount
 
-		// Password comparison with timing attack protection
-		saltedPassword := fmt.Sprintf("%s%s", string(loadedModel.App.JwtSecretKey), password)
-		err = bcrypt.CompareHashAndPassword([]byte(savedPassword), []byte(saltedPassword))
+		// Password comparison with timing attack protection.
+		// Soporta el esquema legacy y re-hashea de forma transparente al nuevo (HMAC+bcrypt).
+		passwordOk, needsUpgrade := verifyPassword(loadedModel.App.JwtSecretKey, savedPassword, password)
 
-		if err != nil {
+		if !passwordOk {
 			app.logSecurityEvent("LOGIN_FAILED", identifier, false, map[string]interface{}{
 				"error":     "invalid_password",
 				"accountId": fullAccount.GetString("id"),
@@ -325,6 +327,16 @@ func setupAccountModel(loadedModel *model.StatefulModel, app *WeStack) {
 			})
 			app.recordFailedLogin(identifier)
 			return wst.CreateError(fiber.ErrUnauthorized, "LOGIN_FAILED", fiber.Map{"message": "login failed"}, "Error")
+		}
+
+		if needsUpgrade {
+			// Migración transparente: el hash estaba en el esquema legacy; lo reescribimos con
+			// el nuevo. Un fallo aquí no debe impedir el login (solo se reintentará la próxima vez).
+			if newHash, hErr := hashPassword(loadedModel.App.JwtSecretKey, password); hErr == nil {
+				if _, uErr := firstAccountCredentials.UpdateAttributes(wst.M{"password": newHash}, &model.EventContext{Bearer: &model.BearerToken{Account: &model.BearerAccount{System: true}}}); uErr != nil {
+					fmt.Printf("[WARNING] Could not upgrade legacy password hash for account %v: %v\n", fullAccount.GetString("id"), uErr)
+				}
+			}
 		}
 
 		// Successful login
@@ -390,9 +402,13 @@ func setupAccountModel(loadedModel *model.StatefulModel, app *WeStack) {
 
 		token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 			"accountId": userIdHex,
-			"created":   time.Now().UnixMilli(),
-			"ttl":       ttl,
-			"roles":     roleNames,
+			// created DEBE estar en segundos (igual que OAuth, routing.go y CreateBearer):
+			// EnforceEx calcula la expiración como created+ttl y la compara con time.Now().Unix().
+			// Usar UnixMilli() aquí hacía que expiresAtTimestamp quedara ~1000x en el futuro y el
+			// token no expirara nunca.
+			"created": time.Now().Unix(),
+			"ttl":     ttl,
+			"roles":   roleNames,
 		})
 
 		tokenString, err := token.SignedString(loadedModel.App.JwtSecretKey)
@@ -582,12 +598,14 @@ func setupInternalModels(config *model.Config, app *WeStack, dataSource *datasou
 		Base:   "PersistedModel",
 		Public: false,
 		Properties: map[string]model.Property{
+			// `key` (texto plano) queda SOLO por compatibilidad con documentos antiguos; ya no se
+			// persiste al crear ni se usa para autenticar. La autenticación es por `secretHash`.
 			"key": {
-				Type:     "string",
-				Required: true,
+				Type: "string",
 			},
 			"secretHash": {
-				Type: "string",
+				Type:     "string",
+				Required: true,
 			},
 			"name": {
 				Type: "string",
@@ -662,9 +680,10 @@ func GetRoleNames(RoleMappingModel *model.StatefulModel, userIdHex string, userI
 func CreateNewToken(userIdHex string, AccountModel *model.StatefulModel, roles []string) (string, error) {
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 		"accountId": userIdHex,
-		"created":   time.Now().UnixMilli(),
-		"ttl":       604800 * 2 * 1000,
-		"roles":     roles,
+		// created/ttl en segundos: coherente con EnforceEx (created+ttl vs time.Now().Unix()).
+		"created": time.Now().Unix(),
+		"ttl":     604800 * 2,
+		"roles":   roles,
 	})
 	tokenString, err := token.SignedString(AccountModel.App.JwtSecretKey)
 	if err != nil {

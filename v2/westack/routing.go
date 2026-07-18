@@ -244,7 +244,7 @@ func mountAccountModelFixedRoutes(loadedModel *model.StatefulModel, app *WeStack
 		if app.apiKeyModel == nil {
 			return wst.CreateError(fiber.ErrInternalServerError, "NO_APIKEY_MODEL", fiber.Map{"message": "apiKeyModel not initialized"}, "Error")
 		}
-		inst, err := app.apiKeyModel.FindOne(&wst.Filter{Where: &wst.Where{"key": key, "accountId": token.Account.Id}}, systemContext)
+		inst, err := app.apiKeyModel.FindOne(&wst.Filter{Where: &wst.Where{"secretHash": sha256Hex(key), "accountId": token.Account.Id}}, systemContext)
 		if err != nil {
 			return err
 		}
@@ -319,7 +319,8 @@ func mountAccountModelFixedRoutes(loadedModel *model.StatefulModel, app *WeStack
 	loadedModel.RemoteMethod(func(eventContext *model.EventContext) error {
 		fmt.Println("verify user ", eventContext.Bearer.Account.Id)
 		eventContext.Bearer.Claims["created"] = time.Now().Unix()
-		eventContext.Bearer.Claims["ttl"] = 86400 * 2 * 1000
+		// ttl en segundos (2 días): EnforceEx compara created+ttl contra time.Now().Unix().
+		eventContext.Bearer.Claims["ttl"] = 86400 * 2
 		eventContext.Bearer.Claims["allowsEmailVerification"] = true
 
 		token := jwt.NewWithClaims(jwt.SigningMethodHS256, eventContext.Bearer.Claims)
@@ -842,6 +843,11 @@ func casbinOwnerFn(loadedModel *model.StatefulModel) func(arguments ...interface
 
 		// Decode the token
 		token, err := jwt.Parse(rawToken, func(token *jwt.Token) (interface{}, error) {
+			// Rechazar cualquier alg que no sea HMAC (evita confusión de algoritmo / alg:none),
+			// igual que en eventcontext.go y en el resto de parseos de este paquete.
+			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+				return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+			}
 			return loadedModel.App.JwtSecretKey, nil
 		})
 		if err != nil {

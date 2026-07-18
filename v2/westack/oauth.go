@@ -3,6 +3,7 @@ package westack
 import (
 	"encoding/json"
 	"fmt"
+	neturl "net/url"
 	"strings"
 	"time"
 
@@ -229,9 +230,51 @@ func validateAndSanitizeUrl(url string) string {
 	return cleaned
 }
 
+// isAllowedRedirect valida que una URL de redirección post-OAuth apunte a un host permitido.
+//
+// Sin esta comprobación, un atacante puede pasar `?success_url=https://evil.com` en el login
+// OAuth; tras autenticarse la víctima, el callback la redirige a esa URL con el access_token
+// añadido (`success_url?access_token=...`), exfiltrando el token. Se permiten:
+//   - URLs relativas (mismo origen), rechazando esquemas peligrosos y `//host` protocol-relative.
+//   - URLs absolutas cuyo host esté en la allowlist (host de publicOrigin + oauth2.allowedRedirectHosts).
+func isAllowedRedirect(rawUrl string, allowedHosts map[string]bool) bool {
+	if rawUrl == "" {
+		return false
+	}
+	// `//evil.com` es protocol-relative: apunta a otro host aunque url.Parse no ponga Scheme.
+	if strings.HasPrefix(rawUrl, "//") {
+		u, err := neturl.Parse(rawUrl)
+		return err == nil && allowedHosts[strings.ToLower(u.Host)]
+	}
+	u, err := neturl.Parse(rawUrl)
+	if err != nil {
+		return false
+	}
+	if u.Host == "" {
+		// URL relativa (p.ej. "/dashboard"): mismo origen. Rechazar esquemas tipo javascript:.
+		return u.Scheme == ""
+	}
+	return allowedHosts[strings.ToLower(u.Host)]
+}
+
 func mountOauthRoutes(app *WeStack, loadedModel *model.StatefulModel, systemContext *model.EventContext) {
 
 	appPublicOrigin := app.Viper.GetString("publicOrigin")
+
+	// Allowlist de hosts a los que se puede redirigir tras el login OAuth (anti open-redirect /
+	// exfiltración de token). Se parte del host de publicOrigin y se amplía con
+	// oauth2.allowedRedirectHosts (lista de hosts). Si no hay ninguno configurado, solo se
+	// permitirán redirecciones relativas (mismo origen).
+	allowedRedirectHosts := map[string]bool{}
+	if pu, err := neturl.Parse(appPublicOrigin); err == nil && pu.Host != "" {
+		allowedRedirectHosts[strings.ToLower(pu.Host)] = true
+	}
+	for _, h := range app.Viper.GetStringSlice("oauth2.allowedRedirectHosts") {
+		if h = strings.ToLower(strings.TrimSpace(h)); h != "" {
+			allowedRedirectHosts[h] = true
+		}
+	}
+
 	finalTokenTtl := app.Viper.GetFloat64("ttl")
 	if finalTokenTtl <= 0.0 {
 		finalTokenTtl = 30 * 86400
@@ -330,8 +373,14 @@ func mountOauthRoutes(app *WeStack, loadedModel *model.StatefulModel, systemCont
 			fmt.Printf("[DEBUG] Received query params - success_url: %v, failure_url: %v\n", successUrl, failureUrl)
 
 			if successUrl != "" && failureUrl != "" {
-				fmt.Printf("[DEBUG] About to store URLs - success: %q, failure: %q\n", successUrl, failureUrl)
-				storeCallbackUrlsInCookies(eventContext.Ctx, successUrl, failureUrl)
+				// Anti open-redirect: solo se aceptan overrides hacia hosts permitidos. Si no,
+				// se ignoran y se usan las URLs globales de configuración (confiables).
+				if isAllowedRedirect(successUrl, allowedRedirectHosts) && isAllowedRedirect(failureUrl, allowedRedirectHosts) {
+					fmt.Printf("[DEBUG] About to store URLs - success: %q, failure: %q\n", successUrl, failureUrl)
+					storeCallbackUrlsInCookies(eventContext.Ctx, successUrl, failureUrl)
+				} else {
+					fmt.Printf("[SECURITY] Rejected OAuth redirect override (host not allowed) - success: %q, failure: %q\n", successUrl, failureUrl)
+				}
 			} else {
 				fmt.Printf("[DEBUG] No callback URLs provided in query params\n")
 			}

@@ -17,7 +17,6 @@ import (
 
 	"github.com/fredyk/westack-go/v2/lib/swaggerhelper"
 	"github.com/spf13/viper"
-	"golang.org/x/crypto/bcrypt"
 
 	wst "github.com/fredyk/westack-go/v2/common"
 	"github.com/fredyk/westack-go/v2/datasource"
@@ -538,11 +537,11 @@ func registerPersistedModelFixedHooks(loadedModel *model.StatefulModel, app *WeS
 					} else if !wst.IsSecurePassword(password) {
 						return wst.CreateError(fiber.ErrBadRequest, "PASSWORD_INSECURE", fiber.Map{"message": "Password length must be at least 8 characters and contain at least one uppercase letter, one lowercase letter, one number and one special character"}, "ValidationError")
 					}
-					hashed, err := bcrypt.GenerateFromPassword([]byte(fmt.Sprintf("%s%s", string(loadedModel.App.JwtSecretKey), password)), 11)
+					hashed, err := hashPassword(loadedModel.App.JwtSecretKey, password)
 					if err != nil {
 						return err
 					}
-					(*data)["password"] = string(hashed)
+					(*data)["password"] = hashed
 				} else if strings.HasPrefix(provider, string(ProviderOAuth2Prefix)) {
 					// already passed email|username validation
 					/*if strings.TrimSpace(email) == "" {
@@ -640,11 +639,11 @@ func registerPersistedModelFixedHooks(loadedModel *model.StatefulModel, app *WeS
 						return wst.CreateError(fiber.ErrBadRequest, "PASSWORD_INSECURE", fiber.Map{"message": "Password length must be at least 8 characters and contain at least one uppercase letter, one lowercase letter, one number and one special character"}, "ValidationError")
 					}
 
-					hashed, err := bcrypt.GenerateFromPassword([]byte(fmt.Sprintf("%s%s", string(loadedModel.App.JwtSecretKey), password)), 11)
+					hashed, err := hashPassword(loadedModel.App.JwtSecretKey, password)
 					if err != nil {
 						return err
 					}
-					(*data)["password"] = string(hashed)
+					(*data)["password"] = hashed
 				}
 			} else if config.Base == "Account" {
 				// Filter for password credentials specifically when password is being updated

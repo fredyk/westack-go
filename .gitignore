@@ -23,3 +23,4 @@ westack/tests/server/datasources.TESTING_PUBLIC.json
 /v2/go.work
 /v2/go.work.sum
 v2/test_output.log
+.opencode-prompts/

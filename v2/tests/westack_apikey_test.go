@@ -24,7 +24,7 @@ func Test_ApiKey_CreateAndRead(t *testing.T) {
 	m, err := app.FindModel("ApiKey")
 	assert.NoError(t, err)
 
-	inst, err := m.FindOne(&wst.Filter{Where: &wst.Where{"key": key}}, systemContext)
+	inst, err := m.FindOne(&wst.Filter{Where: &wst.Where{"secretHash": westack.ApiKeySecretHash(key)}}, systemContext)
 	assert.NoError(t, err)
 	assert.NotNil(t, inst)
 
@@ -51,7 +51,7 @@ func Test_ApiKey_SetRoles(t *testing.T) {
 	m, err := app.FindModel("ApiKey")
 	assert.NoError(t, err)
 
-	inst, err := m.FindOne(&wst.Filter{Where: &wst.Where{"key": key}}, systemContext)
+	inst, err := m.FindOne(&wst.Filter{Where: &wst.Where{"secretHash": westack.ApiKeySecretHash(key)}}, systemContext)
 	assert.NoError(t, err)
 	assert.NotNil(t, inst)
 
@@ -76,7 +76,7 @@ func Test_ApiKey_Revoke(t *testing.T) {
 	m, err := app.FindModel("ApiKey")
 	assert.NoError(t, err)
 
-	inst, err := m.FindOne(&wst.Filter{Where: &wst.Where{"key": key}}, systemContext)
+	inst, err := m.FindOne(&wst.Filter{Where: &wst.Where{"secretHash": westack.ApiKeySecretHash(key)}}, systemContext)
 	assert.NoError(t, err)
 	assert.NotNil(t, inst)
 
@@ -102,7 +102,7 @@ func Test_ApiKey_OwnedByAccount(t *testing.T) {
 
 	m, err := app.FindModel("ApiKey")
 	assert.NoError(t, err)
-	inst, err := m.FindOne(&wst.Filter{Where: &wst.Where{"key": key}}, systemContext)
+	inst, err := m.FindOne(&wst.Filter{Where: &wst.Where{"secretHash": westack.ApiKeySecretHash(key)}}, systemContext)
 	assert.NoError(t, err)
 	assert.NotNil(t, inst)
 	assert.Equal(t, user.GetID(), inst.ToJSON()["accountId"])

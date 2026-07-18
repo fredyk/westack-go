@@ -31,6 +31,13 @@ func sha256Hex(s string) string {
 	return hex.EncodeToString(sum[:])
 }
 
+// ApiKeySecretHash devuelve el SHA-256 (hex) de una key. Es el valor por el que se persisten y
+// buscan las ApiKeys (`secretHash`); la key en claro nunca se almacena. Útil para localizar una
+// ApiKey a partir de la key en claro sin exponer el hashing interno.
+func ApiKeySecretHash(key string) string {
+	return sha256Hex(key)
+}
+
 // CreateApiKey crea una ApiKey con los roles dados, opcionalmente ligada a una cuenta.
 // Devuelve la `key` en claro (mostrarla UNA vez; no se puede recuperar después).
 func CreateApiKey(app *WeStack, name string, roles []string, accountId interface{}, ctx *model.EventContext) (key string, err error) {
@@ -41,8 +48,9 @@ func CreateApiKey(app *WeStack, name string, roles []string, accountId interface
 	if err != nil {
 		return "", err
 	}
+	// NO se persiste la key en claro: solo su SHA-256. La key en claro se devuelve UNA vez al
+	// llamante (abajo) y no puede recuperarse después. La autenticación busca por `secretHash`.
 	data := wst.M{
-		"key":        key,
 		"secretHash": sha256Hex(key),
 		"name":       name,
 		"roles":      roles,
@@ -62,7 +70,7 @@ func RevokeApiKey(app *WeStack, key string, ctx *model.EventContext) error {
 	if app.apiKeyModel == nil {
 		return fmt.Errorf("apiKeyModel not initialized")
 	}
-	inst, err := app.apiKeyModel.FindOne(&wst.Filter{Where: &wst.Where{"key": key}}, ctx)
+	inst, err := app.apiKeyModel.FindOne(&wst.Filter{Where: &wst.Where{"secretHash": sha256Hex(key)}}, ctx)
 	if err != nil {
 		return err
 	}
@@ -78,7 +86,7 @@ func SetApiKeyRoles(app *WeStack, key string, roles []string, ctx *model.EventCo
 	if app.apiKeyModel == nil {
 		return fmt.Errorf("apiKeyModel not initialized")
 	}
-	inst, err := app.apiKeyModel.FindOne(&wst.Filter{Where: &wst.Where{"key": key}}, ctx)
+	inst, err := app.apiKeyModel.FindOne(&wst.Filter{Where: &wst.Where{"secretHash": sha256Hex(key)}}, ctx)
 	if err != nil {
 		return err
 	}
