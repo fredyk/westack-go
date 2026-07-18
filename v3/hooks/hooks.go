@@ -1,6 +1,9 @@
 package hooks
 
-import "context"
+import (
+	"context"
+	"fmt"
+)
 
 // Operation identifies the repository operation that triggers hooks.
 type Operation string
@@ -46,9 +49,10 @@ func (r *Registry[T]) After(op Operation, fn HookFunc[T]) {
 
 // RunBefore executes all before-hooks for the given operation.
 // Returns the first non-nil error (which aborts the operation).
+// If a hook panics, the panic is recovered and returned as an error.
 func (r *Registry[T]) RunBefore(op Operation, ctx context.Context, entity *T) error {
 	for _, fn := range r.before[op] {
-		if err := fn(ctx, entity); err != nil {
+		if err := callHook(fn, ctx, entity); err != nil {
 			return err
 		}
 	}
@@ -57,11 +61,26 @@ func (r *Registry[T]) RunBefore(op Operation, ctx context.Context, entity *T) er
 
 // RunAfter executes all after-hooks for the given operation.
 // Returns the first non-nil error.
+// If a hook panics, the panic is recovered and returned as an error.
 func (r *Registry[T]) RunAfter(op Operation, ctx context.Context, entity *T) error {
 	for _, fn := range r.after[op] {
-		if err := fn(ctx, entity); err != nil {
+		if err := callHook(fn, ctx, entity); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+// callHook wraps a HookFunc to recover from panics and return them as errors.
+func callHook[T any](fn HookFunc[T], ctx context.Context, entity *T) (err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			if e, ok := r.(error); ok {
+				err = fmt.Errorf("hook panic: %w", e)
+			} else {
+				err = fmt.Errorf("hook panic: %v", r)
+			}
+		}
+	}()
+	return fn(ctx, entity)
 }

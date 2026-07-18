@@ -53,9 +53,10 @@ func (f *fakeConnector) Migrate(_ context.Context, _ datasource.ModelDef) error 
 }
 
 func (f *fakeConnector) Create(_ context.Context, collection string, data map[string]interface{}) (map[string]interface{}, error) {
-	f.ensureCollection(collection)
 	f.mu.Lock()
 	defer f.mu.Unlock()
+
+	f.ensureCollection(collection)
 
 	doc := make(map[string]interface{}, len(data))
 	for k, v := range data {
@@ -69,9 +70,9 @@ func (f *fakeConnector) Create(_ context.Context, collection string, data map[st
 }
 
 func (f *fakeConnector) FindById(_ context.Context, collection string, id interface{}) (map[string]interface{}, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	f.ensureCollection(collection)
-	f.mu.RLock()
-	defer f.mu.RUnlock()
 
 	pos, ok := f.indexes[collection][fmtSprint(id)]
 	if !ok {
@@ -81,9 +82,9 @@ func (f *fakeConnector) FindById(_ context.Context, collection string, id interf
 }
 
 func (f *fakeConnector) FindMany(_ context.Context, collection string, query *datasource.Query) (datasource.Cursor, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	f.ensureCollection(collection)
-	f.mu.RLock()
-	defer f.mu.RUnlock()
 
 	var results []map[string]interface{}
 	for _, doc := range f.store[collection] {
@@ -93,9 +94,9 @@ func (f *fakeConnector) FindMany(_ context.Context, collection string, query *da
 }
 
 func (f *fakeConnector) Count(_ context.Context, collection string, filter *datasource.Filter) (int64, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	f.ensureCollection(collection)
-	f.mu.RLock()
-	defer f.mu.RUnlock()
 	return int64(len(f.store[collection])), nil
 }
 

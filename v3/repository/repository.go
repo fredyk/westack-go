@@ -34,6 +34,9 @@ func NewWithHooks[T any](conn datasource.PersistedConnector, model datasource.Mo
 
 // Create persists a new entity, returning the persisted version with any generated fields.
 func (r *Repository[T]) Create(ctx context.Context, entity *T) (*T, error) {
+	if entity == nil {
+		return nil, fmt.Errorf("repository: Create: entity is nil")
+	}
 	if err := r.runBefore(ctx, hooks.OpCreate, entity); err != nil {
 		return nil, err
 	}
@@ -161,6 +164,9 @@ func (r *Repository[T]) runAfter(ctx context.Context, op hooks.Operation, entity
 
 // structToMap converts a struct to a map using json struct tag names.
 // Unexported fields and fields with json:"-" are skipped.
+// Embedded structs are flattened: their exported fields appear at the top level.
+// Pointer fields are dereferenced; nil pointers are stored as nil.
+// Fields with json:",omitempty" are skipped when their value is the zero value.
 func structToMap(v interface{}) (map[string]interface{}, error) {
 	rv := reflect.ValueOf(v)
 	if rv.Kind() == reflect.Ptr {
@@ -173,35 +179,93 @@ func structToMap(v interface{}) (map[string]interface{}, error) {
 		return nil, fmt.Errorf("structToMap: expected struct, got %s", rv.Kind())
 	}
 
-	rt := rv.Type()
-	result := make(map[string]interface{}, rt.NumField())
-	for i := 0; i < rt.NumField(); i++ {
-		field := rt.Field(i)
-		fieldVal := rv.Field(i)
-
-		jsonTag := field.Tag.Get("json")
-		if jsonTag == "-" {
-			continue
+	result := make(map[string]interface{})
+	for i := 0; i < rv.Type().NumField(); i++ {
+		if err := collectField(result, rv.Field(i), rv.Type().Field(i)); err != nil {
+			return nil, err
 		}
-		key := strings.Split(jsonTag, ",")[0]
-		if key == "" {
-			// No json tag: skip (unexported or intentionally untagged)
-			if !field.IsExported() {
-				continue
-			}
-			continue
-		}
-
-		if !fieldVal.CanInterface() {
-			continue
-		}
-
-		result[key] = fieldVal.Interface()
 	}
 	return result, nil
 }
 
+// collectField processes a single struct field and adds it to result.
+// For embedded (anonymous) fields, it recursively collects the inner struct's fields.
+func collectField(result map[string]interface{}, fieldVal reflect.Value, field reflect.StructField) error {
+	jsonTag := field.Tag.Get("json")
+	if jsonTag == "-" {
+		return nil
+	}
+
+	// Embedded (anonymous) struct: flatten its fields
+	if field.Anonymous {
+		if jsonTag != "" {
+			// Embedded field has an explicit json name: treat as a single field
+			key := strings.Split(jsonTag, ",")[0]
+			if !fieldVal.CanInterface() {
+				return nil
+			}
+			result[key] = fieldVal.Interface()
+		}
+		// If no json tag on embedded field, recurse into its fields
+		elemKind := fieldVal.Kind()
+		if elemKind == reflect.Ptr {
+			if fieldVal.IsNil() {
+				return nil
+			}
+			elemKind = fieldVal.Elem().Kind()
+		}
+		if elemKind == reflect.Struct {
+			for j := 0; j < fieldVal.Type().NumField(); j++ {
+				if err := collectField(result, fieldVal.Field(j), fieldVal.Type().Field(j)); err != nil {
+					return err
+				}
+			}
+		}
+		return nil
+	}
+
+	key := strings.Split(jsonTag, ",")[0]
+	if key == "" {
+		// No json tag: skip unexported fields
+		if !field.IsExported() {
+			return nil
+		}
+		return nil
+	}
+
+	if !fieldVal.CanInterface() {
+		return nil
+	}
+
+	// Check omitempty
+	hasOmitEmpty := strings.Contains(jsonTag, ",omitempty")
+	if hasOmitEmpty && isZeroValue(fieldVal) {
+		return nil
+	}
+
+	result[key] = derefPointer(fieldVal)
+	return nil
+}
+
+// isZeroValue reports whether a reflect.Value holds the zero value of its type.
+func isZeroValue(v reflect.Value) bool {
+	return v.IsZero()
+}
+
+// derefPointer returns the dereferenced value for pointer fields.
+// If the pointer is nil, returns nil.
+func derefPointer(v reflect.Value) interface{} {
+	if v.Kind() == reflect.Ptr {
+		if v.IsNil() {
+			return nil
+		}
+		return v.Elem().Interface()
+	}
+	return v.Interface()
+}
+
 // mapToStruct decodes a map into a struct using json struct tag names.
+// Embedded structs are handled by delegating to their fields.
 func mapToStruct(m map[string]interface{}, val interface{}) error {
 	rv := reflect.ValueOf(val).Elem()
 	rt := rv.Type()
@@ -214,6 +278,24 @@ func mapToStruct(m map[string]interface{}, val interface{}) error {
 		if jsonTag == "-" {
 			continue
 		}
+
+		// Embedded struct: delegate to its fields regardless of json tag
+		if field.Anonymous {
+			elemKind := fieldVal.Kind()
+			if elemKind == reflect.Ptr {
+				if fieldVal.IsNil() {
+					fieldVal.Set(reflect.New(fieldVal.Type().Elem()))
+				}
+				elemKind = fieldVal.Elem().Kind()
+			}
+			if elemKind == reflect.Struct {
+				if err := mapToStruct(m, fieldVal.Addr().Interface()); err != nil {
+					return fmt.Errorf("embedded %s: %w", field.Name, err)
+				}
+				continue
+			}
+		}
+
 		key := strings.Split(jsonTag, ",")[0]
 		if key == "" {
 			if !field.IsExported() {
