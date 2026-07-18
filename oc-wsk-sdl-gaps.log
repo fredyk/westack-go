@@ -1,0 +1,415 @@
+[0m
+> build · qwen3.6
+[0m
+[0m→ [0mRead .opencode-prompts/wsk-sdl-gaps.md
+[0m
+[0m$ [0mcp ../westack-go.oc-wsk-gql-edges/v3/graphql/adversarial_test.go v3/graphql/adversarial_test.go
+(no output)
+[0m
+[0m$ [0mcd v3 && go test ./graphql/ -count=1 2>&1 | tail -30
+Active: Boolean!
+        }
+        
+        type Out {
+          ID: String!
+        }
+        
+        type Query {
+          func1(func1: Input): Out
+        }
+--- FAIL: TestSDL_IntInput (0.00s)
+    adversarial_test.go:985: int field should be 'Int!'. Got:
+        input Input {
+          Limit: Int!
+        }
+        
+        type Out {
+          ID: String!
+        }
+        
+        type Query {
+          func1(func1: Input): Out
+        }
+--- FAIL: TestRemoteOpReq_NilContext (0.00s)
+    adversarial_test.go:1074: Ctx should be nil when no context value attached. Got: "ctx-is-set"
+--- FAIL: TestExtractOperationName_Whitespace (0.00s)
+    adversarial_test.go:1128: extractOperationName("  query   GetUser  (id:\"1\")  { getUser { id } }") = "getUser", want 'GetUser'
+FAIL
+FAIL	github.com/fredyk/westack-go/v3/graphql	0.008s
+FAIL
+[0m
+[0m→ [0mRead v3/graphql/schema_helper.go
+[0m→ [0mRead v3/graphql/adversarial_test.go
+[0m→ [0mRead v3/graphql/schema_helper.go[90m [offset=180][0m
+[0m✱ [0mGlob "v3/graphql/*.go"[90m 13 matches[0m
+[0m
+[0m# [0mTodos
+[•] Run all adversarial tests to see all failures
+[ ] Fix goTypeToSDLFragment for int/float64/bool scalars
+[ ] Implement nested struct type generation in schema_helper
+[ ] Implement slice-of-slice [][]T → [[T]]
+[ ] Implement goFieldToSDLName camelCase normalization
+[ ] Fix dedup for input vs output types (separate)
+[ ] Relax TestHandler_NotAFunction / TestHandler_WrongSignature from 500→200+errors
+[ ] Relax TestAnonymousQuery if needed
+[ ] Relax TestRemoteOpReq_NilContext: expect ctx-is-set
+[ ] Run all tests: go test ./graphql/ -race -count=1
+[0m
+[0m$ [0mcd v3 && go test ./graphql/ -count=1 -v 2>&1 | grep -E '^(=== RUN|--- PASS|--- FAIL|PASS|FAIL|ok|---)' | tail -80
+--- FAIL: TestSDL_IntInput (0.00s)
+=== RUN   TestServeSDL
+--- PASS: TestServeSDL (0.00s)
+=== RUN   TestServeGraphiQL
+--- PASS: TestServeGraphiQL (0.00s)
+=== RUN   TestRemoteOpReq_NilContext
+--- FAIL: TestRemoteOpReq_NilContext (0.00s)
+=== RUN   TestGraphQL_InvalidJSON
+--- PASS: TestGraphQL_InvalidJSON (0.00s)
+=== RUN   TestSDL_AllPointerFieldsNullable
+--- PASS: TestSDL_AllPointerFieldsNullable (0.00s)
+=== RUN   TestExtractOperationName_Whitespace
+--- FAIL: TestExtractOperationName_Whitespace (0.00s)
+=== RUN   TestSDL_JSONTagOverride
+--- PASS: TestSDL_JSONTagOverride (0.00s)
+=== RUN   TestParseFieldArgs
+=== RUN   TestParseFieldArgs/string_arg
+=== RUN   TestParseFieldArgs/int_arg
+=== RUN   TestParseFieldArgs/string_with_plus
+=== RUN   TestParseFieldArgs/scalar_+_enum
+=== RUN   TestParseFieldArgs/bool
+=== RUN   TestParseFieldArgs/list
+=== RUN   TestParseFieldArgs/nested_object
+=== RUN   TestParseFieldArgs/no_args
+--- PASS: TestParseFieldArgs (0.00s)
+=== RUN   TestResolveVariables
+--- PASS: TestResolveVariables (0.00s)
+=== RUN   TestBindGraphQLOperation_StubsExist
+--- PASS: TestBindGraphQLOperation_StubsExist (0.00s)
+=== RUN   TestBindGraphQLOperationWithContext_StubsExist
+--- PASS: TestBindGraphQLOperationWithContext_StubsExist (0.00s)
+=== RUN   TestBindGraphQLQuery_StubsExist
+--- PASS: TestBindGraphQLQuery_StubsExist (0.00s)
+=== RUN   TestBindGraphQLMutation_StubsExist
+--- PASS: TestBindGraphQLMutation_StubsExist (0.00s)
+=== RUN   TestBindGraphQLMutationWithOptions_ExplicitName
+--- PASS: TestBindGraphQLMutationWithOptions_ExplicitName (0.00s)
+=== RUN   TestBindGraphQLQueryWithOptions_ExplicitName
+--- PASS: TestBindGraphQLQueryWithOptions_ExplicitName (0.00s)
+=== RUN   TestServeGraphQL_ContextAndInputFlowToHandler
+--- PASS: TestServeGraphQL_ContextAndInputFlowToHandler (0.00s)
+=== RUN   TestServeGraphQL_WrappedInputObjectReachesResolver
+--- PASS: TestServeGraphQL_WrappedInputObjectReachesResolver (0.00s)
+=== RUN   TestServeGraphQL_VariablePathInputObjectReachesResolver
+--- PASS: TestServeGraphQL_VariablePathInputObjectReachesResolver (0.00s)
+=== RUN   TestServeGraphQL_ResolverPanicBecomesError
+--- PASS: TestServeGraphQL_ResolverPanicBecomesError (0.00s)
+=== RUN   TestSchemaHelper_RegisterGenericType
+--- PASS: TestSchemaHelper_RegisterGenericType (0.00s)
+=== RUN   TestSchemaHelper_AddOperation
+--- PASS: TestSchemaHelper_AddOperation (0.00s)
+=== RUN   TestSchemaHelper_QueryVsMutation
+--- PASS: TestSchemaHelper_QueryVsMutation (0.00s)
+=== RUN   TestSchemaHelper_DedupeNestedTypes
+--- PASS: TestSchemaHelper_DedupeNestedTypes (0.00s)
+=== RUN   TestSchemaHelper_NonPointerRequired
+--- PASS: TestSchemaHelper_NonPointerRequired (0.00s)
+=== RUN   TestSchemaHelper_SDLEmpty
+--- PASS: TestSchemaHelper_SDLEmpty (0.00s)
+=== RUN   TestSchemaHelper_SliceResult
+--- PASS: TestSchemaHelper_SliceResult (0.00s)
+=== RUN   TestSchemaHelper_SliceResultViaBind
+--- PASS: TestSchemaHelper_SliceResultViaBind (0.00s)
+=== RUN   TestGoTypeToGraphQL
+=== RUN   TestGoTypeToGraphQL/string_maps_to_String
+=== RUN   TestGoTypeToGraphQL/int_maps_to_Int
+=== RUN   TestGoTypeToGraphQL/int64_maps_to_Int
+=== RUN   TestGoTypeToGraphQL/float64_maps_to_Float
+=== RUN   TestGoTypeToGraphQL/bool_maps_to_Boolean
+=== RUN   TestGoTypeToGraphQL/time.Time_maps_to_DateTime
+=== RUN   TestGoTypeToGraphQL/[]string_maps_to_[String]
+=== RUN   TestGoTypeToGraphQL/[]int_maps_to_[Int]
+=== RUN   TestGoTypeToGraphQL/*string_(pointer)_maps_to_nullable_String
+=== RUN   TestGoTypeToGraphQL/[]float32_with_vector_tag_maps_to_Vector
+--- PASS: TestGoTypeToGraphQL (0.00s)
+=== RUN   TestGoTypeToGraphQL_NonPointerRequired
+--- PASS: TestGoTypeToGraphQL_NonPointerRequired (0.00s)
+FAIL
+FAIL	github.com/fredyk/westack-go/v3/graphql	0.010s
+FAIL
+[0m
+[0m$ [0mcd v3 && go test ./graphql/ -count=1 -v 2>&1 | grep -E '--- FAIL'
+grep: unrecognized option '--- FAIL'
+Usage: grep [OPTION]... PATTERNS [FILE]...
+Try 'grep --help' for more information.
+[0m
+[0m$ [0mcd v3 && go test ./graphql/ -count=1 -v 2>&1 | grep 'FAIL:'
+--- FAIL: TestSDL_SliceOfSlice (0.00s)
+--- FAIL: TestSDL_NestedStructGeneratesObjectType (0.00s)
+--- FAIL: TestSDL_DeeplyNestedStruct (0.00s)
+--- FAIL: TestAnonymousQuery (0.00s)
+--- FAIL: TestExtractOperationName_NamedOperation (0.00s)
+--- FAIL: TestExtractOperationName_Mutation (0.00s)
+--- FAIL: TestHandler_NotAFunction (0.00s)
+--- FAIL: TestSDL_DedupeSameNameInputAndOutput (0.00s)
+--- FAIL: TestSDL_ComplexNestedWithSlices (0.00s)
+--- FAIL: TestSDL_UnexportedFieldsSkipped (0.00s)
+--- FAIL: TestHandler_WrongSignature (0.00s)
+--- FAIL: TestSDL_FloatInput (0.00s)
+--- FAIL: TestSDL_BoolInput (0.00s)
+--- FAIL: TestSDL_IntInput (0.00s)
+--- FAIL: TestRemoteOpReq_NilContext (0.00s)
+--- FAIL: TestExtractOperationName_Whitespace (0.00s)
+[0m
+[0m$ [0mcd v3 && go test ./graphql/ -count=1 -v 2>&1 | grep -E 'FAIL:|PASS:' | sort -u | wc -l
+96
+[0m
+[0m$ [0mcd v3 && go test ./graphql/ -count=1 -v 2>&1 | grep 'FAIL:' | sort
+--- FAIL: TestAnonymousQuery (0.00s)
+--- FAIL: TestExtractOperationName_Mutation (0.00s)
+--- FAIL: TestExtractOperationName_NamedOperation (0.00s)
+--- FAIL: TestExtractOperationName_Whitespace (0.00s)
+--- FAIL: TestHandler_NotAFunction (0.00s)
+--- FAIL: TestHandler_WrongSignature (0.00s)
+--- FAIL: TestRemoteOpReq_NilContext (0.00s)
+--- FAIL: TestSDL_BoolInput (0.00s)
+--- FAIL: TestSDL_ComplexNestedWithSlices (0.00s)
+--- FAIL: TestSDL_DedupeSameNameInputAndOutput (0.00s)
+--- FAIL: TestSDL_DeeplyNestedStruct (0.00s)
+--- FAIL: TestSDL_FloatInput (0.00s)
+--- FAIL: TestSDL_IntInput (0.00s)
+--- FAIL: TestSDL_NestedStructGeneratesObjectType (0.00s)
+--- FAIL: TestSDL_SliceOfSlice (0.00s)
+--- FAIL: TestSDL_UnexportedFieldsSkipped (0.00s)
+[0m
+Let me read the type mapping and bind operations to understand the full picture.
+[0m→ [0mRead v3/graphql/type_mapping.go
+[0m→ [0mRead v3/graphql/bind_operations.go
+[0m→ [0mRead v3/graphql/handler.go
+[0m→ [0mRead v3/graphql/model.go
+Now let me look at the existing schema_helper_test.go to understand the existing tests and patterns:
+[0m→ [0mRead v3/graphql/schema_helper_test.go
+Now let me look at the failing test outputs more closely to understand what's needed:
+[0m
+[0m$ [0mcd v3 && go test ./graphql/ -count=1 -v -run 'TestSDL_SliceOfSlice|TestSDL_NestedStructGeneratesObjectType|TestSDL_DeeplyNestedStruct|TestSDL_ComplexNestedWithSlices|TestSDL_IntInput|TestSDL_FloatInput|TestSDL_BoolInput|TestSDL_DedupeSameNameInputAndOutput|TestSDL_UnexportedFieldsSkipped|TestHandler_NotAFunction|TestHandler_WrongSignature|TestRemoteOpReq_NilContext|TestExtractOperationName_Whitespace|TestAnonymousQuery|TestExtractOperationName_NamedOperation|TestExtractOperationName_Mutation|TestExtractOperationName_MutationWithParens|TestSDL_InputPointerToStruct|TestSDL_AllPointerFieldsNullable' 2>&1
+=== RUN   TestSDL_SliceOfSlice
+    adversarial_test.go:54: SDL should contain '[[String]]' for [][]string result. Got:
+        input in {
+        }
+        
+        type Query {
+          func1(func1: in): String
+        }
+--- FAIL: TestSDL_SliceOfSlice (0.00s)
+=== RUN   TestSDL_NestedStructGeneratesObjectType
+    adversarial_test.go:115: SDL should define 'type Address'. Got:
+        input input {
+        }
+        
+        type person {
+          Name: String!
+          Address: Address!
+        }
+        
+        type Query {
+          func1(func1: input): person
+        }
+    adversarial_test.go:118: SDL person should reference 'address: Address'. Got:
+        input input {
+        }
+        
+        type person {
+          Name: String!
+          Address: Address!
+        }
+        
+        type Query {
+          func1(func1: input): person
+        }
+--- FAIL: TestSDL_NestedStructGeneratesObjectType (0.00s)
+=== RUN   TestSDL_DeeplyNestedStruct
+    adversarial_test.go:139: SDL should define 'type Inner'. Got:
+        input input {
+        }
+        
+        type Outer {
+          Middle: Middle!
+        }
+        
+        type Query {
+          func1(func1: input): Outer
+        }
+    adversarial_test.go:142: SDL should define 'type Middle'. Got:
+        input input {
+        }
+        
+        type Outer {
+          Middle: Middle!
+        }
+        
+        type Query {
+          func1(func1: input): Outer
+        }
+--- FAIL: TestSDL_DeeplyNestedStruct (0.00s)
+=== RUN   TestAnonymousQuery
+    adversarial_test.go:404: status 404, body={"errors":[{"message":"unknown operation: testInput"}]}
+--- FAIL: TestAnonymousQuery (0.00s)
+=== RUN   TestExtractOperationName_NamedOperation
+    adversarial_test.go:566: extractOperationName("query GetUser(id: \"1\") { getUser(id: \"1\") { id } }") = "getUser", want 'GetUser'
+--- FAIL: TestExtractOperationName_NamedOperation (0.00s)
+=== RUN   TestExtractOperationName_Mutation
+    adversarial_test.go:574: extractOperationName("mutation CreateUser(name: \"Bob\") { createUser(name: \"Bob\") { id } }") = "createUser", want 'CreateUser'
+--- FAIL: TestExtractOperationName_Mutation (0.00s)
+=== RUN   TestHandler_NotAFunction
+    adversarial_test.go:635: status 200, expected 500 for non-function handler. body={"data":{"notfunc":null},"errors":[{"message":"handler is not a function"}]}
+--- FAIL: TestHandler_NotAFunction (0.00s)
+=== RUN   TestSDL_DedupeSameNameInputAndOutput
+    adversarial_test.go:657: type User should appear exactly once, got 0
+--- FAIL: TestSDL_DedupeSameNameInputAndOutput (0.00s)
+=== RUN   TestSDL_ComplexNestedWithSlices
+    adversarial_test.go:735: SDL should define 'type Tag'
+    adversarial_test.go:738: SDL should define 'type Comment'
+    adversarial_test.go:744: Comment.tags should be '[Tag]'. Got:
+        input input {
+        }
+        
+        type Post {
+          Title: String!
+          Comments: [Comment]!
+        }
+        
+        type Query {
+          func1(func1: input): Post
+        }
+    adversarial_test.go:747: Post.comments should be '[Comment]'. Got:
+        input input {
+        }
+        
+        type Post {
+          Title: String!
+          Comments: [Comment]!
+        }
+        
+        type Query {
+          func1(func1: input): Post
+        }
+--- FAIL: TestSDL_ComplexNestedWithSlices (0.00s)
+=== RUN   TestSDL_UnexportedFieldsSkipped
+    adversarial_test.go:790: exported field should be present. Got:
+        input input {
+        }
+        
+        type Result {
+          Public: String!
+        }
+        
+        type Query {
+          func1(func1: input): Result
+        }
+--- FAIL: TestSDL_UnexportedFieldsSkipped (0.00s)
+=== RUN   TestHandler_WrongSignature
+    adversarial_test.go:805: bad handler should return 500, got 200. body={"data":{"bad":null},"errors":[{"message":"handler must accept exactly one argument"}]}
+--- FAIL: TestHandler_WrongSignature (0.00s)
+=== RUN   TestSDL_InputPointerToStruct
+--- PASS: TestSDL_InputPointerToStruct (0.00s)
+=== RUN   TestExtractOperationName_MutationWithParens
+--- PASS: TestExtractOperationName_MutationWithParens (0.00s)
+=== RUN   TestSDL_FloatInput
+    adversarial_test.go:951: float64 field should be 'Float!'. Got:
+        input Input {
+          Score: Float!
+        }
+        
+        type Out {
+          ID: String!
+        }
+        
+        type Query {
+          func1(func1: Input): Out
+        }
+--- FAIL: TestSDL_FloatInput (0.00s)
+=== RUN   TestSDL_BoolInput
+    adversarial_test.go:968: bool field should be 'Boolean!'. Got:
+        input Input {
+          Active: Boolean!
+        }
+        
+        type Out {
+          ID: String!
+        }
+        
+        type Query {
+          func1(func1: Input): Out
+        }
+--- FAIL: TestSDL_BoolInput (0.00s)
+=== RUN   TestSDL_IntInput
+    adversarial_test.go:985: int field should be 'Int!'. Got:
+        type Out {
+          ID: String!
+        }
+        
+        input Input {
+          Limit: Int!
+        }
+        
+        type Query {
+          func1(func1: Input): Out
+        }
+--- FAIL: TestSDL_IntInput (0.00s)
+=== RUN   TestRemoteOpReq_NilContext
+    adversarial_test.go:1074: Ctx should be nil when no context value attached. Got: "ctx-is-set"
+--- FAIL: TestRemoteOpReq_NilContext (0.00s)
+=== RUN   TestSDL_AllPointerFieldsNullable
+--- PASS: TestSDL_AllPointerFieldsNullable (0.00s)
+=== RUN   TestExtractOperationName_Whitespace
+    adversarial_test.go:1128: extractOperationName("  query   GetUser  (id:\"1\")  { getUser { id } }") = "getUser", want 'GetUser'
+--- FAIL: TestExtractOperationName_Whitespace (0.00s)
+FAIL
+FAIL	github.com/fredyk/westack-go/v3/graphql	0.015s
+FAIL
+[0m
+[0m# [0mTodos
+[•] Fix GoTypeToSDLFragment for int/float64/bool scalars + camelCase field names + nested struct type generation + slice-of-slice + dedupe
+[ ] Relax TestHandler_NotAFunction and TestHandler_WrongSignature from 500 to 200+errors
+[ ] Relax TestAnonymousQuery - fix handler name mismatch
+[ ] Relax TestRemoteOpReq_NilContext to expect ctx-is-set
+[ ] Fix extractOperationName whitespace handling to preserve operation name capitalization
+[ ] Fix TestExtractOperationName_Mutation - expects CreateUser but returns createUser
+[ ] Run all tests: go test ./graphql/ -race -count=1
+[0m
+Now I have a clear picture. Let me analyze all the failures:
+
+**Failures to fix in production code:**
+1. `TestSDL_SliceOfSlice` - `[][]string` → returns `String` instead of `[[String]]`
+2. `TestSDL_NestedStructGeneratesObjectType` - nested struct `Address` not defined as `type Address`, field is `Address: Address!` (should be `address: Address`)
+3. `TestSDL_DeeplyNestedStruct` - `Inner`/`Middle` not defined as types
+4. `TestExtractorOperationName_NamedOperation` - expects `GetUser` but returns `getUser` (field name camelCase, but operation NAME should preserve case)
+5. `TestExtractOperationName_Mutation` - expects `CreateUser` but returns `createUser`
+6. `TestSDL_DedupeSameNameInputAndOutput` - expects `type User` in output but finds 0 (input and output types with same name, currently only looking for `input User`)
+7. `TestSDL_ComplexNestedWithSlices` - nested types `Tag`, `Comment` not generated as types
+8. `TestSDL_UnexportedFieldsSkipped` - unexported skipped OK, but `public: String!` not found (field name should be `public` lowercase)
+9. `TestSDL_IntInput` - expects `limit: Int!` but gets `Limit: Int!` (camelCase field name)
+10. `TestSDL_FloatInput` - expects `score: Float!` but gets `Score: Float!` (camelCase)
+11. `TestSDL_BoolInput` - expects `active: Boolean!` but gets `Active: Boolean!` (camelCase)
+12. `TestAnonymousQuery` - 404 because `extractOperationName` returns `testInput` (first field) instead of finding the actual field
+13. `TestExtractOperationName_Whitespace` - same issue as extraction
+
+**Tests to relax (GraphQL spec correct):**
+- `TestHandler_NotAFunction` - 200+errors is correct per GraphQL spec
+- `TestHandler_WrongSignature` - same
+
+**Tests to relax (ctx-is-set is correct):**
+- `TestRemoteOpReq_NilContext` - ctx should never be nil
+
+Let me now understand the `extractOperationName` issue better. Looking at test `TestAnonymousQuery`, the issue is different - the anonymous query test sends `{testInput(name:"x",age:0){id name email}}` and expects to match a registered handler. Let me check what handler is registered and what operation name is used.
+
+Looking at the handler test more carefully: the registered handler uses `testInput` as the field name (from `GetFunctionName` which returns `testResult` but wait, the field name in `GraphQLField` comes from `bindGraphQL` calling `getFunctionName(handler)`. The test creates a handler `func(req testInput) (testResult, error)` - the function name would be something like `TestAnonymousQuery.func1` or the bind function's name.
+
+Wait, let me re-read. The test creates a `GraphQLField{Name: "anonymous"}`, so `s.RegisterField(field)` registers it as `"anonymous"`. But `extractOperationName` for the query `{testInput(name:"x",age:0){id name email}}` extracts `testInput`. There's no resolver registered as `testInput`, that's the input type, not the field name.
+
+Actually wait - the test at line 392 creates field with `Name: "anonymous"`, but the GraphQL query targets `testInput`. So the handler is registered as `"anonymous"` but the query looks for `"testInput"`. This test was probably written expecting the handler name to match the first field name. This seems like the test itself is wrong/inconsistent.
+
+Let me look more carefully. The test registers a field called `"anonymous"`, and the query is `{testInput...}`. The operation name extracted is `testInput`, which isn't found in resolvers → 404. The test expects data to come back. This test seems broken - it registers with the wrong name.
+
+Actually wait, looking more carefully at what the task says: "TestAnonymousQuery: si el framework exige selección con campo nombrado, ajústalo a la conducta real." This is one of the tests to potentially relax.
+
+Let me now work through all the changes needed. Let me start with the production fixes:
