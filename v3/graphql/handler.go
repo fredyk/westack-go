@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"reflect"
 	"strings"
@@ -97,7 +98,8 @@ func (s *GraphQLServer) ServeGraphQL(w http.ResponseWriter, r *http.Request) {
 
 	result, err := s.callResolver(r.Context(), handler, args)
 	if err != nil {
-		writeGraphQLResultWithErrors(w, operationName, result, []map[string]any{{"message": err.Error()}})
+		writeGraphQLResultWithErrors(w, operationName, result,
+			[]map[string]any{{"message": sanitizeClientError(operationName, err)}})
 		return
 	}
 
@@ -317,6 +319,49 @@ func writeGraphQLError(w http.ResponseWriter, status int, message string) {
 	_ = json.NewEncoder(w).Encode(map[string]any{
 		"errors": []map[string]any{{"message": message}},
 	})
+}
+
+// genericClientErrorMessage es el mensaje que se devuelve al cliente cuando el
+// error real es de infraestructura/BD. Nunca revela detalle interno.
+const genericClientErrorMessage = "error interno del servidor, inténtalo de nuevo más tarde"
+
+// sanitizeClientError decide qué texto de error es seguro devolver a un cliente
+// GraphQL. Los errores de infraestructura/base de datos arrastran SQL, nombres de
+// tabla/columna, códigos SQLSTATE, fragmentos de DSN, etc.: NUNCA deben llegar al
+// cliente (filtran el esquema interno y se ven como un producto roto). Esos errores
+// se registran ÍNTEGROS en el servidor y se sustituyen por un mensaje genérico y
+// estable. Los errores de dominio/validación (todo lo demás) se devuelven tal cual
+// para que la UI pueda mostrar un mensaje accionable.
+func sanitizeClientError(operationName string, err error) string {
+	if err == nil {
+		return ""
+	}
+	msg := err.Error()
+	if isInternalError(msg) {
+		log.Printf("graphql: operation %q failed: %v", operationName, err)
+		return genericClientErrorMessage
+	}
+	return msg
+}
+
+// isInternalError reconoce errores de infraestructura/BD que no deben mostrarse al
+// usuario final. Detección por firma textual (independiente del driver): postgres/pgx
+// exponen errores como `ERROR: … (SQLSTATE XXXXX)` y los fallos de conexión como
+// `failed to connect` / `not connected` / `connection refused`.
+func isInternalError(msg string) bool {
+	switch {
+	case strings.Contains(msg, "SQLSTATE"):
+		return true
+	case strings.Contains(msg, "ERROR:"):
+		return true
+	case strings.Contains(msg, "failed to connect"):
+		return true
+	case strings.Contains(msg, "not connected"):
+		return true
+	case strings.Contains(msg, "connection refused"):
+		return true
+	}
+	return false
 }
 
 // writeGraphQLResult escribe la respuesta GraphQL. Conforme a la spec, el
