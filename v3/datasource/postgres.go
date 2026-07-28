@@ -735,3 +735,21 @@ func (c *pgxCursor) Err() error {
 var _ PersistedConnector = (*PostgresConnector)(nil)
 var _ VectorConnector = (*PostgresConnector)(nil)
 var _ Cursor = (*pgxCursor)(nil)
+
+// ExecContext ejecuta una sentencia suelta contra el pool del connector.
+//
+// Existe para el DDL que no sale de un modelo, y el caso que lo motiva es crear el ESQUEMA
+// (namespace) donde luego Migrate crea las tablas: Migrate da por hecho que ya existe y
+// falla con "schema ... does not exist" si no. Sin este método la aplicación tendría que
+// abrir una segunda conexión por su cuenta, duplicando el DSN, el TLS y las credenciales.
+//
+// No devuelve filas a propósito: para consultar están los métodos del modelo.
+func (c *PostgresConnector) ExecContext(ctx context.Context, query string, args ...any) error {
+	if c.pool == nil {
+		return fmt.Errorf("postgres: sin conexión; llama a Connect antes de ExecContext")
+	}
+	if _, err := c.pool.Exec(ctx, query, args...); err != nil {
+		return err
+	}
+	return nil
+}
