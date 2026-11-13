@@ -1,6 +1,7 @@
 package swaggerhelper
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"os"
@@ -255,6 +256,18 @@ func getStructTag(f reflect.StructField, tagName string) string {
 	return strings.Split(f.Tag.Get(tagName), ",")[0]
 }
 
+var rawMessageType = reflect.TypeOf(json.RawMessage{})
+
+func isNumberKind(k reflect.Kind) bool {
+	switch k {
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
+		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr,
+		reflect.Float32, reflect.Float64:
+		return true
+	}
+	return false
+}
+
 func analyzeWithReflection(rootTypeName string, t reflect.Type, components *wst.M) wst.M {
 	schema := wst.M{}
 	//valueOf := reflect.ValueOf(sample)
@@ -301,26 +314,35 @@ func analyzeWithReflection(rootTypeName string, t reflect.Type, components *wst.
 			}
 			continue
 		}
-		switch field.Type.Kind() {
-		case reflect.String:
+		// encoding/json writes a json.RawMessage verbatim (any JSON value) and any other []byte as
+		// a base64 string.
+		if field.Type == rawMessageType {
+			schema[tagged] = wst.M{}
+			continue
+		}
+		if field.Type.Kind() == reflect.Slice && field.Type.Elem().Kind() == reflect.Uint8 {
+			schema[tagged] = wst.M{
+				"type":   "string",
+				"format": "byte",
+			}
+			continue
+		}
+		switch k := field.Type.Kind(); {
+		case k == reflect.String:
 			schema[tagged] = wst.M{
 				"type": "string",
 			}
-		//case int, int32, int64, float32, float64:
-		case reflect.Int, reflect.Int32, reflect.Int64, reflect.Float32, reflect.Float64, reflect.Uintptr:
+		case isNumberKind(k):
 			schema[tagged] = wst.M{
 				"type": "number",
 			}
-		//case bool:
-		case reflect.Bool:
+		case k == reflect.Bool:
 			schema[tagged] = wst.M{
 				"type": "boolean",
 			}
-		//case wst.M:
-		case reflect.Map:
+		case k == reflect.Map:
 			schema[tagged] = analyzeWithReflection(rootTypeName, field.Type, components)
-		//case []interface{}:
-		case reflect.Slice:
+		case k == reflect.Slice:
 			fieldElem := field.Type.Elem()
 			itemType := fieldElem.Kind()
 			fieldObjectTypeName := fieldElem.String()
@@ -358,7 +380,7 @@ func analyzeWithReflection(rootTypeName string, t reflect.Type, components *wst.
 				var primitiveType string
 				if itemType == reflect.String {
 					primitiveType = "string"
-				} else if itemType == reflect.Int || itemType == reflect.Int32 || itemType == reflect.Int64 || itemType == reflect.Float32 || itemType == reflect.Float64 {
+				} else if isNumberKind(itemType) {
 					primitiveType = "number"
 				} else if itemType == reflect.Bool {
 					primitiveType = "boolean"
@@ -372,7 +394,7 @@ func analyzeWithReflection(rootTypeName string, t reflect.Type, components *wst.
 					},
 				}
 			}
-		case reflect.Struct:
+		case k == reflect.Struct:
 			fieldObjectTypeName := field.Type.String()
 			if field.Type.Name() == "" {
 				// anonymous struct
@@ -412,7 +434,7 @@ func analyzeWithReflection(rootTypeName string, t reflect.Type, components *wst.
 					}
 				}
 			}
-		case reflect.Interface:
+		case k == reflect.Interface:
 			fmt.Printf("[ERROR] Interfaces are not meant to be used in JSON serialization at %s->%s\n", rootTypeName, field.Name)
 			schema[tagged] = wst.M{
 				"type": "string", // fallback to string
