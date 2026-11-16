@@ -4,6 +4,9 @@
   "base": "PersistedModel",
   "public": true,
   "properties": {
+    "wholeCount": {
+      "type": "integer"
+    },
     "defaultString": {
       "type": "string",
       "default": "default"

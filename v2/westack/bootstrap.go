@@ -406,6 +406,11 @@ func registerPersistedModelFixedHooks(loadedModel *model.StatefulModel, app *WeS
 			(*data)["modified"] = timeNow
 		}
 
+		// Store integer properties as int64 and reject values that are not whole numbers
+		if integerCodes := coerceIntegerProperties(data, config.Properties); len(integerCodes) > 0 {
+			return wst.CreateError(fiber.ErrBadRequest, "ERR_VALIDATION", fiber.Map{"message": "Integer fields must hold whole numbers", "codes": integerCodes}, "ValidationError")
+		}
+
 		// Perform required validation
 		// If it is not a new instance, we need to merge the data with the existing instance
 		allErrorsCodes := wst.M{}
